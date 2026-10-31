@@ -19,6 +19,7 @@ from eventmate.assistant.knowledge import KnowledgeBase
 from eventmate.pricing.reality import reality_check
 from eventmate.schemas import Disruption, LedgerKind, VendorCategory
 from eventmate.service import EventMate
+from eventmate.state import build_state
 
 
 class _Args(BaseModel):
@@ -113,6 +114,28 @@ def _summary(ctx: ToolContext, _):
     }
 
 
+def _event_state(ctx: ToolContext, _):
+    """A bounded slice of EventState: counts, vendor names with statuses, dates. No guest names, contact details, prices or message text."""
+    s = build_state(ctx.em, ctx.plan_id)
+    kinds: Dict[str, int] = {}
+    for i in s.open_items:
+        kinds[i.kind] = kinds.get(i.kind, 0) + 1
+    oldest = max((i.age_hours or 0 for i in s.open_items), default=0)
+    return {
+        "plan_version": s.plan_version,
+        "as_of": s.as_of.isoformat(timespec="minutes"),
+        "event_date": next(f.value for f in s.facts if f.key == "event_date"),
+        "guests_yes": next(f.value for f in s.facts if f.key == "rsvp_yes"),
+        "guests_no": next(f.value for f in s.facts if f.key == "rsvp_no"),
+        "guests_pending": next(f.value for f in s.facts if f.key == "rsvp_pending"),
+        "vendors": [{"category": v.category.value, "name": v.name, "booking_status": v.booking_status, "conversation": v.conversation,
+                     "quote": None if v.quote is None else v.quote.status} for v in s.vendors],
+        "open_items": {"total": len(s.open_items), "by_kind": kinds, "oldest_age_hours": oldest},
+        "changes_in_last_50": len(s.changes),
+        "note": "A vendor price with status quoted_unverified is only what the vendor wrote; it is not a recorded quote.",
+    }
+
+
 def _alternatives(ctx: ToolContext, a: CategoryArgs):
     p = ctx.em.store.latest(ctx.plan_id)
     s = p.selection_for(a.category)
@@ -181,6 +204,7 @@ def build_tools() -> Dict[str, Tool]:
         Tool("search_knowledge", "Search to;doh-the event planner's own policy and help documents. Use for how to;doh-the event planner works, budget rules and dietary checklists.", Perm.KB_READ, SearchArgs, _search),
         Tool("get_public_event_info", "Event type, city, date and venue name. Safe to share with guests.", Perm.PLAN_PUBLIC, NoArgs, _public),
         Tool("get_plan_summary", "The current plan without money: guests, dietary needs, chosen vendors and their booking status.", Perm.PLAN_READ, NoArgs, _summary),
+        Tool("get_event_state", "Where the plan stands right now: RSVP counts, each vendor's booking status and conversation status, and how many things are still open and for how long. No names of guests, no contact details, no prices.", Perm.PLAN_READ, NoArgs, _event_state),
         Tool("list_alternatives", "Alternatives considered for one vendor category and why they were not chosen.", Perm.PLAN_READ, CategoryArgs, _alternatives),
         Tool("get_budget_status", "Budget, planned cost, quotes, payments the organiser recorded and headroom. Money: organiser only.", Perm.LEDGER_READ, NoArgs, _budget),
         Tool("check_budget_reality", "Whether the budget is realistic, an estimate from vendor records. Organiser only.", Perm.LEDGER_READ, NoArgs, _reality),

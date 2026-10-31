@@ -36,6 +36,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eventmate.planning import intake
 from eventmate.arcade_pulse import pulse as _arcade_pulse
+from eventmate.state import build_state
 from eventmate.retention import PlanBusy
 from eventmate.assistant.agent import Assistant, AssistantError
 from eventmate.assistant.approvals import ApprovalError
@@ -1248,6 +1249,22 @@ def create_app(
         with lock:
             draft = em.mark_outreach_sent(plan_id, draft_id)
         return out(draft)
+
+    @app.get("/api/plans/<plan_id>/state")
+    def plan_state(plan_id):
+        """Where the plan stands: facts with their source and status, vendors, what is still open, and what changed (docs/EVENT_STATE.md). Read-only."""
+        plan_id = pid(plan_id)
+        since = None
+        if request.args.get("changes_since"):
+            try:
+                since = datetime.fromisoformat(request.args["changes_since"].replace("Z", "+00:00"))
+            except ValueError:
+                raise ValueError("changes_since must be an ISO 8601 time") from None
+            if since.tzinfo is None:
+                since = since.replace(tzinfo=timezone.utc)
+        with lock:
+            state = build_state(em, plan_id, changes_since=since, today=today_fn())
+        return out(state)
 
     @app.get("/api/plans/<plan_id>/ledger")
     def ledger_get(plan_id):

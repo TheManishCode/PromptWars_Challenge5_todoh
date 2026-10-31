@@ -9,5 +9,6 @@ Models are optional (`EVENTMATE_ENABLE_LLM=0` turns them off). Contact details a
 | Ideas | eight facts: event type, guest count, budget band, diets, city, venue setting, up to 5 preferences, subtype | 900 tokens out | preferences pass through the same placeholder step |
 | Explanation | the verified plan summary (vendor names, numbers) | 3000 tokens out | no raw request and no guest names are in it |
 
+The assistant's `get_event_state` tool returns a bounded slice of EventState (docs/EVENT_STATE.md): the event date, RSVP counts, each vendor's category, name, booking status, conversation status and whether a vendor price is only quoted (never the amount), and counts of open items by kind. No guest names, contact details, prices or message text.
 Not sent to any model: the budget total or ledger (except as numbers a tool returns to the assistant), vendor reply text, discovered contact text, secrets.
 Optional Langfuse export, if configured, sends masked questions and answers off the machine.

@@ -1,0 +1,229 @@
+"""EventState: one read-only view of where a plan stands, built on demand from the existing stores (ADR-054).
+
+It reads the plan version, ledger, vendor messages, jobs and guest counts and calls nothing else: no model, no network, no new database. Every fact
+says where it came from (``source``), when (``as_of``) and how far it can be trusted (``status``). A price a vendor wrote is ``quoted_unverified``
+and never reprices the plan (ADR-049). The view holds no guest names and no contact details, and it authorises nothing: seeing that something is
+waiting does not approve, send or spend anything.
+"""
+
+from __future__ import annotations
+
+import contextlib
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Literal, Optional, Tuple, Union
+
+from eventmate.schemas import LedgerKind, VendorCategory, _Model
+
+FactSource = Literal["user", "vendor_reply", "tool", "model_idea", "seed_data"]
+FactStatus = Literal["user_stated", "quoted_unverified", "confirmed", "pending"]
+Conversation = Literal["none", "awaiting_approval", "asked", "replied", "unavailable", "stopped", "problem"]
+OpenKind = Literal["pending_rsvps", "approval_waiting", "unanswered_vendor", "unconfirmed_quote", "follow_up_due", "job_item"]
+ChangeKind = Literal["plan_version", "ledger", "message", "reply", "job"]
+
+MAX_CHANGES = 50
+# What closes each kind of open item; shown to the user so "nothing left hanging" is checkable.
+CLOSES_WHEN: Dict[str, str] = {
+    "pending_rsvps": "the guest list is updated and nobody is left pending",
+    "approval_waiting": "you approve or deny the message, or it expires",
+    "unanswered_vendor": "the vendor replies",
+    "unconfirmed_quote": "you record the price in the ledger, or mark the reply read",
+    "follow_up_due": "a follow-up is sent or approved, or the vendor replies",
+    "job_item": "you resolve the item in its quote job",
+}
+JOB_ITEM_LABELS = {
+    "confirm_claim": "A quoted price needs your confirmation", "vendor_question": "A vendor asked you a question", "approve_requests": "Quote requests wait for your approval",
+    "approve_nudge": "A follow-up waits for your approval", "check_unknown_send": "A send has an unknown outcome: check the vendor chat", "unclear_price": "A reply needs reading",
+    "vendor_unavailable": "A vendor says it is not available", "different_sender": "A reply came from an unexpected address", "do_not_contact": "A request was blocked: do not contact",
+    "no_quotes_possible": "Too few vendors can still give a quote",
+}
+
+
+class Fact(_Model):
+    key: str
+    label: str
+    value: Union[str, int, bool, None]
+    source: FactSource
+    as_of: datetime
+    status: FactStatus
+
+
+class VendorState(_Model):
+    category: VendorCategory
+    vendor_id: str
+    name: str
+    booking_status: str
+    plan_cost: int
+    price_stale: bool = False  # a later quote or an expiry means the plan was priced differently; replan to re-price
+    conversation: Conversation = "none"
+    last_activity_at: Optional[datetime] = None
+    quote: Optional[Fact] = None
+
+
+class OpenItem(_Model):
+    kind: OpenKind
+    ref: str
+    label: str
+    since: Optional[datetime] = None
+    age_hours: Optional[int] = None
+    closes_when: str
+
+
+class Change(_Model):
+    at: datetime
+    kind: ChangeKind
+    summary: str
+
+
+class EventState(_Model):
+    plan_id: str
+    plan_version: int
+    as_of: datetime
+    facts: Tuple[Fact, ...]
+    vendors: Tuple[VendorState, ...]
+    open_items: Tuple[OpenItem, ...]
+    changes: Tuple[Change, ...]
+    notice: str = "A read-only view assembled from this plan's records. It approves, sends and spends nothing, and a vendor's quote stays unverified until you record it."
+
+
+def _aware(t: Optional[datetime]) -> Optional[datetime]:
+    return t if t is None or t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
+def _age_hours(since: Optional[datetime], now: datetime) -> Optional[int]:
+    return None if since is None else max(0, int((now - since).total_seconds() // 3600))
+
+
+def _item(kind: str, ref: str, label: str, since: Optional[datetime], now: datetime) -> OpenItem:
+    since = _aware(since)
+    return OpenItem(kind=kind, ref=ref, label=label, since=since, age_hours=_age_hours(since, now), closes_when=CLOSES_WHEN[kind])
+
+
+def _conversation(drafts: list, inbound: list) -> Tuple[Conversation, Optional[datetime]]:
+    """Where the latest request to one vendor stands, from the vendor's own side of the thread."""
+    requests = [d for d in drafts if d.kind == "request"]
+    if not requests:
+        return "none", None
+    latest = max(requests, key=lambda d: d.created_at)
+    replies = [m for m in inbound if m.draft_id == latest.draft_id]
+    last_at = max([_aware(latest.sent_at or latest.created_at)] + [_aware(m.received_at) for m in replies])
+    if any(m.analysis.asks_to_stop for m in replies):
+        return "stopped", last_at
+    if replies:
+        return ("unavailable" if any(m.analysis.says_unavailable for m in replies) else "replied"), last_at
+    if latest.status in ("sent", "marked_sent"):
+        return "asked", last_at
+    if latest.status == "prepared":
+        return "awaiting_approval", last_at
+    return "problem", last_at  # approved or sending is in flight; failed, denied, expired, blocked or unknown outcome need a look
+
+
+def _quote_fact(vendor_id: str, category: VendorCategory, inbound: list, ledger: list, confirmed_claims: set, now: datetime) -> Optional[Fact]:
+    recorded = [e for e in ledger if e.kind == LedgerKind.QUOTE and e.category == category]
+    if recorded:  # the user recorded a price: that is the one that counts
+        e = max(recorded, key=lambda x: x.timestamp)
+        return Fact(key=f"quote:{vendor_id}", label=f"{category.value} price you recorded (INR)", value=e.amount, source="user", as_of=_aware(e.timestamp), status="user_stated")
+    priced = [m for m in inbound if m.vendor_id == vendor_id and m.analysis.amounts and not m.sender_differs]
+    if not priced:
+        return None
+    m = max(priced, key=lambda x: x.received_at)
+    a = m.analysis.amounts[0]
+    status: FactStatus = "confirmed" if m.message_id in confirmed_claims else "quoted_unverified"
+    return Fact(key=f"quote:{vendor_id}", label=f"{category.value} price the vendor wrote (INR, {a.unit}, as they wrote it)", value=a.low_inr, source="vendor_reply", as_of=_aware(m.received_at), status=status)
+
+
+def _facts(plan, as_of: datetime) -> List[Fact]:
+    r, g = plan.request, plan.guests
+    at = _aware(plan.created_at)
+    guest_source: FactSource = "seed_data" if "seed" in (g.source or "") else "user"
+    return [
+        Fact(key="event_type", label="Event type", value=r.event_type.value, source="user", as_of=at, status="user_stated"),
+        Fact(key="city", label="City", value=r.city, source="user", as_of=at, status="user_stated"),
+        Fact(key="event_date", label="Event date", value=r.event_date.isoformat(), source="user", as_of=at, status="user_stated"),
+        Fact(key="budget_total_inr", label="Budget (INR)", value=r.budget_total, source="user", as_of=at, status="user_stated"),
+        Fact(key="guest_count", label="Guests you planned for", value=r.guest_count, source="user", as_of=at, status="user_stated"),
+        Fact(key="rsvp_yes", label="Guests who said yes", value=g.confirmed, source=guest_source, as_of=at, status="user_stated"),
+        Fact(key="rsvp_no", label="Guests who declined", value=g.declined, source=guest_source, as_of=at, status="user_stated"),
+        Fact(key="rsvp_pending", label="Guests who have not answered", value=g.pending, source=guest_source, as_of=at, status="pending"),
+        Fact(key="plan_cost_inr", label="Planned vendor cost (INR)", value=plan.total_cost, source="tool", as_of=at, status="pending" if any(s.booking_status.value != "confirmed" for s in plan.selections) else "confirmed"),
+    ]
+
+
+def build_state(em, plan_id: str, now: Optional[datetime] = None, changes_since: Optional[datetime] = None, today=None) -> EventState:
+    """Assemble the state of one plan. Raises FileNotFoundError for an unknown plan. Reads only; never calls a model or the network."""
+    now = _aware(now) or datetime.now(timezone.utc)
+    plan = em.store.latest(plan_id)
+    drafts, inbound, ledger = em.outreach(plan_id), em.outreach_store.inbound(plan_id), em.ledger_entries(plan_id)
+    jobs = em._jobs_of(plan_id)
+    confirmed_claims = {c.message_id for j in jobs for c in j.claims if c.status == "confirmed"}
+    stale: Dict[str, bool] = {}
+    with contextlib.suppress(Exception):  # a price check that cannot run must not hide the rest of the state
+        stale = {q.vendor_id: q.price_stale for q in em.quote_status(plan_id, today)}
+
+    vendors: List[VendorState] = []
+    for s in plan.selections:
+        mine_d = [d for d in drafts if d.vendor_id == s.vendor_id]
+        mine_i = [m for m in inbound if m.vendor_id == s.vendor_id]
+        conv, last = _conversation(mine_d, mine_i)
+        vendors.append(VendorState(
+            category=s.category, vendor_id=s.vendor_id, name=s.name, booking_status=s.booking_status.value, plan_cost=s.cost, price_stale=stale.get(s.vendor_id, False),
+            conversation=conv, last_activity_at=last, quote=_quote_fact(s.vendor_id, s.category, inbound, ledger, confirmed_claims, now),
+        ))
+
+    items: List[OpenItem] = []
+    if plan.guests.pending > 0:
+        first = em.store.load(plan_id, 1).created_at if plan.version > 1 else plan.created_at
+        no_list = " (no guest list is loaded, so replies are not being tracked)" if plan.guests.guest_list_id is None else ""
+        items.append(_item("pending_rsvps", "guests", f"{plan.guests.pending} guest(s) have not answered{no_list}", first, now))
+    replied_drafts = {m.draft_id for m in inbound}
+    for d in drafts:
+        if d.status == "prepared" and (d.expires_at is None or _aware(d.expires_at) > now):
+            items.append(_item("approval_waiting", d.draft_id, f"A message to {d.vendor_name} waits for your approval", d.created_at, now))
+        elif d.kind == "request" and d.status in ("sent", "marked_sent") and d.draft_id not in replied_drafts:
+            items.append(_item("unanswered_vendor", d.draft_id, f"{d.vendor_name} has not replied", d.sent_at or d.marked_at or d.created_at, now))
+    for m in inbound:
+        if m.analysis.amounts and not m.read and m.message_id not in confirmed_claims:
+            items.append(_item("unconfirmed_quote", m.message_id, f"{m.vendor_name} mentioned a price that is not recorded", m.received_at, now))
+    for j in jobs:
+        if j.status in ("done", "expired", "cancelled"):
+            continue
+        window = timedelta(hours=j.reply_window_hours)
+        for vid, p in j.vendors.items():
+            if p.state == "asked" and p.asked_at is not None and now >= _aware(p.asked_at) + window and p.nudges < j.max_nudges_per_vendor and not p.pending_nudge_draft_id:
+                items.append(_item("follow_up_due", f"{j.job_id}:{vid}", f"A follow-up to {vid} is due in the quote job", _aware(p.asked_at) + window, now))
+        for it in j.items:
+            if not it.resolved:
+                items.append(_item("job_item", f"{j.job_id}:{it.item_id}", JOB_ITEM_LABELS.get(it.kind, "A quote job item needs you"), j.created_at, now))
+    items.sort(key=lambda i: (i.since or now, i.kind, i.ref))
+
+    return EventState(
+        plan_id=plan_id, plan_version=plan.version, as_of=now, facts=tuple(_facts(plan, now)), vendors=tuple(vendors), open_items=tuple(items),
+        changes=tuple(_changes(em, plan, plan_id, drafts, inbound, ledger, jobs, changes_since)),
+    )
+
+
+def _changes(em, plan, plan_id: str, drafts: list, inbound: list, ledger: list, jobs: list, since: Optional[datetime]) -> List[Change]:
+    """What happened, newest first, from the stores' own timestamps (the decision logs are per run, not per plan, so they are not the source)."""
+    out: List[Change] = []
+    for v in range(1, plan.version + 1):
+        pv = plan if v == plan.version else em.store.load(plan_id, v)
+        out.append(Change(at=_aware(pv.created_at), kind="plan_version", summary=f"Plan version {pv.version} saved: {pv.change_reason[:160]}"))
+    for e in ledger:
+        out.append(Change(at=_aware(e.timestamp), kind="ledger", summary=f"You recorded a {e.kind.value} of INR {e.amount:,} for the {e.category.value}"))
+    for d in drafts:
+        out.append(Change(at=_aware(d.created_at), kind="message", summary=f"A {d.kind} to {d.vendor_name} was drafted"))
+        if d.sent_at:
+            out.append(Change(at=_aware(d.sent_at), kind="message", summary=f"A {d.kind} to {d.vendor_name} was sent"))
+        elif d.status in ("denied", "expired") and d.decided_at:
+            out.append(Change(at=_aware(d.decided_at), kind="message", summary=f"A {d.kind} to {d.vendor_name} was {d.status}"))
+    for m in inbound:
+        note = " and mentioned a price (not recorded)" if m.analysis.amounts else ""
+        out.append(Change(at=_aware(m.received_at), kind="reply", summary=f"{m.vendor_name} replied{note}"))
+    for j in jobs:
+        for ts, actor, event, _ in em.jobs.store.history(j.job_id):
+            with contextlib.suppress(ValueError):
+                out.append(Change(at=_aware(datetime.fromisoformat(ts)), kind="job", summary=f"Quote job: {event.replace('_', ' ')} ({actor})"))
+    if since is not None:
+        since = _aware(since)
+        out = [c for c in out if c.at > since]
+    out.sort(key=lambda c: (c.at, c.summary), reverse=True)
+    return out[:MAX_CHANGES]

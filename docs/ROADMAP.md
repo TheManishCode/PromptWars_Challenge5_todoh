@@ -53,6 +53,7 @@ solver-verified plans, provenance-tracked vendor quotes, bounded negotiation, an
 | F25 | Personalized ideas (guarded suggestions) | Accept (done 2026-10-31, ADR-045) | 3 | Templates plus optional model; never prices or claims |
 | F26 | Community events with profiles, hard checks and user-marked conditional items | Accept (done 2026-10-31, ADR-046) | 3 | No rule packs: conditional items stay not_verified until the user marks them |
 | F27 | Owner digest in-app plus optional email copy; mailbox smoke check | Accept (done 2026-10-31, ADR-047) | 3 | Real-mailbox validation still to run (docs/EMAIL_VALIDATION.md) |
+| F33 | EventState: a read-only view with source, time and status on every fact, open items with ages, changes since, one assistant tool | Accept (done 2026-11-01, ADR-054) | 3 | docs/EVENT_STATE.md |
 | F32 | Plan deletion, log retention, flagged vendor replies left to the user, search error text | Accept (done 2026-11-01, ADR-053) | 2 | docs/RETENTION.md |
 | F31 | Line-by-line audit with mutation testing: bugs fixed, behaviour pinned | Accept (done 2026-10-31, ADR-052) | 3 | Sampled, not exhaustive; some modules not swept |
 | F30 | Animated assistant avatar (CC BY model, vendored viewer, narrow CSP change) | Accept (done 2026-10-31, ADR-051) | 3 | Checked in headless Chromium only |

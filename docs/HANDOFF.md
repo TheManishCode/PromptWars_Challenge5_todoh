@@ -9,7 +9,7 @@ Updated by: Claude (audit with mutation testing, avatar: ADR-050, ADR-051, ADR-0
 ## Current state
 
 - Package: `eventmate/` (sibling of `src/llm_plan`, which is untouched). Python venv at `.venv`.
-- Tests: `python -m pytest tests` → **2186 passed, 0 failed, 0 skipped** (Python 3.14.8, with Fast Downward, VAL and Chromium present; 2026-10-31; includes the Chromium end-to-end tests). Without the solver variables most planning tests error, by design.
+- Tests: `python -m pytest tests` → **2218 passed, 0 failed, 0 skipped** (Python 3.14.8, with Fast Downward, VAL and Chromium present; 2026-11-01; includes the Chromium end-to-end tests). Without the solver variables most planning tests error, by design.
 - Git: this repository (`event-agent`) is the home of the code. Tests live in `tests/`; the package is grouped into `planning`, `pricing`, `messaging`, `followthrough`, `integrations`, `agents`, `assistant`, `web`.
 
 ### Roadmap progress (rows count only with passing tests)
@@ -106,7 +106,7 @@ Nearly all have 0-2 stars, so none counts as proven; any borrowing needs a read-
 
 ## Session log (newest first)
 
-- 2026-11-01: Backend brief from the owner (`todoh-backend-prompt-eventstate-guests-voice-0ee1157b.md.txt`), first batch, on `feature/todoh-rename-and-backend` (ADR-053; not pushed, not merged): DuckDuckGo search errors name the HTTP status; a vendor reply with instruction-like text is left to the user (no automatic follow-up); plan deletion (`delete-plan`, `DELETE /api/plans/<id>` with confirm, 409 while a send is in flight, deleted jobs unrecoverable from `jobs.db`), log expiry (`purge-logs`, 90 days default) and `docs/RETENTION.md`; README and DEMO point at this file for the test count. Not started from that brief: EventState, guest-list import, voice (sessions, turns, cancel, transcription), behavioural evals, real-mailbox validation, secret-handling docs.
+- 2026-11-01: Backend brief from the owner (`todoh-backend-prompt-eventstate-guests-voice-0ee1157b.md.txt`), first batch, on `feature/todoh-rename-and-backend` (ADR-053, ADR-054; not pushed, not merged): EventState (`eventmate/state.py`, `GET /api/plans/<id>/state`, assistant tool `get_event_state`, docs/EVENT_STATE.md; 32 tests, mutation survivors 40 to 6 of 137); DuckDuckGo search errors name the HTTP status; a vendor reply with instruction-like text is left to the user (no automatic follow-up); plan deletion (`delete-plan`, `DELETE /api/plans/<id>` with confirm, 409 while a send is in flight, deleted jobs unrecoverable from `jobs.db`), log expiry (`purge-logs`, 90 days default) and `docs/RETENTION.md`; README and DEMO point at this file for the test count. Not started from that brief: guest-list import, voice (sessions, turns, cancel, transcription), behavioural evals, real-mailbox validation, secret-handling docs.
 
 - 2026-11-01: Product name changed to "to;doh-the event planner" in every user-visible string, doc and comment (59 files). The 3D cabinet's fixed-size canvas marquees use the short mark TO;DOH. Not renamed, because they are code or wire identifiers and the name cannot be one: the `eventmate` package, the `EventMate` class, `EVENTMATE_*` environment variables, the `X-EventMate-CSRF` header, the `EventMate/0.1` User-Agent and `EventMateBot` robots token. `prompts/` is untouched (versioned and hash-locked; `assistant.system.v1.md` still says EventMate, change it only by adding a v2). The rename was done with a tokenizer-based script so only string and comment text changed.
 
