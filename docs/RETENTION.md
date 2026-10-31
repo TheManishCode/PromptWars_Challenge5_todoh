@@ -17,7 +17,7 @@ DELETE /api/plans/<plan_id>        header X-EventMate-CSRF, body {"confirm": "<p
 -> 409 a message for this plan is being sent right now; try again in a moment
 ```
 
-Removed: every plan version; the budget ledger; vendor requests, replies and the standing permission (`mandates/`); quote-request jobs and their history (`jobs.db`, rewritten so deleted rows are not recoverable from the file); ideas and notes; the imported guest list (its names are overwritten with zeros before the file is removed, docs/GUEST_IMPORT.md); saved price leads; digests; the shortlist; the community checklist. The assistant also forgets the plan's conversation memory, cached answers and approved annotations.
+Removed: every plan version; the budget ledger; vendor requests, replies and the standing permission (`mandates/`); quote-request jobs and their history (`jobs.db`, rewritten so deleted rows are not recoverable from the file); ideas and notes; kept voice notes (overwritten, then removed, docs/VOICE.md); the imported guest list (its names are overwritten with zeros before the file is removed, docs/GUEST_IMPORT.md); saved price leads; digests; the shortlist; the community checklist. The assistant also forgets the plan's conversation memory, cached answers and approved annotations.
 
 Kept on purpose, because they are not per plan:
 
@@ -40,6 +40,10 @@ python -m eventmate purge-logs --days 30
 ```
 
 from a scheduler (cron, a systemd timer) if you want it automatic. Only files named like a run log are touched; symlinks and other files are left alone. Logs hold the brief you typed (placeholders mask phone numbers, emails and card-like numbers; names and addresses are not masked), so delete a plan and purge logs if a brief should not outlive its use.
+
+## Voice
+
+A voice note is deleted as soon as it has been transcribed unless the owner turned on keeping originals and the user chose to keep it (docs/VOICE.md). Kept notes are removed with the plan, on request, or after `EVENTMATE_VOICE_NOTE_DAYS` (default 30), which `python -m eventmate purge-logs` enforces. Voice sessions live in memory only and end after 90 seconds idle or 15 minutes.
 
 ## Conversations
 

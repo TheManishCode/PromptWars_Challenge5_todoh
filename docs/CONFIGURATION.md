@@ -6,6 +6,8 @@
 |---|---|
 | `EVENTMATE_SIGNING_KEY` | HMAC key (>=16 bytes) that makes stored plans tamper-evident even against someone who can write files |
 | `EVENTMATE_LOG_RETENTION_DAYS` | How old a run log must be before `purge-logs` removes it (default 90; see RETENTION.md) |
+| `EVENTMATE_VOICE_ENGINE`, `EVENTMATE_VOICE_MODEL`, `EVENTMATE_VOICE_DEVICE`, `EVENTMATE_VOICE_COMPUTE` | Local voice-note transcriber (off unless `faster-whisper` is installed and a model folder is named; see VOICE.md). Set in the shell, not `.env` |
+| `EVENTMATE_VOICE_KEEP_ORIGINAL`, `EVENTMATE_VOICE_NOTE_DAYS` | Opt-in keeping of original voice notes (default off) and how long they are kept (default 30 days). Set in the shell, not `.env` |
 | `EVENTMATE_WEB_TOKEN` | Bearer token required for the API (mandatory for non-loopback binds) |
 | `EVENTMATE_FD`, `EVENTMATE_VAL` | Paths to Fast Downward / VAL if not in the default locations |
 | `NVIDIA_API_KEY`, `OPENROUTER_API_KEY` (`EVENTMATE_ENABLE_LLM=0` turns models off) | Models: NVIDIA for heavy work, OpenRouter free models for light work and as backup; no SDK needed |

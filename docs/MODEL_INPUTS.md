@@ -12,5 +12,7 @@ Models are optional (`EVENTMATE_ENABLE_LLM=0` turns them off). Contact details a
 The assistant's `get_event_state` tool returns a bounded slice of EventState (docs/EVENT_STATE.md): the event date, RSVP counts, each vendor's category, name, booking status, conversation status and whether a vendor price is only quoted (never the amount), and counts of open items by kind. No guest names, contact details, prices or message text.
 The assistant's `get_guest_counts` tool returns the imported guest list as counts only (docs/GUEST_IMPORT.md): people who said yes, no or have not answered, how many need each diet, and whether the list agrees with the planned headcount. Never a name, a contact detail or a raw cell; a guest list's names are kept in one private file for the plan and appear in no prompt, log or trace.
 
+A voice turn sends the assistant exactly what typed chat would: the transcript, masked and checked the same way, never the audio. A voice session keeps its own short conversation memory (docs/VOICE.md); a spoken answer is the already-checked answer rewritten for speech and is not sent anywhere.
+
 Not sent to any model: the budget total or ledger (except as numbers a tool returns to the assistant), vendor reply text, discovered contact text, secrets.
 Optional Langfuse export, if configured, sends masked questions and answers off the machine.

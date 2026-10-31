@@ -18,7 +18,7 @@ from pydantic import Field
 
 from eventmate.assistant import guard
 from eventmate.assistant.annotations import Annotation, AnnotationStore
-from eventmate.assistant.approvals import ApprovalQueue, Proposal
+from eventmate.assistant.approvals import ApprovalError, ApprovalQueue, Proposal
 from eventmate.assistant.cache import AnswerCache, cache_key
 from eventmate.assistant.identity import Perm, Principal
 from eventmate.assistant.knowledge import KnowledgeBase, build_default
@@ -47,7 +47,7 @@ class AnswerResult(_Model):
     proposals: Tuple[Proposal, ...] = ()
     route: str
     cache: str
-    outcome: str  # answered | refused | degraded
+    outcome: str  # answered | refused | degraded | cancelled (a voice turn dropped before it could commit anything)
     trace_id: str
     degraded_reason: Optional[str] = Field(default=None, max_length=300)
 
@@ -99,7 +99,9 @@ class Assistant:
 
     # ------------------------------------------------------------------ ask
 
-    def ask(self, question: str, plan_id: str, principal: Principal) -> AnswerResult:
+    def ask(self, question: str, plan_id: str, principal: Principal, turn: Optional[Any] = None) -> AnswerResult:
+        """Answer one question. ``turn`` is given for a voice turn (eventmate.voice.turns.Turn): it stages proposals, never writes the answer cache, and is
+        checked for cancellation after every blocking step, so a cancelled turn commits nothing. Typed chat passes no turn and behaves exactly as before."""
         if not isinstance(question, str) or not question.strip():
             raise AssistantError("ask a question")
         if len(question) > MAX_QUESTION:
@@ -124,18 +126,26 @@ class Assistant:
             return self._record(tb, result, principal, plan_id, roles)
         r = route(question)
         tb.step("route", r.kind, detail=r.reason + (f" -> {r.tool}" if r.tool else ""))
-        memory = "" if r.kind == "direct" else self.sessions.block(plan_id, principal.user_id)  # routine questions are answered by a tool alone: no model, so no memory
+        mem_user = turn.memory_user if turn is not None else principal.user_id  # a voice session has its own memory, never shared with typed chat or another session
+        memory = "" if r.kind == "direct" else self.sessions.block(plan_id, mem_user)  # routine questions are answered by a tool alone: no model, so no memory
         key = cache_key(question + ("\n" + memory if depends_on_context(question) else ""), roles, plan_id, state_fp, self.kb.version, self.prompt_sha)  # an answer given with context is never reused without it
 
         def compute():
-            result, evidence_hostile = self._answer(model_question, plan_id, principal, r, tb, memory)
-            return result, result.outcome == "answered" and not result.proposals and not flags and not evidence_hostile
+            result, evidence_hostile = self._answer(model_question, plan_id, principal, r, tb, memory, turn)
+            return result, turn is None and result.outcome == "answered" and not result.proposals and not flags and not evidence_hostile
 
         result, cache_state = self.cache.get_or_compute(key, compute)
+        if turn is not None and turn.cancelled():
+            return AnswerResult(answer="", route=r.kind, cache="skipped", outcome="cancelled", trace_id=tb.id)  # nothing below runs: no trace, memory or proposal
         if cache_state != "miss":
             tb.step("cache", cache_state, detail="answer reused; no model or tool ran for this question")
+        if turn is not None and result.proposals:
+            try:
+                result = result.model_copy(update={"proposals": tuple(self.queue.adopt(p) for p in result.proposals)})  # staged during the turn; filed only now that it stands
+            except ApprovalError as exc:
+                result = AnswerResult(answer=str(exc), route=r.kind, cache="skipped", outcome="refused", trace_id=tb.id)
         final = self._record(tb, result.model_copy(update={"cache": cache_state}), principal, plan_id, roles, question)
-        self.sessions.record(plan_id, principal.user_id, question, final.answer, final.outcome)
+        self.sessions.record(plan_id, mem_user, question, final.answer, final.outcome)
         return final.model_copy(update={"answer": ph.restore(final.answer)})  # real values back only in what this person sees; the trace and memory hold the masked text
 
     def _record(self, tb: TraceBuilder, result: AnswerResult, principal: Principal, plan_id: str, roles: Tuple[str, ...], question: Optional[str] = None) -> AnswerResult:
@@ -215,8 +225,8 @@ class Assistant:
 
     # --------------------------------------------------------------- answering
 
-    def _answer(self, question: str, plan_id: str, principal: Principal, r: Route, tb: TraceBuilder, memory: str = "") -> Tuple[AnswerResult, bool]:
-        ctx = ToolContext(self.em, principal, plan_id, self.kb, self.queue)
+    def _answer(self, question: str, plan_id: str, principal: Principal, r: Route, tb: TraceBuilder, memory: str = "", turn: Optional[Any] = None) -> Tuple[AnswerResult, bool]:
+        ctx = ToolContext(self.em, principal, plan_id, self.kb, turn.staging if turn is not None else self.queue)
         evidence: List[str] = []
         cited: Dict[str, str] = {}  # id -> text that may be cited
         proposals: List[Proposal] = []
@@ -248,6 +258,8 @@ class Assistant:
 
         if r.kind == "direct":
             text = call(r.tool, {"query": question} if r.tool == "search_knowledge" else {})
+            if turn is not None and turn.cancelled():
+                return done("", (), "cancelled")
             data = json.loads(text)
             if "error" in data:
                 return done("You don't have access to that information for this event.", (), "refused", data["error"])
@@ -274,6 +286,8 @@ class Assistant:
         transcript = (guard.fence("EARLIER CONVERSATION", memory) + "\n\n" if memory else "") + guard.fence("QUESTION", question)
         reasked, tier = False, r.kind
         for step in range(MAX_STEPS):
+            if turn is not None and turn.cancelled():  # checked again after each blocking step (a model call cannot be aborted; its result is dropped here)
+                return done("", (), "cancelled")
             prompt = body.replace("{tools}", catalogue).replace("{transcript}", transcript)
             started = time.perf_counter()
             try:

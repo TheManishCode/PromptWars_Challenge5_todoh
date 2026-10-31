@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 from eventmate.guestlist import GuestListStore, GuestPreview, check_against, parse_guest_csv, totals_of
+from eventmate.voice.notes import VoiceNoteStore
 from eventmate.retention import PlanBusy, delete_plan_files, purge_old_logs, report
 from eventmate.agents.budget import BudgetAgent, BudgetPolicy
 from eventmate.agents.explainer import ExplainerAgent, Explanation
@@ -115,6 +116,7 @@ class EventMate:
         self.access_store = AccessibilityStore(self.store.root)
         self.checklist_store = ChecklistStore(self.store.root)
         self.guest_lists = GuestListStore(self.store.root)
+        self.voice_notes = VoiceNoteStore(self.store.root)
         self.repo.access = self.access_store
         self.outreach_store = OutreachStore(self.store.root, self.observations.checklists)
         self._jobs: Optional[JobWorker] = None
@@ -247,7 +249,7 @@ class EventMate:
         if any(d.status == "sending" for d in self.outreach_store.list(plan_id)):
             raise PlanBusy("a message for this plan is being sent; try again in a moment")
         self.guest_lists.delete(plan_id)  # also drops any preview still waiting for a commit
-        files = delete_plan_files(self.store.root, plan_id)
+        files = delete_plan_files(self.store.root, plan_id) + self.voice_notes.delete_plan(plan_id)
         jobs = self.jobs.store.delete_plan(plan_id) if (self.store.root / "jobs.db").exists() else 0
         versions = self.store.delete(plan_id)  # last: until it is gone the plan still lists, so a failed delete can simply be run again
         self.logs.decisions.log(
@@ -257,8 +259,8 @@ class EventMate:
         return report(versions, files, jobs)
 
     def purge_logs(self, max_age_days: Optional[int] = None) -> List[str]:
-        """Delete run logs older than the retention period (default 90 days, ``EVENTMATE_LOG_RETENTION_DAYS``). Returns the file names removed."""
-        return purge_old_logs(self.logs.decisions.log_dir, max_age_days)
+        """Delete run logs older than the retention period (default 90 days, ``EVENTMATE_LOG_RETENTION_DAYS``) and kept voice notes older than theirs. Returns what was removed."""
+        return purge_old_logs(self.logs.decisions.log_dir, max_age_days) + [f"voice note {n}" for n in self.voice_notes.purge_expired()]
 
     def ledger_add(self, plan_id: str, kind: str, category: VendorCategory, amount: int, note: str = "") -> LedgerEntry:
         """Record money the user reports (quote, payment, refund) against the latest plan. Nothing is paid by to;doh-the event planner."""

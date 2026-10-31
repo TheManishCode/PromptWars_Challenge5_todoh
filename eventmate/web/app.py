@@ -32,10 +32,14 @@ from pathlib import Path
 from typing import Callable, Deque, Dict, List, Literal, Optional
 
 from flask import Flask, Response, abort, g, jsonify, request
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 
 from eventmate.planning import intake
 from eventmate.arcade_pulse import pulse as _arcade_pulse
+from eventmate.voice import audio as voice_audio
+from eventmate.voice.notes import NotesDisabled
+from eventmate.voice.transcribe import Transcriber, TranscribeError, engine_from_env
+from eventmate.voice.turns import ID as VOICE_ID, LANGUAGE as VOICE_LANGUAGE, VoiceError, VoiceService
 from eventmate.state import build_state
 from eventmate.guestlist import MAX_BYTES as MAX_GUEST_BYTES, GuestListTooLarge, StalePreview
 from eventmate.retention import PlanBusy
@@ -84,12 +88,19 @@ _gzip_cache: Dict[tuple, bytes] = {}  # (name, mtime_ns) -> compressed bytes; th
 LOOPBACK = {"127.0.0.1", "localhost", "[::1]", "::1"}
 CSP = (
     f"default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' '{VIEWER_STYLE_HASH}'; img-src 'self' data: blob:; "
-    "connect-src 'self' blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    "media-src 'self' blob:; connect-src 'self' blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 )
 HEAVY_MAX = 4  # concurrent network-bound searches
 _PLAN_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
-_GUEST_PREVIEW = re.compile(r"/api/plans/[A-Za-z0-9_-]{1,64}/guests/preview")
 GUEST_UPLOAD_LIMIT = 640 * 1024  # a 256 KB CSV can grow when JSON-escaped; the parser enforces the real 256 KB limit
+AUDIO_UPLOAD_LIMIT = voice_audio.MAX_BYTES + 256 * 1024  # a recording plus the multipart wrapper; the audio check enforces the real 5 MB
+VOICE_STREAMS_MAX = 4  # concurrent server-sent event streams
+# the only routes that take a body larger than 64 KB, or multipart instead of JSON: (path pattern, limit)
+UPLOAD_ROUTES = (
+    (re.compile(r"/api/plans/[A-Za-z0-9_-]{1,64}/guests/preview"), GUEST_UPLOAD_LIMIT),
+    (re.compile(r"/api/voice/transcribe"), AUDIO_UPLOAD_LIMIT),
+    (re.compile(r"/api/plans/[A-Za-z0-9_-]{1,64}/voice-notes"), AUDIO_UPLOAD_LIMIT),
+)
 log = logging.getLogger("eventmate.web")
 
 
@@ -294,6 +305,24 @@ class GuestCommitBody(_Strict):
     token: str = Field(min_length=1, max_length=100)
 
 
+class VoiceSessionBody(_Strict):
+    plan_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
+
+
+class VoiceTurnBody(_Strict):
+    session_id: str = Field(min_length=1, max_length=100)
+    turn_id: str = Field(min_length=1, max_length=100)
+    generation: StrictInt
+    text: str = Field(min_length=1, max_length=4000)
+    input_mode: str = Field(max_length=20)
+    confidence: Optional[float] = None
+    language: Optional[str] = Field(default=None, max_length=12)
+
+
+class VoiceCancelBody(_Strict):
+    playback_chars: StrictInt
+
+
 class DeletePlanBody(_Strict):
     confirm: str = Field(min_length=1, max_length=64)
 
@@ -364,6 +393,8 @@ def create_app(
     assistant: Optional[Assistant] = None,
     principal: Principal = LOCAL_ORGANIZER,
     poll_seconds: Optional[float] = None,
+    voice: Optional[VoiceService] = None,
+    transcriber: Optional[Transcriber] = None,
 ) -> Flask:
     app = Flask(__name__, static_folder=None)
     app.config["MAX_CONTENT_LENGTH"] = 64 * 1024
@@ -372,6 +403,9 @@ def create_app(
         em = EventMate(run_id=f"web-{date.today():%Y%m%d}", llm=client_from_env())
     lock = threading.RLock()
     assistant = assistant or Assistant.from_env(em)
+    voice_svc = voice or VoiceService(assistant, em)
+    transcriber = transcriber or Transcriber(engine_from_env(os.environ), em.store.root / "voice" / "tmp")
+    stream_slots = threading.BoundedSemaphore(VOICE_STREAMS_MAX)
     csrf_token = secrets.token_urlsafe(32)
     hosts = set(allowed_hosts) if allowed_hosts else set(LOOPBACK)
     writes: Dict[str, Deque[float]] = defaultdict(deque)
@@ -403,9 +437,9 @@ def create_app(
             origin = request.headers.get("Origin")
             if origin and origin.split("://", 1)[-1] != request.host:
                 return _err(403, "cross-origin request refused")
-            upload = request.method == "POST" and bool(_GUEST_PREVIEW.fullmatch(request.path))
+            upload = next((limit for rx, limit in UPLOAD_ROUTES if request.method == "POST" and rx.fullmatch(request.path)), None)
             if upload:
-                request.max_content_length = GUEST_UPLOAD_LIMIT  # the one route that takes a larger body (a guest CSV)
+                request.max_content_length = upload
             if request.mimetype != "application/json" and not (upload and request.mimetype == "multipart/form-data"):
                 return _err(415, "JSON body required")
             now, q = time.monotonic(), writes[request.remote_addr or "?"]
@@ -444,6 +478,22 @@ def create_app(
 
     def _err(code: int, message: str, **extra):
         return jsonify({"error": message, **extra}), code
+
+    @app.errorhandler(VoiceError)
+    def _voice_error(exc):
+        return _err(exc.status, str(exc)[:300])
+
+    @app.errorhandler(TranscribeError)
+    def _transcribe_error(exc):
+        return _err(exc.status, str(exc)[:300])
+
+    @app.errorhandler(voice_audio.AudioRejected)
+    def _audio_rejected(exc):
+        return _err(exc.status, str(exc)[:300])
+
+    @app.errorhandler(NotesDisabled)
+    def _notes_disabled(exc):
+        return _err(503, "keeping voice notes is not turned on")
 
     @app.errorhandler(GuestListTooLarge)
     def _guests_too_large(exc):
@@ -1271,6 +1321,98 @@ def create_app(
         with lock:
             draft = em.mark_outreach_sent(plan_id, draft_id)
         return out(draft)
+
+    # ------------------------------------------------------------- voice (docs/VOICE.md)
+
+    def audio_upload():
+        """The one audio file of a multipart request, as (bytes, declared type)."""
+        f = request.files.get("audio")
+        if f is None or len(request.files) != 1:
+            raise ValueError("send exactly one recording, in the field named audio")
+        return f.stream.read(voice_audio.MAX_BYTES + 1), f.mimetype or ""
+
+    @app.get("/api/voice/capabilities")
+    def voice_capabilities():
+        return jsonify({"transcribe": transcriber.capabilities(), "keep_original": em.voice_notes.enabled})
+
+    @app.post("/api/voice/transcribe")
+    def voice_transcribe():
+        """Turn one recorded note into text on this machine. Nothing is sent to the assistant by this call; the audio is deleted before it returns."""
+        data, declared = audio_upload()
+        language = request.form.get("language") or None
+        if language is not None and not VOICE_LANGUAGE.fullmatch(language):
+            raise ValueError("language must be a language code such as en or hi-IN")
+        got = transcriber.transcribe(data, declared, language)
+        return jsonify({"transcript": got.text, "language": got.language, "duration_s": got.duration_s})
+
+    @app.post("/api/voice/sessions")
+    def voice_session_open():
+        b = body(VoiceSessionBody)
+        return jsonify(voice_svc.create_session(principal, b.plan_id)), 201
+
+    @app.delete("/api/voice/sessions/<session_id>")
+    def voice_session_close(session_id):
+        body(EmptyBody)
+        voice_svc.end_session(principal, session_id if VOICE_ID.fullmatch(session_id) else "")
+        return jsonify({"ended": True})
+
+    @app.post("/api/voice/turns")
+    def voice_turn():
+        """One transcript through the same assistant pipeline as typed chat. Server-sent events when asked for (Accept: text/event-stream), else one JSON body."""
+        b = body(VoiceTurnBody)
+        turn = voice_svc.start_turn(principal, b.session_id, b.turn_id, b.generation, b.text, b.input_mode, b.confidence, b.language)
+        events = voice_svc.run_turn(principal, b.session_id, turn)
+        if "text/event-stream" not in request.headers.get("Accept", ""):
+            got = list(events)
+            by = {e["event"]: e["data"] for e in got if e["event"] != "sentence"}
+            return jsonify({"turn_id": turn.turn_id, "sentences": [e["data"] for e in got if e["event"] == "sentence"], "final": by.get("final"), "error": by.get("error")})
+        if not stream_slots.acquire(blocking=False):
+            events.close()
+            voice_svc.cancel_turn(principal, turn.turn_id, 0)  # nothing was started, so nothing is left thinking
+            return _err(429, "too many voice streams are open; try again in a moment")
+
+        def stream():
+            try:
+                for e in events:
+                    yield f"event: {e['event']}\ndata: {json.dumps(e['data'])}\n\n"
+            finally:
+                events.close()
+                stream_slots.release()
+
+        return Response(stream(), mimetype="text/event-stream", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+    @app.post("/api/voice/turns/<turn_id>/cancel")
+    def voice_turn_cancel(turn_id):
+        """The user spoke over the answer or walked away. ``playback_chars`` is how much speech was played: an estimate, not proof of what was heard."""
+        b = body(VoiceCancelBody)
+        return jsonify(voice_svc.cancel_turn(principal, turn_id if VOICE_ID.fullmatch(turn_id) else "", b.playback_chars))
+
+    @app.post("/api/plans/<plan_id>/voice-notes")
+    def voice_note_save(plan_id):
+        """Keep the original recording with the plan. Off unless the owner turned it on (EVENTMATE_VOICE_KEEP_ORIGINAL=1)."""
+        plan_id = pid(plan_id)
+        data, declared = audio_upload()
+        with lock:
+            em.store.latest(plan_id)
+            return jsonify(em.voice_notes.save(plan_id, data, declared)), 201
+
+    @app.get("/api/plans/<plan_id>/voice-notes/<note_id>")
+    def voice_note_get(plan_id, note_id):
+        plan_id = pid(plan_id)
+        with lock:
+            em.store.latest(plan_id)
+            got = em.voice_notes.read(plan_id, note_id)
+        if got is None:
+            abort(404)
+        return Response(got[0], mimetype=got[1], headers={"Cache-Control": "no-store", "Content-Disposition": "attachment; filename=voice-note"})
+
+    @app.delete("/api/plans/<plan_id>/voice-notes/<note_id>")
+    def voice_note_delete(plan_id, note_id):
+        plan_id = pid(plan_id)
+        body(EmptyBody)
+        with lock:
+            em.store.latest(plan_id)
+            return jsonify({"deleted": em.voice_notes.delete(plan_id, note_id)})
 
     @app.post("/api/plans/<plan_id>/guests/preview")
     def guests_preview(plan_id):

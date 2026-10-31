@@ -58,6 +58,22 @@ class SessionStore:
     def turns(self, plan_id: str, user: str) -> int:
         return len(self._turns.get((user, plan_id), ()))
 
+    def amend_last(self, plan_id: str, user: str, answer: str) -> None:
+        """Replace the stored answer of the newest turn (a voice answer cut off mid-playback keeps only what was played)."""
+        k = (user, plan_id)
+        with self._lock:
+            turns = self._turns.get(k)
+            if turns:
+                q, _ = turns.pop()
+                turns.append((q, self._clean(answer, MAX_A)))
+
+    def drop_last(self, plan_id: str, user: str) -> None:
+        """Forget the newest turn (a voice turn cancelled before anything was played)."""
+        with self._lock:
+            turns = self._turns.get((user, plan_id))
+            if turns:
+                turns.pop()
+
     def clear(self, plan_id: str, user: str) -> None:
         k = (user, plan_id)
         with self._lock:
