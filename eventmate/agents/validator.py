@@ -204,16 +204,34 @@ class ValidatorAgent:
     def _schedule(self, d: PlanDraft) -> List[ConstraintCheck]:
         spec, entries = d.spec, {e.task_id: e for e in d.solution.entries}
         tasks = {t.id: t for t in spec.tasks}
-        out: List[ConstraintCheck] = []
+        known = [t for t in tasks.values() if t.id in entries]
+        return [
+            self._schedule_complete(d, tasks, entries),
+            self._schedule_durations(known, entries),
+            self._schedule_dependencies(spec, entries),
+            self._schedule_bounds(spec, known, entries),
+            self._schedule_resources(spec, entries),
+            self._items_match_solution(d, entries),
+        ]
+
+    def _schedule_complete(self, d: PlanDraft, tasks, entries) -> ConstraintCheck:
         expected = self._expected_tasks(d)
         missing = sorted((set(tasks) | expected) - set(entries))
         extra = sorted(set(entries) - set(tasks))
-        out.append(_chk("schedule_complete", not missing and not extra and expected <= set(tasks), "every expected task is scheduled" if not (missing or extra) and expected <= set(tasks) else f"missing {missing or sorted(expected - set(tasks))}, unexpected {extra}"))
-        known = [t for t in tasks.values() if t.id in entries]
+        return _chk("schedule_complete", not missing and not extra and expected <= set(tasks), "every expected task is scheduled" if not (missing or extra) and expected <= set(tasks) else f"missing {missing or sorted(expected - set(tasks))}, unexpected {extra}")
+
+    @staticmethod
+    def _schedule_durations(known, entries) -> ConstraintCheck:
         bad_dur = [t.id for t in known if entries[t.id].end - entries[t.id].start != t.duration]
-        out.append(_chk("schedule_durations", not bad_dur, "all durations match" if not bad_dur else f"wrong duration: {bad_dur}"))
+        return _chk("schedule_durations", not bad_dur, "all durations match" if not bad_dur else f"wrong duration: {bad_dur}")
+
+    @staticmethod
+    def _schedule_dependencies(spec, entries) -> ConstraintCheck:
         bad_dep = [f"{x.before}->{x.after}" for x in spec.dependencies if x.before in entries and x.after in entries and entries[x.after].start < entries[x.before].end + x.min_lag]
-        out.append(_chk("schedule_dependencies", not bad_dep, "all precedences and lags hold" if not bad_dep else f"violated: {bad_dep}"))
+        return _chk("schedule_dependencies", not bad_dep, "all precedences and lags hold" if not bad_dep else f"violated: {bad_dep}")
+
+    @staticmethod
+    def _schedule_bounds(spec, known, entries) -> ConstraintCheck:
         bad_bounds = []
         for t in known:
             e = entries[t.id]
@@ -223,14 +241,19 @@ class ValidatorAgent:
                 bad_bounds.append(f"{t.id}: not at fixed start")
             if t.deadline_end is not None and e.end > t.deadline_end:
                 bad_bounds.append(f"{t.id}: misses deadline")
-        out.append(_chk("schedule_bounds", not bad_bounds, "all time bounds hold" if not bad_bounds else "; ".join(bad_bounds)))
-        out.append(_chk("schedule_resources", not (over := self._resource_overuse(spec, entries)), "no resource is over capacity" if not over else f"over capacity: {over}"))
+        return _chk("schedule_bounds", not bad_bounds, "all time bounds hold" if not bad_bounds else "; ".join(bad_bounds))
+
+    def _schedule_resources(self, spec, entries) -> ConstraintCheck:
+        over = self._resource_overuse(spec, entries)
+        return _chk("schedule_resources", not over, "no resource is over capacity" if not over else f"over capacity: {over}")
+
+    @staticmethod
+    def _items_match_solution(d: PlanDraft, entries) -> ConstraintCheck:
         by_task = {i.task_id: i for i in d.items}
         ok_items = set(by_task) == set(entries) and all(
             by_task[k].start == d.origin + timedelta(minutes=e.start) and by_task[k].end == d.origin + timedelta(minutes=e.end) for k, e in entries.items()
         )
-        out.append(_chk("items_match_solution", ok_items, "wall-clock items equal the solved schedule" if ok_items else "plan items differ from the solved schedule"))
-        return out
+        return _chk("items_match_solution", ok_items, "wall-clock items equal the solved schedule" if ok_items else "plan items differ from the solved schedule")
 
     def _expected_tasks(self, d: PlanDraft) -> set:
         ids = {"book_venue", "venue_setup", "event", "teardown"}
