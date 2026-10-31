@@ -36,6 +36,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eventmate.planning import intake
 from eventmate.arcade_pulse import pulse as _arcade_pulse
+from eventmate.retention import PlanBusy
 from eventmate.assistant.agent import Assistant, AssistantError
 from eventmate.assistant.approvals import ApprovalError
 from eventmate.assistant.identity import LOCAL_ORGANIZER, Perm, Principal
@@ -281,6 +282,10 @@ class EmptyBody(_Strict):
     pass
 
 
+class DeletePlanBody(_Strict):
+    confirm: str = Field(min_length=1, max_length=64)
+
+
 class FeedbackBody(_Strict):
     value: int = Field(ge=-1, le=1)
     comment: str = Field(default="", max_length=200)
@@ -424,6 +429,10 @@ def create_app(
 
     def _err(code: int, message: str, **extra):
         return jsonify({"error": message, **extra}), code
+
+    @app.errorhandler(PlanBusy)
+    def _plan_busy(exc):
+        return _err(409, str(exc)[:300])
 
     @app.errorhandler(RequestParseError)
     def _parse(exc):
@@ -837,6 +846,17 @@ def create_app(
         with lock:
             st = em.autoreply_status(plan_id)
         return out(st)
+
+    @app.delete("/api/plans/<plan_id>")
+    def delete_plan(plan_id):
+        """Forget a plan and everything it owns (docs/RETENTION.md). The body must repeat the plan id: a stray call cannot delete anything."""
+        plan_id, b = pid(plan_id), body(DeletePlanBody)
+        if b.confirm != plan_id:
+            raise ValueError("confirm must repeat the plan id")
+        with lock:
+            removed = em.delete_plan(plan_id)
+            assistant.forget_plan(plan_id)
+        return jsonify({"deleted": plan_id, "removed": removed})
 
     @app.post("/api/plans/<plan_id>/autoreply")
     def autoreply_grant(plan_id):

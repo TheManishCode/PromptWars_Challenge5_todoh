@@ -422,3 +422,25 @@ def test_default_provider_merges_when_brave_is_keyed(monkeypatch):
     monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "KEY12345678")
     p = default_provider()
     assert isinstance(p, MergedSearch) and [x.name for x in p.providers] == ["brave", "duckduckgo"]
+
+
+@pytest.mark.parametrize("code,needle", [(429, "limiting automated"), (403, "limiting automated"), (503, "busy or down"), (404, "refused (HTTP 404)")])
+def test_duckduckgo_errors_name_the_http_status_not_just_unreachable(code, needle):
+    from eventmate.integrations.websearch import DuckDuckGoHtml, SearchError
+
+    def boom(query):
+        raise urllib.error.HTTPError("https://html.duckduckgo.com/html/", code, "x", {}, None)
+
+    with pytest.raises(SearchError) as e:
+        DuckDuckGoHtml(transport=boom).search("caterers pune")
+    assert needle in str(e.value) and f"HTTP {code}" in str(e.value) and "could not be reached" not in str(e.value)
+
+
+def test_duckduckgo_network_failure_is_still_reported_as_unreachable():
+    from eventmate.integrations.websearch import DuckDuckGoHtml, SearchError
+
+    def down(query):
+        raise urllib.error.URLError("no route")
+
+    with pytest.raises(SearchError, match="could not be reached"):
+        DuckDuckGoHtml(transport=down).search("x")

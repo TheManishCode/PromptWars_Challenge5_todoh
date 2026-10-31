@@ -29,6 +29,11 @@ class AnswerCache:
         self._lock = threading.Lock()
         self.hits = self.misses = self.coalesced = 0
 
+    def clear(self) -> None:
+        """Forget every cached answer (keys are hashes, so one plan's entries cannot be picked out; the cache is five minutes deep)."""
+        with self._lock:
+            self._store.clear()
+
     def _fresh(self, key: str):
         item = self._store.get(key)
         if item and time.monotonic() - item[0] <= self.ttl:

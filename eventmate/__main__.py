@@ -44,7 +44,7 @@ from eventmate.integrations.discovery import DiscoveryError
 from eventmate.integrations.travel import TravelError, check_date
 from eventmate.integrations.weather import WeatherError
 
-COMMANDS = {"testvendor", "jobs", "inbox", "outreach", "plan", "confirm", "replan", "show", "diff", "validate", "list", "intake", "tradeoffs", "ledger", "quotes", "flights", "multicity", "discover", "weather", "deals"}
+COMMANDS = {"delete-plan", "purge-logs", "testvendor", "jobs", "inbox", "outreach", "plan", "confirm", "replan", "show", "diff", "validate", "list", "intake", "tradeoffs", "ledger", "quotes", "flights", "multicity", "discover", "weather", "deals"}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -153,6 +153,11 @@ def _parser() -> argparse.ArgumentParser:
     g.add_argument("--date", type=date.fromisoformat)
     p.add_argument("--override-confirmed", nargs="*", default=[])
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("delete-plan", help="forget a plan and everything it owns (versions, ledger, messages, jobs, ideas); see docs/RETENTION.md")
+    p.add_argument("plan_id")
+    p.add_argument("--confirm", required=True, metavar="PLAN_ID", help="repeat the plan id to confirm")
+    p = sub.add_parser("purge-logs", help="delete run logs older than the retention period (default 90 days, EVENTMATE_LOG_RETENTION_DAYS)")
+    p.add_argument("--days", type=int)
     p = sub.add_parser("show")
     p.add_argument("plan_id")
     p.add_argument("--version", type=int)
@@ -255,6 +260,16 @@ def _run(em: EventMate, a) -> int:
         return _inbox(em, a)
     if a.command == "jobs":
         return _jobs(em, a)
+    if a.command == "delete-plan":
+        if a.confirm != a.plan_id:
+            print("--confirm must repeat the plan id", file=sys.stderr)
+            return 2
+        print(json.dumps(em.delete_plan(a.plan_id)))
+        return 0
+    if a.command == "purge-logs":
+        removed = em.purge_logs(a.days)
+        print(f"removed {len(removed)} log file(s)")
+        return 0
     if a.command == "testvendor":
         if not a.i_own_this_address:
             print("a test vendor needs --i-own-this-address: you confirm the address is yours", file=sys.stderr)

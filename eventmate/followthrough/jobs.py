@@ -145,6 +145,19 @@ class JobStore:
             db.execute("INSERT INTO events (job_id, ts, actor, event, detail) VALUES (?,?,?,?,?)", (job.job_id, self._iso(now), "system", "created", json.dumps({"goal": job.goal})))
         return job
 
+    def delete_plan(self, plan_id: str) -> int:
+        """Remove a plan's jobs and their event history. Returns how many jobs were removed."""
+        ids = [j.job_id for j in self.list(plan_id)]
+        with self._lock, self._db() as db:
+            db.execute("PRAGMA secure_delete = ON")  # freed pages are overwritten, not just unlinked
+            for jid in ids:
+                db.execute("DELETE FROM events WHERE job_id = ?", (jid,))
+                db.execute("DELETE FROM jobs WHERE job_id = ?", (jid,))
+            if ids:
+                db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                db.execute("VACUUM")  # and the file shrinks, so no deleted row stays readable in it
+        return len(ids)
+
     def get(self, job_id: str) -> Job:
         with self._db() as db:
             row = db.execute("SELECT data FROM jobs WHERE job_id=?", (job_id,)).fetchone()

@@ -36,4 +36,4 @@ Show the Updates box and the proposed price with "check taxes and extras". It is
 Optional: turn on the owner email copy; show the exact summary before confirming.
 
 ## Paired regression run (30 s)
-Run a wedding: `Plan a 120-person wedding in Pune on December 12 under INR 500,000. Venue and catering.` There is no Community tab, no community checks, and the plan, Ideas and quotes flow work as before. `python -m pytest tests` (1706 passed on Python 3.14.8 with solvers and Chromium).
+Run a wedding: `Plan a 120-person wedding in Pune on December 12 under INR 500,000. Venue and catering.` There is no Community tab, no community checks, and the plan, Ideas and quotes flow work as before. `python -m pytest tests` (the current count, date and environment are in docs/HANDOFF.md).

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
+from eventmate.assistant.guard import scan as scan_instructions
 from eventmate.sourcing.suppression import SuppressionStore, UnmatchedStore, normalise_address
 from eventmate.messaging.channels import Channel, ChannelError, Inbound, KnownThread, OutcomeUnknown, ThreadRef
 from eventmate.integrations.deals import extract_mentions
@@ -378,6 +379,8 @@ class ConversationService:
             return 0
         if any(r.analysis.questions or r.analysis.says_unavailable or r.attachments or r.sender_differs for r in fresh):
             return 0  # a person has to read this: a question (even one an earlier reply in this round asked), a refusal, a file, or an unexpected sender
+        if any(scan_instructions(r.body) for r in fresh):
+            return 0  # text that tries to instruct the assistant is hostile data: nothing is sent in answer to it, the user reads it first
         req = self.store.get(pid, root)
         options = suggest_followups(replies, self.store.checklists.get(req.category.value, ())) if req else []
         if not options:

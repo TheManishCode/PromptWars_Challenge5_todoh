@@ -153,6 +153,14 @@ class PlanStore:
                 out.append(int(m.group(2)))
         return sorted(out)
 
+    def delete(self, plan_id: str) -> int:
+        """Remove every version of a plan (the user asked for it to be forgotten). Returns how many files were removed."""
+        with self._lock:
+            numbers = self._version_numbers(plan_id)
+            for n in reversed(numbers):  # newest first: a crash midway leaves a plan that still loads
+                os.unlink(self._path(plan_id, n))
+            return len(numbers)
+
     def list_plans(self) -> List[str]:
         return sorted({m.group(1) for p in self.root.iterdir() if (m := FILE_NAME.fullmatch(p.name))})
 

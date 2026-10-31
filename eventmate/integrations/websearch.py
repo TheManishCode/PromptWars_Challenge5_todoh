@@ -66,7 +66,13 @@ class DuckDuckGoHtml(SearchProvider):
     def search(self, query: str, limit: int = 8) -> List[SearchHit]:
         try:
             page = self._transport(query)
-        except NETWORK_ERRORS:  # URLError and HTTPError are OSErrors
+        except urllib.error.HTTPError as exc:  # before NETWORK_ERRORS: HTTPError is an OSError too, and its status says what to do
+            if exc.code in (202, 403, 429):
+                raise SearchError(f"the web search answered HTTP {exc.code} (it is limiting automated requests); wait a few minutes, or set BRAVE_SEARCH_API_KEY to use Brave Search") from None
+            if exc.code in (502, 503, 504):
+                raise SearchError(f"the web search answered HTTP {exc.code} (busy or down); try again in a minute") from None
+            raise SearchError(f"the web search was refused (HTTP {exc.code})") from None
+        except NETWORK_ERRORS:
             raise SearchError("the web search could not be reached; try again shortly") from None
         hits: List[SearchHit] = []
         for block in re.split(r'(?=<div class="result[ "])', page):

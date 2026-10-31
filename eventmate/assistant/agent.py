@@ -91,6 +91,12 @@ class Assistant:
         small = client_from_env(tier="light") or large
         return cls(em, {"large": large, "small": small}, **kw)
 
+    def forget_plan(self, plan_id: str) -> None:
+        """Drop what the assistant remembers about a deleted plan: conversation memory, cached answers and approved annotations."""
+        self.sessions.clear_plan(plan_id)
+        self.cache.clear()
+        self.annotations.drop_plan(plan_id)
+
     # ------------------------------------------------------------------ ask
 
     def ask(self, question: str, plan_id: str, principal: Principal) -> AnswerResult:

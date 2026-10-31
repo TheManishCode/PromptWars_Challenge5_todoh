@@ -17,6 +17,7 @@ from datetime import date
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
+from eventmate.retention import PlanBusy, delete_plan_files, purge_old_logs, report
 from eventmate.agents.budget import BudgetAgent, BudgetPolicy
 from eventmate.agents.explainer import ExplainerAgent, Explanation
 from eventmate.agents.guest import GuestAgent, GuestRepository
@@ -51,7 +52,7 @@ from eventmate.llm import LLMClient, client_from_env
 from eventmate.logs import RunLogs
 from eventmate.planning.rules import Advisory, advisories_for
 from eventmate.plan_store import PlanStore, draft_from_plan
-from eventmate.schemas import ContactFindResult, ExternalBusiness, SearchOutcome, ShortlistItem, VendorContact, VendorRef, WeatherAdvice, BookingStatus, DecisionLogEntry, SelectionQuoteStatus, LedgerEntry, LedgerSummary, Disruption, DisruptionKind, PlanDiff, PlanOutcome, PlanVersion, ReplanOutcome, TradeoffOption, TradeoffReport, ValidationReport, VendorCategory
+from eventmate.schemas import AgentName, DecisionType, ContactFindResult, ExternalBusiness, SearchOutcome, ShortlistItem, VendorContact, VendorRef, WeatherAdvice, BookingStatus, DecisionLogEntry, SelectionQuoteStatus, LedgerEntry, LedgerSummary, Disruption, DisruptionKind, PlanDiff, PlanOutcome, PlanVersion, ReplanOutcome, TradeoffOption, TradeoffReport, ValidationReport, VendorCategory
 from eventmate.symbolic import SymbolicChecker
 from eventmate.integrations.deals import DealAgent
 from eventmate.integrations.discovery import OverpassSource
@@ -196,6 +197,25 @@ class EventMate:
     def advisories(self, plan_id: str) -> List[Advisory]:
         """Advisory checklists for the plan's dietary requirements. Never constraints."""
         return advisories_for(self.store.latest(plan_id).request)
+
+    def delete_plan(self, plan_id: str) -> dict:
+        """Forget a plan: its versions, ledger, vendor messages, standing permission, jobs, ideas, digests, shortlist and checklist (docs/RETENTION.md).
+        Refused while a message for it is being sent. The do-not-contact lists and vendor price observations are not per plan and are kept."""
+        self.store.latest(plan_id)  # unknown or hostile ids fail here, before anything is touched
+        if any(d.status == "sending" for d in self.outreach_store.list(plan_id)):
+            raise PlanBusy("a message for this plan is being sent; try again in a moment")
+        files = delete_plan_files(self.store.root, plan_id)
+        jobs = self.jobs.store.delete_plan(plan_id) if (self.store.root / "jobs.db").exists() else 0
+        versions = self.store.delete(plan_id)  # last: until it is gone the plan still lists, so a failed delete can simply be run again
+        self.logs.decisions.log(
+            request_id="retention", agent=AgentName.MANAGER, decision_type=DecisionType.ASSESSMENT, summary=f"Plan {plan_id} deleted at the user's request",
+            justification=f"removed {versions} plan version(s), {files} message and ledger file(s), {jobs} job(s)", confidence=1.0, source="rule:retention",
+        )
+        return report(versions, files, jobs)
+
+    def purge_logs(self, max_age_days: Optional[int] = None) -> List[str]:
+        """Delete run logs older than the retention period (default 90 days, ``EVENTMATE_LOG_RETENTION_DAYS``). Returns the file names removed."""
+        return purge_old_logs(self.logs.decisions.log_dir, max_age_days)
 
     def ledger_add(self, plan_id: str, kind: str, category: VendorCategory, amount: int, note: str = "") -> LedgerEntry:
         """Record money the user reports (quote, payment, refund) against the latest plan. Nothing is paid by to;doh-the event planner."""

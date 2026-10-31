@@ -70,6 +70,16 @@ class AnnotationStore:
             self._save()
             return a
 
+    def drop_plan(self, plan_id: str) -> int:
+        """Remove every annotation for a deleted plan. Returns how many there were."""
+        with self._lock:
+            kept = [a for a in self._items if a.plan_id != plan_id]
+            gone = len(self._items) - len(kept)
+            self._items = kept
+            if gone:
+                self._save()
+            return gone
+
     def remove(self, annotation_id: str, plan_id: str) -> bool:
         with self._lock:
             kept = [a for a in self._items if not (a.id == annotation_id and a.plan_id == plan_id)]
