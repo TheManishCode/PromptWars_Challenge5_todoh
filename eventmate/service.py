@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import time
 import uuid
@@ -17,6 +18,7 @@ from datetime import date
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
+from eventmate.guestlist import GuestListStore, GuestPreview, check_against, parse_guest_csv, totals_of
 from eventmate.retention import PlanBusy, delete_plan_files, purge_old_logs, report
 from eventmate.agents.budget import BudgetAgent, BudgetPolicy
 from eventmate.agents.explainer import ExplainerAgent, Explanation
@@ -112,6 +114,7 @@ class EventMate:
         self.contact_fetcher: Callable[[], object] = SafeFetcher  # tests replace this; the real one has the SSRF, robots and size rules
         self.access_store = AccessibilityStore(self.store.root)
         self.checklist_store = ChecklistStore(self.store.root)
+        self.guest_lists = GuestListStore(self.store.root)
         self.repo.access = self.access_store
         self.outreach_store = OutreachStore(self.store.root, self.observations.checklists)
         self._jobs: Optional[JobWorker] = None
@@ -198,12 +201,52 @@ class EventMate:
         """Advisory checklists for the plan's dietary requirements. Never constraints."""
         return advisories_for(self.store.latest(plan_id).request)
 
+    # ---- imported guest lists (ADR-055): names stay in one private file per plan; everything else sees counts
+
+    def guest_preview(self, plan_id: str, raw) -> GuestPreview:
+        """Parse an uploaded CSV without saving it. The token is single use and only issued for a file with no row problems."""
+        plan = self.store.latest(plan_id)
+        result = parse_guest_csv(raw)
+        token = None if (result.errors or not result.guests) else self.guest_lists.preview(plan_id, result)
+        return GuestPreview(guests=result.guests, errors=result.errors, totals=result.totals, check=check_against(result.totals, plan.request.guest_count), token=token)
+
+    def guest_commit(self, plan_id: str, token: str) -> dict:
+        plan = self.store.latest(plan_id)
+        guests = self.guest_lists.commit(plan_id, token)
+        totals = totals_of(guests)
+        self._log_guest_list(plan_id, f"Guest list saved for plan {plan_id}: {totals.rows} row(s), {totals.headcount} people")
+        return {"totals": json.loads(totals.model_dump_json()), "check": json.loads(check_against(totals, plan.request.guest_count).model_dump_json())}
+
+    def guest_summary(self, plan_id: str) -> Optional[dict]:
+        """Totals and the check against the stated headcount for the saved list, or None. Never names."""
+        plan = self.store.latest(plan_id)
+        guests = self.guest_lists.load(plan_id)
+        if guests is None:
+            return None
+        totals = totals_of(guests)
+        return {"totals": json.loads(totals.model_dump_json()), "check": json.loads(check_against(totals, plan.request.guest_count).model_dump_json())}
+
+    def guest_delete(self, plan_id: str) -> bool:
+        self.store.latest(plan_id)
+        gone = self.guest_lists.delete(plan_id)
+        if gone:
+            self._log_guest_list(plan_id, f"Guest list deleted for plan {plan_id}")
+        return gone
+
+    def _log_guest_list(self, plan_id: str, summary: str) -> None:
+        """Counts only: a name or a raw cell must never reach a log."""
+        self.logs.decisions.log(
+            request_id="guest-list", agent=AgentName.GUEST, decision_type=DecisionType.ASSESSMENT, summary=summary,
+            justification="the list is stored in one private file for this plan and shown to models only as counts", confidence=1.0, source="rule:guest_import",
+        )
+
     def delete_plan(self, plan_id: str) -> dict:
         """Forget a plan: its versions, ledger, vendor messages, standing permission, jobs, ideas, digests, shortlist and checklist (docs/RETENTION.md).
         Refused while a message for it is being sent. The do-not-contact lists and vendor price observations are not per plan and are kept."""
         self.store.latest(plan_id)  # unknown or hostile ids fail here, before anything is touched
         if any(d.status == "sending" for d in self.outreach_store.list(plan_id)):
             raise PlanBusy("a message for this plan is being sent; try again in a moment")
+        self.guest_lists.delete(plan_id)  # also drops any preview still waiting for a commit
         files = delete_plan_files(self.store.root, plan_id)
         jobs = self.jobs.store.delete_plan(plan_id) if (self.store.root / "jobs.db").exists() else 0
         versions = self.store.delete(plan_id)  # last: until it is gone the plan still lists, so a failed delete can simply be run again

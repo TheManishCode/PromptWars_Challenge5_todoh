@@ -136,6 +136,20 @@ def _event_state(ctx: ToolContext, _):
     }
 
 
+def _guest_counts(ctx: ToolContext, _):
+    """Counts and diet totals from the imported guest list, beside the stated headcount. Never a name, a contact detail or a raw cell."""
+    plan = ctx.em.store.latest(ctx.plan_id)
+    saved = ctx.em.guest_summary(ctx.plan_id)
+    if saved is None:
+        return {"guest_list": False, "planning_headcount": plan.request.guest_count, "note": "No guest list has been imported for this plan."}
+    t, c = saved["totals"], saved["check"]
+    return {
+        "guest_list": True, "planning_headcount": c["planning_headcount"], "people_on_list": t["headcount"], "yes": t["yes"], "no": t["no"], "pending": t["pending"],
+        "dietary_counts": t["dietary_counts"], "list_vs_planned": c["flag"] or "the list and the planned headcount agree",
+        "note": "Diet counts are people on the list who have not declined. The plan itself still uses the stated headcount.",
+    }
+
+
 def _alternatives(ctx: ToolContext, a: CategoryArgs):
     p = ctx.em.store.latest(ctx.plan_id)
     s = p.selection_for(a.category)
@@ -205,6 +219,7 @@ def build_tools() -> Dict[str, Tool]:
         Tool("get_public_event_info", "Event type, city, date and venue name. Safe to share with guests.", Perm.PLAN_PUBLIC, NoArgs, _public),
         Tool("get_plan_summary", "The current plan without money: guests, dietary needs, chosen vendors and their booking status.", Perm.PLAN_READ, NoArgs, _summary),
         Tool("get_event_state", "Where the plan stands right now: RSVP counts, each vendor's booking status and conversation status, and how many things are still open and for how long. No names of guests, no contact details, no prices.", Perm.PLAN_READ, NoArgs, _event_state),
+        Tool("get_guest_counts", "How many guests said yes, no or have not answered, and how many need each diet (vegetarian, vegan, jain, halal and so on), from the imported guest list, beside the planned headcount. Counts only: no names.", Perm.PLAN_READ, NoArgs, _guest_counts),
         Tool("list_alternatives", "Alternatives considered for one vendor category and why they were not chosen.", Perm.PLAN_READ, CategoryArgs, _alternatives),
         Tool("get_budget_status", "Budget, planned cost, quotes, payments the organiser recorded and headroom. Money: organiser only.", Perm.LEDGER_READ, NoArgs, _budget),
         Tool("check_budget_reality", "Whether the budget is realistic, an estimate from vendor records. Organiser only.", Perm.LEDGER_READ, NoArgs, _reality),

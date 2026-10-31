@@ -17,7 +17,7 @@ DELETE /api/plans/<plan_id>        header X-EventMate-CSRF, body {"confirm": "<p
 -> 409 a message for this plan is being sent right now; try again in a moment
 ```
 
-Removed: every plan version; the budget ledger; vendor requests, replies and the standing permission (`mandates/`); quote-request jobs and their history (`jobs.db`, rewritten so deleted rows are not recoverable from the file); ideas and notes; saved price leads; digests; the shortlist; the community checklist. The assistant also forgets the plan's conversation memory, cached answers and approved annotations.
+Removed: every plan version; the budget ledger; vendor requests, replies and the standing permission (`mandates/`); quote-request jobs and their history (`jobs.db`, rewritten so deleted rows are not recoverable from the file); ideas and notes; the imported guest list (its names are overwritten with zeros before the file is removed, docs/GUEST_IMPORT.md); saved price leads; digests; the shortlist; the community checklist. The assistant also forgets the plan's conversation memory, cached answers and approved annotations.
 
 Kept on purpose, because they are not per plan:
 

@@ -53,6 +53,8 @@ Every fact carries where it came from and how far to trust it.
 
 When you record a quote in the ledger it replaces the vendor's wording as the price that counts (`source: user`, `status: user_stated`). A payment or a quote for a different category is not a quote for this vendor. A reply from an address other than the one you wrote to is never shown as the vendor's price.
 
+When an imported guest list is saved (docs/GUEST_IMPORT.md), the `rsvp_*` facts and the `pending_rsvps` item use the list's counts instead of the plan's, and a `guest_list_check` fact says when the list and your planned headcount disagree.
+
 ## Vendor conversation status
 
 `none`, `awaiting_approval` (drafted, not approved), `asked` (sent, no reply), `replied`, `unavailable` (the vendor says it cannot do the date), `stopped` (the vendor asked not to be contacted again), `problem` (approved or sending, or failed, denied, expired, blocked, unknown outcome: it needs a look).

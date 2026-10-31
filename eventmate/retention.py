@@ -37,11 +37,29 @@ def _unlink(path: Path) -> bool:
         return False
 
 
+def wipe(path: Path) -> bool:
+    """Overwrite a small file with zeros and unlink it; a symlink is only unlinked. Returns whether anything was there."""
+    try:
+        if path.is_symlink():
+            path.unlink()
+            return True
+        size = path.stat().st_size
+        with open(path, "r+b") as fh:
+            fh.write(b"\x00" * size)
+            fh.flush()
+            os.fsync(fh.fileno())
+        path.unlink()
+        return True
+    except FileNotFoundError:
+        return False
+
+
 def delete_plan_files(root: Path, plan_id: str) -> int:
     """Remove the per-plan JSONL files under ``root``. Returns how many existed."""
     if not PLAN_ID.fullmatch(plan_id):
         raise ValueError("invalid plan id")
-    return sum(_unlink(Path(root) / sub / f"{channel}-{plan_id}.jsonl") for sub, channel in PER_PLAN_JSONL)
+    gone = sum(_unlink(Path(root) / sub / f"{channel}-{plan_id}.jsonl") for sub, channel in PER_PLAN_JSONL)
+    return gone + wipe(Path(root) / "guests" / f"guests-{plan_id}.json")  # the imported guest list holds names: overwritten, then removed
 
 
 def purge_old_logs(log_dir: Path, max_age_days: Optional[int] = None, now: Optional[float] = None) -> List[str]:

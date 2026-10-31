@@ -10,5 +10,7 @@ Models are optional (`EVENTMATE_ENABLE_LLM=0` turns them off). Contact details a
 | Explanation | the verified plan summary (vendor names, numbers) | 3000 tokens out | no raw request and no guest names are in it |
 
 The assistant's `get_event_state` tool returns a bounded slice of EventState (docs/EVENT_STATE.md): the event date, RSVP counts, each vendor's category, name, booking status, conversation status and whether a vendor price is only quoted (never the amount), and counts of open items by kind. No guest names, contact details, prices or message text.
+The assistant's `get_guest_counts` tool returns the imported guest list as counts only (docs/GUEST_IMPORT.md): people who said yes, no or have not answered, how many need each diet, and whether the list agrees with the planned headcount. Never a name, a contact detail or a raw cell; a guest list's names are kept in one private file for the plan and appear in no prompt, log or trace.
+
 Not sent to any model: the budget total or ledger (except as numbers a tool returns to the assistant), vendor reply text, discovered contact text, secrets.
 Optional Langfuse export, if configured, sends masked questions and answers off the machine.

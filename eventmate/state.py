@@ -12,6 +12,7 @@ import contextlib
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Literal, Optional, Tuple, Union
 
+from eventmate.guestlist import check_against, totals_of
 from eventmate.schemas import LedgerKind, VendorCategory, _Model
 
 FactSource = Literal["user", "vendor_reply", "tool", "model_idea", "seed_data"]
@@ -131,11 +132,15 @@ def _quote_fact(vendor_id: str, category: VendorCategory, inbound: list, ledger:
     return Fact(key=f"quote:{vendor_id}", label=f"{category.value} price the vendor wrote (INR, {a.unit}, as they wrote it)", value=a.low_inr, source="vendor_reply", as_of=_aware(m.received_at), status=status)
 
 
-def _facts(plan, as_of: datetime) -> List[Fact]:
+def _facts(plan, as_of: datetime, listed=None) -> List[Fact]:
+    """``listed`` is the totals of an imported guest list, if the user saved one: then the RSVP counts are the list's (people, by party size)."""
     r, g = plan.request, plan.guests
     at = _aware(plan.created_at)
     guest_source: FactSource = "seed_data" if "seed" in (g.source or "") else "user"
-    return [
+    if listed is not None:
+        guest_source = "user"
+        g = g.model_copy(update={"confirmed": listed.yes, "declined": listed.no, "pending": listed.pending})
+    facts = [
         Fact(key="event_type", label="Event type", value=r.event_type.value, source="user", as_of=at, status="user_stated"),
         Fact(key="city", label="City", value=r.city, source="user", as_of=at, status="user_stated"),
         Fact(key="event_date", label="Event date", value=r.event_date.isoformat(), source="user", as_of=at, status="user_stated"),
@@ -146,6 +151,11 @@ def _facts(plan, as_of: datetime) -> List[Fact]:
         Fact(key="rsvp_pending", label="Guests who have not answered", value=g.pending, source=guest_source, as_of=at, status="pending"),
         Fact(key="plan_cost_inr", label="Planned vendor cost (INR)", value=plan.total_cost, source="tool", as_of=at, status="pending" if any(s.booking_status.value != "confirmed" for s in plan.selections) else "confirmed"),
     ]
+    if listed is not None:
+        flag = check_against(listed, r.guest_count).flag
+        if flag:
+            facts.append(Fact(key="guest_list_check", label="Guest list against your planned headcount", value=flag, source="tool", as_of=as_of, status="pending"))
+    return facts
 
 
 def build_state(em, plan_id: str, now: Optional[datetime] = None, changes_since: Optional[datetime] = None, today=None) -> EventState:
@@ -154,6 +164,8 @@ def build_state(em, plan_id: str, now: Optional[datetime] = None, changes_since:
     plan = em.store.latest(plan_id)
     drafts, inbound, ledger = em.outreach(plan_id), em.outreach_store.inbound(plan_id), em.ledger_entries(plan_id)
     jobs = em._jobs_of(plan_id)
+    saved = em.guest_lists.load(plan_id)
+    listed = None if saved is None else totals_of(saved)
     confirmed_claims = {c.message_id for j in jobs for c in j.claims if c.status == "confirmed"}
     stale: Dict[str, bool] = {}
     with contextlib.suppress(Exception):  # a price check that cannot run must not hide the rest of the state
@@ -170,10 +182,15 @@ def build_state(em, plan_id: str, now: Optional[datetime] = None, changes_since:
         ))
 
     items: List[OpenItem] = []
-    if plan.guests.pending > 0:
+    pending = plan.guests.pending if listed is None else listed.pending
+    if pending > 0:
         first = em.store.load(plan_id, 1).created_at if plan.version > 1 else plan.created_at
-        no_list = " (no guest list is loaded, so replies are not being tracked)" if plan.guests.guest_list_id is None else ""
-        items.append(_item("pending_rsvps", "guests", f"{plan.guests.pending} guest(s) have not answered{no_list}", first, now))
+        if listed is not None:
+            label = f"{pending} guest(s) on your list have not answered"
+        else:
+            no_list = "" if plan.guests.guest_list_id is not None else " (no guest list is loaded, so replies are not being tracked)"
+            label = f"{pending} guest(s) have not answered{no_list}"
+        items.append(_item("pending_rsvps", "guests", label, first, now))
     replied_drafts = {m.draft_id for m in inbound}
     for d in drafts:
         if d.status == "prepared" and (d.expires_at is None or _aware(d.expires_at) > now):
@@ -196,7 +213,7 @@ def build_state(em, plan_id: str, now: Optional[datetime] = None, changes_since:
     items.sort(key=lambda i: (i.since or now, i.kind, i.ref))
 
     return EventState(
-        plan_id=plan_id, plan_version=plan.version, as_of=now, facts=tuple(_facts(plan, now)), vendors=tuple(vendors), open_items=tuple(items),
+        plan_id=plan_id, plan_version=plan.version, as_of=now, facts=tuple(_facts(plan, now, listed)), vendors=tuple(vendors), open_items=tuple(items),
         changes=tuple(_changes(em, plan, plan_id, drafts, inbound, ledger, jobs, changes_since)),
     )
 

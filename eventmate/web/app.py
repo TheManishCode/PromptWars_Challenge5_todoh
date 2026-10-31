@@ -37,6 +37,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from eventmate.planning import intake
 from eventmate.arcade_pulse import pulse as _arcade_pulse
 from eventmate.state import build_state
+from eventmate.guestlist import MAX_BYTES as MAX_GUEST_BYTES, GuestListTooLarge, StalePreview
 from eventmate.retention import PlanBusy
 from eventmate.assistant.agent import Assistant, AssistantError
 from eventmate.assistant.approvals import ApprovalError
@@ -87,6 +88,8 @@ CSP = (
 )
 HEAVY_MAX = 4  # concurrent network-bound searches
 _PLAN_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+_GUEST_PREVIEW = re.compile(r"/api/plans/[A-Za-z0-9_-]{1,64}/guests/preview")
+GUEST_UPLOAD_LIMIT = 640 * 1024  # a 256 KB CSV can grow when JSON-escaped; the parser enforces the real 256 KB limit
 log = logging.getLogger("eventmate.web")
 
 
@@ -283,6 +286,14 @@ class EmptyBody(_Strict):
     pass
 
 
+class GuestCsvBody(_Strict):
+    csv: str = Field(min_length=1, max_length=600_000)
+
+
+class GuestCommitBody(_Strict):
+    token: str = Field(min_length=1, max_length=100)
+
+
 class DeletePlanBody(_Strict):
     confirm: str = Field(min_length=1, max_length=64)
 
@@ -392,7 +403,10 @@ def create_app(
             origin = request.headers.get("Origin")
             if origin and origin.split("://", 1)[-1] != request.host:
                 return _err(403, "cross-origin request refused")
-            if request.mimetype != "application/json":
+            upload = request.method == "POST" and bool(_GUEST_PREVIEW.fullmatch(request.path))
+            if upload:
+                request.max_content_length = GUEST_UPLOAD_LIMIT  # the one route that takes a larger body (a guest CSV)
+            if request.mimetype != "application/json" and not (upload and request.mimetype == "multipart/form-data"):
                 return _err(415, "JSON body required")
             now, q = time.monotonic(), writes[request.remote_addr or "?"]
             while q and now - q[0] > 60:
@@ -430,6 +444,14 @@ def create_app(
 
     def _err(code: int, message: str, **extra):
         return jsonify({"error": message, **extra}), code
+
+    @app.errorhandler(GuestListTooLarge)
+    def _guests_too_large(exc):
+        return _err(413, str(exc)[:200])
+
+    @app.errorhandler(StalePreview)
+    def _stale_preview(exc):
+        return _err(409, str(exc)[:200])
 
     @app.errorhandler(PlanBusy)
     def _plan_busy(exc):
@@ -1249,6 +1271,44 @@ def create_app(
         with lock:
             draft = em.mark_outreach_sent(plan_id, draft_id)
         return out(draft)
+
+    @app.post("/api/plans/<plan_id>/guests/preview")
+    def guests_preview(plan_id):
+        """Parse a guest CSV (JSON {"csv": "..."} or one multipart file) without saving it. Row problems are listed by line; a clean file gets a single-use token."""
+        plan_id = pid(plan_id)
+        if request.mimetype == "multipart/form-data":
+            f = request.files.get("file")
+            if f is None or len(request.files) != 1:
+                raise ValueError("send exactly one file, in the field named file")
+            raw = f.stream.read(MAX_GUEST_BYTES + 1)
+        else:
+            raw = body(GuestCsvBody).csv.encode("utf-8")
+        with lock:
+            preview = em.guest_preview(plan_id, raw)
+        return out(preview)
+
+    @app.post("/api/plans/<plan_id>/guests/commit")
+    def guests_commit(plan_id):
+        plan_id, b = pid(plan_id), body(GuestCommitBody)
+        with lock:
+            saved = em.guest_commit(plan_id, b.token)
+        return jsonify(saved), 201
+
+    @app.get("/api/plans/<plan_id>/guests")
+    def guests_get(plan_id):
+        """Totals for the saved list beside the stated headcount. Never names."""
+        plan_id = pid(plan_id)
+        with lock:
+            saved = em.guest_summary(plan_id)
+        return jsonify({"has_list": saved is not None, **(saved or {})})
+
+    @app.delete("/api/plans/<plan_id>/guests")
+    def guests_delete(plan_id):
+        plan_id = pid(plan_id)
+        body(EmptyBody)
+        with lock:
+            gone = em.guest_delete(plan_id)
+        return jsonify({"deleted": gone})
 
     @app.get("/api/plans/<plan_id>/state")
     def plan_state(plan_id):
