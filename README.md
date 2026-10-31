@@ -74,7 +74,7 @@ eventmate/
   web/                            Flask API and single-page UI
   data/                           seed vendors, profiles, idea templates, knowledge base
 prompts/                          versioned prompt files (wording and output format only)
-tests/                            2087 tests
+tests/                            2166 tests
 docs/                             decisions, roadmap, setup guides, design notes
 ```
 
@@ -96,7 +96,7 @@ docs/                             decisions, roadmap, setup guides, design notes
 python -m pytest                  # whole suite
 ```
 
-2087 tests passed on Python 3.14.8 with Fast Downward, VAL and Chromium available. Without the solvers most planning tests fail by design; without Chromium the browser tests skip. Tests use fake SMTP/IMAP and fake channels and never call a keyed or external service.
+2166 tests passed on Python 3.14.8 with Fast Downward, VAL and Chromium available. Without the solvers most planning tests fail by design; without Chromium the browser tests skip. Tests use fake SMTP/IMAP and fake channels and never call a keyed or external service.
 
 ## Documentation
 

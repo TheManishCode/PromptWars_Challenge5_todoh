@@ -87,7 +87,7 @@ def _generic_phrase(match_text: str) -> bool:
     """True when every capitalised word before the business-type word is an ordinary decor or activity word ("Floral Decorations", "Live Entertainment")."""
     lead = match_text.split()[:-1]
     return bool(lead) and all(w.strip(".,'&-").casefold() in _GENERIC for w in lead)
-_BOOK_NAME = re.compile(r"\b(?:book|hire|call|contact|visit|order from)\s+(?:the\s+)?([A-Z][\w&'-]+(?:\s+[A-Z][\w&'-]+)+)")
+_BOOK_NAME = re.compile(r"\b(?i:book|hire|call|contact|visit|order from)\s+(?:the\s+)?([A-Z][\w&'-]+(?:\s+[A-Z][\w&'-]+)+)")
 
 
 class TemplateError(Exception):

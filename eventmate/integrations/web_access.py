@@ -32,7 +32,7 @@ MAX_REDIRECTS = 3
 TIMEOUT_S = 15
 REDIRECTS = (301, 302, 303, 307, 308)
 TEXT_TYPES = ("text/html", "text/plain", "application/xhtml+xml")
-_LABEL = re.compile(r"[a-z0-9-]{1,63}")
+_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")  # RFC 1123: letters, digits and inner hyphens, at most 63
 
 
 class UnsafeURL(ValueError):
