@@ -1,4 +1,4 @@
-"""EventMate facade: wires every agent and exposes the whole workflow.
+"""to;doh-the event planner facade: wires every agent and exposes the whole workflow.
 
     em = EventMate()
     outcome = em.plan("Plan a 120-person engagement party in Pune ...")
@@ -198,7 +198,7 @@ class EventMate:
         return advisories_for(self.store.latest(plan_id).request)
 
     def ledger_add(self, plan_id: str, kind: str, category: VendorCategory, amount: int, note: str = "") -> LedgerEntry:
-        """Record money the user reports (quote, payment, refund) against the latest plan. Nothing is paid by EventMate."""
+        """Record money the user reports (quote, payment, refund) against the latest plan. Nothing is paid by to;doh-the event planner."""
         return self.ledger.add(self.store.latest(plan_id), kind, category, amount, note)
 
     def ledger_entries(self, plan_id: str):
@@ -288,7 +288,7 @@ class EventMate:
         return self.jobs.store.list(plan_id) if (self.store.root / "jobs.db").exists() else []
 
     def _own_addresses(self) -> set:
-        """The mailboxes EventMate itself sends from."""
+        """The mailboxes to;doh-the event planner itself sends from."""
         return {a for a in (getattr(getattr(ch, "config", None), "from_addr", "") for ch in self.conversations.channels.values()) if a}
 
     def _vendor_names(self):
@@ -298,7 +298,7 @@ class EventMate:
         return names
 
     def _vendor_addresses(self) -> set:
-        """Every email address EventMate has written to or saved for a vendor: none of these may ever be the owner's notification address."""
+        """Every email address to;doh-the event planner has written to or saved for a vendor: none of these may ever be the owner's notification address."""
         out = {c.email for c in self.outreach_store.contacts().values() if c.email}
         for pid in self.outreach_store.plan_ids():
             out |= {d.recipient for d in self.outreach_store.list(pid) if d.channel == "email"}

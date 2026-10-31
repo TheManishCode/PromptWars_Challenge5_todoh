@@ -5,7 +5,7 @@ A channel only moves text. It decides nothing: what is sent, to whom and when is
 Everything a vendor sends back is untrusted text: it is cleaned, size-capped and returned as data.
 
 WhatsApp note: WAHA drives a WhatsApp Web session. That is not the official Business API and WhatsApp's terms do not
-allow unofficial clients, so the account can be restricted. EventMate therefore sends slowly, only after approval, and
+allow unofficial clients, so the account can be restricted. to;doh-the event planner therefore sends slowly, only after approval, and
 only to numbers WhatsApp reports as registered (ADR-042).
 """
 

@@ -1,4 +1,4 @@
-# AI Coding Rules (EventMate)
+# AI Coding Rules (to;doh-the event planner)
 
 These rules bind every human or AI contributor to `eventmate/`.
 
@@ -36,7 +36,7 @@ These rules bind every human or AI contributor to `eventmate/`.
   first. Include at least one adversarial test (malformed input, boundary,
   hostile text) per new input surface.
 - Do not rewrite the base PDDL/LangGraph pipeline in `src/` unless a specific,
-  tested requirement demands it. EventMate is a sibling package.
+  tested requirement demands it. to;doh-the event planner is a sibling package.
 - Unimplemented agents are documented stubs that raise `NotImplementedError`;
   they must not return plausible-looking fake output.
 

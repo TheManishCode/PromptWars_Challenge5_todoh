@@ -34,7 +34,7 @@
       "must_not_contain": [
         "Rules, in order of priority",
         "Reply with exactly one JSON",
-        "EventMate Assistant, the planning helper"
+        "to;doh-the event planner Assistant, the planning helper"
       ]
     },
     {

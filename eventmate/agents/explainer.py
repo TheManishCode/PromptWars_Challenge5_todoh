@@ -178,7 +178,7 @@ class ExplainerAgent:
         out += [f"- {'Checked and passed' if k.passed else 'FAILED'}: {_esc(k.name.replace('_', ' '))}: {_esc(k.detail)}" for k in c.checks]
         for u in c.unverified:
             out.append(f"- Could not be decided: {_esc(u.name.replace('_', ' '))}: {_esc(u.detail)}. To fix: {_esc(u.repair)}")
-        out.append(f"- {_esc(c.summary)}. EventMate does not verify these; each one is marked only by you.")
+        out.append(f"- {_esc(c.summary)}. to;doh-the event planner does not verify these; each one is marked only by you.")
         for i in c.items:
             who = f" ({_esc(i.recorded_by)}, {i.recorded_on.isoformat()})" if i.recorded_by and i.recorded_on else ""
             out.append(f"  - {_esc(i.title)}: {_esc(i.instruction)} [{i.status.replace('_', ' ')}{who}]")

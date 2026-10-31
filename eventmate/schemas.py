@@ -1,4 +1,4 @@
-"""Typed data contracts for EventMate.
+"""Typed data contracts for to;doh-the event planner.
 
 Every structure that crosses an agent boundary, is persisted, or is logged is
 a frozen Pydantic model with ``extra="forbid"``: unknown fields are rejected
@@ -1065,7 +1065,7 @@ IntakeResult.model_rebuild()  # resolves the forward reference to GuestSummary
 
 
 # ----------------------------------------------------------------- budget ledger
-# Money the user reports. EventMate never moves money; every entry is `source=user_input`.
+# Money the user reports. to;doh-the event planner never moves money; every entry is `source=user_input`.
 
 
 class LedgerKind(str, Enum):
@@ -1253,7 +1253,7 @@ class SelectionQuoteStatus(_Model):
 
 
 # ------------------------------------------------------------------ travel
-# Flight fares and schedules from an external tool (ADR-028). Indicative only; EventMate never books or pays.
+# Flight fares and schedules from an external tool (ADR-028). Indicative only; to;doh-the event planner never books or pays.
 
 _IATA = r"^[A-Z]{3}$"
 GOOGLE_FLIGHTS_PREFIX = "https://www.google.com/travel/flights"
@@ -1311,7 +1311,7 @@ class FlightSearch(_Model):
     source: str
     warnings: Tuple[str, ...] = ()
     error: Optional[str] = Field(default=None, max_length=300)  # set when this leg could not be searched
-    notice: str = "Indicative fare and schedule from Google Flights through fli. Fares change; EventMate does not book or pay."
+    notice: str = "Indicative fare and schedule from Google Flights through fli. Fares change; to;doh-the event planner does not book or pay."
 
 
 class MultiCityResult(_Model):
@@ -1476,7 +1476,7 @@ class TripSearchResult(_Model):
     source: Literal["tool:fli"] = "tool:fli"
     method: Literal["separate_one_way_searches"] = "separate_one_way_searches"
     note: str
-    notice: str = "Indicative fares from Google Flights through fli. Fares change; EventMate does not book or pay."
+    notice: str = "Indicative fares from Google Flights through fli. Fares change; to;doh-the event planner does not book or pay."
 
 
 # ------------------------------------------------------------------------- deals
@@ -1653,7 +1653,7 @@ class WeatherAdvice(_Model):
 
 
 # ----------------------------------------------------------------- outreach and conversations
-# A quote request EventMate drafts, the user approves, and the agent sends and follows (ADR-041, ADR-042). Content is bound to a hash
+# A quote request to;doh-the event planner drafts, the user approves, and the agent sends and follows (ADR-041, ADR-042). Content is bound to a hash
 # at proposal time; approval is for that exact content. Replies are stored as untrusted text with a rule-based analysis, never as facts.
 
 _EMAIL = re.compile(r"^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,24}$")
@@ -1698,7 +1698,7 @@ class OutreachDraft(_Model):
     action_key: str = Field(default="", max_length=200)  # who claimed this outbound action, e.g. "reply:<message_id>" or "nudge:<job>:<vendor>:<n>"; one live draft per key
     approved_by: Literal["user", "mandate"] = "user"  # "mandate": sent under the user's standing permission (ADR-043), not a per-message approval
     source: Literal["user_input"] = "user_input"
-    notice: str = "Not sent until you approve it. After that EventMate sends it through the channel you configured and reads the vendor's reply."
+    notice: str = "Not sent until you approve it. After that to;doh-the event planner sends it through the channel you configured and reads the vendor's reply."
 
     @model_validator(mode="before")
     @classmethod
@@ -2036,7 +2036,7 @@ class ChecklistRecord(_Model):
 
 
 class ConditionalItem(_Model):
-    """A requirement the user's answers triggered. EventMate states who to check with and never states a rule; only the user can mark it."""
+    """A requirement the user's answers triggered. to;doh-the event planner states who to check with and never states a rule; only the user can mark it."""
 
     item_id: str
     title: str

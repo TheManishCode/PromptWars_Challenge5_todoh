@@ -29,7 +29,7 @@ python -m eventmate.messaging.smoke_email
 It logs in to SMTP and IMAP (the inbox is opened read-only) and prints only PASS or FAIL and the host. It never prints the user name, the password or the server's own error text. A real one-message test needs both `--send-test-to ADDRESS --i-own-this-address`.
 
 ## 5. Sending limits
-Providers limit how much you can send. Gmail's limits are described at https://support.google.com/mail/answer/22839. EventMate's own limits are lower: 3 messages per vendor and 30 per day, and the optional owner copy at most 4 a day, 30 minutes apart. Do not raise them without checking your provider's rules.
+Providers limit how much you can send. Gmail's limits are described at https://support.google.com/mail/answer/22839. to;doh-the event planner's own limits are lower: 3 messages per vendor and 30 per day, and the optional owner copy at most 4 a day, 30 minutes apart. Do not raise them without checking your provider's rules.
 
 ## 6. How to stop
 - **Kill switch:** `python -m eventmate inbox kill` (or the red button in the Vendor chats tab). It stops every automatic message and the owner email copy, and denies messages already queued. `inbox resume` lifts it.

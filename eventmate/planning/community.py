@@ -7,7 +7,7 @@ editing that file; set EVENTMATE_COMMUNITY_PROFILES to use another file.
 Three classes of requirement stay apart:
   A. hard checks computed from the user's input and the database (``evaluate`` below, called by the Validator);
   B. conditional requirements: shown when the user's answers trigger them; each ends as confirmed_by_user, not_applicable_by_user or not_verified,
-     and EventMate never marks one itself and never states a legal rule;
+     and to;doh-the event planner never marks one itself and never states a legal rule;
   C. suggestions (ideas.py).
 """
 
@@ -439,7 +439,7 @@ class _ChecklistFile(JsonlLog[ChecklistRecord]):
 
 
 class ChecklistStore:
-    """The user's marks on conditional items. EventMate writes here only when the user acts; nothing in this module marks an item itself."""
+    """The user's marks on conditional items. to;doh-the event planner writes here only when the user acts; nothing in this module marks an item itself."""
 
     def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
         self.root = Path(root) / "community"
@@ -511,7 +511,7 @@ def build_status(plan: PlanVersion, store: ChecklistStore, report=None) -> Commu
     summary = "no conditional items apply to your answers" if not items else f"{open_n} conditional item{'' if open_n == 1 else 's'} not verified"
     report = report or plan.validation
     unv = report.unverified
-    detail = summary + (f"; {len(unv)} check{'' if len(unv) == 1 else 's'} could not be decided from the data (unverified)" if unv else "") + ". EventMate verifies none of these: each is marked only by you."
+    detail = summary + (f"; {len(unv)} check{'' if len(unv) == 1 else 's'} could not be decided from the data (unverified)" if unv else "") + ". to;doh-the event planner verifies none of these: each is marked only by you."
     names = {"community_profile", "attendance_vs_capacity", "funding_vs_budget", "volunteer_coverage", "timeline_dependencies", "accessibility_declared"}
     return CommunityStatus(
         plan_id=plan.plan_id, version=plan.version, subtype=prof.key, profile_label=prof.label, profile_version=profiles.version, profile_reviewed=profiles.reviewed,

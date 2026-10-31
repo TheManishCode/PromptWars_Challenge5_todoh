@@ -105,7 +105,7 @@ def test_the_budget_tool_computes_percent_and_remaining_and_shows_its_inputs(em,
     res = execute(ToolContext(em, LOCAL_ORGANIZER, pid, None), tools, "get_budget_status", {})
     d = res.data
     assert d["planned_percent_of_budget"] == round(100 * d["planned_total"] / d["budget_total"]) and d["remaining_after_planned"] == d["budget_total"] - d["planned_total"]
-    assert str(d["planned_total"]) in d["derivation"] and str(d["budget_total"]) in d["derivation"] and "computed by EventMate" in d["derivation"]
+    assert str(d["planned_total"]) in d["derivation"] and str(d["budget_total"]) in d["derivation"] and "computed by to;doh-the event planner" in d["derivation"]
 
 
 def test_a_derived_number_the_model_cites_from_the_tool_is_accepted_and_one_it_computed_itself_is_not(em, pid):

@@ -1,6 +1,6 @@
 # Email validation record
 
-**Result: not yet run.** No real mailbox has been used with EventMate. Until this file records a passed run with a date, the README must say: "Email is tested with fake SMTP/IMAP only; not yet validated against a real mailbox."
+**Result: not yet run.** No real mailbox has been used with to;doh-the event planner. Until this file records a passed run with a date, the README must say: "Email is tested with fake SMTP/IMAP only; not yet validated against a real mailbox."
 
 ## Plan (you run this, not the test suite)
 Use a dedicated mailbox and recipients you own or who agreed. No real vendors.

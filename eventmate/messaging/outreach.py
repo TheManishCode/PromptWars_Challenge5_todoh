@@ -1,4 +1,4 @@
-"""Quote-request proposals: EventMate drafts, the user approves, the agent sends and follows (ADR-041, ADR-042).
+"""Quote-request proposals: to;doh-the event planner drafts, the user approves, the agent sends and follows (ADR-041, ADR-042).
 
 A proposal is bound to a content hash. Approval is for exactly that text and recipient; any change needs a new proposal.
 The text is built only from the plan's validated facts and a fixed checklist, never from a model, and never contains the
@@ -250,7 +250,7 @@ class OutreachStore:
         )
 
     def mark_sent(self, plan_id: str, draft_id: str) -> OutreachDraft:
-        """The user says they sent it themselves (the manual fallback). EventMate cannot know; the label says so."""
+        """The user says they sent it themselves (the manual fallback). to;doh-the event planner cannot know; the label says so."""
         current = self.get(plan_id, draft_id)
         if current is None:
             raise ValueError(f"unknown draft {draft_id!r}")

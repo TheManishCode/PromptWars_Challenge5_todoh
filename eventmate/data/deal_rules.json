@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "reviewed": false,
-  "source": "EventMate draft. Plausible price bounds and query templates for Indian events; not reviewed by industry practitioners. Bounds only discard obviously wrong numbers.",
+  "source": "to;doh-the event planner draft. Plausible price bounds and query templates for Indian events; not reviewed by industry practitioners. Bounds only discard obviously wrong numbers.",
   "bounds": {
     "per_plate": [
       100,

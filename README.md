@@ -1,8 +1,8 @@
-# EventMate
+# to;doh-the event planner
 
 **A constraint-verified planning copilot for weddings, birthdays and community events.**
 
-EventMate turns a plain-language brief into a plan with a budget, a timeline and a vendor checklist, and it only shows you a plan after an independent validator has re-checked every hard constraint. When constraints conflict it offers priced trade-offs instead of silently bending them. It can also write to vendors for you, read their replies, and keep a job moving over days, while every price stays a proposal until you confirm it.
+to;doh-the event planner turns a plain-language brief into a plan with a budget, a timeline and a vendor checklist, and it only shows you a plan after an independent validator has re-checked every hard constraint. When constraints conflict it offers priced trade-offs instead of silently bending them. It can also write to vendors for you, read their replies, and keep a job moving over days, while every price stays a proposal until you confirm it.
 
 Language models are used where wording helps (reading your brief, suggesting ideas, answering questions, rewording explanations) and deliberately **not** where facts matter: plan validity, prices, availability, capacity and legal or cultural claims come from code, data, or you.
 
@@ -18,7 +18,7 @@ Language models are used where wording helps (reading your brief, suggesting ide
 | **Ideas** | Personalized suggestions from verified facts; templates work with no model; model ideas are guarded (no prices, no invented vendors, no availability or cultural claims) |
 | **Community events** | Profile-driven (college fest, neighbourhood, fundraiser, local cultural). Hard checks for attendance, funding, volunteers, timeline and accessibility; conditional items (permits, noise, food licence…) that only you can mark |
 | **Quotes** | Ledger with provenance and expiry, hidden-cost flags, and a transparent vendor score |
-| **Find vendors** | Finds businesses and public contact details from their own pages; you review and confirm each address; then EventMate sends and tracks replies. Discovered businesses are kept apart from the vendor database, and a do-not-contact list covers every plan and job |
+| **Find vendors** | Finds businesses and public contact details from their own pages; you review and confirm each address; then to;doh-the event planner sends and tracks replies. Discovered businesses are kept apart from the vendor database, and a do-not-contact list covers every plan and job |
 | **Vendors** | Hash-approved messages over email (SMTP/IMAP) or WhatsApp (self-hosted gateway, experimental); replies read as untrusted text; optional narrow standing permission with caps, window and kill switch |
 | **Jobs** | "Get N comparable quotes by a deadline": claims you confirm, nudges, expiry, an in-app digest and an optional email copy to you |
 | **Assistant** | Grounded answers with sources, permissioned tools, proposals that need your click |
@@ -85,10 +85,10 @@ docs/                             decisions, roadmap, setup guides, design notes
 - **Failures explain themselves.** Every failure names the violated constraint and a concrete repair.
 - **Nothing is overwritten.** Every replan writes a new immutable version and a diff.
 - **Nothing leaves without approval.** Vendor messages are bound to a hash of their exact text. The only exception is an optional, capped, time-boxed standing permission for fixed follow-up questions, with a kill switch. Request templates and automatic follow-ups never contain your budget or a price; text you type yourself is sent as written.
-- **Nothing found is used until you confirm it.** An address read from a business's own page or listing is a candidate with its source. Only an address you confirm can be written to, and a stop request in a reply to a message we sent, or a permanent delivery failure naming a message we sent, puts it on a do-not-contact list that only you can lift. This matching relies on mail headers that can be forged, so it is not authenticated: a forgery can only stop EventMate writing to an address it already wrote to, and a bounced address shows why it failed before you can re-enable it. Discovery depends on what a source publishes and coverage varies by city and category. EventMate does not check anti-spam or privacy law; check the rules that apply to you before contacting businesses.
+- **Nothing found is used until you confirm it.** An address read from a business's own page or listing is a candidate with its source. Only an address you confirm can be written to, and a stop request in a reply to a message we sent, or a permanent delivery failure naming a message we sent, puts it on a do-not-contact list that only you can lift. This matching relies on mail headers that can be forged, so it is not authenticated: a forgery can only stop to;doh-the event planner writing to an address it already wrote to, and a bounced address shows why it failed before you can re-enable it. Discovery depends on what a source publishes and coverage varies by city and category. to;doh-the event planner does not check anti-spam or privacy law; check the rules that apply to you before contacting businesses.
 - **Replies are untrusted data.** A vendor reply never records a quote, changes a plan or approves anything.
 - **Conservative sending.** A send is claimed before it happens (a file lock across processes), and a send whose outcome is unknown is never retried automatically. This reduces the chance of duplicates; it cannot make one impossible.
-- **Provisional until verified.** If a need you stated cannot be checked from the data (for example a required access need the venue has not declared), the plan is built but marked **Needs verification** everywhere; it is not called verified until you record the venue's answer. Conditional requirements (permits, noise rules, licences…) stay "not verified" until you mark them; EventMate never says a plan is safe or compliant.
+- **Provisional until verified.** If a need you stated cannot be checked from the data (for example a required access need the venue has not declared), the plan is built but marked **Needs verification** everywhere; it is not called verified until you record the venue's answer. Conditional requirements (permits, noise rules, licences…) stay "not verified" until you mark them; to;doh-the event planner never says a plan is safe or compliant.
 
 ## Testing
 

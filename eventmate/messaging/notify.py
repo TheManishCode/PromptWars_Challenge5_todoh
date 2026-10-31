@@ -91,7 +91,7 @@ class OwnerNotifier:
         if low in {a.casefold() for a in self._vendor_addresses()}:
             raise NotifyError("that address belongs to a vendor you contact; updates only go to you")
         if low in {a.casefold() for a in self._own_addresses()}:
-            raise NotifyError("that is the mailbox EventMate sends from; use your own address")
+            raise NotifyError("that is the mailbox to;doh-the event planner sends from; use your own address")
         scope = NotifyScope(include_vendor_names=include_vendor_names, include_amounts=include_amounts, include_raw_text=include_raw_text)
         at = self.now()
         code = hashlib.sha256(f"{low}|{scope.model_dump_json()}|{at.isoformat()}|{secrets.token_hex(8)}".encode()).hexdigest()
@@ -106,7 +106,7 @@ class OwnerNotifier:
             parts.append("the vendors' own wording")
         left_out = [w for w, on in (("vendor names", include_vendor_names), ("confirmed amounts", include_amounts), ("vendor message text", include_raw_text)) if not on]
         summary = (
-            f"EventMate will email job updates to {destination} and to no one else. Each email will contain: {', '.join(parts)}. "
+            f"to;doh-the event planner will email job updates to {destination} and to no one else. Each email will contain: {', '.join(parts)}. "
             + (f"It will not include: {', '.join(left_out)}, " if left_out else "It will not include: ")
             + "or your budget. Emails go out only between 09:00 and 20:00 IST, at most "
             + f"{self.limits.per_day} a day and {self.limits.min_gap_minutes} minutes apart, and stop at once when the kill switch is on."
@@ -168,7 +168,7 @@ class OwnerNotifier:
         log = self._log()
         result = "sent"
         try:
-            channel.send(cur.destination, f"EventMate update: {goal}"[:200], body, None)  # the only recipient is the confirmed owner address
+            channel.send(cur.destination, f"to;doh-the event planner update: {goal}"[:200], body, None)  # the only recipient is the confirmed owner address
         except OutcomeUnknown:
             result = "unknown"  # it may have gone out: recorded as emailed, never resent
         except ChannelError:

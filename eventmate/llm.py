@@ -177,7 +177,7 @@ class OpenAICompatClient:
         body = {"model": self.model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}], "max_tokens": min(max_tokens, cap), "temperature": 0, **self._extra}
         self._meter.charge(self.name)
         try:
-            raw = self._transport(self._url, {"Authorization": f"Bearer {self._key}", "Content-Type": "application/json", "Accept": "application/json", "X-Title": "EventMate"}, json.dumps(body).encode(), self._timeout)
+            raw = self._transport(self._url, {"Authorization": f"Bearer {self._key}", "Content-Type": "application/json", "Accept": "application/json", "X-Title": "to;doh-the event planner"}, json.dumps(body).encode(), self._timeout)
         except urllib.error.HTTPError as exc:
             reason = {401: "rejected the API key", 403: "refused the request", 402: "is out of credit", 429: "rate limit reached"}.get(exc.code, f"failed (HTTP {exc.code})")
             raise LLMError(f"{self.name} {reason}") from None

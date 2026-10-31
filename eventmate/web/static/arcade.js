@@ -1,4 +1,4 @@
-/* EventMate Arcade — the arcade is a live view of the real pipeline.
+/* to;doh-the event planner Arcade — the arcade is a live view of the real pipeline.
  *
  * Honesty rules this file keeps:
  * - a module lights only because /api/arcade/pulse says the real stage ran;

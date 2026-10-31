@@ -1,14 +1,14 @@
-# EventMate roadmap and feature triage
+# to;doh-the event planner roadmap and feature triage
 
 Status values: **Accept** (scheduled), **Defer** (good, not yet, reason given), **Reject** (reason given).
 Rejections are binding until a new ADR supersedes them. Decisions: `DECISIONS.md`. State: `HANDOFF.md`.
 
 ## Positioning
 
-EventMate is a constraint-verified, explainable event copilot for Indian weddings, birthdays and
+to;doh-the event planner is a constraint-verified, explainable event copilot for Indian weddings, birthdays and
 community events. It turns a brief into a plan that is checked against budget, capacity, date, dietary and
 vendor constraints, offers ranked trade-offs when they conflict, and replans without breaking confirmed bookings.
-Others generate suggestions; EventMate proves feasibility and shows its work. Novelty is the combination:
+Others generate suggestions; to;doh-the event planner proves feasibility and shows its work. Novelty is the combination:
 solver-verified plans, provenance-tracked vendor quotes, bounded negotiation, and a secrets-free agent wallet.
 
 ## Resolving the five known limitations

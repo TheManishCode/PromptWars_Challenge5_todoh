@@ -53,7 +53,7 @@ def safe_goal(job: Job) -> str:
 def scoped_text(job: Job, names: Mapping[str, str], scope) -> str:
     """The email copy: status and counts always; vendor names, amounts and vendor wording only when the owner ticked them. Never the budget or the cap."""
     open_items = job.open_items()
-    lines = [f"EventMate update: {safe_goal(job)}", f"Status: {job.status.replace('_', ' ')}", f"Quotes confirmed: {len(job.confirmed())} of {job.min_quotes}"]
+    lines = [f"to;doh-the event planner update: {safe_goal(job)}", f"Status: {job.status.replace('_', ' ')}", f"Quotes confirmed: {len(job.confirmed())} of {job.min_quotes}"]
     if open_items:
         kinds = sorted({ITEM_LABEL.get(i.kind, "something to look at") for i in open_items})
         lines.append(f"Waiting for you: {len(open_items)} ({', '.join(kinds)})")
@@ -65,7 +65,7 @@ def scoped_text(job: Job, names: Mapping[str, str], scope) -> str:
     if scope.include_raw_text and open_items:
         lines.append("Details:")
         lines += [f"- {_names(i.text, names)}" for i in open_items]
-    lines += ["", "Open EventMate to act on this. Nothing was sent to anyone else."]
+    lines += ["", "Open to;doh-the event planner to act on this. Nothing was sent to anyone else."]
     return "\n".join(lines)
 
 

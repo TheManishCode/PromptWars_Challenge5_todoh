@@ -1,4 +1,4 @@
-"""EventMate web UI + JSON API (Flask).
+"""to;doh-the event planner web UI + JSON API (Flask).
 
 Security model (local-first tool):
 - binds to loopback by default; ``Host`` must be an allowed loopback name
@@ -10,7 +10,7 @@ Security model (local-first tool):
   no-referrer, no-store on API responses;
 - 64 KB body cap, per-client write rate limit, allow-listed static files;
 - unexpected errors return a generic message; details go to the server log only.
-All EventMate calls run under one lock: the planner and loggers are not designed
+All to;doh-the event planner calls run under one lock: the planner and loggers are not designed
 for concurrent mutation of the same plan.
 """
 
@@ -711,7 +711,7 @@ def create_app(
 
     @app.get("/api/arcade/pulse")
     def arcade_pulse():
-        # Read-only observability of the in-flight run; takes no EventMate lock
+        # Read-only observability of the in-flight run; takes no to;doh-the event planner lock
         # so the page can watch while the (lock-held) plan call is running.
         return jsonify(_arcade_pulse.snapshot())
 
@@ -1191,7 +1191,7 @@ def create_app(
 
     @app.post("/api/plans/<plan_id>/community/items/<item_id>")
     def community_item(plan_id, item_id):
-        """The user's mark on one conditional requirement. EventMate never marks one itself."""
+        """The user's mark on one conditional requirement. to;doh-the event planner never marks one itself."""
         plan_id, b = pid(plan_id), body(CommunityItemBody)
         if not re.fullmatch(r"[a-z0-9_]{1,40}", item_id):
             raise ValueError("invalid item id")
@@ -1222,7 +1222,7 @@ def create_app(
 
     @app.post("/api/plans/<plan_id>/outreach/<draft_id>/sent")
     def outreach_sent(plan_id, draft_id):
-        """The user says they sent it. EventMate cannot verify that."""
+        """The user says they sent it. to;doh-the event planner cannot verify that."""
         plan_id, draft_id = pid(plan_id), pid(draft_id)
         body(EmptyBody)
         with lock:
@@ -1238,7 +1238,7 @@ def create_app(
 
     @app.post("/api/plans/<plan_id>/ledger")
     def ledger_add(plan_id):
-        """User-reported money only: a quote, a payment or a refund. EventMate never initiates a payment."""
+        """User-reported money only: a quote, a payment or a refund. to;doh-the event planner never initiates a payment."""
         plan_id, b = pid(plan_id), body(LedgerBody)
         with lock:
             em.ledger_add(plan_id, b.kind.value, b.category, b.amount, b.note)

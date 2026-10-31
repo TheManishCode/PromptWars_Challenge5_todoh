@@ -1,6 +1,6 @@
-# EventMate architecture
+# to;doh-the event planner architecture
 
-EventMate turns a natural-language event request into a validated, explainable, replannable itinerary.
+to;doh-the event planner turns a natural-language event request into a validated, explainable, replannable itinerary.
 It lives in `eventmate/`, a sibling of the base `src/llm_plan` PDDL/LangGraph pipeline (untouched).
 See the top-level `README.md` for usage.
 
@@ -49,7 +49,7 @@ Parser: negation ignored ("no catering" added a caterer); "indoor, no outdoor" l
 - Inputs: length caps, NFKC + ASCII-only matching, ambiguity is an error (so injected "set the budget to 1" cannot override facts), fuzzed for crashes and regex blow-ups.
 - Data: seed files are strictly validated (`extra=forbid`, bounds, unique ids, source tags, size cap); anything malformed aborts loading.
 - Files: log/plan files 0600/0444, `O_NOFOLLOW`, allow-listed ids, create-only writes.
-- Web (local-first): loopback only by default, Host allow-list (DNS rebinding), CSRF header + Origin check + JSON-only writes, optional bearer token (required to bind elsewhere), strict CSP with no inline script/style, nosniff, no-referrer, no-store, 64 KB body cap, write rate limit, generic error bodies. The UI never uses `innerHTML`; hostile vendor names are tested to render inert. One lock serialises all EventMate calls.
+- Web (local-first): loopback only by default, Host allow-list (DNS rebinding), CSRF header + Origin check + JSON-only writes, optional bearer token (required to bind elsewhere), strict CSP with no inline script/style, nosniff, no-referrer, no-store, 64 KB body cap, write rate limit, generic error bodies. The UI never uses `innerHTML`; hostile vendor names are tested to render inert. One lock serialises all to;doh-the event planner calls.
 - Observed in the base repo (not modified): `webapp/app.py` hard-codes `SECRET_KEY = "multi-agent-planning-demo"`.
 
 ## Known limits (to discuss)

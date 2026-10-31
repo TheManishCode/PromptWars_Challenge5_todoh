@@ -146,7 +146,7 @@ def test_the_model_router_survives_random_and_hostile_model_output(world):
     from eventmate.integrations.explore import ExploreError, route
 
     app, tok, pid = world
-    em = app.config.get("EM") or None  # the fixture's EventMate is reachable through a closure: rebuild an equivalent one
+    em = app.config.get("EM") or None  # the fixture's to;doh-the event planner is reachable through a closure: rebuild an equivalent one
     import tempfile
     from pathlib import Path
 

@@ -21,6 +21,6 @@
   "blocked_input_phrases": [
     "jailbreak"
   ],
-  "preset_reply": "I can help with questions about this event plan and how EventMate works. I can't help with that request.",
+  "preset_reply": "I can help with questions about this event plan and how to;doh-the event planner works. I can't help with that request.",
   "min_retrieval_score": 1.0
 }

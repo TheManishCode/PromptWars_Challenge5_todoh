@@ -1,4 +1,4 @@
-# EventMate decision log
+# to;doh-the event planner decision log
 
 Append-only. Never edit or delete an accepted entry; supersede it with a new one
 (`Status: superseded by ADR-NNN`). Rule: `AI_CODING_RULES.md` → "Memory files".
@@ -8,10 +8,10 @@ Entry headings must be exactly `## ADR-NNN: title`, numbered consecutively (a te
 
 ---
 
-## ADR-001: Keep the name EventMate; do not rename to EventMind
+## ADR-001: Keep the name to;doh-the event planner; do not rename to EventMind
 Status: accepted (2026-10-30)
 Context: A research note proposed "EventMind" as a project title.
-Decision: Package, docs and UI stay `EventMate`. The pitch line may use the note's wording
+Decision: Package, docs and UI stay `to;doh-the event planner`. The pitch line may use the note's wording
 ("constraint-aware, explainable event copilot").
 Why: A rename touches the package, CLI, docs, tests and logs and adds no capability.
 Rejected: Rename to EventMind.
@@ -276,7 +276,7 @@ Consequences: no UI control yet; organizers are set through request text (CLI/AP
 
 ## ADR-021: F7 v1 = advisory dietary checklists in strict, versioned, review-labelled data packs
 Status: accepted (2026-10-30). Implements the safe part of F7; refines ROADMAP F7 ("3 traditions") without superseding it.
-Context: F7 asked for cultural/dietary rule packs. EventMate has no verified knowledge of rituals or traditions, and rule 1
+Context: F7 asked for cultural/dietary rule packs. to;doh-the event planner has no verified knowledge of rituals or traditions, and rule 1
 forbids invented facts. Dietary requirements already work as hard constraints against caterer data.
 Decision:
 1. Packs are data (`eventmate/data/rule_packs.json`, schema_version 1), loaded by `eventmate/planning/rules.py` with the same fail-closed
@@ -456,7 +456,7 @@ Decision:
 2. Multi-city is composed from separate one-way searches, in order, dates non-decreasing, at most 6 legs. The result says it is not a multi-city fare.
    A leg that fails is reported on that leg and removes the total; nothing is estimated. We did **not** try to forge Google's gated header: that is a
    bot-protection token, and bypassing it is not ours to do.
-3. Fares are indicative, never booked or paid by EventMate (AI_CODING_RULES: records, never pays). Flight data does not enter plans or the Validator yet.
+3. Fares are indicative, never booked or paid by to;doh-the event planner (AI_CODING_RULES: records, never pays). Flight data does not enter plans or the Validator yet.
 4. Venue discovery (next slice): Overpass/OSM first (free, no key). Results are `public_listing` candidates with source `tool:overpass`; they are never
    written into the vendor database as facts (ADR-006 rejected that) and carry no price or availability.
 5. Deferred, with reasons: Foursquare Places MCP needs an API key and its terms are unread; Foursquare OS Places is a very large dataset (a city slice
@@ -655,7 +655,7 @@ Not done: (UI card added the same day, see the handoff); the thresholds (3 quote
 (Places) are not tied to vendor records, so they stay out of the score.
 Consequences: 20 tests in `tests/test_vendorscore.py`.
 
-## ADR-041: Quote requests by email and WhatsApp are drafted by EventMate and sent by the user; nothing is sent from here
+## ADR-041: Quote requests by email and WhatsApp are drafted by to;doh-the event planner and sent by the user; nothing is sent from here
 Status: accepted (2026-10-30). Delivers the safe part of F11 at the user's request ("email and WhatsApp, no WhatsApp API, free"). Refines ADR-018; the sending part of F11 stays blocked.
 Context: The user wants quote requests to vendors over email and WhatsApp without the paid WhatsApp Business API. The free routes are click-to-chat (`https://wa.me/<number>?text=...`) and `mailto:` links, both opened in
 the user's own apps. The other free option, driving a personal WhatsApp account with an unofficial library (whatsapp-web.js, Baileys and similar), breaks WhatsApp's terms and gets numbers banned, so it is rejected.
@@ -763,7 +763,7 @@ Decision:
 5. **Do-not-contact.** One suppression per normalised address and channel (case-folded; `+tag` removed only at providers known to ignore it; dots only at Gmail; elsewhere exact). It covers every plan, job and business record, is checked at approval and again at dispatch, and moves every unsent draft to `blocked`. Added only by: a stop request in a reply tied to a message we sent (the thread headers and the address we wrote to), a permanent delivery failure that names the Message-ID of a message we recorded sending, or the user. A stop-like message from anyone else, or from another address using our thread headers, a bounce that does not name a message id we sent (including one that only names an address we wrote to), and a temporary failure are not acted on; the first two kinds are shown to the user as unmatched. A bad address is cleared when the user edits or re-confirms the contact, or lifts the entry, and in both cases only after acknowledging the failure reason (the report's status and the remote server's own cleaned words, shown as unverified); a stop request or the user's own entry is lifted only by the user, recording who and why. Delivery failures are read only from structured reports (RFC 3464), not from text that looks like one.
 6. **Test vendors.** A test vendor is an external business created only with the user's explicit statement that they own the address (`owns_address`, `--i-own-this-address`), recorded as `owner_confirmed_by`, labelled "TEST VENDOR (address owned by <name>)" in the shortlist, threads, jobs, digests and scores. `is_test` is enforced consistent with the source: discovery cannot produce one and a test vendor cannot be passed off as discovered.
 Interfaces: API under `/api/plans/<id>/shortlist/...` (search, list, website, find-contacts, confirm, reject, test-vendor), `/api/suppressions`, `/api/unmatched`, `/api/vendors/labels|directory`; CLI `testvendor`; a Find vendors card, a Do not contact box and a Messages to review box in the Vendor chats tab.
-Honest limits: a quote from a discovered business is recorded and scored but cannot price the plan (it is not a plan vendor), so the manual Re-price changes nothing for it; contact coverage depends on what a business publishes; Places websites and the DSN parser were tested with fakes and one hand-built report, not live; businesses' addresses are personal data stored with no retention or deletion rules yet (pre-launch blocker 3); EventMate does not check anti-spam or privacy law, and the UI says so.
+Honest limits: a quote from a discovered business is recorded and scored but cannot price the plan (it is not a plan vendor), so the manual Re-price changes nothing for it; contact coverage depends on what a business publishes; Places websites and the DSN parser were tested with fakes and one hand-built report, not live; businesses' addresses are personal data stored with no retention or deletion rules yet (pre-launch blocker 3); to;doh-the event planner does not check anti-spam or privacy law, and the UI says so.
 Not done: promotion into the vendor database, WhatsApp discovery, images, ranking by contact quality, an unsubscribe link in outgoing mail, a catch for forwarded or translated stop requests.
 Consequences: about 190 new tests (`test_external_vendors`, `test_contacts`, `test_shortlist`, `test_suppression`, `test_test_vendors`, `test_discovery_e2e`) and a Chromium test of the whole review flow; the mutation checks that removed the hidden-text defence, the cross-domain rule, the dispatch-time check, the forged-stop guard and the temporary-failure rule each made a test fail.
 Amendment (2026-10-31, after review): (a) bounce correlation now requires the recorded Message-ID; a notice that only names a recipient we wrote to went from "correlated" to "review" because anyone can write one. (b) The failure reason is stored (`Suppression.detail`) and shown, and re-enabling the address (lift or re-confirm) needs the user to acknowledge it; the API answers 409 with the reason until they do. (c) **None of the matching is authentication.** Thread headers, sender addresses and Message-IDs can be forged by anyone who has received our mail, so a stop request or a delivery notice can be forged. The design fails safe: a forgery can only stop us writing to an address we already wrote to, it is shown with its source and reason, and only the user lifts it. A message id we sent proves correlation, not that the notice is genuine. Nothing in the code, UI or docs should call this verified.

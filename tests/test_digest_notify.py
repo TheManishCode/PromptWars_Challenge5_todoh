@@ -239,10 +239,10 @@ def test_only_the_confirmed_owner_address_receives_the_digest(em, world, pid, cl
     run_to_a_price(em, world, pid, clock)
     tick(em, clock)
     assert owner_mail(world)
-    digests = [m for m in world.outbox if m["Subject"].startswith("EventMate")]
+    digests = [m for m in world.outbox if m["Subject"].startswith("to;doh-the event planner")]
     assert digests and all(m["To"] == OWNER for m in digests)
     for vendor in ADDR.values():
-        assert not any(m["Subject"].startswith("EventMate") for m in world.sent_to(vendor))
+        assert not any(m["Subject"].startswith("to;doh-the event planner") for m in world.sent_to(vendor))
     assert all(len(m.get_all("To")) == 1 and not m.get_all("Cc") and not m.get_all("Bcc") for m in digests)
 
 

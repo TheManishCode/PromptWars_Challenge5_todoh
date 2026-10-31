@@ -1,4 +1,4 @@
-"""Quote-request drafts (ADR-041, F11 without sending): EventMate writes the message and builds a link; the user sends it.
+"""Quote-request drafts (ADR-041, F11 without sending): to;doh-the event planner writes the message and builds a link; the user sends it.
 
 Nothing here sends anything, uses the WhatsApp Business API or automates a WhatsApp account.
 """

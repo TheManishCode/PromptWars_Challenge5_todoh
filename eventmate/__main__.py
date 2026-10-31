@@ -1,4 +1,4 @@
-"""EventMate command line.
+"""to;doh-the event planner command line.
 
     python -m eventmate plan "<request>" [--guest-list ID]
     python -m eventmate confirm PLAN_ID venue|caterer|photographer
@@ -65,14 +65,14 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--guest-list", default=None)
     p.add_argument("--apply", type=int, default=None, metavar="N", help="apply option N (1-based) and store the resulting plan")
     p.add_argument("--json", action="store_true")
-    p = sub.add_parser("ledger", help="budget ledger: money you report (quotes, payments, refunds); nothing is ever paid by EventMate")
+    p = sub.add_parser("ledger", help="budget ledger: money you report (quotes, payments, refunds); nothing is ever paid by to;doh-the event planner")
     p.add_argument("plan_id")
     g = p.add_mutually_exclusive_group()
     for kind in ("quote", "payment", "refund"):
         g.add_argument(f"--{kind}", nargs=2, metavar=("CATEGORY", "AMOUNT_INR"), help=f"record a {kind}")
     p.add_argument("--note", default="")
     p.add_argument("--json", action="store_true")
-    p = sub.add_parser("flights", help="indicative fares and schedules from Google Flights through fli; EventMate never books")
+    p = sub.add_parser("flights", help="indicative fares and schedules from Google Flights through fli; to;doh-the event planner never books")
     p.add_argument("origin")
     p.add_argument("destination")
     p.add_argument("date", type=date.fromisoformat)

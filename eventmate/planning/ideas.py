@@ -166,7 +166,7 @@ def guard_idea(item: dict, vendor_names: Iterable[str], available_fields: Option
 def idea_review_note(item: dict) -> str:
     """A visible note for an idea that passed but touches culture: shown to the organiser instead of dropping the idea. Empty when there is nothing to check."""
     blob = " ".join(str(item.get(k, "")) for k in ("title", "why")) if isinstance(item, dict) else ""
-    return "Organiser to check: this idea mentions a tradition. EventMate does not know what your family or community expects; ask them before relying on it." if _CULTURAL_SOFT.search(blob) else ""
+    return "Organiser to check: this idea mentions a tradition. to;doh-the event planner does not know what your family or community expects; ask them before relying on it." if _CULTURAL_SOFT.search(blob) else ""
 
 
 # ------------------------------------------------------------------ templates

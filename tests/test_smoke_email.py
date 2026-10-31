@@ -82,7 +82,7 @@ def test_a_real_test_send_needs_both_flags_and_goes_only_to_that_address(capsys)
         assert run(w, argv=["--send-test-to", bad, "--i-own-this-address"], capsys=capsys)[0] == 2 and w.outbox == []
     code, out = run(w, argv=["--send-test-to", "me@personal.test", "--i-own-this-address"], capsys=capsys)
     assert code == 0 and [m["To"] for m in w.outbox] == ["me@personal.test"] and "PASS send" in out.out
-    assert "EventMate" in w.outbox[0]["Subject"] and SECRET not in w.outbox[0].get_content()
+    assert "to;doh-the event planner" in w.outbox[0]["Subject"] and SECRET not in w.outbox[0].get_content()
 
 
 def test_it_never_selects_the_mailbox_for_writing_and_never_deletes_anything(capsys):

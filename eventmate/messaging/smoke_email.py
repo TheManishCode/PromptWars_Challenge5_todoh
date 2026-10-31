@@ -92,7 +92,7 @@ def main(argv: Optional[List[str]] = None, env: Optional[Mapping[str, str]] = No
     if a.send_test_to and rows[0][0] == "PASS":
         try:
             sender = EmailChannel(cfg, smtp_factory=smtp_factory) if smtp_factory else channel
-            sender.send(a.send_test_to.strip(), "EventMate mail test", "This is a test message from EventMate's mail check. Nothing else was sent.", None)
+            sender.send(a.send_test_to.strip(), "to;doh-the event planner mail test", "This is a test message from to;doh-the event planner's mail check. Nothing else was sent.", None)
             rows.append(("PASS", "send", f"one test message sent to the address you named ({cfg.smtp_host})"))
         except ChannelError:
             rows.append(("FAIL", "send", "the server refused or dropped the message"))

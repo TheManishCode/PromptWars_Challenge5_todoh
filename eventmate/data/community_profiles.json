@@ -2,7 +2,7 @@
  "schema_version": 1,
  "version": 1,
  "reviewed": false,
- "source": "EventMate draft: adjustable defaults for planning a community event. Not reviewed by event professionals or any authority. Suggested roles are prompts to confirm, not requirements. Conditional items say who to check with and never state a rule.",
+ "source": "to;doh-the event planner draft: adjustable defaults for planning a community event. Not reviewed by event professionals or any authority. Suggested roles are prompts to confirm, not requirements. Conditional items say who to check with and never state a rule.",
  "default_subtype": "other",
  "profiles": {
   "other": {

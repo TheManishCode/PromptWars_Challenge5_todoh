@@ -1,4 +1,4 @@
-# EventMate handoff
+# to;doh-the event planner handoff
 
 Read this first, then `AI_CODING_RULES.md`, `DECISIONS.md`, `ROADMAP.md`. Update this file in the same
 change as any code or decision change, and at the end of every session. Stale handoff = unfinished work.
@@ -65,7 +65,7 @@ Those need either a design that is not blocked by missing data or outside review
 ## Things to know
 
 - F1: moves are rebalance caps, drop optional service, shift date, raise budget; harm weights in `TradeoffPolicy`.
-  `EventRequest.cap_weights` is new; the Validator recomputes allocation; `BudgetPolicy` is shared via `EventMate`.
+  `EventRequest.cap_weights` is new; the Validator recomputes allocation; `BudgetPolicy` is shared via `to;doh-the event planner`.
   Not done: tier/hours downgrades (no data), combined moves.
 - F2: floor = cheapest eligible vendor per service, labelled "Estimate, not a quote". The CLI printed nothing for it until this
   session (gap found by running the CLI; fixed with a test).
@@ -113,6 +113,8 @@ Nearly all have 0-2 stars, so none counts as proven; any borrowing needs a read-
 - 2026-10-31: Discovered vendors (ADR-049) on branch `feature/discovery-contacts` (not pushed, not merged): `ExternalBusiness` identity separate from seed vendors, contact extraction from a business's own pages with provenance, shortlist and search with explicit source coverage, user-confirmed addresses only, a do-not-contact list (matched stop requests, correlated permanent bounces, user), test vendors, a Find vendors UI. Found and fixed on the way: unmatched-sender stop requests could not be reviewed (they were dropped), a draft blocked by a suppression was silently skipped when a job was approved (now a job item). Not verified live: Places `websiteUri`, DSN parsing against a real mail server, any real fetch or send.
 
 - 2026-10-31: Review fixes (ADR-048): a required access need that is unknown now makes the plan provisional ("Needs verification: required accessibility unknown") in the header, chat, Overview, Community tab, trade-off cards, explanation, CLI validate, API and assistant tool; the test that said unknown never blocks was replaced. Profile cache keys on content. Demo gained a synthetic-data disclosure and the access walkthrough. Branch `cleanup/structure` was pushed for review; nothing is on `main` beyond 82c8d4f.
+
+- 2026-11-01: Product name changed to "to;doh-the event planner" in every user-visible string, doc and comment (59 files). The 3D cabinet's fixed-size canvas marquees use the short mark TO;DOH. Not renamed, because they are code or wire identifiers and the name cannot be one: the `eventmate` package, the `EventMate` class, `EVENTMATE_*` environment variables, the `X-EventMate-CSRF` header, the `EventMate/0.1` User-Agent and `EventMateBot` robots token. `prompts/` is untouched (versioned and hash-locked; `assistant.system.v1.md` still says EventMate, change it only by adding a v2). The rename was done with a tokenizer-based script so only string and comment text changed.
 
 - 2026-11-01: Break-and-fix pass: injected small bugs (line-level mutants, `_audit/harness/mutate.py`) into the modules refactored last and the security guards, then wrote tests for what survived. Survivors out of 105-120 mutants: planner selection 52 to 20, `web_access` 43 to 31, idea guard 30 to 23. Two real defects found and fixed: host labels such as `-bad.example` were accepted by `check_url` (now RFC 1123), and the idea guard's booking-verb match was case-sensitive, so a sentence-initial `Hire Golden Palace` named an unknown business without being dropped (now caught; an idea that starts a sentence with Visit/Book/Hire/Call/Contact plus two capitalised words is now dropped, which fails closed). `Validator._schedule` was split into one method per check. New tests: `test_planner_select.py`, `test_url_guard.py`, `test_idea_guard.py`. Remaining survivors are mostly tuning constants, message text and fetcher plumbing; `deals.py` (44) and `followthrough/worker.py` (36) were measured but not yet worked on.
 

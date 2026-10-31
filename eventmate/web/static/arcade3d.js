@@ -1,4 +1,4 @@
-/* EventMate Arcade — 3D floor (Three.js r128, vendored locally, MIT).
+/* to;doh-the event planner Arcade — 3D floor (Three.js r128, vendored locally, MIT).
  *
  * "Our own version" of a classic game-ready upright cabinet (silhouette and
  * layout inspired by CC-BY reference cabinets the user picked on Sketchfab;
@@ -227,7 +227,7 @@ window.Arcade3D = (function () {
       x.fillStyle = g; x.fillRect(0, 0, w, h);
     }, { repeat: true });
   }
-  /* cabinet side art: original EventMate vinyl wrap (no third-party art) */
+  /* cabinet side art: original to;doh-the event planner vinyl wrap (no third-party art) */
   function sideArtTexture() {
     return canvasTex(640, 1600, (x, w, h) => {
       const bg = x.createLinearGradient(0, 0, 0, h);
@@ -281,7 +281,7 @@ window.Arcade3D = (function () {
       x.font = "bold 92px ui-monospace, Menlo, Consolas, monospace";
       x.shadowColor = "rgba(63,210,255,0.9)"; x.shadowBlur = 26;
       x.fillStyle = "#bfeaff";
-      x.fillText("EVENTMATE", 0, 0);
+      x.fillText("TO;DOH", 0, 0);
       x.shadowBlur = 0;
       x.font = "bold 30px ui-monospace, Menlo, Consolas, monospace";
       x.fillStyle = "#ffb54d";
@@ -498,7 +498,7 @@ window.Arcade3D = (function () {
     x.textAlign = "left"; x.textBaseline = "alphabetic";
     x.font = "bold 27px ui-monospace, Menlo, Consolas, monospace";
     x.fillStyle = "#ffb54d";
-    x.fillText("EVENTMATE // PLANNING ENGINE", 28, 46);
+    x.fillText("TO;DOH // PLANNING ENGINE", 28, 46);
     x.textAlign = "right";
     const crtCol = { "STANDBY": "#3a4a5c", "INSERT COIN": "#ffb54d", "RUNNING": "#3fd2ff",
       "REPLAY": "#ffb54d", "PLAN READY": "#59d68f", "JAMMED": "#ff5a5a" }[scr.crt] || "#3fd2ff";
@@ -626,7 +626,7 @@ window.Arcade3D = (function () {
     if (!S.lowFx) sc.add(S.dust);
   }
 
-  /* -------- cabinet: classic upright silhouette, original EventMate art --------
+  /* -------- cabinet: classic upright silhouette, original to;doh-the event planner art --------
      If the user-selected CC-BY model ships as /static/cabinet.glb, the GLB
      loader replaces this shell and reuses the same mount points. */
   const PROFILE = [ // (depth front+/back-, height) — the classic upright side view
@@ -699,7 +699,7 @@ window.Arcade3D = (function () {
       mat(0x0a0d13, 0.6, 0.2));
     marqueeFrame.position.set(0, 2.30, 0.31); marqueeFrame.rotation.x = -0.10; cab.add(shadowed(marqueeFrame));
     S.marquee = new THREE.Mesh(new THREE.PlaneGeometry(1.62, 0.3),
-      glowMat(textTexture("EVENTMATE", { fg: "#8a6a28", w: 640, h: 128, size: 76 }), 1.05));
+      glowMat(textTexture("TO;DOH", { fg: "#8a6a28", w: 640, h: 128, size: 76 }), 1.05));
     S.marquee.position.set(0, 2.30, 0.345); S.marquee.rotation.x = -0.10; cab.add(S.marquee);
     const marqueeGlass = new THREE.Mesh(new THREE.PlaneGeometry(1.66, 0.34),
       new THREE.MeshStandardMaterial({ color: 0xaac4dd, transparent: true, opacity: 0.09,
@@ -1089,7 +1089,7 @@ window.Arcade3D = (function () {
         });
       });
     }
-    S.marquee.material = glowMat(textTexture("EVENTMATE", { fg: "#ffb54d", w: 640, h: 128, size: 76 }), 1.7);
+    S.marquee.material = glowMat(textTexture("TO;DOH", { fg: "#ffb54d", w: 640, h: 128, size: 76 }), 1.7);
     S.marqueeLight.intensity = 1.8;
     S.screenLight.intensity = 1.2;
     scr.crt = "INSERT COIN"; scr.dirty = true;

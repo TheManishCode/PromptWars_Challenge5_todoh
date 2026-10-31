@@ -104,8 +104,8 @@ class ConversationService:
     ):
         self.store, self.channels, self.plan_lookup, self.policy, self.now = store, channels, plan_lookup, policy, now
         self._last_whatsapp: Optional[datetime] = None
-        self.suppressions: Optional[SuppressionStore] = None  # set by EventMate: the do-not-contact list, checked at approval and again when a message is about to be sent
-        self.unmatched: Optional[UnmatchedStore] = None  # set by EventMate: stop-like mail and bounces that are not tied to anything we sent, for the user to review
+        self.suppressions: Optional[SuppressionStore] = None  # set by to;doh-the event planner: the do-not-contact list, checked at approval and again when a message is about to be sent
+        self.unmatched: Optional[UnmatchedStore] = None  # set by to;doh-the event planner: stop-like mail and bounces that are not tied to anything we sent, for the user to review
         self.guards: List[Callable[[OutreachDraft], Optional[str]]] = []  # each may veto an automatic send at dispatch time (for example: its job was cancelled)
 
     # ------------------------------------------------------------ approval

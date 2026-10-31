@@ -129,7 +129,7 @@ def _budget(ctx: ToolContext, _):
     pct = round(100 * s.planned_total / s.budget_total) if s.budget_total else 0
     remaining = s.budget_total - s.planned_total
     return {"budget_total": s.budget_total, "planned_total": s.planned_total, "planned_percent_of_budget": pct, "remaining_after_planned": remaining,
-            "derivation": f"planned {s.planned_total} / budget {s.budget_total} = {pct} percent; budget {s.budget_total} - planned {s.planned_total} = {remaining} (computed by EventMate, not by the model)",
+            "derivation": f"planned {s.planned_total} / budget {s.budget_total} = {pct} percent; budget {s.budget_total} - planned {s.planned_total} = {remaining} (computed by to;doh-the event planner, not by the model)",
             "quoted_total": s.quoted_total, "committed_total": s.committed_total,
             "paid_total": s.paid_total, "pending_total": s.pending_total, "headroom": s.headroom, "plan_version": p.version,
             "vendors": [{"category": x.category.value, "name": x.name, "cost": x.cost} for x in p.selections]}
@@ -178,7 +178,7 @@ def _apply_replan(ctx: ToolContext, args: Dict[str, Any]) -> str:
 
 def build_tools() -> Dict[str, Tool]:
     t: List[Tool] = [
-        Tool("search_knowledge", "Search EventMate's own policy and help documents. Use for how EventMate works, budget rules and dietary checklists.", Perm.KB_READ, SearchArgs, _search),
+        Tool("search_knowledge", "Search to;doh-the event planner's own policy and help documents. Use for how to;doh-the event planner works, budget rules and dietary checklists.", Perm.KB_READ, SearchArgs, _search),
         Tool("get_public_event_info", "Event type, city, date and venue name. Safe to share with guests.", Perm.PLAN_PUBLIC, NoArgs, _public),
         Tool("get_plan_summary", "The current plan without money: guests, dietary needs, chosen vendors and their booking status.", Perm.PLAN_READ, NoArgs, _summary),
         Tool("list_alternatives", "Alternatives considered for one vendor category and why they were not chosen.", Perm.PLAN_READ, CategoryArgs, _alternatives),

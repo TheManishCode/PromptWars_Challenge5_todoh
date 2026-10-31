@@ -1,7 +1,7 @@
 ---
 permission: kb:read
 ---
-# What EventMate does not know yet
+# What to;doh-the event planner does not know yet
 
 Vendor records are sample data, not live quotes. Treat every price as an estimate until the vendor confirms it in writing.
 

@@ -1,4 +1,4 @@
-# EventMate Arcade UI (revision 2 — cinematic 3D)
+# to;doh-the event planner Arcade UI (revision 2 — cinematic 3D)
 
 Process map for the `/arcade` page: a 3D arcade floor with a working cabinet, an
 attendant character, and a chat. Every moving part below maps to real pipeline
@@ -7,7 +7,7 @@ code — nothing on screen claims a stage happened that did not.
 ## What the user sees, in order
 
 1. **Room powers on** — fluorescent light flickers, the cabinet marquee lights up
-   (`EVENTMATE // PLANNING ENGINE`), and the attendant character (a small rounded
+   (`TO;DOH // PLANNING ENGINE`), and the attendant character (a small rounded
    robot on a pedestal) wakes and turns to face the cabinet.
 2. **Dormant loop inside the cabinet screen** — before any coin, the CRT runs the
    real workflow loop slowly and *uniquely*: parse -> decompose -> optimize ->
@@ -115,4 +115,4 @@ rupees, catering and photography". An infeasible brief (e.g. 20000 rupees for
   resolution with the chat overlay collapsing to a header bar.
 
 
-Credits: cabinet model by Snji, attendant by dantheman, both CC BY 4.0 (see ATTRIBUTIONS.md); artwork and animation rigging by EventMate.
+Credits: cabinet model by Snji, attendant by dantheman, both CC BY 4.0 (see ATTRIBUTIONS.md); artwork and animation rigging by to;doh-the event planner.

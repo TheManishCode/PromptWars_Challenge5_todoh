@@ -1,4 +1,4 @@
-"""Run the EventMate web UI:  python -m eventmate.web [--port 8765]
+"""Run the to;doh-the event planner web UI:  python -m eventmate.web [--port 8765]
 
 Loopback only by default. To listen elsewhere you must set EVENTMATE_WEB_TOKEN
 (a bearer token required for the API) and pass --allow-remote plus --allowed-host
@@ -26,7 +26,7 @@ def main(argv=None) -> int:
         return 2
     hosts = set(LOOPBACK) | set(a.allowed_host)
     app = create_app(api_token=token, allowed_hosts=hosts)
-    print(f"EventMate UI on http://{a.host}:{a.port}/  (API token {'required' if token else 'not set; loopback only'})")
+    print(f"to;doh-the event planner UI on http://{a.host}:{a.port}/  (API token {'required' if token else 'not set; loopback only'})")
     app.run(host=a.host, port=a.port, threaded=True, debug=False, use_reloader=False)
     return 0
 

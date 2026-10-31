@@ -45,7 +45,7 @@ class ObservationStore:
         self.root = Path(root) / "observations"
         self.repo = repo
         self.checklists = _load_checklists()
-        self.external_lookup: Callable[[str], Optional[object]] = lambda vendor_id: None  # set by EventMate: finds a discovered or test business by its ext_ id
+        self.external_lookup: Callable[[str], Optional[object]] = lambda vendor_id: None  # set by to;doh-the event planner: finds a discovered or test business by its ext_ id
 
     def _file(self) -> _ObservationFile:
         return _ObservationFile(self.root, run_id="all")

@@ -1,6 +1,6 @@
 """Community conditional requirements (class B, ADR-046).
 
-Shown when the user's answers trigger them. Each ends as confirmed_by_user, not_applicable_by_user or not_verified. EventMate never marks one
+Shown when the user's answers trigger them. Each ends as confirmed_by_user, not_applicable_by_user or not_verified. to;doh-the event planner never marks one
 itself and never states a legal rule; the summary never says safe or compliant.
 """
 
@@ -170,7 +170,7 @@ def test_the_summary_is_exact_and_the_explanation_carries_it(em, pid):
     s = em.community_status(pid, today=TODAY)
     md = em.explain(pid).markdown
     assert "## Community checks" in md and s.summary in md
-    assert "not verified by EventMate" in md.lower() or "not verified" in md.lower()
+    assert "not verified by to;doh-the event planner" in md.lower() or "not verified" in md.lower()
     for text in (s.summary, md.lower(), " ".join(i.instruction for i in s.items).lower()):
         assert not FORBIDDEN.search(text), FORBIDDEN.findall(text)
     mark(em, pid, "venue_permission")

@@ -132,7 +132,7 @@ def test_cli_shows_approves_and_polls(em, pid, chans, tmp_path, capsys):
 
     d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Asha")
     base = ["--plan-dir", str(tmp_path / "p"), "--log-dir", str(tmp_path / "l")]
-    # the CLI builds its own EventMate with channels from the environment: none configured, so approval is refused cleanly
+    # the CLI builds its own to;doh-the event planner with channels from the environment: none configured, so approval is refused cleanly
     assert main(base + ["inbox", "approve", pid, d.draft_id, "--hash", d.content_hash]) != 0
     assert main(base + ["inbox", "show", pid]) == 0
     out = capsys.readouterr().out

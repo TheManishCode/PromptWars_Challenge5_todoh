@@ -1,5 +1,5 @@
 ---
-title: "EventMate: from planner to follow-through agent"
+title: "to;doh-the event planner: from planner to follow-through agent"
 subtitle: "Design and status for the follow-through jobs (ADR-044)"
 ---
 
@@ -18,7 +18,7 @@ subtitle: "Design and status for the follow-through jobs (ADR-044)"
 
 ## 1. Goal and honest scope
 
-Today EventMate turns a brief into a verified plan and, once you click, sends approved vendor messages and reads replies. The aim here is an agent that **keeps a job moving across days** (send, wait, read, decide, nudge, ask you, finish) while staying inside limits you set.
+Today to;doh-the event planner turns a brief into a verified plan and, once you click, sends approved vendor messages and reads replies. The aim here is an agent that **keeps a job moving across days** (send, wait, read, decide, nudge, ask you, finish) while staying inside limits you set.
 
 This is an independent design for your own system, built from your repo and ordinary engineering patterns. Nothing here is measured. Do not claim any efficiency level until the evals in section 9 pass on your own data. No code in the repo was changed.
 
