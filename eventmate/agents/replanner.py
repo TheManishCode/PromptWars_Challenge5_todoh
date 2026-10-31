@@ -15,6 +15,7 @@ Rules enforced here (and re-checked independently by the Validator):
 
 from __future__ import annotations
 
+import contextlib
 from datetime import date
 
 from pydantic import ValidationError
@@ -268,6 +269,12 @@ class ReplannerAgent:
             )
             self._fail(plan.request.request_id, "Plan changed while replanning", [v])
             return ReplanOutcome(status="failed", violations=(v,))
+        except OSError:
+            # the decision log already says "version N chosen" (the plan embeds those entry ids, so it must come first): say what happened to it
+            with contextlib.suppress(Exception):
+                self._log_decision(plan.request.request_id, DecisionType.FAILURE, f"Version {plan.version} of plan {plan.plan_id} could not be written",
+                                   [], f"the storage failed; version {plan.version - 1} stays current and nothing was changed")
+            raise
         return None
 
     def _apply(self, parent: PlanVersion, d: Disruption, today: date) -> Tuple[EventRequest, Tuple[str, ...], Set[str], str]:

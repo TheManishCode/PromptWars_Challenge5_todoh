@@ -9,6 +9,7 @@ plus necessity (every task must feed the final explanation).
 
 from __future__ import annotations
 
+import contextlib
 import re
 import unicodedata
 import uuid
@@ -30,6 +31,7 @@ from eventmate.schemas import (
     MAX_GUESTS,
     MAX_ORGANIZERS,
     AgentName,
+    PlanVersion,
     ConstraintCheck,
     ConstraintViolation,
     DecisionType,
@@ -658,6 +660,26 @@ class ManagerAgent:
 
     # ------------------------------------------------------------ full run
 
+    def _save(self, plan: PlanVersion) -> None:
+        """Write version 1. The decision log already says the plan was chosen (the plan embeds those entry ids), so a failed write is logged before it is raised."""
+        try:
+            self.store.save(plan)
+        except OSError:
+            with contextlib.suppress(Exception):
+                self.logger.log(request_id=plan.request.request_id, agent=self.agent_name, decision_type=DecisionType.FAILURE,
+                                summary=f"Plan {plan.plan_id} could not be written", justification="the storage failed; no plan exists and nothing was changed", confidence=1.0, source="rule:manager")
+            raise
+
+    def _explain_after_save(self, plan: PlanVersion) -> None:
+        """The plan is already saved and its explanation is derived (``EventMate.explain`` rebuilds it on demand), so a failure here must not turn a saved plan into an error."""
+        try:
+            self.explainer.explain(plan)
+        except Exception as exc:
+            with contextlib.suppress(Exception):
+                self.logger.log(request_id=plan.request.request_id, agent=self.agent_name, decision_type=DecisionType.FAILURE,
+                                summary=f"The explanation for plan {plan.plan_id} could not be written ({type(exc).__name__})",
+                                justification="the plan is saved and valid; the explanation is rebuilt when it is asked for", confidence=1.0, source="rule:manager")
+
     def run(self, text: str, today: Optional[date] = None, guest_list_id: Optional[str] = None, plan_id: Optional[str] = None) -> PlanOutcome:
         """Parse -> decompose -> source -> plan -> validate -> store -> explain."""
         self._require_pipeline()
@@ -727,8 +749,8 @@ class ManagerAgent:
         plan = assemble_plan(planned.draft, report, 1, None, change_reason, tuple(self.logger.entry_ids[start:]))
         if persist:
             _arcade_pulse.stage_started("store")
-            self.store.save(plan)
-            self.explainer.explain(plan)
+            self._save(plan)
+            self._explain_after_save(plan)
             _arcade_pulse.stage_done("store")
         graph = graph.with_status(TERMINAL_TASK_ID, TaskStatus.DONE)
         return outcome((), plan)

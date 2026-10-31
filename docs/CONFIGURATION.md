@@ -45,3 +45,18 @@ Vendor messaging settings are in [EMAIL_SETUP.md](EMAIL_SETUP.md). Community pro
 
 Contact addresses are read only from a business's own website (the listing's, or one you type) and at most one same-domain contact page, honouring robots.txt. Found addresses are never used until you confirm them. Business addresses and the do-not-contact list are stored in the plan directory (`sourcing` data: `externals/`, `shortlist/`, `suppression/`, `unmatched/`) with no retention or deletion rules yet.
 
+## Keeping secrets out of files
+
+The SMTP password, the WhatsApp gateway key and the API keys can live in `.env` (mode 600, git-ignored), but a file on disk is the weakest option. The loader reads only the 30 allow-listed names and **a value already set in the real environment wins over the file**, so any of these work with no code change: put the secret in the environment when you start the app, and leave it out of `.env`.
+
+| Where the secret lives | How to start the app | Notes |
+|---|---|---|
+| A password manager (1Password CLI) | `op run --env-file=.env.op -- python -m eventmate.web`, where `.env.op` holds a reference, not the secret: `EVENTMATE_SMTP_PASSWORD="op://Private/todoh SMTP/password"` | The secret is fetched when the process starts and exists only in its environment. `.env.op` is safe to keep, but still do not commit it |
+| The desktop keychain on Linux (libsecret) | `EVENTMATE_SMTP_PASSWORD="$(secret-tool lookup service todoh user smtp)" python -m eventmate.web` | Store it once with `secret-tool store --label='todoh SMTP' service todoh user smtp` (it prompts; the value is not on the command line) |
+| The macOS keychain | `EVENTMATE_SMTP_PASSWORD="$(security find-generic-password -a "$USER" -s todoh-smtp -w)" python -m eventmate.web` | Store it once with `security add-generic-password -a "$USER" -s todoh-smtp -w` (it prompts) |
+| A service manager (systemd) | `LoadCredential=` or an `EnvironmentFile=` with mode 600 owned by the service user | The file is still on disk, but outside the project and not world-readable |
+
+I have **not run** the 1Password, libsecret or macOS commands for this page; they follow those tools' documented usage, so check each against its own help before relying on it. What this application guarantees, and tests cover, is its own side: it never prints, logs or returns a secret's value (only names and warnings), ignores an `.env` that is a symlink, larger than 64,000 bytes or not a regular file, warns when `.env` is readable by other users, and lets the real environment override the file.
+
+Do not put a secret on a command line (`--password ...`) or in a shell history line: other users can see process arguments. Rotate any secret that has ever been pasted into a chat, a ticket or a log.
+

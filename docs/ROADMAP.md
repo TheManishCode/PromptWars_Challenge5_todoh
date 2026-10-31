@@ -53,6 +53,7 @@ solver-verified plans, provenance-tracked vendor quotes, bounded negotiation, an
 | F25 | Personalized ideas (guarded suggestions) | Accept (done 2026-10-31, ADR-045) | 3 | Templates plus optional model; never prices or claims |
 | F26 | Community events with profiles, hard checks and user-marked conditional items | Accept (done 2026-10-31, ADR-046) | 3 | No rule packs: conditional items stay not_verified until the user marks them |
 | F27 | Owner digest in-app plus optional email copy; mailbox smoke check | Accept (done 2026-10-31, ADR-047) | 3 | Real-mailbox validation still to run (docs/EMAIL_VALIDATION.md) |
+| F36 | A failed save is logged truthfully; an explanation cannot turn a saved plan into an error; secret-handling options documented | Accept (done 2026-11-01, ADR-057) | 2 | docs/CONFIGURATION.md |
 | F35 | Voice: notes and live conversation, cancel-safe turns, local transcriber (off by default), opt-in kept originals | Accept (done 2026-11-01, ADR-056) | 4 | docs/VOICE.md |
 | F34 | Guest-list import: preview, single-use commit, one private file per plan, counts everywhere else | Accept (done 2026-11-01, ADR-055) | 3 | docs/GUEST_IMPORT.md |
 | F33 | EventState: a read-only view with source, time and status on every fact, open items with ages, changes since, one assistant tool | Accept (done 2026-11-01, ADR-054) | 3 | docs/EVENT_STATE.md |
