@@ -9,6 +9,7 @@ configures; nothing here is on by default for a loopback bind.
 from __future__ import annotations
 
 import sys
+import time
 from typing import Any
 
 # 6 MB: the largest upload route is audio (5 MB) plus a multipart envelope; every other route is held to 64 KB by the app itself
@@ -48,7 +49,41 @@ def run(app, host: str, port: int, requested: str = "auto", remote: bool = False
     """Serve until interrupted. Returns the name of the server used."""
     kind = choose(requested, remote)
     if kind == "waitress":
-        make_waitress(app, host, port, **overrides).run()
+        drain_s = float(overrides.pop("drain_s", 20.0))
+        server = make_waitress(app, host, port, **overrides)
+        import signal
+        import threading
+
+        from waitress import wasyncore
+
+        def busy(ch):  # a request being handled, queued, or a response not yet fully sent
+            return bool(getattr(ch, "running_tasks", False) or getattr(ch, "requests", None) or getattr(ch, "total_outbufs_len", 0))
+
+        def drain():
+            # Only the listening socket is closed: the trigger the worker threads use to hand back finished responses must stay open, or the answer to a request that is
+            # still running is lost. Once no connection is busy (idle keep-alive ones do not count) or ``drain_s`` is over, everything is closed and run() returns.
+            deadline = time.monotonic() + drain_s
+            while time.monotonic() < deadline:
+                chans = [d for d in list(server._map.values()) if isinstance(d, server.channel_class)]
+                if not any(busy(c) for c in chans):
+                    break
+                time.sleep(0.05)
+            wasyncore.close_all(server._map)
+
+        def stop(_signum, _frame):
+            # The listener is closed from inside the loop (the trigger runs the function in the loop's own thread): closing it here would pull a descriptor out from under a
+            # select() that Python restarts after the signal, which fails the whole loop. Not server.close(): that also closes the trigger.
+            server.trigger.pull_trigger(lambda: wasyncore.dispatcher.close(server))
+            threading.Thread(target=drain, daemon=True).start()
+
+        signal.signal(signal.SIGTERM, stop)
+        signal.signal(signal.SIGINT, stop)
+        server.run()  # returns when the listener is closed and no connection is left
+        dispatcher = getattr(server, "task_dispatcher", None)
+        if dispatcher is not None:
+            dispatcher.shutdown(cancel_pending=False, timeout=drain_s)
+        clean = not (dispatcher.threads if dispatcher is not None else [])
+        print("stopped" if clean else "stopped; some requests were still running and were abandoned", file=sys.stderr)
     else:
         from eventmate.web.server import make_bounded_server  # the built-in server with an idle timeout and a connection cap (thread B's R-6)
 

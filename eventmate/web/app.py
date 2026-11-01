@@ -757,7 +757,7 @@ def create_app(
         rid = g.get("rid", "-")
         if isinstance(exc, OSError) and exc.errno in (errno.ENOSPC, errno.EDQUOT):
             log.error("storage full (request %s): %s", rid, type(exc).__name__)
-            return _err(507, "the server has no room to save this; nothing was lost and the owner has been told by the log", code="storage_full", request_id=rid)
+            return _err(507, "the server has no room to save this, so the change may not have been made; try again once the owner has freed space. If you were deleting, run the delete again to finish it", code="storage_full", request_id=rid)
         log.exception("unhandled error (request %s)", rid)  # the traceback goes to the server's own log only; the answer names the request and nothing else
         return _err(500, "internal error", code="internal", request_id=rid)
 
