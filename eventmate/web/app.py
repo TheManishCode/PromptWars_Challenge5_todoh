@@ -51,6 +51,7 @@ from eventmate.agents.manager import RequestParseError
 from eventmate.agents.vendor import DataIntegrityError
 from eventmate.env import load_env
 from eventmate.integrations.explore import ExploreError, ExploreNotConfigured, route as explore_route
+from eventmate import consumption
 from eventmate.llm import LLMError, client_from_env
 from eventmate.plan_store import PlanIntegrityError
 from eventmate.schemas import MAX_BUDGET_INR, CommunityDetails, DealQuery, TripRequest, MAX_MULTI_CITY_LEGS, Disruption, HiddenCost, LedgerKind, ObservationSource, TradeoffOption, VendorCategory
@@ -422,6 +423,16 @@ def create_app(
         return path in quota_gets or (path.startswith("/api/plans/") and path.endswith(("/weather", "/weather-advice")))
 
     @app.before_request
+    def bind_workspace():
+        g.workspace_token = consumption.bind(principal.user_id)  # model calls made for this request are charged to this workspace (Phase 4.7)
+
+    @app.teardown_request
+    def unbind_workspace(_exc):
+        token = g.pop("workspace_token", None)
+        if token is not None:
+            consumption.unbind(token)
+
+    @app.before_request
     def guard():
         hostname = request.host.rsplit(":", 1)[0] if not request.host.startswith("[") else request.host.split("]")[0] + "]"
         if hostname not in hosts:
@@ -479,8 +490,8 @@ def create_app(
             resp.headers["Cache-Control"] = "no-store"
         return resp
 
-    def _err(code: int, message: str, **extra):
-        return jsonify({"error": message, **extra}), code
+    def _err(status: int, message: str, **extra):
+        return jsonify({"error": message, **extra}), status
 
     @app.errorhandler(VoiceError)
     def _voice_error(exc):
@@ -525,6 +536,10 @@ def create_app(
     @app.errorhandler(ExploreError)
     def _explore(exc):
         return _err(422, str(exc)[:400])
+
+    @app.errorhandler(consumption.ConsumptionError)
+    def _consumption(exc):
+        return _err(429, str(exc)[:300], code=exc.code)
 
     @app.errorhandler(LLMError)
     def _llm(exc):

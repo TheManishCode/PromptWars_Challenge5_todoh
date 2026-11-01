@@ -7,16 +7,27 @@ jobs:
   lint-and-security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          python-version: "3.13"
-      - uses: actions/setup-node@v4
+          fetch-depth: 0  # the secret scan reads the whole history
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.14"  # the version the suite was run with (requirements.txt); 3.12 and 3.13 are allowed by pyproject but not tested
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
-      - run: pip install -e ".[dev]"
+      - run: pip install --require-hashes -r requirements.lock && pip install --no-deps -e .
       - run: make lint
       - run: make security
+      - name: Dependency vulnerabilities (report only for now; make it blocking on high severity once the first runs are clean)
+        run: pip install pip-audit==2.9.0 && pip-audit -r requirements.lock --require-hashes --no-deps --disable-pip
+        continue-on-error: true
+      - name: Secret scan over the whole history (gitleaks, pinned release, checksum verified)
+        run: |
+          curl -fsSLO https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks_8.30.1_linux_x64.tar.gz" | sha256sum -c -
+          tar xzf gitleaks_8.30.1_linux_x64.tar.gz gitleaks
+          ./gitleaks detect --source . --config .gitleaks.toml --no-banner
 
   tests:
     # The planning tests need Fast Downward and VAL (docs/CONFIGURATION.md); they are built once and cached.
@@ -25,11 +36,11 @@ jobs:
       EVENTMATE_FD: ${{ github.workspace }}/solvers/downward/fast-downward.py
       EVENTMATE_VAL: ${{ github.workspace }}/solvers/VAL/build/bin/Validate
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
-          python-version: "3.13"
-      - uses: actions/cache@v4
+          python-version: "3.14"  # the version the suite was run with (requirements.txt); 3.12 and 3.13 are allowed by pyproject but not tested
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         id: solvers
         with:
           path: solvers
@@ -43,6 +54,6 @@ jobs:
           (cd downward && ./build.py)
           git clone --depth 1 https://github.com/KCL-Planning/VAL.git
           (cd VAL && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j"$(nproc)")
-      - run: pip install -e ".[dev]"
+      - run: pip install --require-hashes -r requirements.lock && pip install --no-deps -e .
       - run: python -m playwright install --with-deps chromium
       - run: python -m pytest -q

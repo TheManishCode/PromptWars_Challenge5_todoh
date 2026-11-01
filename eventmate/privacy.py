@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Dict, Tuple
 
-from eventmate.assistant.guard import _AADHAAR, _CARD, _EMAIL, _PAN, _PHONE, _luhn
+from eventmate.assistant.guard import _AADHAAR, _CARD, _EMAIL, _EMAIL_SPOKEN, _PAN, _PHONE, _luhn
 
 _AADHAAR_CTX = re.compile(r"aadhaar|aadhar|\buid\b|आधार", re.I)
 _CARD_CTX = re.compile(r"\bcards?\b|credit|debit|visa|master\s?card|rupay|\bcvv\b|expir", re.I)
@@ -38,6 +38,7 @@ class Placeholders:
         if not isinstance(text, str) or not text:
             return text
         text = _EMAIL.sub(lambda m: self._token("EMAIL", m.group(0)), text)
+        text = _EMAIL_SPOKEN.sub(lambda m: self._token("EMAIL", m.group(0)), text)
         text = _PAN.sub(lambda m: self._token("PAN", m.group(0)), text)
 
         def near(rx, m):

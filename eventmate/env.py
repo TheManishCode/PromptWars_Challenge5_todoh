@@ -19,8 +19,11 @@ ALLOWED = frozenset({
     "LANGFUSE_HOST", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "FOURSQUARE_API_KEY", "BRAVE_SEARCH_API_KEY", "GOOGLE_PLACES_API_KEY",
     "EVENTMATE_SMTP_HOST", "EVENTMATE_SMTP_PORT", "EVENTMATE_SMTP_USER", "EVENTMATE_SMTP_PASSWORD", "EVENTMATE_MAIL_FROM", "EVENTMATE_IMAP_HOST", "EVENTMATE_IMAP_PORT",
     "EVENTMATE_COMMUNITY_PROFILES", "EVENTMATE_WAHA_URL", "EVENTMATE_WAHA_API_KEY", "EVENTMATE_WAHA_SESSION", "EVENTMATE_POLL_SECONDS",
+    "EVENTMATE_WS_LLM_CALLS_PER_HOUR", "EVENTMATE_WS_LLM_TOKENS_PER_HOUR", "EVENTMATE_WS_LLM_CONCURRENCY",
 })
 MAX_BYTES = 64_000
+_SECRET_NAME = re.compile(r"(?:KEY|PASSWORD|SECRET|TOKEN)$")
+_SECRET_SHAPE = re.compile(r"(?i)(?:bearer\s+\S+|nvapi-[\w-]{8,}|sk-[\w-]{16,}|AIza[\w-]{20,}|(?<=[?&])(?:key|token|secret|password|api_key|apikey)=[^&\s]+)")
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / ".env"
 _LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
 
@@ -72,3 +75,13 @@ def load_env(path: Optional[Path] = None, environ: Optional[MutableMapping[str, 
             environ[m.group(1)] = value
             loaded.append(m.group(1))
     return EnvLoad(loaded=tuple(loaded), warnings=tuple(warnings))
+
+
+def redact_secrets(text: str, environ: Optional[MutableMapping[str, str]] = None) -> str:
+    """Remove secrets from text that is about to be logged or shown: the value of every secret-named environment variable and common key shapes.
+    Error text from a provider or a library can echo the key it was sent; this is the last line of defence, not a licence to log raw errors."""
+    env = os.environ if environ is None else environ
+    for name, value in env.items():
+        if _SECRET_NAME.search(name) and len(value) >= 8 and value in text:
+            text = text.replace(value, "[secret]")
+    return _SECRET_SHAPE.sub("[secret]", text)
