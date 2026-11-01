@@ -39,3 +39,12 @@ A persistent disk path for the plan and log directories is required; the plainte
 
 ## Not verified
 Nothing on this page has been run behind a real proxy, on a real host, with real TLS or under real load. The start-up checks are tested with fake environments; the limits are tested with fake clocks and a local server.
+
+
+## Request framing: the proxy must reject ambiguous requests (red-team F-021)
+
+waitress, like most WSGI servers, reads a request that carries both `Content-Length` and `Transfer-Encoding: chunked` as chunked and then treats the bytes after the
+chunked body as a **second request** (it answers twice). Behind a proxy that frames the same bytes by `Content-Length`, that is request smuggling. Put a proxy in
+front that refuses such requests. **Tested with nginx 1.30.6 only** (`tests/pentest/test_proxy_smuggling.py`, skipped when nginx is not installed): four smuggling shapes
+(Content-Length then Transfer-Encoding, the reverse, an obfuscated value, a space before the colon) each got exactly one answer, 400 or 501. Caddy, HAProxy, a cloud load
+balancer or another nginx version were not tested; check yours with that test's four requests before trusting it. Never expose waitress directly to the internet.
