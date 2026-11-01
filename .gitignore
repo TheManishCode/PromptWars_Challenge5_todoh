@@ -11,3 +11,4 @@ eventmate/plans/
 plans/
 logs/
 *.jsonl
+.coverage

@@ -215,6 +215,19 @@ class JobWorker:
             report["errors"].append(f"dispatch: {type(exc).__name__}")
         return report
 
+    def reevaluate(self, plan_id: str) -> List[str]:
+        """Run the unfinished jobs of one plan now, instead of waiting for their next wake time (a replan made one of their drafts stale). Returns the job ids run."""
+        ran: List[str] = []
+        for job in self.store.list(plan_id):
+            if job.status in TERMINAL:
+                continue
+            try:
+                self._run(job, self.now())
+                ran.append(job.job_id)
+            except StaleJob:
+                continue  # someone changed it first; the next tick sees the current state
+        return ran
+
     def _run(self, job: Job, now: datetime) -> Job:
         st = _Tick(vendors=dict(job.vendors), claims=list(job.claims), items=list(job.items), seen=set(job.seen_message_ids), awaiting=list(job.answered_replies), events=[])
         self._check_sent(job, st)
@@ -243,6 +256,9 @@ class JobWorker:
             elif d.status == "blocked" and not st.has_item("do_not_contact", p.draft_id):
                 st.vendors[vid] = p.model_copy(update={"state": "unresponsive"})
                 st.items.append(_item("do_not_contact", f"The request to {vid} was not sent: blocked, do not contact. {d.error}".strip(), vid, p.draft_id))
+            elif d.status == "stale" and not st.has_item("request_stale", p.draft_id):
+                st.vendors[vid] = p.model_copy(update={"state": "unresponsive"})
+                st.items.append(_item("request_stale", f"The request to {vid} is out of date: the plan changed after it was written. Draft it again; nothing was sent.", vid, p.draft_id))
             elif d.status in ("outcome_unknown", "failed", "expired", "denied") and not st.has_item("check_unknown_send", p.draft_id):
                 st.vendors[vid] = p.model_copy(update={"state": "unresponsive"})
                 st.items.append(_item("check_unknown_send", f"The request to {vid} is '{d.status}'. Check the vendor chat before sending again. {d.error}".strip(), vid, p.draft_id))

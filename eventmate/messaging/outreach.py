@@ -7,6 +7,8 @@ budget. A user's own follow-up words are cleaned and bounded but not rewritten.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import contextlib
 import fcntl
 import os
@@ -112,6 +114,13 @@ def _message(plan: PlanVersion, category: VendorCategory, vendor_name: str, send
         lines.append("- for each of these, whether it is included or extra: " + ", ".join(checklist))
     lines += ["- any other charges (taxes, overtime, travel)", "- how long the quote is valid", "", f"Thank you,\n{sender}"]
     return subject, "\n".join(lines)
+
+
+def basis_sha256(plan: PlanVersion, category: VendorCategory) -> str:
+    """A hash of the plan facts a request's text states, so a later plan version that changes one of them is noticed. Budget is not in the text, so it is not in the hash."""
+    r = plan.request
+    facts = [r.event_type.value, r.city, r.event_date.isoformat(), r.guest_count, sorted(d.value for d in r.dietary) if category == VendorCategory.CATERER else []]
+    return hashlib.sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest()
 
 
 def _links(channel: str, recipient: str, subject: str, body: str) -> str:
@@ -223,6 +232,7 @@ class OutreachStore:
         return self._new(
             plan.plan_id, category=category, vendor_id=vendor_id, vendor_name=vendor_name, vendor_origin=origin, channel=channel, recipient=recipient,
             subject=subject, body=body, link=_links(channel, recipient, subject, body),
+            plan_version=plan.version, basis_sha256=basis_sha256(plan, category), for_plan_pick=vendor_id == selection.vendor_id and origin == "seed",
         )
 
     def followup(self, plan_id: str, parent_id: str, text: str, sender_name: str, automated: bool = False, action_key: str = "") -> OutreachDraft:
@@ -246,7 +256,7 @@ class OutreachStore:
         subject = parent.subject if parent.subject.lower().startswith("re:") or not parent.subject else f"Re: {parent.subject}"
         return self._new(
             plan_id, category=parent.category, vendor_id=parent.vendor_id, vendor_name=parent.vendor_name, vendor_origin=parent.vendor_origin, channel=parent.channel, recipient=parent.recipient,
-            subject=subject, body=body, link=_links(parent.channel, parent.recipient, subject, body), kind="followup", parent_id=parent_id, action_key=action_key,
+            subject=subject, body=body, link=_links(parent.channel, parent.recipient, subject, body), kind="followup", parent_id=parent_id, action_key=action_key, plan_version=parent.plan_version, for_plan_pick=parent.for_plan_pick,
         )
 
     def mark_sent(self, plan_id: str, draft_id: str) -> OutreachDraft:

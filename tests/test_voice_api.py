@@ -9,6 +9,7 @@ import time
 import pytest
 
 import eventmate.web.app as webapp
+from eventmate.assistant.identity import Principal, Role
 from eventmate.service import EventMate
 from eventmate.voice import audio
 from eventmate.voice.transcribe import Transcriber
@@ -74,9 +75,19 @@ def sse(response):
 def test_capabilities_say_what_is_on_and_default_to_nothing(em):
     plain = create_app(em, today_fn=lambda: TODAY).test_client()
     got = plain.get("/api/voice/capabilities").get_json()
-    assert got == {"transcribe": {"route": "none", "engine": None, "model": None, "languages": [], "max_seconds": 120, "max_bytes": 5 * 1024 * 1024}, "keep_original": False}
+    assert got["transcribe"] == {"route": "none", "engine": None, "model": None, "languages": [], "max_seconds": 120, "max_bytes": 5 * 1024 * 1024}
+    assert got["keep_original"] is False
     on = Rig(em, FakeEngine()).client.get("/api/voice/capabilities").get_json()
     assert on["transcribe"]["route"] == "server" and on["transcribe"]["engine"] == "fake" and on["transcribe"]["model"] == "fake-tiny" and on["keep_original"] is False
+
+
+def test_capabilities_state_the_groups_the_page_gates_on_explicitly(em):  # R3 b
+    for client in (create_app(em, today_fn=lambda: TODAY).test_client(), Rig(em, FakeEngine()).client):
+        got = client.get("/api/voice/capabilities").get_json()
+        for group in ("sessions", "turns", "live"):
+            assert isinstance(got[group]["enabled"], bool), group
+        assert got["live"]["reason_unavailable"] is None or isinstance(got["live"]["reason_unavailable"], str)
+        assert {"route", "engine", "model", "max_seconds", "max_bytes"} <= set(got["transcribe"])
 
 
 def test_a_note_is_transcribed_and_nothing_is_sent_to_the_assistant_or_kept(rig, em):
@@ -182,18 +193,57 @@ def test_turn_requests_are_validated_and_stale_or_reused_turns_are_conflicts(rig
     assert rig.client.post("/api/voice/turns", data=json.dumps(turn_body(sid, 9)), headers={"Content-Type": "application/json"}).status_code == 403
 
 
+def cancel_body(sid, n=1, chars=0, **kw):
+    return {"session_id": sid, "generation": n, "playback_chars": chars, **kw}
+
+
 def test_cancel_over_http_follows_the_same_rules(rig, pid):
     sid = rig.open(pid)
     rig.post("/api/voice/turns", turn_body(sid))
-    r = rig.post("/api/voice/turns/turn-0001/cancel", {"playback_chars": 10})
+    r = rig.post("/api/voice/turns/turn-0001/cancel", cancel_body(sid, 1, 10))
     assert r.status_code == 200 and r.get_json()["state"] == "interrupted"
-    assert rig.post("/api/voice/turns/turn-0001/cancel", {"playback_chars": 10}).get_json()["state"] == "interrupted"
-    assert rig.post("/api/voice/turns/turn-9999/cancel", {"playback_chars": 0}).status_code == 404
-    assert rig.post("/api/voice/turns/x/cancel", {"playback_chars": 0}).status_code == 404  # too short to be an id: the same answer
-    assert rig.post("/api/voice/turns/turn-0001/cancel", {}).status_code == 422
-    assert rig.post("/api/voice/turns/turn-0001/cancel", {"playback_chars": "5"}).status_code == 422
-    assert rig.post("/api/voice/turns/turn-0001/cancel", {"playback_chars": -1}).status_code == 400
+    assert rig.post("/api/voice/turns/turn-0001/cancel", cancel_body(sid, 1, 10)).get_json()["state"] == "interrupted"
+    assert rig.post("/api/voice/turns/turn-9999/cancel", cancel_body(sid)).status_code == 404
+    assert rig.post("/api/voice/turns/x/cancel", cancel_body(sid)).status_code == 404  # too short to be an id: the same answer
+    assert rig.post("/api/voice/turns/turn-0001/cancel", {"playback_chars": 0}).status_code == 422  # session_id and generation are required
+    assert rig.post("/api/voice/turns/turn-0001/cancel", {"session_id": sid, "playback_chars": 0}).status_code == 422
+    assert rig.post("/api/voice/turns/turn-0001/cancel", {"session_id": sid, "generation": 1}).status_code == 422
+    assert rig.post("/api/voice/turns/turn-0001/cancel", cancel_body(sid, 1, "5")).status_code == 422
+    assert rig.post("/api/voice/turns/turn-0001/cancel", cancel_body(sid, 1, -1)).status_code == 400
+    assert rig.post("/api/voice/turns/turn-0001/cancel", cancel_body(sid, 1, 0, extra=1)).status_code == 422
     assert rig.client.post("/api/voice/turns/turn-0001/cancel", data="{}", headers={"Content-Type": "application/json"}).status_code == 403
+
+
+def test_cancel_binds_to_the_session_and_generation_over_http(rig, pid):  # R3 c
+    a, b = rig.open(pid), rig.open(pid)
+    rig.post("/api/voice/turns", turn_body(a, 3))
+    rig.post("/api/voice/turns", {**turn_body(b, 1), "turn_id": "turn-other-0001"})
+    unknown = rig.post("/api/voice/turns/turn-nope-0001/cancel", cancel_body(a, 3))
+    assert unknown.status_code == 404
+    wrong_session = rig.post("/api/voice/turns/turn-0003/cancel", cancel_body(b, 3))  # a real turn id, named under the wrong session
+    ended = rig.client.delete(f"/api/voice/sessions/{b}", headers=rig.csrf())
+    assert ended.status_code == 200
+    ended_cancel = rig.post("/api/voice/turns/turn-other-0001/cancel", cancel_body(b, 1))
+    assert wrong_session.status_code == ended_cancel.status_code == 404
+    assert wrong_session.get_json() == ended_cancel.get_json() == unknown.get_json()  # one generic body for every miss: no oracle
+    assert rig.post("/api/voice/turns/turn-0003/cancel", cancel_body(a, 2)).status_code == 409  # right session, wrong generation
+    assert rig.world.svc._sessions[a].turns["turn-0003"].state == "answered"  # and nothing changed
+    assert rig.post("/api/voice/turns/turn-0003/cancel", cancel_body(a, 3)).get_json()["state"] == "already_final"
+
+
+def test_a_bodyless_delete_closes_the_callers_own_session_and_gives_the_generic_404_otherwise(rig, pid, em):  # R3 d
+    sid = rig.open(pid)
+    r = rig.client.delete(f"/api/voice/sessions/{sid}", headers=rig.csrf())  # no body, no content type
+    assert r.status_code == 200 and r.get_json() == {"ended": True}
+    assert rig.post("/api/voice/turns", turn_body(sid)).status_code == 404  # it no longer accepts turns
+    other = Rig(em, FakeEngine())
+    theirs = other.world.svc.create_session(Principal(user_id="someone", roles=(Role.ORGANIZER,)), pid)["session_id"]
+    miss = other.client.delete(f"/api/voice/sessions/{theirs}", headers=other.csrf())
+    unknown = other.client.delete("/api/voice/sessions/no-such-session-id", headers=other.csrf())
+    assert miss.status_code == unknown.status_code == 404 and miss.get_json() == unknown.get_json()
+    assert rig.client.delete(f"/api/voice/sessions/{sid}", headers={}).status_code == 403  # the CSRF header is still required
+    assert rig.post(f"/api/plans/{pid}/guests/preview", {"csv": "name\nA\n"}).status_code == 200  # other routes still insist on JSON
+    assert rig.client.post("/api/voice/sessions", data="x", headers=rig.csrf()).status_code == 415
 
 
 def test_too_many_open_streams_get_a_busy_answer_and_the_refused_turn_is_not_left_thinking(em, pid, monkeypatch):

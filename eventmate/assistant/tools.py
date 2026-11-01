@@ -144,7 +144,7 @@ def _guest_counts(ctx: ToolContext, _):
         return {"guest_list": False, "planning_headcount": plan.request.guest_count, "note": "No guest list has been imported for this plan."}
     t, c = saved["totals"], saved["check"]
     return {
-        "guest_list": True, "planning_headcount": c["planning_headcount"], "people_on_list": t["headcount"], "yes": t["yes"], "no": t["no"], "pending": t["pending"],
+        "guest_list": True, "planning_headcount": c["planning_headcount"], "people_on_list": t["heads"], "yes": t["yes"], "no": t["no"], "pending": t["pending"],
         "dietary_counts": t["dietary_counts"], "list_vs_planned": c["flag"] or "the list and the planned headcount agree",
         "note": "Diet counts are people on the list who have not declined. The plan itself still uses the stated headcount.",
     }

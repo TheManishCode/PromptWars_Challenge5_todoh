@@ -1658,7 +1658,7 @@ class WeatherAdvice(_Model):
 
 _EMAIL = re.compile(r"^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,24}$")
 _LINK = re.compile(r"^(mailto:[A-Za-z0-9._%+@-]+\?[^\s]*|https://wa\.me/[1-9][0-9]{7,14}\?text=[^\s]*)$")
-OutreachStatus = Literal["prepared", "approved", "sending", "sent", "failed", "outcome_unknown", "denied", "expired", "marked_sent", "blocked"]
+OutreachStatus = Literal["prepared", "approved", "sending", "sent", "failed", "outcome_unknown", "denied", "expired", "marked_sent", "blocked", "stale"]  # stale: the plan changed after the text was written
 OUTREACH_FINAL = frozenset({"sent", "failed", "outcome_unknown", "denied", "expired", "marked_sent", "blocked"})
 VendorOrigin = Literal["seed", "discovered", "test"]  # where a business came from; shown wherever it appears
 
@@ -1696,6 +1696,9 @@ class OutreachDraft(_Model):
     external_id: str = Field(default="", max_length=400)  # Message-ID or WhatsApp message id of what was sent
     error: str = Field(default="", max_length=300)
     action_key: str = Field(default="", max_length=200)  # who claimed this outbound action, e.g. "reply:<message_id>" or "nudge:<job>:<vendor>:<n>"; one live draft per key
+    plan_version: Optional[int] = Field(default=None, ge=1)  # the plan version the text was written against (None on drafts made before this was recorded)
+    basis_sha256: str = Field(default="", max_length=64)  # a hash of the plan facts the text states: event, city, date, guests, diets for a caterer
+    for_plan_pick: bool = False  # written to the vendor the plan itself chose, so a plan without that vendor makes it out of date
     approved_by: Literal["user", "mandate"] = "user"  # "mandate": sent under the user's standing permission (ADR-043), not a per-message approval
     source: Literal["user_input"] = "user_input"
     notice: str = "Not sent until you approve it. After that to;doh-the event planner sends it through the channel you configured and reads the vendor's reply."

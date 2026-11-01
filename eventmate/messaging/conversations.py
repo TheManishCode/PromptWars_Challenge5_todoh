@@ -22,7 +22,7 @@ from eventmate.assistant.guard import scan as scan_instructions
 from eventmate.sourcing.suppression import SuppressionStore, UnmatchedStore, normalise_address
 from eventmate.messaging.channels import Channel, ChannelError, Inbound, KnownThread, OutcomeUnknown, ThreadRef
 from eventmate.integrations.deals import extract_mentions
-from eventmate.messaging.outreach import OutreachStore
+from eventmate.messaging.outreach import OutreachStore, basis_sha256
 from eventmate.schemas import (
     AmountMention, AutoreplyStatus, ConversationThread, Inbox, InboundMessage, Mandate, OutreachDraft, PlanVersion, PollResult, ReplyAnalysis,
 )
@@ -111,6 +111,36 @@ class ConversationService:
 
     # ------------------------------------------------------------ approval
 
+    STALE_MESSAGE = "The plan changed after this was written. Draft it again."
+
+    def stale_reason(self, d: OutreachDraft) -> Optional[str]:
+        """Why a not-yet-sent draft no longer matches the plan, or None. The hash proves the text is what the user saw; this checks it is still true.
+        Drafts written before the plan version was recorded are left alone. If the plan cannot be read, that is a reason too: fail closed."""
+        if d.plan_version is None or d.status not in ("prepared", "approved"):
+            return None
+        try:
+            plan = self.plan_lookup(d.plan_id)
+        except Exception:
+            return "the plan could not be read"
+        if d.for_plan_pick and not any(s.vendor_id == d.vendor_id for s in plan.selections):
+            return "the plan no longer includes this vendor"
+        if d.kind == "request" and d.basis_sha256 and d.basis_sha256 != basis_sha256(plan, d.category):
+            return "the event details in the text changed"
+        return None
+
+    def supersede_stale(self, plan_id: str) -> List[str]:
+        """Call after a new plan version is saved: mark every waiting draft of the plan that no longer matches it ``stale``. Returns their ids. Nothing is rewritten or resent."""
+        done: List[str] = []
+        for d in self.store.list(plan_id):
+            why = self.stale_reason(d)
+            if why:
+                try:
+                    self.store.transition(plan_id, d.draft_id, ("prepared", "approved"), status="stale", error=why[:300], decided_at=self.now())
+                    done.append(d.draft_id)
+                except ValueError:
+                    pass  # it was sent, denied or changed by someone else in the meantime
+        return done
+
     def approve(self, plan_id: str, draft_id: str, content_hash: str) -> OutreachDraft:
         """Approve exactly the content the user saw. The send happens now if the limits allow, otherwise on the next dispatch."""
         d = self.store.get(plan_id, draft_id)
@@ -120,8 +150,14 @@ class ConversationService:
             raise ValueError("This draft changed. Open its latest version before approving.")
         if d.status in ("approved", "sending", "sent"):
             return d  # approving twice never sends twice
+        if d.status == "stale":
+            raise ValueError(self.STALE_MESSAGE)
         if d.status != "prepared":
             raise ValueError(f"This draft is {d.status}; write a new one.")
+        stale = self.stale_reason(d)
+        if stale:
+            self.store.transition(plan_id, draft_id, ("prepared",), status="stale", error=stale[:300], decided_at=self.now())
+            raise ValueError(self.STALE_MESSAGE)
         blocked = self.blocked_reason(d)
         if blocked:
             self.store.transition(plan_id, draft_id, ("prepared",), status="blocked", error=blocked[:300])
@@ -167,6 +203,10 @@ class ConversationService:
                 blocked = self.blocked_reason(d)  # checked now, not when it was queued: a suppression added since then stops it
                 if blocked:
                     self.store.transition(pid, d.draft_id, ("approved",), status="blocked", error=blocked[:300])
+                    continue
+                stale = self.stale_reason(d)  # and the plan as it is now, not as it was when the user clicked
+                if stale:
+                    self.store.transition(pid, d.draft_id, ("approved",), status="stale", error=stale[:300], decided_at=now)
                     continue
                 if d.approved_by == "mandate":
                     veto = next((why for why in (g(d) for g in self.guards) if why), None)

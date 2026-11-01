@@ -58,7 +58,7 @@ class GuestListTotals(_Model):
     """Counts only. People are counted by party size; a declined party is not counted towards diets (the same rule the Guest Agent uses)."""
 
     rows: int = Field(ge=0)
-    headcount: int = Field(ge=0)  # everyone on the list, declined included
+    heads: int = Field(ge=0)  # everyone on the list, declined included
     yes: int = Field(ge=0)
     no: int = Field(ge=0)
     pending: int = Field(ge=0)
@@ -75,13 +75,15 @@ class ListCheck(_Model):
 
 
 class GuestPreview(_Model):
-    """What the preview endpoint returns: the parsed rows (for the user's own screen), every row problem, the totals beside the stated headcount, and the token."""
+    """What the preview endpoint returns, in the names the page reads: ``can_commit``, ``preview_token``, ``row_errors``, ``totals.rows`` and ``totals.heads``.
+    The parsed rows are for the user's own screen; ``check`` sets the totals beside the stated headcount."""
 
     guests: Tuple[Guest, ...] = ()
-    errors: Tuple[RowError, ...] = ()
+    row_errors: Tuple[RowError, ...] = ()
     totals: GuestListTotals
     check: ListCheck
-    token: Optional[str] = None  # absent while any row has a problem: nothing can be saved from a file with errors
+    can_commit: bool = False
+    preview_token: Optional[str] = None  # absent while any row has a problem: nothing can be saved from a file with errors
     notice: str = "Nothing is saved until you commit. Only counts and diet totals are ever shown to the assistant; names stay on this machine."
 
 
@@ -104,7 +106,7 @@ def totals_of(guests: Tuple[Guest, ...]) -> GuestListTotals:
         if g.rsvp != RSVP.NO:
             diets.update(d.value for d in g.dietary)
     return GuestListTotals(
-        rows=len(guests), headcount=sum(heads.values()), yes=heads["yes"], no=heads["no"], pending=heads["pending"],
+        rows=len(guests), heads=sum(heads.values()), yes=heads["yes"], no=heads["no"], pending=heads["pending"],
         dietary_counts=dict(sorted(diets.items())), required_diets=tuple(sorted(diets)),
     )
 

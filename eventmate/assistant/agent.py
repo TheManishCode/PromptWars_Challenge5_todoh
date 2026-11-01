@@ -139,13 +139,24 @@ class Assistant:
             return AnswerResult(answer="", route=r.kind, cache="skipped", outcome="cancelled", trace_id=tb.id)  # nothing below runs: no trace, memory or proposal
         if cache_state != "miss":
             tb.step("cache", cache_state, detail="answer reused; no model or tool ran for this question")
-        if turn is not None and result.proposals:
-            try:
-                result = result.model_copy(update={"proposals": tuple(self.queue.adopt(p) for p in result.proposals)})  # staged during the turn; filed only now that it stands
-            except ApprovalError as exc:
-                result = AnswerResult(answer=str(exc), route=r.kind, cache="skipped", outcome="refused", trace_id=tb.id)
-        final = self._record(tb, result.model_copy(update={"cache": cache_state}), principal, plan_id, roles, question)
-        self.sessions.record(plan_id, mem_user, question, final.answer, final.outcome)
+
+        def commit(res: AnswerResult) -> AnswerResult:
+            """Everything a finished answer writes: trace, memory, and (voice) the proposals it staged."""
+            if turn is not None and res.proposals:
+                try:
+                    res = res.model_copy(update={"proposals": tuple(self.queue.adopt(p)[0] for p in res.proposals)})
+                except ApprovalError as exc:
+                    res = AnswerResult(answer=str(exc), route=r.kind, cache="skipped", outcome="refused", trace_id=tb.id)
+            final = self._record(tb, res.model_copy(update={"cache": cache_state}), principal, plan_id, roles, question)
+            self.sessions.record(plan_id, mem_user, question, final.answer, final.outcome)
+            return final
+
+        if turn is None:
+            final = commit(result)
+        else:
+            final = turn.commit(lambda: commit(result))  # the barrier: a cancel that got there first wins, and then none of the above has run
+            if final is None:
+                return AnswerResult(answer="", route=r.kind, cache="skipped", outcome="cancelled", trace_id=tb.id)
         return final.model_copy(update={"answer": ph.restore(final.answer)})  # real values back only in what this person sees; the trace and memory hold the masked text
 
     def _record(self, tb: TraceBuilder, result: AnswerResult, principal: Principal, plan_id: str, roles: Tuple[str, ...], question: Optional[str] = None) -> AnswerResult:

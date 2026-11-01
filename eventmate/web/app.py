@@ -302,7 +302,7 @@ class GuestCsvBody(_Strict):
 
 
 class GuestCommitBody(_Strict):
-    token: str = Field(min_length=1, max_length=100)
+    preview_token: str = Field(min_length=1, max_length=100)
 
 
 class VoiceSessionBody(_Strict):
@@ -320,6 +320,8 @@ class VoiceTurnBody(_Strict):
 
 
 class VoiceCancelBody(_Strict):
+    session_id: str = Field(min_length=1, max_length=100)
+    generation: StrictInt
     playback_chars: StrictInt
 
 
@@ -440,7 +442,8 @@ def create_app(
             upload = next((limit for rx, limit in UPLOAD_ROUTES if request.method == "POST" and rx.fullmatch(request.path)), None)
             if upload:
                 request.max_content_length = upload
-            if request.mimetype != "application/json" and not (upload and request.mimetype == "multipart/form-data"):
+            bodyless_delete = request.method == "DELETE" and not request.content_length  # a DELETE that carries nothing has nothing to type-check
+            if request.mimetype != "application/json" and not bodyless_delete and not (upload and request.mimetype == "multipart/form-data"):
                 return _err(415, "JSON body required")
             now, q = time.monotonic(), writes[request.remote_addr or "?"]
             while q and now - q[0] > 60:
@@ -1333,7 +1336,13 @@ def create_app(
 
     @app.get("/api/voice/capabilities")
     def voice_capabilities():
-        return jsonify({"transcribe": transcriber.capabilities(), "keep_original": em.voice_notes.enabled})
+        return jsonify({
+            "transcribe": transcriber.capabilities(),
+            "sessions": {"enabled": True},
+            "turns": {"enabled": True},
+            "live": {"enabled": True, "reason_unavailable": None},  # the server side of live mode is always ready; whether the browser can listen is the page's to check
+            "keep_original": em.voice_notes.enabled,
+        })
 
     @app.post("/api/voice/transcribe")
     def voice_transcribe():
@@ -1352,8 +1361,7 @@ def create_app(
 
     @app.delete("/api/voice/sessions/<session_id>")
     def voice_session_close(session_id):
-        body(EmptyBody)
-        voice_svc.end_session(principal, session_id if VOICE_ID.fullmatch(session_id) else "")
+        voice_svc.end_session(principal, session_id if VOICE_ID.fullmatch(session_id) else "")  # no body: the id in the path is all it needs
         return jsonify({"ended": True})
 
     @app.post("/api/voice/turns")
@@ -1368,7 +1376,7 @@ def create_app(
             return jsonify({"turn_id": turn.turn_id, "sentences": [e["data"] for e in got if e["event"] == "sentence"], "final": by.get("final"), "error": by.get("error")})
         if not stream_slots.acquire(blocking=False):
             events.close()
-            voice_svc.cancel_turn(principal, turn.turn_id, 0)  # nothing was started, so nothing is left thinking
+            turn.request_cancel()  # nothing was started, so nothing is left running
             return _err(429, "too many voice streams are open; try again in a moment")
 
         def stream():
@@ -1385,7 +1393,7 @@ def create_app(
     def voice_turn_cancel(turn_id):
         """The user spoke over the answer or walked away. ``playback_chars`` is how much speech was played: an estimate, not proof of what was heard."""
         b = body(VoiceCancelBody)
-        return jsonify(voice_svc.cancel_turn(principal, turn_id if VOICE_ID.fullmatch(turn_id) else "", b.playback_chars))
+        return jsonify(voice_svc.cancel_turn(principal, b.session_id, turn_id if VOICE_ID.fullmatch(turn_id) else "", b.generation, b.playback_chars))
 
     @app.post("/api/plans/<plan_id>/voice-notes")
     def voice_note_save(plan_id):
@@ -1433,8 +1441,8 @@ def create_app(
     def guests_commit(plan_id):
         plan_id, b = pid(plan_id), body(GuestCommitBody)
         with lock:
-            saved = em.guest_commit(plan_id, b.token)
-        return jsonify(saved), 201
+            saved = em.guest_commit(plan_id, b.preview_token)
+        return jsonify({"saved": True, "totals": saved["totals"], "check": saved["check"]}), 201
 
     @app.get("/api/plans/<plan_id>/guests")
     def guests_get(plan_id):

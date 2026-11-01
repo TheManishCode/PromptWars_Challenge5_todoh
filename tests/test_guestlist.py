@@ -35,7 +35,7 @@ def test_a_valid_file_is_parsed_with_counts_by_party_size():
     r = parse_guest_csv(GOOD)
     assert not r.errors and [g.name for g in r.guests][:2] == ["Zubin Marzban", "Kaveri Naidu"] and [g.id for g in r.guests] == ["g001", "g002", "g003", "g004"]
     t = r.totals
-    assert (t.rows, t.headcount, t.yes, t.no, t.pending) == (4, 10, 5, 1, 4)
+    assert (t.rows, t.heads, t.yes, t.no, t.pending) == (4, 10, 5, 1, 4)
     assert t.dietary_counts == {"halal": 1, "jain": 1, "vegetarian": 2} and t.required_diets == ("halal", "jain", "vegetarian")  # the declined guest's vegan is not counted
 
 
@@ -43,7 +43,7 @@ def test_optional_columns_blank_cells_a_bom_crlf_and_blank_lines():
     r = parse_guest_csv("\ufeffname,rsvp\r\nAsha,yes\r\n\r\n,\r\nRohan,\r\n")
     assert not r.errors and [(g.name, g.party_size, g.rsvp.value) for g in r.guests] == [("Asha", 1, "yes"), ("Rohan", 1, "pending")]
     nameless = parse_guest_csv("party_size,rsvp\n3,yes\n")
-    assert nameless.guests[0].name == "Guest 1" and nameless.totals.headcount == 3
+    assert nameless.guests[0].name == "Guest 1" and nameless.totals.heads == 3
     assert [g.rsvp.value for g in parse_guest_csv("rsvp\nYES\nNo\n PENDING \n").guests] == ["yes", "no", "pending"]
 
 
@@ -321,29 +321,29 @@ def upload(client, pid, text, name="guests.csv", extra=None):
 
 
 def commit_good(client, pid, text=GOOD):
-    token = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": text}).get_json()["token"]
-    return post_json(client, f"/api/plans/{pid}/guests/commit", {"token": token})
+    token = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": text}).get_json()["preview_token"]
+    return post_json(client, f"/api/plans/{pid}/guests/commit", {"preview_token": token})
 
 
 def test_preview_returns_rows_errors_and_totals_beside_the_stated_headcount_and_saves_nothing(client, em, pid):
     r = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": GOOD})
     body = r.get_json()
-    assert r.status_code == 200 and body["token"] and len(body["guests"]) == 4 and body["errors"] == []
-    assert body["totals"]["headcount"] == 10 and body["check"]["planning_headcount"] == 120 and "9 of the 120" in body["check"]["flag"]
+    assert r.status_code == 200 and body["preview_token"] and len(body["guests"]) == 4 and body["row_errors"] == []
+    assert body["totals"]["heads"] == 10 and body["check"]["planning_headcount"] == 120 and "9 of the 120" in body["check"]["flag"]
     assert not (em.store.root / "guests").exists() and client.get(f"/api/plans/{pid}/guests").get_json() == {"has_list": False}
 
 
 def test_a_file_with_problems_gets_no_token_and_cannot_be_committed(client, pid):
     r = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": HEADER + "Ok,1,yes,\nBad,0,yes,\n"})
     b = r.get_json()
-    assert r.status_code == 200 and b["token"] is None and [(e["line"], e["column"]) for e in b["errors"]] == [(3, "party_size")] and len(b["guests"]) == 1
-    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"token": "anything"}).status_code == 409
+    assert r.status_code == 200 and b["preview_token"] is None and [(e["line"], e["column"]) for e in b["row_errors"]] == [(3, "party_size")] and len(b["guests"]) == 1
+    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"preview_token": "anything"}).status_code == 409
 
 
 def test_multipart_upload_works_and_the_same_rules_apply(client, pid):
     ok = upload(client, pid, GOOD)
-    assert ok.status_code == 200 and ok.get_json()["token"]
-    assert upload(client, pid, HEADER + "A,99,yes,\n").get_json()["token"] is None
+    assert ok.status_code == 200 and ok.get_json()["preview_token"]
+    assert upload(client, pid, HEADER + "A,99,yes,\n").get_json()["preview_token"] is None
     assert upload(client, pid, b"\xff\xfe").status_code == 400
     assert upload(client, pid, GOOD, extra={"second": (io.BytesIO(b"x"), "b.csv")}).status_code == 400
     two = client.post(f"/api/plans/{pid}/guests/preview", data={"other": (io.BytesIO(b"x"), "a.csv")}, headers=hdr(client), content_type="multipart/form-data")
@@ -359,13 +359,13 @@ def test_oversize_is_413_for_both_ways_of_sending_it(client, pid):
 
 
 def test_only_the_preview_route_takes_a_larger_body_or_multipart(client, pid):
-    assert client.post(f"/api/plans/{pid}/guests/commit", data={"token": "x"}, headers=hdr(client), content_type="multipart/form-data").status_code == 415
+    assert client.post(f"/api/plans/{pid}/guests/commit", data={"preview_token": "x"}, headers=hdr(client), content_type="multipart/form-data").status_code == 415
     assert client.post(f"/api/plans/{pid}/guests/preview", data="name\nA", headers=hdr(client), content_type="text/plain").status_code == 415
     assert post_json(client, f"/api/plans/{pid}/ledger", {"junk": "x" * 70_000}).status_code == 413  # the 64 KB limit still holds everywhere else
 
 
 def test_the_guest_routes_need_csrf_and_a_real_plan(client, pid):
-    for method, url, body in (("post", f"/api/plans/{pid}/guests/preview", {"csv": GOOD}), ("post", f"/api/plans/{pid}/guests/commit", {"token": "t"}), ("delete", f"/api/plans/{pid}/guests", {})):
+    for method, url, body in (("post", f"/api/plans/{pid}/guests/preview", {"csv": GOOD}), ("post", f"/api/plans/{pid}/guests/commit", {"preview_token": "t"}), ("delete", f"/api/plans/{pid}/guests", {})):
         r = getattr(client, method)(url, data=json.dumps(body), headers={"Content-Type": "application/json"})
         assert r.status_code == 403, url
     assert upload(client, "nope", GOOD).status_code == 404
@@ -385,30 +385,30 @@ def test_commit_saves_returns_counts_and_leaves_the_plan_and_its_headcount_alone
 
 
 def test_a_stale_token_is_a_409_and_a_second_commit_with_the_same_token_fails(client, pid):
-    token = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": GOOD}).get_json()["token"]
-    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"token": token}).status_code == 201
-    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"token": token}).status_code == 409
-    old = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": GOOD}).get_json()["token"]
+    token = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": GOOD}).get_json()["preview_token"]
+    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"preview_token": token}).status_code == 201
+    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"preview_token": token}).status_code == 409
+    old = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": GOOD}).get_json()["preview_token"]
     post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": GOOD})  # a newer preview
-    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"token": old}).status_code == 409
-    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"token": "x", "extra": 1}).status_code == 422
+    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"preview_token": old}).status_code == 409
+    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"preview_token": "x", "extra": 1}).status_code == 422
 
 
 def test_delete_removes_the_list_and_invalidates_waiting_previews(client, em, pid):
     commit_good(client, pid)
-    waiting = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": GOOD}).get_json()["token"]
+    waiting = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": GOOD}).get_json()["preview_token"]
     f = em.store.root / "guests" / f"guests-{pid}.json"
     assert f.exists()
     r = client.delete(f"/api/plans/{pid}/guests", data="{}", headers={**hdr(client), "Content-Type": "application/json"})
     assert r.get_json() == {"deleted": True} and not f.exists()
     assert client.get(f"/api/plans/{pid}/guests").get_json() == {"has_list": False}
-    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"token": waiting}).status_code == 409
+    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"preview_token": waiting}).status_code == 409
     assert client.delete(f"/api/plans/{pid}/guests", data="{}", headers={**hdr(client), "Content-Type": "application/json"}).get_json() == {"deleted": False}
 
 
 def test_deleting_the_plan_wipes_the_guest_list_and_its_previews(em, pid):
-    em.guest_commit(pid, em.guest_preview(pid, GOOD).token)
-    token = em.guest_preview(pid, GOOD).token
+    em.guest_commit(pid, em.guest_preview(pid, GOOD).preview_token)
+    token = em.guest_preview(pid, GOOD).preview_token
     f = em.store.root / "guests" / f"guests-{pid}.json"
     assert f.exists() and any(n.encode() in f.read_bytes() for n in NAMES)
     em.delete_plan(pid)
@@ -420,13 +420,13 @@ def test_deleting_the_plan_wipes_the_guest_list_and_its_previews(em, pid):
 
 
 def test_nothing_is_ever_sent_to_a_guest(em, pid, chans):
-    em.guest_commit(pid, em.guest_preview(pid, GOOD).token)
+    em.guest_commit(pid, em.guest_preview(pid, GOOD).preview_token)
     em.poll_conversations()
     assert chans["email"].sent == [] and chans["whatsapp"].sent == [] and em.outreach(pid) == []
 
 
 def test_names_reach_no_model_prompt_log_trace_or_state(em, pid, client):
-    em.guest_commit(pid, em.guest_preview(pid, GOOD).token)
+    em.guest_commit(pid, em.guest_preview(pid, GOOD).preview_token)
     model = Scripted(tool("get_guest_counts"), answer("5 guests said yes.", "get_guest_counts"))
     a = Assistant(em, {"large": model, "small": model})
     for q in ("compare the guests who said yes with the planned headcount", "which guests need halal food, by name?"):
@@ -441,7 +441,7 @@ def test_names_reach_no_model_prompt_log_trace_or_state(em, pid, client):
 
 
 def test_the_assistant_answers_how_many_vegetarian_guests_from_the_counts(em, pid):
-    em.guest_commit(pid, em.guest_preview(pid, GOOD).token)
+    em.guest_commit(pid, em.guest_preview(pid, GOOD).preview_token)
     model = Scripted(tool("get_guest_counts"), answer("2 guests need vegetarian meals.", "get_guest_counts"))
     r = Assistant(em, {"large": model, "small": model}).ask("compare how many vegetarian guests we have against the vegan ones", pid, LOCAL_ORGANIZER)
     assert r.outcome == "answered" and "2" in r.answer
@@ -459,7 +459,7 @@ def test_without_a_list_the_tool_says_so_and_an_invented_count_is_not_accepted(e
 def test_state_uses_the_saved_list_for_rsvp_counts_and_flags_a_mismatch(em, pid):
     before = build_state(em, pid)
     assert {f.key: f.value for f in before.facts}["rsvp_pending"] == 120
-    em.guest_commit(pid, em.guest_preview(pid, GOOD).token)
+    em.guest_commit(pid, em.guest_preview(pid, GOOD).preview_token)
     s = build_state(em, pid)
     facts = {f.key: f for f in s.facts}
     assert (facts["rsvp_yes"].value, facts["rsvp_no"].value, facts["rsvp_pending"].value) == (5, 1, 4) and facts["rsvp_yes"].source == "user"
@@ -475,3 +475,39 @@ def test_the_guest_tool_is_visible_to_the_organizer_only():
 
     names = lambda p: {t.name for t in visible_tools(build_tools(), p)}  # noqa: E731
     assert "get_guest_counts" in names(LOCAL_ORGANIZER) and "get_guest_counts" not in names(Principal(user_id="g", roles=(Role.GUEST,)))
+
+
+# ------------------------------------------------------------------ the contract the page reads (Phase R3)
+
+FRONTEND_PREVIEW_KEYS = {"can_commit": bool, "preview_token": (str, type(None)), "row_errors": list, "totals": dict}
+
+
+def test_the_preview_has_exactly_the_keys_the_page_reads_with_the_right_types(client, pid):  # R3 a
+    ok = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": GOOD}).get_json()
+    for key, kind in FRONTEND_PREVIEW_KEYS.items():
+        assert isinstance(ok[key], kind), key
+    assert ok["can_commit"] is True and isinstance(ok["preview_token"], str) and ok["row_errors"] == []
+    assert isinstance(ok["totals"]["rows"], int) and isinstance(ok["totals"]["heads"], int) and ok["totals"]["rows"] == 4 and ok["totals"]["heads"] == 10
+    bad = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": HEADER + "Ok,1,yes,\nBad,0,yes,\n"}).get_json()
+    assert bad["can_commit"] is False and bad["preview_token"] is None and [(e["line"], e["column"]) for e in bad["row_errors"]] == [(3, "party_size")]
+    assert {"line", "column", "message"} == set(bad["row_errors"][0])
+    assert not {"token", "errors"} & set(ok) and "headcount" not in ok["totals"]  # no older alias names are emitted
+
+
+def test_commit_takes_preview_token_and_answers_saved_true_with_totals(client, pid):  # R3 a
+    token = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": GOOD}).get_json()["preview_token"]
+    r = post_json(client, f"/api/plans/{pid}/guests/commit", {"preview_token": token})
+    assert 200 <= r.status_code < 300 and r.get_json()["saved"] is True and r.get_json()["totals"]["heads"] == 10
+    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"token": token}).status_code == 422  # the old name is not accepted
+    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"preview_token": token}).status_code == 409  # single use, still
+
+
+def test_the_frontends_exact_request_bodies_pass_backend_validation(client, pid):  # R3 e
+    assert post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": GOOD}).status_code == 200
+    token = post_json(client, f"/api/plans/{pid}/guests/preview", {"csv": GOOD}).get_json()["preview_token"]
+    assert post_json(client, f"/api/plans/{pid}/guests/commit", {"preview_token": token}).status_code == 201
+    sid = post_json(client, "/api/voice/sessions", {"plan_id": pid}).get_json()["session_id"]
+    turn = {"session_id": sid, "turn_id": "turn-0001", "generation": 1, "text": "how many guests said yes", "input_mode": "live"}
+    assert post_json(client, "/api/voice/turns", turn).status_code == 200
+    assert post_json(client, "/api/voice/turns/turn-0001/cancel", {"session_id": sid, "generation": 1, "playback_chars": 0}).status_code == 200
+    assert client.delete(f"/api/voice/sessions/{sid}", headers=hdr(client)).status_code == 200

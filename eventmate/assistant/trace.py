@@ -59,7 +59,7 @@ class ProposalEvent(BaseModel):
     timestamp: datetime
     run_id: str
     request_id: str = Field(max_length=64)  # = proposal id
-    event: str  # proposed | approved | rejected | stale | failed | withdrawn
+    event: str  # proposed | approved | rejected | stale | failed
     plan_id: str
     tool: str
     actor: str

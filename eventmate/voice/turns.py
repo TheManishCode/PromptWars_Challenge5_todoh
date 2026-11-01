@@ -61,14 +61,34 @@ class Turn:
     memory_user: str
     confidence: Optional[float] = None
     staging: ApprovalQueue = field(default_factory=_staging_queue)
-    state: str = "thinking"  # thinking | answered | cancelled | interrupted | done
+    state: str = "thinking"  # thinking (before the barrier) | answered (committed) | cancelled | interrupted | done
     result: Any = None
     spoken: Any = None
-    proposal_ids: tuple = ()
+    played_chars: int = 0
     _cancel: threading.Event = field(default_factory=threading.Event)
+    _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def cancelled(self) -> bool:
         return self._cancel.is_set()
+
+    def commit(self, write: Callable[[], Any]) -> Any:
+        """The barrier. Under the turn's lock: if the turn is still running, run ``write`` (trace, memory, proposals) and mark it committed; if a cancel
+        got here first, run nothing. Returns what ``write`` returned, or None when the cancel won. Exactly one of commit and cancel wins."""
+        with self._lock:
+            if self.state != "thinking" or self._cancel.is_set():
+                return None
+            result = write()
+            self.state = "answered"
+            return result
+
+    def request_cancel(self) -> bool:
+        """Cancel if the barrier has not been passed. Returns whether this call cancelled it."""
+        with self._lock:
+            if self.state != "thinking":
+                return False
+            self._cancel.set()
+            self.state = "cancelled"
+            return True
 
 
 @dataclass
@@ -181,9 +201,7 @@ class VoiceService:
             if not _bounded(s.turn_times, self.mono(), self.turns_per_min):
                 raise VoiceError(429, "too many turns too quickly; wait a moment")
             for old in s.turns.values():
-                if old.state == "thinking":
-                    old._cancel.set()  # a newer generation supersedes a turn still being worked on
-                    old.state = "cancelled"
+                old.request_cancel()  # a newer generation supersedes a turn still running; one already past the barrier is left alone
             s.generation = generation
             s.last_activity = self.clock()
             turn = Turn(turn_id=turn_id, generation=generation, text=text.strip(), input_mode=input_mode, memory_user=s.memory_user, confidence=confidence)
@@ -208,21 +226,20 @@ class VoiceService:
             deadline = self.mono() + self.run_timeout_s
             while not future.done():
                 if turn.cancelled() or self.mono() > deadline:
-                    turn._cancel.set()
                     break
                 wait([future], timeout=0.02)  # wakes the moment the answer is ready; otherwise looks again for a cancel every 20 ms
-            if turn.cancelled():
-                turn.state = "cancelled"
-                yield {"event": "error", "data": {"turn_id": turn.turn_id, "code": "cancelled", "message": "this turn was cancelled; nothing was saved"}}
-                return
+            if not future.done():
+                turn.request_cancel()  # a no-op if it was already cancelled, or if the barrier was passed in this same instant
+                if turn.state == "cancelled":
+                    yield {"event": "error", "data": {"turn_id": turn.turn_id, "code": "cancelled", "message": "this turn was cancelled; nothing was saved"}}
+                    return
             try:
                 result = future.result()
             except Exception:
-                turn.state = "cancelled"
+                turn.request_cancel()
                 yield {"event": "error", "data": {"turn_id": turn.turn_id, "code": "failed", "message": "the assistant could not answer; try again or type your question"}}
                 return
-            if turn.cancelled() or result.outcome == "cancelled":
-                turn.state = "cancelled"
+            if result.outcome == "cancelled":
                 yield {"event": "error", "data": {"turn_id": turn.turn_id, "code": "cancelled", "message": "this turn was cancelled; nothing was saved"}}
                 return
             yield from self._deliver(s, turn, result)
@@ -244,8 +261,7 @@ class VoiceService:
             spoken = spoken_answer(plain, readback=readback)
             if not verify_spoken(result.answer, spoken.text, readback):
                 spoken = spoken_answer("The answer is on screen.", readback="")
-        turn.result, turn.spoken, turn.state = result, spoken, "answered"
-        turn.proposal_ids = tuple(p.id for p in result.proposals)
+        turn.result, turn.spoken = result, spoken  # the turn is already committed (state "answered" was set at the barrier)
         s.last_activity = self.clock()
         for seq, (say, show) in enumerate(spoken.sentences):
             if turn.cancelled():
@@ -257,50 +273,45 @@ class VoiceService:
         }}
 
     def _abandon(self, s: Session, turn: Turn) -> None:
-        """The connection closed before the turn finished: nothing was heard, so it is as if it had been cancelled before playback."""
-        if turn.state == "thinking":
-            turn._cancel.set()
-            turn.state = "cancelled"
-        elif turn.state == "answered":
-            self._rollback(s, turn)
+        """The connection closed. Before the barrier that is a cancel; after it the answer and its proposals are committed and stay (the user can still decide them)."""
+        turn.request_cancel()
 
     # -------------------------------------------------------------- cancel
 
-    def cancel_turn(self, principal: Principal, turn_id: str, playback_chars: Any) -> dict:
+    def cancel_turn(self, principal: Principal, session_id: Any, turn_id: Any, generation: Any, playback_chars: Any) -> dict:
+        """Cancel one turn of one session. Every miss (unknown, ended, someone else's, wrong plan) is the same generic 404; a wrong generation on the
+        caller's own session is a 409 that changes nothing.
+
+        Before the commit barrier: ``cancelled``, nothing was written. After it the turn is final: ``already_final`` (nothing is withdrawn or dropped, and
+        nothing says "nothing was saved"), or ``interrupted`` when playback stopped part way, which only annotates the stored answer with what was played."""
         if isinstance(playback_chars, bool) or not isinstance(playback_chars, int) or not 0 <= playback_chars <= 100_000:
             raise VoiceError(400, "playback_chars must be a whole number of characters played so far")
+        if isinstance(generation, bool) or not isinstance(generation, int) or generation < 1:
+            raise VoiceError(400, "generation must be the turn's generation")
         with self._lock:
-            found = next(((s, s.turns[turn_id]) for s in self._sessions.values() if s.user_id == principal.user_id and self._alive(s) and turn_id in s.turns), None) if isinstance(turn_id, str) else None
-            if found is None:
+            s = self._sessions.get(session_id) if isinstance(session_id, str) else None
+            turn = s.turns.get(turn_id) if s is not None and isinstance(turn_id, str) else None
+            if s is None or turn is None or s.user_id != principal.user_id or not self._alive(s):
                 raise VoiceError(404, GENERIC)
-            s, turn = found
+            if turn.generation != generation:
+                raise VoiceError(409, "that turn is not the one with this generation")
             if not _bounded(s.cancel_times, self.mono(), self.cancels_per_min):
                 raise VoiceError(429, "too many cancels too quickly; wait a moment")
             s.last_activity = self.clock()
-            if turn.state in ("cancelled", "interrupted", "done"):
-                return {"turn_id": turn_id, "state": turn.state}  # already settled: a second cancel changes nothing
-            if turn.state == "thinking":
-                turn._cancel.set()
-                turn.state = "cancelled"
-                return {"turn_id": turn_id, "state": "cancelled", "rolled_back": False}
+        if turn.request_cancel():
+            return {"turn_id": turn_id, "state": "cancelled"}
+        with turn._lock:
+            if turn.state == "cancelled":
+                return {"turn_id": turn_id, "state": "cancelled"}  # a second cancel changes nothing
+            if turn.state == "interrupted":
+                return {"turn_id": turn_id, "state": "interrupted", "played_chars": turn.played_chars}
             total = len(turn.spoken.text) if turn.spoken else 0
-            if playback_chars == 0:
-                self._rollback(s, turn)
-                return {"turn_id": turn_id, "state": "cancelled", "rolled_back": True}
-            if playback_chars >= total:
-                turn.state = "done"
-                return {"turn_id": turn_id, "state": "done"}
+            if playback_chars == 0 or playback_chars >= total:
+                turn.state = "done" if playback_chars >= total and total else turn.state
+                return {"turn_id": turn_id, "state": "already_final"}
             self.assistant.sessions.amend_last(s.plan_id, s.memory_user, self._played_prefix(turn, playback_chars) + " " + INTERRUPTED)
-            turn.state = "interrupted"
+            turn.state, turn.played_chars = "interrupted", playback_chars
             return {"turn_id": turn_id, "state": "interrupted", "played_chars": playback_chars}
-
-    def _rollback(self, s: Session, turn: Turn) -> None:
-        """Cancelled before anything was played, after the answer was ready: forget the memory entry and take back the proposals no one has decided."""
-        turn._cancel.set()
-        turn.state = "cancelled"
-        self.assistant.sessions.drop_last(s.plan_id, s.memory_user)
-        for pid in turn.proposal_ids:
-            self.assistant.queue.withdraw(pid, s.user_id)
 
     @staticmethod
     def _played_prefix(turn: Turn, chars: int) -> str:

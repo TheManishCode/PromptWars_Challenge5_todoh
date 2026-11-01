@@ -57,6 +57,9 @@ class World:
     def run(self, who, sid, turn):
         return list(self.svc.run_turn(who, sid, turn))
 
+    def cancel(self, who, sid, turn, chars=0):
+        return self.svc.cancel_turn(who, sid, turn.turn_id, turn.generation, chars)
+
 
 def kinds(events):
     return [e["event"] for e in events]
@@ -192,8 +195,8 @@ def test_cancelling_while_thinking_commits_nothing_even_when_the_model_answers_l
     t = w.turn(LOCAL_ORGANIZER, sid, "record a payment of five thousand for the venue")
     th, out = start_in_thread(w, LOCAL_ORGANIZER, sid, t)
     assert wait_for(lambda: len(w.model.prompts) >= 1)
-    r = w.svc.cancel_turn(LOCAL_ORGANIZER, t.turn_id, 0)
-    assert r == {"turn_id": t.turn_id, "state": "cancelled", "rolled_back": False}
+    r = w.cancel(LOCAL_ORGANIZER, sid, t, 0)
+    assert r == {"turn_id": t.turn_id, "state": "cancelled"}
     th.join(10)
     assert kinds(out["events"]) == ["status", "error"] and out["events"][1]["data"]["code"] == "cancelled"
     assert w.assistant.queue.pending(pid) == [] and t.staging.pending(pid) == []  # neither the real queue nor the turn's own staging holds it
@@ -210,25 +213,11 @@ def test_a_late_result_after_the_cancel_is_dropped_on_the_tool_path_too(em, pid)
     th, out = start_in_thread(w, LOCAL_ORGANIZER, sid, t)
     assert wait_for(lambda: len(w.model.prompts) >= 1)
     time.sleep(0.1)
-    w.svc.cancel_turn(LOCAL_ORGANIZER, t.turn_id, 0)
+    w.cancel(LOCAL_ORGANIZER, sid, t, 0)
     th.join(10)
     time.sleep(0.8)  # the worker keeps running until its next check; give it every chance to commit
     assert w.assistant.queue.pending(pid) == [] and w.assistant.sessions.turns(pid, w.svc._sessions[sid].memory_user) == 0
     assert len(w.model.prompts) <= 2  # it stopped at the next check instead of finishing the conversation
-
-
-def test_cancelling_after_the_answer_but_before_any_playback_takes_everything_back(em, pid):
-    w = World(em, PROPOSE, answer("I have drafted that payment for you to approve.", "propose_ledger_entry"))
-    sid = w.open(pid)
-    t = w.turn(LOCAL_ORGANIZER, sid, "record a payment of five thousand for the venue")
-    f = final(w.run(LOCAL_ORGANIZER, sid, t))
-    mem = w.svc._sessions[sid].memory_user
-    assert len(w.assistant.queue.pending(pid)) == 1 and w.assistant.sessions.turns(pid, mem) == 1
-    r = w.svc.cancel_turn(LOCAL_ORGANIZER, t.turn_id, 0)
-    assert r["state"] == "cancelled" and r["rolled_back"] is True
-    assert w.assistant.queue.pending(pid) == [] and w.assistant.sessions.turns(pid, mem) == 0
-    assert [e.event for e in w.assistant.queue.log.read() if e.request_id == f["proposals"][0]["id"]] == ["proposed", "withdrawn"]  # the audit trail says what happened
-    assert w.svc.cancel_turn(LOCAL_ORGANIZER, t.turn_id, 0) == {"turn_id": t.turn_id, "state": "cancelled"}  # a second cancel changes nothing
 
 
 def test_an_interrupted_turn_keeps_the_full_text_on_screen_and_only_the_played_prefix_in_memory(em, pid):
@@ -240,11 +229,11 @@ def test_an_interrupted_turn_keeps_the_full_text_on_screen_and_only_the_played_p
     assert f["answer"] == text  # the whole checked answer is what the screen keeps
     mem = w.svc._sessions[sid].memory_user
     first = len("The event is in Pune on 2026-12-12.")
-    r = w.svc.cancel_turn(LOCAL_ORGANIZER, t.turn_id, first + 6)  # the first sentence and a few characters of the second were played
+    r = w.cancel(LOCAL_ORGANIZER, sid, t, first + 6)  # the first sentence and a few characters of the second were played
     assert r == {"turn_id": t.turn_id, "state": "interrupted", "played_chars": first + 6}
     remembered = w.assistant.sessions.block(pid, mem)
     assert "The event is in Pune on 2026-12-12." in remembered and "(interrupted)" in remembered and "120 guests" not in remembered
-    assert w.svc.cancel_turn(LOCAL_ORGANIZER, t.turn_id, first + 6)["state"] == "interrupted"
+    assert w.cancel(LOCAL_ORGANIZER, sid, t, first + 6)["state"] == "interrupted"
 
 
 def test_the_prefix_in_memory_is_a_proportional_estimate_not_a_claim_of_what_was_heard(em, pid):
@@ -252,21 +241,9 @@ def test_the_prefix_in_memory_is_a_proportional_estimate_not_a_claim_of_what_was
     sid = w.open(pid)
     t = w.turn(LOCAL_ORGANIZER, sid)
     final(w.run(LOCAL_ORGANIZER, sid, t))
-    w.svc.cancel_turn(LOCAL_ORGANIZER, t.turn_id, 20)
+    w.cancel(LOCAL_ORGANIZER, sid, t, 20)
     block = w.assistant.sessions.block(pid, w.svc._sessions[sid].memory_user)
     assert "..." in block and "(interrupted)" in block and "Orchid Banquet" not in block
-
-
-def test_a_cancel_after_the_whole_reply_was_played_changes_nothing(em, pid):
-    w = World(em, tool("get_public_event_info"), answer("The event is in Pune on 2026-12-12.", "get_public_event_info"))
-    sid = w.open(pid)
-    t = w.turn(LOCAL_ORGANIZER, sid)
-    f = final(w.run(LOCAL_ORGANIZER, sid, t))
-    mem = w.svc._sessions[sid].memory_user
-    r = w.svc.cancel_turn(LOCAL_ORGANIZER, t.turn_id, len(f["spoken_text"]))
-    assert r == {"turn_id": t.turn_id, "state": "done"}
-    assert w.assistant.sessions.turns(pid, mem) == 1 and "(interrupted)" not in w.assistant.sessions.block(pid, mem)
-    assert w.svc.cancel_turn(LOCAL_ORGANIZER, t.turn_id, 0)["state"] == "done"  # and it stays done
 
 
 @pytest.mark.parametrize("chars", [-1, 100_001, 1.5, "3", None, True])
@@ -276,7 +253,7 @@ def test_playback_chars_must_be_a_sane_whole_number(em, pid, chars):
     t = w.turn(LOCAL_ORGANIZER, sid)
     w.run(LOCAL_ORGANIZER, sid, t)
     with pytest.raises(VoiceError) as e:
-        w.svc.cancel_turn(LOCAL_ORGANIZER, t.turn_id, chars)
+        w.cancel(LOCAL_ORGANIZER, sid, t, chars)
     assert e.value.status == 400
 
 
@@ -292,16 +269,6 @@ def test_closing_the_stream_early_cancels_the_turn(em, pid):
     assert w.assistant.sessions.turns(pid, w.svc._sessions[sid].memory_user) == 0
 
 
-def test_dropping_the_stream_after_the_answer_but_before_playback_rolls_the_turn_back(em, pid):
-    w = World(em, PROPOSE, answer("I have drafted that payment for you to approve.", "propose_ledger_entry"))
-    sid = w.open(pid)
-    t = w.turn(LOCAL_ORGANIZER, sid, "record a payment of five thousand for the venue")
-    gen = w.svc.run_turn(LOCAL_ORGANIZER, sid, t)
-    assert next(gen)["event"] == "status" and next(gen)["event"] == "sentence"
-    gen.close()
-    assert w.assistant.queue.pending(pid) == [] and w.assistant.sessions.turns(pid, w.svc._sessions[sid].memory_user) == 0
-
-
 # ------------------------------------------------------------------ access, order and limits
 
 
@@ -311,15 +278,18 @@ def test_ids_alone_grant_nothing_and_every_wrong_id_gets_the_same_answer(em, pid
     mine, theirs = w.open(pid), w.open(other_plan, OTHER)
     t = w.turn(LOCAL_ORGANIZER, mine)
     w.run(LOCAL_ORGANIZER, mine, t)
+    theirs_turn = w.turn(OTHER, theirs)
     attempts = [
         lambda: w.turn(OTHER, mine),  # another person's session id
         lambda: w.turn(LOCAL_ORGANIZER, "no-such-session"),
         lambda: w.turn(LOCAL_ORGANIZER, None),
-        lambda: w.svc.cancel_turn(OTHER, t.turn_id, 0),  # another person's turn id
-        lambda: w.svc.cancel_turn(LOCAL_ORGANIZER, "no-such-turn", 0),
-        lambda: w.svc.cancel_turn(LOCAL_ORGANIZER, 7, 0),
+        lambda: w.cancel(OTHER, mine, t, 0),  # another person's session and turn
+        lambda: w.svc.cancel_turn(LOCAL_ORGANIZER, mine, "no-such-turn", 1, 0),
+        lambda: w.svc.cancel_turn(LOCAL_ORGANIZER, mine, 7, 1, 0),
+        lambda: w.svc.cancel_turn(LOCAL_ORGANIZER, "no-such-session", t.turn_id, t.generation, 0),
+        lambda: w.svc.cancel_turn(LOCAL_ORGANIZER, theirs, theirs_turn.turn_id, theirs_turn.generation, 0),  # someone else's session
+        lambda: w.svc.cancel_turn(LOCAL_ORGANIZER, mine, theirs_turn.turn_id, theirs_turn.generation, 0),  # their turn id under my session
         lambda: w.svc.end_session(OTHER, mine),
-        lambda: w.svc.cancel_turn(LOCAL_ORGANIZER, w.turn(OTHER, theirs).turn_id, 0),  # a turn that belongs to someone else's session, on another plan
     ]
     messages = set()
     for a in attempts:
@@ -421,10 +391,10 @@ def test_rate_limits_per_session_and_a_cap_on_open_sessions(em, pid):
     assert e.value.status == 429
     w.mono[0] += 60.5  # the minute passes
     assert w.turn(LOCAL_ORGANIZER, sid)
-    w.svc.cancel_turn(LOCAL_ORGANIZER, ts[0].turn_id, 0)
-    w.svc.cancel_turn(LOCAL_ORGANIZER, ts[1].turn_id, 0)
+    w.cancel(LOCAL_ORGANIZER, sid, ts[0], 0)
+    w.cancel(LOCAL_ORGANIZER, sid, ts[1], 0)
     with pytest.raises(VoiceError) as e:
-        w.svc.cancel_turn(LOCAL_ORGANIZER, ts[2].turn_id, 0)
+        w.cancel(LOCAL_ORGANIZER, sid, ts[2], 0)
     assert e.value.status == 429
     w.open(pid)
     with pytest.raises(VoiceError) as e:
@@ -502,8 +472,8 @@ def test_only_the_most_recent_turns_are_remembered_by_a_session(em, pid):
     turns = [w.turn(LOCAL_ORGANIZER, sid) for _ in range(5)]
     assert list(w.svc._sessions[sid].turns) == [t.turn_id for t in turns[2:]]
     with pytest.raises(VoiceError):
-        w.svc.cancel_turn(LOCAL_ORGANIZER, turns[0].turn_id, 0)
-    assert w.svc.cancel_turn(LOCAL_ORGANIZER, turns[4].turn_id, 0)["state"] == "cancelled"
+        w.cancel(LOCAL_ORGANIZER, sid, turns[0], 0)
+    assert w.cancel(LOCAL_ORGANIZER, sid, turns[4], 0)["state"] == "cancelled"
 
 
 def test_the_clarifying_question_is_sentence_zero_of_its_own_stream(em, pid):
@@ -511,17 +481,6 @@ def test_the_clarifying_question_is_sentence_zero_of_its_own_stream(em, pid):
     sid = w.open(pid)
     ev = w.run(LOCAL_ORGANIZER, sid, w.turn(LOCAL_ORGANIZER, sid, "uh"))
     assert ev[1]["data"]["seq"] == 0 and w.svc._sessions[sid].turns[ev[0]["data"]["turn_id"]].state == "answered"
-
-
-def test_an_assistant_that_reports_a_cancelled_turn_is_never_spoken_as_an_answer(em, pid, monkeypatch):
-    from eventmate.assistant.agent import AnswerResult
-
-    w = World(em, answer("x", "x"))
-    sid = w.open(pid)
-    monkeypatch.setattr(w.assistant, "ask", lambda *a, **k: AnswerResult(answer="", route="large", cache="skipped", outcome="cancelled", trace_id="t"))
-    t = w.turn(LOCAL_ORGANIZER, sid)
-    ev = w.run(LOCAL_ORGANIZER, sid, t)
-    assert kinds(ev) == ["status", "error"] and ev[1]["data"]["code"] == "cancelled" and t.state == "cancelled" and not t.cancelled()
 
 
 def test_if_the_spoken_rewrite_ever_added_something_the_plain_words_are_said_and_failing_that_nothing_is(em, pid, monkeypatch):
@@ -540,43 +499,6 @@ def test_if_the_spoken_rewrite_ever_added_something_the_plain_words_are_said_and
     sid = w2.open(pid)
     f = final(w2.run(LOCAL_ORGANIZER, sid, w2.turn(LOCAL_ORGANIZER, sid, BUDGET)))
     assert f["spoken_text"] == "The answer is on screen." and f["answer"] == text  # the screen still has the full checked answer
-
-
-def test_a_cancel_between_sentences_stops_the_stream_and_takes_the_turn_back(em, pid):
-    w = World(em, tool("get_plan_summary"), answer("The event is in Pune. It has 120 guests planned. The date is set.", "get_plan_summary"))
-    sid = w.open(pid)
-    t = w.turn(LOCAL_ORGANIZER, sid, "compare the vendors for me please")
-    gen = w.svc.run_turn(LOCAL_ORGANIZER, sid, t)
-    assert next(gen)["event"] == "status" and next(gen)["event"] == "sentence"
-    assert w.svc.cancel_turn(LOCAL_ORGANIZER, t.turn_id, 0)["rolled_back"] is True and t.cancelled()
-    assert list(gen) == []  # no more sentences and no final after a cancel
-    assert w.assistant.sessions.turns(pid, w.svc._sessions[sid].memory_user) == 0
-
-
-def test_closing_a_stream_whose_turn_was_already_settled_changes_nothing(em, pid):
-    w = World(em, tool("get_plan_summary"), answer("The event is in Pune. It has 120 guests planned. The date is set.", "get_plan_summary"))
-    sid = w.open(pid)
-    t = w.turn(LOCAL_ORGANIZER, sid, "compare the vendors for me please")
-    gen = w.svc.run_turn(LOCAL_ORGANIZER, sid, t)
-    seen = []
-    for e in gen:
-        seen.append(e["event"])
-        if e["event"] == "final":
-            break
-    mem = w.svc._sessions[sid].memory_user
-    assert w.svc.cancel_turn(LOCAL_ORGANIZER, t.turn_id, 12)["state"] == "interrupted"
-    before = w.assistant.sessions.block(pid, mem)
-    gen.close()  # the connection drops after the turn was already settled
-    assert t.state == "interrupted" and w.assistant.sessions.block(pid, mem) == before and "(interrupted)" in before
-
-
-def test_the_turn_is_marked_cancelled_for_every_worker_that_still_holds_it(em, pid):
-    w = World(em, PROPOSE, answer("I have drafted that payment for you to approve.", "propose_ledger_entry"))
-    sid = w.open(pid)
-    t = w.turn(LOCAL_ORGANIZER, sid, "record a payment of five thousand for the venue")
-    w.run(LOCAL_ORGANIZER, sid, t)
-    w.svc.cancel_turn(LOCAL_ORGANIZER, t.turn_id, 0)
-    assert t.cancelled() and t.state == "cancelled"
 
 
 def spoken_turn(*pairs):
@@ -615,3 +537,242 @@ def test_two_words_are_enough_to_try_and_one_word_is_not(em, pid):
     assert w.svc._clarify(w.turn(LOCAL_ORGANIZER, sid, "book venue", confidence=0.49)) is True
     assert w.svc._clarify(w.turn(LOCAL_ORGANIZER, sid, "book venue", confidence=0.5)) is False
     assert w.svc._clarify(w.turn(LOCAL_ORGANIZER, sid, "book venue", confidence=0.0)) is True
+
+
+# ------------------------------------------------------------------ the commit barrier (Phase R2)
+
+
+def test_a_cancel_after_the_barrier_at_zero_chars_is_already_final_and_withdraws_nothing(em, pid):  # R2 b
+    w = World(em, PROPOSE, answer("I have drafted that payment for you to approve.", "propose_ledger_entry"))
+    sid = w.open(pid)
+    t = w.turn(LOCAL_ORGANIZER, sid, "record a payment of five thousand for the venue")
+    f = final(w.run(LOCAL_ORGANIZER, sid, t))
+    mem = w.svc._sessions[sid].memory_user
+    assert w.cancel(LOCAL_ORGANIZER, sid, t, 0) == {"turn_id": t.turn_id, "state": "already_final"}
+    assert [p.id for p in w.assistant.queue.pending(pid)] == [f["proposals"][0]["id"]] and w.assistant.sessions.turns(pid, mem) == 1
+    assert [e.event for e in w.assistant.queue.log.read() if e.request_id == f["proposals"][0]["id"]] == ["proposed"]  # nothing was ever withdrawn
+    assert w.cancel(LOCAL_ORGANIZER, sid, t, 0)["state"] == "already_final"  # and asking again changes nothing
+    assert not hasattr(w.assistant.queue, "withdraw")
+
+
+def test_an_approved_proposal_stays_approved_and_no_text_claims_nothing_was_saved(em, pid):  # R2 c
+    w = World(em, PROPOSE, answer("I have drafted that payment for you to approve.", "propose_ledger_entry"))
+    sid = w.open(pid)
+    t = w.turn(LOCAL_ORGANIZER, sid, "record a payment of five thousand for the venue")
+    [p] = final(w.run(LOCAL_ORGANIZER, sid, t))["proposals"]
+    w.assistant.decide(p["id"], LOCAL_ORGANIZER, True)
+    assert em.ledger_entries(pid) and w.assistant.queue.get(p["id"]).status == "approved"
+    r = w.cancel(LOCAL_ORGANIZER, sid, t, 0)
+    assert r["state"] == "already_final" and "nothing was saved" not in str(r)
+    assert w.assistant.queue.get(p["id"]).status == "approved" and len(em.ledger_entries(pid)) == 1 and w.assistant.sessions.turns(pid, w.svc._sessions[sid].memory_user) == 1
+
+
+def test_a_typed_chat_proposal_is_untouched_by_a_voice_turn_that_staged_the_same_action(em, pid):  # R1 and R2 d
+    w = World(em, PROPOSE, answer("I have drafted that payment for you to approve.", "propose_ledger_entry"))
+    typed_model = Scripted(PROPOSE, answer("Drafted.", "propose_ledger_entry"))
+    typed = Assistant(em, {"large": typed_model, "small": typed_model})
+    typed.queue = w.assistant.queue  # one queue, as in the app
+    [x] = typed.ask("record a payment of five thousand for the venue", pid, LOCAL_ORGANIZER).proposals  # made in typed chat
+    sid = w.open(pid)
+    t = w.turn(LOCAL_ORGANIZER, sid, "record a payment of five thousand for the venue")  # the same action, by voice
+    [same] = final(w.run(LOCAL_ORGANIZER, sid, t))["proposals"]
+    assert same["id"] == x.id and len(w.assistant.queue.pending(pid)) == 1  # adopt() found the existing card and made no second one
+    assert w.cancel(LOCAL_ORGANIZER, sid, t, 0)["state"] == "already_final"
+    assert [p.id for p in w.assistant.queue.pending(pid)] == [x.id]
+    assert [e.event for e in w.assistant.queue.log.read() if e.request_id == x.id] == ["proposed"]  # and the log never says "withdrawn" for it
+
+
+def test_adopt_says_whether_it_created_the_proposal():  # R1 tests 1 to 3, at the queue
+    from eventmate.assistant.approvals import ApprovalQueue, Proposal, content_hash
+    from eventmate.assistant.trace import ProposalLog
+    import tempfile
+    from pathlib import Path
+
+    q = ApprovalQueue(ProposalLog(Path(tempfile.mkdtemp()), run_id="r1"))
+    args = {"kind": "payment", "category": "venue", "amount": 5000}
+
+    def prop(pid_):
+        return Proposal(id=pid_, plan_id="p1", plan_version=1, proposer="u", tool="propose_ledger_entry", args=args, summary="pay", content_sha256=content_hash("p1", 1, "propose_ledger_entry", args),
+                        created_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc))
+
+    mine, created = q.adopt(prop("aaaaaaaaaaaa"))
+    assert created is True and q.pending("p1") == [mine]
+    again, created = q.adopt(prop("bbbbbbbbbbbb"))  # the same action staged by another turn
+    assert created is False and again.id == mine.id and len(q.pending("p1")) == 1
+    assert not hasattr(q, "withdraw")
+
+
+def test_cancel_and_commit_race_so_that_exactly_one_wins_with_no_partial_state(em, pid):  # R2 e
+    import random
+
+    from eventmate.voice.turns import Turn
+
+    random.seed(7)
+    for i in range(300):
+        turn = Turn(turn_id=f"race-{i:05d}", generation=1, text="x y", input_mode="live", memory_user="u")
+        wrote = []
+        results = {}
+        gate = threading.Barrier(2)
+
+        def committer():
+            gate.wait()
+            for _ in range(random.randint(0, 40)):
+                pass
+            results["commit"] = turn.commit(lambda: wrote.append("trace") or wrote.append("memory") or "ok")
+
+        def canceller():
+            gate.wait()
+            results["cancel"] = turn.request_cancel()
+
+        a, b = threading.Thread(target=committer), threading.Thread(target=canceller)
+        a.start(); b.start(); a.join(); b.join()
+        committed, cancelled = results["commit"] == "ok", results["cancel"]
+        assert committed != cancelled, i  # exactly one wins
+        assert (wrote == ["trace", "memory"]) == committed and (wrote == []) == cancelled  # and the loser left nothing behind, the winner left everything
+        assert turn.state == ("answered" if committed else "cancelled")
+        assert turn.commit(lambda: wrote.append("late")) is None and turn.request_cancel() is False and "late" not in wrote  # the barrier is one-way
+
+
+def test_a_dropped_connection_before_the_barrier_cancels_and_after_it_is_final(em, pid):  # R2 f
+    w = World(em, tool("get_public_event_info"), answer("The event is in Pune on 2026-12-12.", "get_public_event_info"), delay=0.3)
+    sid = w.open(pid)
+    t = w.turn(LOCAL_ORGANIZER, sid)
+    gen = w.svc.run_turn(LOCAL_ORGANIZER, sid, t)
+    assert next(gen)["event"] == "status"
+    gen.close()
+    assert t.state == "cancelled"
+    time.sleep(0.9)
+    assert w.assistant.sessions.turns(pid, w.svc._sessions[sid].memory_user) == 0 and w.assistant.queue.pending(pid) == []
+    w2 = World(em, PROPOSE, answer("I have drafted that payment for you to approve.", "propose_ledger_entry"))
+    sid2 = w2.open(pid)
+    t2 = w2.turn(LOCAL_ORGANIZER, sid2, "record a payment of five thousand for the venue")
+    gen = w2.svc.run_turn(LOCAL_ORGANIZER, sid2, t2)
+    assert next(gen)["event"] == "status" and next(gen)["event"] == "sentence"
+    gen.close()  # after the barrier: the answer and its proposal are committed and stay
+    assert t2.state == "answered" and len(w2.assistant.queue.pending(pid)) == 1 and w2.assistant.sessions.turns(pid, w2.svc._sessions[sid2].memory_user) == 1
+
+
+def test_the_commit_happens_before_the_first_sentence_so_the_final_event_describes_committed_state(em, pid):
+    w = World(em, PROPOSE, answer("I have drafted that payment for you to approve.", "propose_ledger_entry"))
+    sid = w.open(pid)
+    t = w.turn(LOCAL_ORGANIZER, sid, "record a payment of five thousand for the venue")
+    gen = w.svc.run_turn(LOCAL_ORGANIZER, sid, t)
+    next(gen)
+    next(gen)  # the first sentence has been handed out
+    assert t.state == "answered" and len(w.assistant.queue.pending(pid)) == 1 and w.assistant.sessions.turns(pid, w.svc._sessions[sid].memory_user) == 1
+
+
+def test_a_cancel_between_sentences_after_the_barrier_changes_no_stored_state(em, pid):
+    w = World(em, tool("get_plan_summary"), answer("The event is in Pune. It has 120 guests planned. The date is set.", "get_plan_summary"))
+    sid = w.open(pid)
+    t = w.turn(LOCAL_ORGANIZER, sid, "compare the vendors for me please")
+    gen = w.svc.run_turn(LOCAL_ORGANIZER, sid, t)
+    next(gen), next(gen)
+    mem = w.svc._sessions[sid].memory_user
+    before = w.assistant.sessions.block(pid, mem)
+    assert w.cancel(LOCAL_ORGANIZER, sid, t, 0)["state"] == "already_final"
+    assert w.assistant.sessions.block(pid, mem) == before and "(interrupted)" not in before
+    assert kinds(list(gen))[-1] == "final"  # the stream is not torn up: the committed answer is still delivered
+
+
+def test_a_late_second_cancel_after_a_partial_one_reports_the_same_played_count(em, pid):
+    w = World(em, tool("get_plan_summary"), answer("The event is in Pune. It has 120 guests planned.", "get_plan_summary"))
+    sid = w.open(pid)
+    t = w.turn(LOCAL_ORGANIZER, sid, "compare the vendors for me please")
+    w.run(LOCAL_ORGANIZER, sid, t)
+    assert w.cancel(LOCAL_ORGANIZER, sid, t, 10) == {"turn_id": t.turn_id, "state": "interrupted", "played_chars": 10}
+    assert w.cancel(LOCAL_ORGANIZER, sid, t, 30) == {"turn_id": t.turn_id, "state": "interrupted", "played_chars": 10}
+    full = World(em, tool("get_public_event_info"), answer("The event is in Pune on 2026-12-12.", "get_public_event_info"))
+    sid2 = full.open(pid)
+    t2 = full.turn(LOCAL_ORGANIZER, sid2)
+    f = final(full.run(LOCAL_ORGANIZER, sid2, t2))
+    assert full.cancel(LOCAL_ORGANIZER, sid2, t2, len(f["spoken_text"]))["state"] == "already_final"
+    assert "(interrupted)" not in full.assistant.sessions.block(pid, full.svc._sessions[sid2].memory_user)
+
+
+def test_an_assistant_that_reports_a_cancelled_turn_is_never_spoken_as_an_answer(em, pid, monkeypatch):
+    from eventmate.assistant.agent import AnswerResult
+
+    w = World(em, answer("x", "x"))
+    sid = w.open(pid)
+    monkeypatch.setattr(w.assistant, "ask", lambda *a, **k: AnswerResult(answer="", route="large", cache="skipped", outcome="cancelled", trace_id="t"))
+    ev = w.run(LOCAL_ORGANIZER, sid, w.turn(LOCAL_ORGANIZER, sid))
+    assert kinds(ev) == ["status", "error"] and ev[1]["data"]["code"] == "cancelled"
+
+
+# ------------------------------------------------------------------ cancel is bound to its session and generation (Phase R3)
+
+
+def test_a_turn_id_cannot_exist_in_two_sessions_so_cancel_never_has_two_to_choose_between(em, pid):  # R3 c
+    w = World(em, answer("x", "x"))
+    a, b = w.open(pid), w.open(pid)
+    ta = w.svc.start_turn(LOCAL_ORGANIZER, a, "shared-turn-id", 1, "compare the vendors", "live")
+    with pytest.raises(VoiceError) as e:
+        w.svc.start_turn(LOCAL_ORGANIZER, b, "shared-turn-id", 1, "compare the vendors", "live")
+    assert e.value.status == 409
+    tb = w.svc.start_turn(LOCAL_ORGANIZER, b, "another-turn-id", 1, "compare the vendors", "live")
+    with pytest.raises(VoiceError) as e:
+        w.svc.cancel_turn(LOCAL_ORGANIZER, b, "shared-turn-id", 1, 0)  # session b has no such turn, even though session a does
+    assert e.value.status == 404 and str(e.value) == GENERIC and ta.state == "thinking"
+    assert w.svc.cancel_turn(LOCAL_ORGANIZER, a, "shared-turn-id", 1, 0)["state"] == "cancelled" and ta.state == "cancelled" and tb.state == "thinking"
+
+
+def test_a_wrong_generation_on_the_callers_own_turn_is_a_409_and_changes_nothing(em, pid):  # R3 c
+    w = World(em, tool("get_public_event_info"), answer("The event is in Pune on 2026-12-12.", "get_public_event_info"))
+    sid = w.open(pid)
+    t = w.turn(LOCAL_ORGANIZER, sid, generation=4)
+    for wrong in (3, 5):
+        with pytest.raises(VoiceError) as e:
+            w.svc.cancel_turn(LOCAL_ORGANIZER, sid, t.turn_id, wrong, 0)
+        assert e.value.status == 409
+    assert t.state == "thinking" and not t.cancelled()
+    for bad in (0, "4", None, True, 1.5):
+        with pytest.raises(VoiceError) as e:
+            w.svc.cancel_turn(LOCAL_ORGANIZER, sid, t.turn_id, bad, 0)
+        assert e.value.status == 400
+
+
+def test_another_persons_wrong_generation_is_the_same_404_not_a_409(em, pid):
+    w = World(em, answer("x", "x"))
+    sid = w.open(pid)
+    t = w.turn(LOCAL_ORGANIZER, sid, generation=4)
+    with pytest.raises(VoiceError) as e:
+        w.svc.cancel_turn(OTHER, sid, t.turn_id, 99, 0)
+    assert e.value.status == 404 and str(e.value) == GENERIC  # no way to learn the generation of someone else's turn
+
+
+def test_a_session_ended_while_a_turn_is_running_lets_that_turn_commit_nothing(em, pid):
+    w = World(em, PROPOSE, answer("I have drafted that payment for you to approve.", "propose_ledger_entry"), delay=0.3)
+    sid = w.open(pid)
+    traces_before = len(w.assistant.traces.read())
+    t = w.turn(LOCAL_ORGANIZER, sid, "record a payment of five thousand for the venue")
+    mem = w.svc._sessions[sid].memory_user
+    th, out = start_in_thread(w, LOCAL_ORGANIZER, sid, t)
+    assert wait_for(lambda: len(w.model.prompts) >= 1)
+    w.svc.end_session(LOCAL_ORGANIZER, sid)  # sets the turn's cancel flag without going through cancel
+    th.join(10)
+    time.sleep(0.8)
+    assert t.commit(lambda: "late") is None  # the barrier refuses once the flag is set, whatever the state says
+    assert w.assistant.queue.pending(pid) == [] and w.assistant.sessions.turns(pid, mem) == 0 and len(w.assistant.traces.read()) == traces_before
+
+
+def test_a_second_cancel_of_a_cancelled_turn_says_cancelled_again_and_changes_nothing(em, pid):
+    w = World(em, answer("x", "x"))
+    sid = w.open(pid)
+    t = w.turn(LOCAL_ORGANIZER, sid)
+    assert w.cancel(LOCAL_ORGANIZER, sid, t, 0) == {"turn_id": t.turn_id, "state": "cancelled"}
+    assert w.cancel(LOCAL_ORGANIZER, sid, t, 40) == {"turn_id": t.turn_id, "state": "cancelled"}
+    assert t.state == "cancelled"
+
+
+def test_playback_to_the_very_end_of_a_nonempty_reply_marks_it_done(em, pid):
+    w = World(em, tool("get_public_event_info"), answer("The event is in Pune on 2026-12-12.", "get_public_event_info"))
+    sid = w.open(pid)
+    t = w.turn(LOCAL_ORGANIZER, sid)
+    f = final(w.run(LOCAL_ORGANIZER, sid, t))
+    assert w.cancel(LOCAL_ORGANIZER, sid, t, len(f["spoken_text"]) - 1)["state"] == "interrupted"  # one character short is still partway
+    t2 = w.turn(LOCAL_ORGANIZER, sid)
+    w.model.replies = [tool("get_public_event_info"), answer("The event is in Pune on 2026-12-12.", "get_public_event_info")]
+    f2 = final(w.run(LOCAL_ORGANIZER, sid, t2))
+    assert w.cancel(LOCAL_ORGANIZER, sid, t2, len(f2["spoken_text"]))["state"] == "already_final" and t2.state == "done"
+    assert w.cancel(LOCAL_ORGANIZER, sid, t2, 0)["state"] == "already_final"

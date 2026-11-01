@@ -11,7 +11,7 @@ import json
 import threading
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from pydantic import Field
 
@@ -66,27 +66,18 @@ class ApprovalQueue:
         self.log.write(request_id=p.id, event="proposed", plan_id=plan_id, tool=tool, actor=proposer, content_sha256=digest, detail=summary)
         return p
 
-    def adopt(self, proposal: Proposal) -> Proposal:
-        """Take a proposal that was staged during a voice turn into this queue, once that turn is known to stand. The same rules as ``propose`` apply."""
+    def adopt(self, proposal: Proposal) -> Tuple[Proposal, bool]:
+        """Take a proposal staged during a voice turn into this queue, at the turn's commit barrier. Returns (proposal, created): an identical pending
+        proposal that already exists (made in typed chat, say) is returned as is with created False. Nothing ever takes a proposal back out."""
         with self._lock:
             if sum(1 for p in self._items.values() if p.plan_id == proposal.plan_id and p.status == "pending") >= MAX_PENDING_PER_PLAN:
                 raise ApprovalError("too many proposals are waiting for a decision; decide on some first")
             dup = next((p for p in self._items.values() if p.status == "pending" and p.content_sha256 == proposal.content_sha256), None)
             if dup:
-                return dup
+                return dup, False
             self._items[proposal.id] = proposal
         self.log.write(request_id=proposal.id, event="proposed", plan_id=proposal.plan_id, tool=proposal.tool, actor=proposal.proposer, content_sha256=proposal.content_sha256, detail=proposal.summary)
-        return proposal
-
-    def withdraw(self, proposal_id: str, actor: str) -> bool:
-        """Take back a proposal nobody has decided yet (a voice turn that was cancelled before anything was played). Returns whether one was removed."""
-        with self._lock:
-            p = self._items.get(proposal_id)
-            if p is None or p.status != "pending":
-                return False
-            del self._items[proposal_id]
-        self.log.write(request_id=p.id, event="withdrawn", plan_id=p.plan_id, tool=p.tool, actor=actor, content_sha256=p.content_sha256, detail="withdrawn: the voice turn was cancelled before playback")
-        return True
+        return proposal, True
 
     def pending(self, plan_id: str) -> List[Proposal]:
         with self._lock:

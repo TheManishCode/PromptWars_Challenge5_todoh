@@ -35,7 +35,7 @@ JOB_ITEM_LABELS = {
     "confirm_claim": "A quoted price needs your confirmation", "vendor_question": "A vendor asked you a question", "approve_requests": "Quote requests wait for your approval",
     "approve_nudge": "A follow-up waits for your approval", "check_unknown_send": "A send has an unknown outcome: check the vendor chat", "unclear_price": "A reply needs reading",
     "vendor_unavailable": "A vendor says it is not available", "different_sender": "A reply came from an unexpected address", "do_not_contact": "A request was blocked: do not contact",
-    "no_quotes_possible": "Too few vendors can still give a quote",
+    "no_quotes_possible": "Too few vendors can still give a quote", "request_stale": "A request is out of date because the plan changed: draft it again",
 }
 
 

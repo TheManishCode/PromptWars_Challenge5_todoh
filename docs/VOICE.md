@@ -47,7 +47,8 @@ All state-changing calls carry the CSRF header and follow the local-origin rules
 ```
 GET /api/voice/capabilities
 -> {"transcribe": {"route": "none"|"server", "engine": "faster-whisper"|null, "model": "base"|null, "languages": ["en","hi","mr"],
-                   "max_seconds": 120, "max_bytes": 5242880}, "keep_original": false}
+                   "max_seconds": 120, "max_bytes": 5242880},
+   "sessions": {"enabled": true}, "turns": {"enabled": true}, "live": {"enabled": true, "reason_unavailable": null}, "keep_original": false}
 ```
 
 ```
@@ -61,7 +62,7 @@ Nothing is sent to the assistant by this call. The recording is deleted before t
 
 ```
 POST   /api/voice/sessions        {"plan_id": "..."}  -> 201 {"session_id": "...", "expires_at": "...", "limits": {"idle_timeout_s": 90, "session_cap_s": 900, "max_turn_chars": 600, "turns_per_minute": 20}}
-DELETE /api/voice/sessions/<id>   {}                  -> {"ended": true}   (drops that session's memory)
+DELETE /api/voice/sessions/<id>   (no body)           -> {"ended": true}   (drops that session's memory; a miss is the generic 404)
 ```
 
 ```
@@ -79,8 +80,9 @@ event: error     data: {"turn_id": "turn-0001", "code": "cancelled"|"failed", "m
 JSON fallback: `{"turn_id": "...", "sentences": [...], "final": {...}|null, "error": {...}|null}`.
 
 ```
-POST /api/voice/turns/<turn_id>/cancel   {"playback_chars": 124}
--> {"turn_id": "...", "state": "cancelled", "rolled_back": true|false} | {"state": "interrupted", "played_chars": 124} | {"state": "done"}
+POST /api/voice/turns/<turn_id>/cancel   {"session_id": "...", "generation": 1, "playback_chars": 124}   (all three required)
+-> {"turn_id": "...", "state": "cancelled"} | {"state": "already_final"} | {"state": "interrupted", "played_chars": 124}
+-> 404 generic for every miss (unknown, ended, someone else's, not in that session)    409 wrong generation on your own turn (nothing changes)
 ```
 
 Optional, off by default (below): `POST /api/plans/<id>/voice-notes`, `GET` and `DELETE .../voice-notes/<note_id>`.
@@ -97,21 +99,22 @@ Errors that are about someone else's or an expired id are all the same `404 that
 
 A turn runs the same `Assistant.ask` (masking, input checks, injection scan, tools, answer fact check). The differences are all about not committing too early:
 
-- **Proposals are staged.** A change the turn proposes waits in a private queue and is filed in the real approval queue only if the turn still stands when it finishes.
+- **One commit barrier.** Until the turn passes it, nothing is written: not the trace, not the session memory, not a proposal in the real approval queue (proposals made during the turn wait in the turn's own private queue). The barrier is a single compare-and-set under a per-turn lock, so a cancel and the commit cannot both win. It is passed **before the first sentence is streamed**, so the `final` event always describes committed state.
 - **The answer cache is read but never written** by a voice turn.
 - **Each session has its own memory**, separate from typed chat and from every other session. Ending or expiring a session clears it.
 - **Cancellation is checked after every blocking step.** The model client cannot abort a call in flight, so cancelling means "discard the result and commit nothing"; per-call timeouts stay short.
+- **Nothing is ever taken back after the barrier.** An identical proposal that already exists (made in typed chat, say) is reused, never duplicated and never removed by a voice cancel.
 
-Cancel, in the three cases:
+Cancel, by when it arrives:
 
 | Situation | Result |
 |---|---|
-| Cancelled while thinking (before the answer is ready) | `cancelled`. Nothing is committed: no memory, no proposal, no cache entry, no trace. A result that arrives later is dropped |
-| Cancelled after the answer is ready but before anything was played (`playback_chars` 0) | `cancelled`, `rolled_back: true`: the memory entry is removed and the turn's pending proposals are withdrawn (the approval log records `proposed` then `withdrawn`) |
-| Interrupted while playing | `interrupted`. The full checked answer stays on screen and in the chat history. Session memory keeps only a prefix, marked `(interrupted)`: whole sentences played plus a proportional share of the one in progress. Proposals stay pending on screen |
-| Played to the end | `done`; nothing changes |
+| Before the barrier (the turn is still running) | `cancelled`. Nothing was written: no memory, no proposal, no cache entry, no trace. A result that arrives later is dropped |
+| After the barrier, nothing played (`playback_chars` 0) or all of it played | `already_final`. The answer, its memory entry and its proposals stay; the user decides the proposals as usual. Nothing is withdrawn and nothing says "nothing was saved" |
+| After the barrier, playback stopped part way | `interrupted`. The full checked answer stays on screen and in the chat history. Session memory keeps only a prefix, marked `(interrupted)`: whole sentences played plus a proportional share of the one in progress. Proposals stay pending |
+| A second cancel | Reports the same state; changes nothing |
 
-`playback_chars` is an estimate from the speech engine's boundary events. It is **not** proof that the user heard or understood anything: it is described as "played" everywhere and never used as evidence of what the user was told. A second cancel changes nothing. Closing the stream early is treated as a cancel. A turn with a newer `generation` supersedes one still thinking, and a stale `generation` is refused (409).
+`playback_chars` is an estimate from the speech engine's boundary events. It is **not** proof that the user heard or understood anything: it is described as "played" everywhere and never used as evidence of what the user was told. A second cancel changes nothing. Closing the stream before the barrier is treated as a cancel; after it the answer is committed and stays. A turn with a newer `generation` supersedes one still running, and a stale `generation` is refused (409).
 
 ## What is said aloud
 

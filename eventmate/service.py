@@ -210,13 +210,13 @@ class EventMate:
         plan = self.store.latest(plan_id)
         result = parse_guest_csv(raw)
         token = None if (result.errors or not result.guests) else self.guest_lists.preview(plan_id, result)
-        return GuestPreview(guests=result.guests, errors=result.errors, totals=result.totals, check=check_against(result.totals, plan.request.guest_count), token=token)
+        return GuestPreview(guests=result.guests, row_errors=result.errors, totals=result.totals, check=check_against(result.totals, plan.request.guest_count), can_commit=token is not None, preview_token=token)
 
     def guest_commit(self, plan_id: str, token: str) -> dict:
         plan = self.store.latest(plan_id)
         guests = self.guest_lists.commit(plan_id, token)
         totals = totals_of(guests)
-        self._log_guest_list(plan_id, f"Guest list saved for plan {plan_id}: {totals.rows} row(s), {totals.headcount} people")
+        self._log_guest_list(plan_id, f"Guest list saved for plan {plan_id}: {totals.rows} row(s), {totals.heads} people")
         return {"totals": json.loads(totals.model_dump_json()), "check": json.loads(check_against(totals, plan.request.guest_count).model_dump_json())}
 
     def guest_summary(self, plan_id: str) -> Optional[dict]:
@@ -674,11 +674,20 @@ class EventMate:
         return search_multi_city(self.flights, legs, **kw)
 
     def confirm(self, plan_id: str, category: VendorCategory) -> ReplanOutcome:
-        return self.replanner.confirm(plan_id, category)
+        outcome = self.replanner.confirm(plan_id, category)
+        self._after_new_version(plan_id)
+        return outcome
 
     def replan(self, plan_id: str, disruption: Disruption, today: Optional[date] = None) -> ReplanOutcome:
         self._clock(today)
-        return self.replanner.replan(plan_id, disruption, today)
+        outcome = self.replanner.replan(plan_id, disruption, today)
+        self._after_new_version(plan_id)
+        return outcome
+
+    def _after_new_version(self, plan_id: str) -> None:
+        """A new plan version may make waiting vendor drafts untrue: mark those stale, and let the quote jobs that own them say so. A no-op when nothing changed."""
+        if self.conversations.supersede_stale(plan_id) and (self.store.root / "jobs.db").exists():
+            self.jobs.reevaluate(plan_id)
 
     def update_community(self, plan_id: str, details, today: Optional[date] = None) -> ReplanOutcome:
         """Replace a community plan's details (attendance, funding, volunteers, programme, access needs) as a validated new version, or refuse with repairs."""

@@ -41,17 +41,17 @@ All need the CSRF header and the local-origin rules of the other write routes, a
 
 ```
 POST /api/plans/<id>/guests/preview     JSON {"csv": "<text>"}   or   multipart/form-data with one file in the field "file"
--> 200 {"guests": [...], "errors": [{"line": 4, "column": "party_size", "message": "..."}],
-        "totals": {"rows": 4, "headcount": 10, "yes": 5, "no": 1, "pending": 4, "dietary_counts": {"vegetarian": 2}, "required_diets": ["vegetarian"]},
-        "check": {"planning_headcount": 120, "expected": 9, "flag": "the list accounts for 9 of the 120 people you planned for; the plan keeps 120"},
-        "token": "<single-use token>" | null, "notice": "..."}
+-> 200 {"can_commit": true, "preview_token": "<single-use token>" | null,
+        "row_errors": [{"line": 4, "column": "party_size", "message": "..."}],
+        "totals": {"rows": 4, "heads": 10, "yes": 5, "no": 1, "pending": 4, "dietary_counts": {"vegetarian": 2}, "required_diets": ["vegetarian"]},
+        "guests": [...], "check": {"planning_headcount": 120, "expected": 9, "flag": "the list accounts for 9 of the 120 people you planned for; the plan keeps 120"}, "notice": "..."}
 -> 400 the file cannot be used (not UTF-8, wrong header, too many rows)   -> 413 over 256 KB
 ```
-`token` is `null` while any row has a problem: a file with errors cannot be saved. The rows in the preview are for your own screen.
+`can_commit` is false and `preview_token` is `null` while any row has a problem: a file with errors cannot be saved. `heads` counts people (party sizes), declined included. The rows in the preview are for your own screen. These are the names the page reads; no older alias names are emitted.
 
 ```
-POST /api/plans/<id>/guests/commit      {"token": "<token>"}
--> 201 {"totals": {...}, "check": {...}}      -> 409 the preview is no longer valid; preview the file again
+POST /api/plans/<id>/guests/commit      {"preview_token": "<token>"}
+-> 201 {"saved": true, "totals": {...}, "check": {...}}      -> 409 the preview is no longer valid; preview the file again
 ```
 The token works once, for that plan, for 15 minutes. It stops working if a newer preview was taken for the plan, or the list was changed or deleted since. At most eight previews are held; they live in memory only.
 
