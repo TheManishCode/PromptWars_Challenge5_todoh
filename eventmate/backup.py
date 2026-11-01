@@ -40,6 +40,7 @@ def _copy_db(src: Path, dst: Path) -> None:
     source, target = sqlite3.connect(f"file:{src}?mode=ro", uri=True), sqlite3.connect(dst)
     try:
         source.backup(target)  # a consistent snapshot even if the server is writing
+        target.execute("PRAGMA journal_mode=DELETE").fetchone()  # the copy is one self-contained file, not a WAL database with sidecars
     finally:
         target.close()
         source.close()
