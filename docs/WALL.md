@@ -27,6 +27,23 @@ frontend or on a real phone, and the wording of the public-name notice is the ow
 - The credential is 256 random bits (`secrets.token_urlsafe(32)`), stored only as a SHA-256 hash, never logged. Cookie: `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain`, one year, `Secure` over HTTPS.
 - **Honest limits.** The credential identifies a browser profile, not a person. Clearing cookies, a private window, another browser or device gives a fresh visitor. No fingerprinting is added. The real brakes against flooding are validation, rate limits, daily caps and moderation. The public `mark_id` proves nothing.
 
+## Try it locally (this transcript is from a real run of `python -m eventmate.web` and curl on 2026-11-01)
+
+```
+export EVENTMATE_WALL_DB=/tmp/wall.sqlite3 ; python -m eventmate.web --port 8791 &
+B=http://127.0.0.1:8791 ; J=/tmp/jar
+CSRF=$(curl -s -c $J -b $J $B/api/wall/session | python -c "import sys,json;print(json.load(sys.stdin)['csrf'])")
+curl -s -b $J -H "Content-Type: application/json" -H "X-EventMate-Wall-CSRF: $CSRF" -H "Idempotency-Key: demo-key-0001" -d '{"name":"Asha"}' $B/api/wall/marks
+  -> {"mark_id":1,"status":"pending"}                       (invisible to everyone until approved)
+python -m eventmate.wall_admin list-pending ; python -m eventmate.wall_admin approve 1
+  -> {"mark_id": 1, "name": "Asha", "status": "visible", "section_id": 0, "slot": 0}
+curl -s $B/api/wall/sections/0
+  -> {"capacity":48,"layout_version":1,"next_after_slot":null,"section_id":0,"slots":[{"mark_id":1,"name":"Asha","slot":0}]}
+curl -s -b $J -H "Content-Type: application/json" -H "X-EventMate-Wall-CSRF: $CSRF" -d '{"mode":"timed"}' $B/api/wall/rounds
+  -> {"available":true,"from_slot":0,"mode":"timed","round_id":"…","snapshot":{…},…}
+```
+The cookie jar shows `#HttpOnly_127.0.0.1 … todoh_wall`; an unlisted path such as `/api/wall/admin` is 404; a private route such as `POST /api/inbox/poll` without the private CSRF header is 403.
+
 ## The 14 routes
 
 Errors: `{"error": "<text>", "code": "<code>"}`. Codes: `bad_request`, `invalid_name`, `already_marked`, `code_exists`, `not_found`, `unauthorized`, `bearer_required`, `rate_limited`, `wall_closed`, `not_eligible`, `not_ready`, `round_expired`, `round_used`, `round_stale`.
