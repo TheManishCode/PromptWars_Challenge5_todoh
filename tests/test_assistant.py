@@ -225,11 +225,15 @@ def test_only_an_authorised_human_can_decide(em, pid):
 def test_a_decision_is_final_and_bound_to_the_exact_content(em, pid):
     a, _ = make(em, tool("propose_ledger_entry", kind="payment", category="venue", amount=1000), answer("filed", "propose_ledger_entry"))
     p = a.ask("record a payment of 1000", pid, LOCAL_ORGANIZER).proposals[0]
-    a.queue._items[p.id] = p.model_copy(update={"args": {**p.args, "amount": 999999}})  # tamper after the fact
+    def store_args(args):
+        with a.queue._db() as c:
+            c.execute("UPDATE proposals SET args = ? WHERE id = ?", (json.dumps(args, sort_keys=True), p.id))
+
+    store_args({**p.args, "amount": 999999})  # tamper with the stored proposal after the fact
     with pytest.raises(ApprovalError, match="hash"):
         a.decide(p.id, LOCAL_ORGANIZER, True)
     assert em.ledger_entries(pid) == []
-    a.queue._items[p.id] = p
+    store_args(p.args)
     assert a.decide(p.id, LOCAL_ORGANIZER, False).status == "rejected"
     with pytest.raises(ApprovalError, match="already rejected"):
         a.decide(p.id, LOCAL_ORGANIZER, True)

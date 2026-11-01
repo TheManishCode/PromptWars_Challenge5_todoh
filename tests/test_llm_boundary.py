@@ -1,5 +1,6 @@
 """Phase 4.5: the boundary holds against a model that obeys every instruction it is shown (an obedient, fully compromised model)."""
 
+import json
 import re
 from pathlib import Path
 
@@ -106,7 +107,8 @@ def test_the_approval_summary_is_built_by_code_from_the_validated_arguments(em, 
 def test_the_stored_arguments_are_validated_again_when_applied(em, pid):
     a, _ = make(em, tool("propose_ledger_entry", kind="payment", category="caterer", amount=5000), answer("filed", "propose_ledger_entry"))
     p = a.ask("record a payment of 5000 for the caterer", pid, LOCAL_ORGANIZER).proposals[0]
-    a.queue._items[p.id] = p.model_copy(update={"args": {**p.args, "amount": -1}, "content_sha256": p.content_sha256})
+    with a.queue._db() as c:  # tamper with the stored proposal after the fact (the queue is durable now, so the row is the thing to change)
+        c.execute("UPDATE proposals SET args = ? WHERE id = ?", (json.dumps({**p.args, "amount": -1}, sort_keys=True), p.id))
     with pytest.raises(ApprovalError, match="hash"):
         a.decide(p.id, LOCAL_ORGANIZER, True)
     assert em.ledger_entries(pid) == []

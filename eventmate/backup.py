@@ -75,6 +75,10 @@ def make_backup(data_dir: Path, destination: Path, now: Optional[datetime] = Non
                 continue  # a SQLite side file is part of its database and is never copied on its own: the database is copied below with SQLite's own backup
             elif path.name.endswith(".db"):
                 _copy_db(path, target)  # jobs.db and any other per-workspace database: a raw copy of a live WAL database can mix two moments and be torn (F-017)
+            elif path.is_file() and path.suffix == ".db":
+                _copy_db(path, target)  # SQLite's own online backup: a byte copy of a database that is being written (WAL mode) can be torn
+            elif path.is_file() and path.name.endswith(("-wal", "-shm")):
+                continue  # folded into the database by the online backup above
             elif path.is_file():
                 target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 shutil.copy2(path, target)

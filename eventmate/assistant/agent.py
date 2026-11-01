@@ -78,7 +78,7 @@ class Assistant:
         log_dir = log_dir or em.logs.decisions.log_dir
         run_id = run_id or em.logs.decisions.run_id
         self.traces = TraceLog(log_dir, run_id)
-        self.queue = ApprovalQueue(ProposalLog(log_dir, run_id))
+        self.queue = ApprovalQueue(ProposalLog(log_dir, run_id), db=Path(log_dir) / "assistant_approvals.db")  # durable: a proposal waiting for a click survives a restart
         self.prompt_body, self.prompt_version = self.prompts.load(PROMPT_ID)
         self.prompt_sha = sha(self.prompt_body)
         self.policy = policy or guard.load_policy()
@@ -101,6 +101,7 @@ class Assistant:
         self.sessions.clear_plan(plan_id)
         self.cache.clear()
         self.annotations.drop_plan(plan_id)
+        self.queue.forget_plan(plan_id)
 
     # ------------------------------------------------------------------ ask
 
