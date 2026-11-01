@@ -10,7 +10,7 @@ from typing import Optional, Tuple
 NAME_MIN, NAME_MAX = 2, 24
 _ALLOWED_PUNCT = frozenset(" -'’.")
 _STRIP_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"})  # control, format (zero-width, bidi), surrogate, private, unassigned, line/paragraph separators
-_URLISH = re.compile(r"(?i)(?:https?|ftp|www)\b|\b[\w-]+\s*(?:\.|dot)\s*(?:com|net|org|in|io|co|me|xyz|app|dev|ly|gg|tv|info|biz|ru|cn)\b|\b(?:at|@)\s*[\w-]+\s*(?:\.|dot)")
+_URLISH = re.compile(r"(?i)(?:https?|ftp|www)\b|\b[\w-]{1,63}\s{0,3}(?:\.|dot)\s{0,3}(?:com|net|org|in|io|co|me|xyz|app|dev|ly|gg|tv|info|biz|ru|cn)\b|\b(?:at|@)\s{0,3}[\w-]{1,63}\s{0,3}(?:\.|dot)")  # bounded: the sweep in test_regex_time flagged the unbounded form
 _LEET = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "$": "s", "!": "i"})
 BLOCKLIST_PATH = Path(__file__).resolve().parent.parent / "data" / "wall_blocklist.txt"
 _FAMILY = {"HIRAGANA": "cjk", "KATAKANA": "cjk", "CJK": "cjk", "HANGUL": "hangul"}
