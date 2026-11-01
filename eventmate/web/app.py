@@ -13,9 +13,9 @@ import secrets
 import sys
 import threading
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable
 from flask import Flask, Response, abort, g, jsonify, request
 from werkzeug.local import LocalProxy
 from eventmate import arcade_pulse as _pulse_mod
@@ -56,19 +56,19 @@ from eventmate.web.routes import assistant_plans, errors, ideas_sourcing, ledger
 
 
 def create_app(
-    em: Optional[EventMate] = None,
-    api_token: Optional[str] = None,
+    em: EventMate | None = None,
+    api_token: str | None = None,
     rate_limit_per_minute: int = 60,
     today_fn: Callable[[], date] = date.today,
-    allowed_hosts: Optional[set] = None,
-    assistant: Optional[Assistant] = None,
+    allowed_hosts: set | None = None,
+    assistant: Assistant | None = None,
     principal: Principal = LOCAL_ORGANIZER,
-    poll_seconds: Optional[float] = None,
-    voice: Optional[VoiceService] = None,
-    transcriber: Optional[Transcriber] = None,
-    registry: Optional[WorkspaceRegistry] = None,
-    wall_store: Optional[WallStore] = None,
-    wall_limits: Optional[WallLimits] = None,
+    poll_seconds: float | None = None,
+    voice: VoiceService | None = None,
+    transcriber: Transcriber | None = None,
+    registry: WorkspaceRegistry | None = None,
+    wall_store: WallStore | None = None,
+    wall_limits: WallLimits | None = None,
 ) -> Flask:
     """Local mode (no ``registry``): one workspace, as before. Shared mode: ``registry`` gives every visitor a workspace of their own, found from a cookie."""
 
@@ -78,7 +78,7 @@ def create_app(
 
     shared = registry is not None
 
-    local: Optional[Workspace] = None
+    local: Workspace | None = None
 
     if not shared:
         if em is None:
@@ -117,7 +117,7 @@ def create_app(
 
     started_at = time.time()
 
-    poll_state: Dict[str, object] = {"last": None, "failures": 0}  # for the owner status route: when the last background round finished, and how many failed
+    poll_state: dict[str, object] = {"last": None, "failures": 0}  # for the owner status route: when the last background round finished, and how many failed
 
     metrics = observe.Metrics()
 
@@ -143,7 +143,7 @@ def create_app(
     def caller() -> str:
         return limits.limiter_key(limits.client_address(request.remote_addr, request.headers.get("X-Forwarded-For"), proxies))  # counted per IPv4 address or per IPv6 /64
 
-    wall: Optional[Wall] = None
+    wall: Wall | None = None
 
     if os.environ.get("EVENTMATE_WALL", "on").lower() != "off":
         wall_db = Path(os.environ.get("EVENTMATE_WALL_DB") or (registry.root if shared else local.em.store.root.parent) / "wall_data" / "wall.sqlite3")
@@ -298,7 +298,7 @@ def create_app(
             raise ValueError("invalid plan id")
         return plan_id
 
-    def version_arg(name: str = "version") -> Optional[int]:
+    def version_arg(name: str = "version") -> int | None:
         raw = request.args.get(name)
         if raw is None:
             return None
@@ -377,7 +377,7 @@ def create_app(
             try:
                 with local.lock:
                     local.em.background_round()
-                poll_state["last"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                poll_state["last"] = datetime.now(UTC).isoformat(timespec="seconds")
             except Exception as exc:  # one failed round must not end the agent; the next round retries
                 poll_state["failures"] += 1
                 print(f"conversation poll failed: {type(exc).__name__}", file=sys.stderr)

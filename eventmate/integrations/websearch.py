@@ -14,7 +14,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from typing import Callable, List
+from typing import Callable
 
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
 
@@ -46,7 +46,7 @@ def _http_url(url: str) -> bool:
 class SearchProvider:
     name = "none"
 
-    def search(self, query: str, limit: int = 8) -> List[SearchHit]:
+    def search(self, query: str, limit: int = 8) -> list[SearchHit]:
         raise NotImplementedError
 
 
@@ -63,7 +63,7 @@ class DuckDuckGoHtml(SearchProvider):
     def __init__(self, transport: Callable[[str], str] = _ddg_post):
         self._transport = transport
 
-    def search(self, query: str, limit: int = 8) -> List[SearchHit]:
+    def search(self, query: str, limit: int = 8) -> list[SearchHit]:
         try:
             page = self._transport(query)
         except urllib.error.HTTPError as exc:  # before NETWORK_ERRORS: HTTPError is an OSError too, and its status says what to do
@@ -74,7 +74,7 @@ class DuckDuckGoHtml(SearchProvider):
             raise SearchError(f"the web search was refused (HTTP {exc.code})") from None
         except NETWORK_ERRORS:
             raise SearchError("the web search could not be reached; try again shortly") from None
-        hits: List[SearchHit] = []
+        hits: list[SearchHit] = []
         for block in re.split(r'(?=<div class="result[ "])', page):
             if 'class="result' not in block[:40] or "result--ad" in block[:80]:
                 continue
@@ -109,7 +109,7 @@ class BraveSearch(SearchProvider):
     def __repr__(self) -> str:
         return "BraveSearch(key=<hidden>)"
 
-    def search(self, query: str, limit: int = 8) -> List[SearchHit]:
+    def search(self, query: str, limit: int = 8) -> list[SearchHit]:
         url = "https://api.search.brave.com/res/v1/web/search?" + urllib.parse.urlencode({"q": query, "count": min(limit, 20), "country": "in"})
         try:
             raw = self._transport(url, {"X-Subscription-Token": self._key, "Accept": "application/json", "User-Agent": "EventMate/0.1"})
@@ -143,7 +143,7 @@ class FallbackSearch(SearchProvider):
     def name(self) -> str:
         return self.last_used or "+".join(p.name for p in self.providers)
 
-    def search(self, query: str, limit: int = 8) -> List[SearchHit]:
+    def search(self, query: str, limit: int = 8) -> list[SearchHit]:
         errors = []
         for p in self.providers:
             try:
@@ -161,13 +161,13 @@ class MergedSearch(SearchProvider):
 
     def __init__(self, providers):
         self.providers = list(providers)
-        self.used: List[str] = []
+        self.used: list[str] = []
 
     @property
     def name(self) -> str:
         return "+".join(self.used) if self.used else "+".join(p.name for p in self.providers)
 
-    def search(self, query: str, limit: int = 8) -> List[SearchHit]:
+    def search(self, query: str, limit: int = 8) -> list[SearchHit]:
         answers, errors, used = [], [], []
         for p in self.providers:
             try:

@@ -14,7 +14,6 @@ Deterministic by construction: one worker, fixed seed.
 from __future__ import annotations
 
 import time
-from typing import Dict, Optional, Set
 
 from ortools.sat.python import cp_model
 
@@ -27,7 +26,7 @@ MAX_TIMEOUT_S = 120.0
 def solve_schedule(
     spec: ScheduleSpec,
     timeout_s: float = 10.0,
-    tool_log: Optional[ToolCallLog] = None,
+    tool_log: ToolCallLog | None = None,
     request_id: str = "unknown",
 ) -> ScheduleSolution:
     if not 0 < timeout_s <= MAX_TIMEOUT_S:
@@ -46,11 +45,11 @@ def solve_schedule(
     return solution
 
 
-def _solve(spec: ScheduleSpec, timeout_s: float, enforce: Optional[Set[str]] = None) -> ScheduleSolution:
+def _solve(spec: ScheduleSpec, timeout_s: float, enforce: set[str] | None = None) -> ScheduleSolution:
     model = cp_model.CpModel()
     horizon = spec.horizon
     starts, ends, intervals = {}, {}, {}
-    assumptions: Dict[str, cp_model.IntVar] = {}
+    assumptions: dict[str, cp_model.IntVar] = {}
 
     def guard(label: str):
         lit = model.NewBoolVar(label)
@@ -116,7 +115,7 @@ def _solve(spec: ScheduleSpec, timeout_s: float, enforce: Optional[Set[str]] = N
     return ScheduleSolution(status="error", detail=f"solver stopped with {solver.StatusName(code)}")
 
 
-def _minimise_core(spec: ScheduleSpec, timeout_s: float, core: Set[str]) -> Set[str]:
+def _minimise_core(spec: ScheduleSpec, timeout_s: float, core: set[str]) -> set[str]:
     """Deletion-based shrink: drop each named constraint that is not needed for infeasibility.
 
     CP-SAT's core is sufficient but not minimal; a minimal one names the real conflict.

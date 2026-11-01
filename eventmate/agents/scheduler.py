@@ -9,7 +9,7 @@ in prompts. Time is whole minutes from ``origin`` (midnight of the planning day)
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Sequence
 
 from pydantic import Field
 
@@ -49,7 +49,7 @@ class EventPolicy(_Model):
     teardown_minutes: int = Field(default=120, ge=1)
     setup_buffer_minutes: int = Field(default=30, ge=0)
     # event type -> (start hour, duration minutes)
-    event_defaults: Dict[str, Tuple[int, int]] = {
+    event_defaults: dict[str, tuple[int, int]] = {
         EventType.ENGAGEMENT_PARTY.value: (18, 240),
         EventType.WEDDING.value: (17, 360),
         EventType.BIRTHDAY.value: (18, 180),
@@ -59,7 +59,7 @@ class EventPolicy(_Model):
         EventType.OTHER.value: (18, 180),
     }
 
-    def event_window(self, request) -> Tuple[int, int]:
+    def event_window(self, request) -> tuple[int, int]:
         """(start hour, minutes) of the event. A community event reads it from its profile (data), every other type from ``event_defaults``."""
         if request.event_type == EventType.COMMUNITY:
             from eventmate.planning.community import profile_for
@@ -72,7 +72,7 @@ class EventPolicy(_Model):
 class SchedulingAgent:
     agent_name = AgentName.SCHEDULER
 
-    def __init__(self, logger: DecisionLogger, policy: Optional[EventPolicy] = None):
+    def __init__(self, logger: DecisionLogger, policy: EventPolicy | None = None):
         self.logger = logger
         self.policy = policy or EventPolicy()
 
@@ -83,8 +83,8 @@ class SchedulingAgent:
         request: EventRequest,
         categories: Sequence[VendorCategory],
         origin: datetime,
-        fixed_starts: Optional[Dict[str, int]] = None,
-        now_offset: Optional[int] = None,
+        fixed_starts: dict[str, int] | None = None,
+        now_offset: int | None = None,
     ) -> ScheduleSpec:
         p = self.policy
         now = p.work_start_hour * 60 if now_offset is None else now_offset
@@ -92,8 +92,8 @@ class SchedulingAgent:
         start_hour, event_minutes = p.event_window(request)
         event_start = day0 + start_hour * 60
         has = set(categories)
-        tasks: List[ScheduleTask] = []
-        deps: List[ScheduleDependency] = []
+        tasks: list[ScheduleTask] = []
+        deps: list[ScheduleDependency] = []
 
         def task(id_, name, minutes, **kw):
             tasks.append(ScheduleTask(id=id_, name=name, duration=minutes, **kw))
@@ -155,7 +155,7 @@ class SchedulingAgent:
         task("teardown", "Teardown", p.teardown_minutes, resource="venue", **day)
         dep("event", "teardown")
 
-        for tid, start in (fixed_starts or {}).items():
+        for tid, _start in (fixed_starts or {}).items():
             if tid not in {t.id for t in tasks}:
                 raise ValueError(f"cannot fix unknown task {tid!r}")
         # A confirmed booking already happened. It cannot be ordered after a step that has not
@@ -186,7 +186,7 @@ class SchedulingAgent:
     # ----------------------------------------------------------- results
 
     @staticmethod
-    def to_items(spec: ScheduleSpec, solution: ScheduleSolution, origin: datetime) -> Tuple[PlanItem, ...]:
+    def to_items(spec: ScheduleSpec, solution: ScheduleSolution, origin: datetime) -> tuple[PlanItem, ...]:
         by_id = {t.id: t for t in spec.tasks}
         items = [
             PlanItem(
@@ -207,9 +207,9 @@ class SchedulingAgent:
         request: EventRequest,
         categories: Sequence[VendorCategory],
         origin: datetime,
-        fixed_starts: Optional[Dict[str, int]] = None,
-        now_offset: Optional[int] = None,
-    ) -> List[ConstraintViolation]:
+        fixed_starts: dict[str, int] | None = None,
+        now_offset: int | None = None,
+    ) -> list[ConstraintViolation]:
         """Name the violated rule and, where the solver can prove one, a feasible later date."""
         core = set(solution.infeasibility_core)
         p = self.policy
@@ -222,7 +222,7 @@ class SchedulingAgent:
         elif any("activity_" in c for c in core):
             constraint = "program_does_not_fit"
             _, event_minutes = p.event_window(request)
-            totals: Dict[str, int] = {}
+            totals: dict[str, int] = {}
             for a in (request.community.program if request.community else ()):
                 totals[a.resource] = totals.get(a.resource, 0) + a.minutes
             crowded = sorted((r for r, m in totals.items() if m > event_minutes), key=lambda r: -totals[r])
@@ -260,10 +260,10 @@ class SchedulingAgent:
         request: EventRequest,
         categories: Sequence[VendorCategory],
         origin: datetime,
-        fixed_starts: Optional[Dict[str, int]] = None,
-        now_offset: Optional[int] = None,
+        fixed_starts: dict[str, int] | None = None,
+        now_offset: int | None = None,
         horizon_days: int = 365,
-    ) -> Optional[date]:
+    ) -> date | None:
         """Binary search the (monotone) feasibility of the event date with the real solver.
 
         ``now_offset`` is the planning "now" (minutes from origin): during a replan the search must

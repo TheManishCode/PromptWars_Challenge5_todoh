@@ -4,7 +4,7 @@ import hashlib
 import sqlite3
 import threading
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 
@@ -368,7 +368,7 @@ def test_never_a_hidden_marks_slot_and_removed_tombstones_are_valid_targets(tmp_
     store.hide(ids[3])
     store.remove(ids[4])
     seen = set()
-    for k in range(40):
+    for _k in range(40):
         r = store.issue_round(h(30), "untimed")
         assert r["available"], r
         seen.add(r["to_slot"])
@@ -713,7 +713,7 @@ def test_newest_order_pages_and_never_shows_non_opted_in_marks(tmp_path):
 def test_the_period_resets_ranked_times_only_and_on_first_use_in_the_new_month(tmp_path):
     # 2026-11-30 18:29 UTC is 23:59 IST; one minute later it is December in Asia/Calcutta
     store, clock = make_wall(tmp_path, section_capacity=30)
-    clock.t = datetime(2026, 11, 30, 18, 28, tzinfo=timezone.utc)
+    clock.t = datetime(2026, 11, 30, 18, 28, tzinfo=UTC)
     mid = visitor(store, 1, "Keeper")
     played(store, clock, 1, wait_ms=500)
     store.set_hall(h(1), True)
@@ -730,10 +730,10 @@ def test_the_period_resets_ranked_times_only_and_on_first_use_in_the_new_month(t
 
 def test_the_period_follows_the_server_zone_and_year_end_and_weeks(tmp_path):
     store, _ = make_wall(tmp_path)
-    p = store.period_at(int(datetime(2026, 12, 31, 20, 0, tzinfo=timezone.utc).timestamp() * 1000))
+    p = store.period_at(int(datetime(2026, 12, 31, 20, 0, tzinfo=UTC).timestamp() * 1000))
     assert p["id"] == "2027-01" and p["ends_at"] == "2027-01-31T18:30:00Z"
     weekly, _ = make_wall(tmp_path / "w", hall_kind="week")
-    w = weekly.period_at(int(datetime(2026, 11, 1, 6, 0, tzinfo=timezone.utc).timestamp() * 1000))
+    w = weekly.period_at(int(datetime(2026, 11, 1, 6, 0, tzinfo=UTC).timestamp() * 1000))
     assert w == {"id": "2026-W44", "kind": "week", "starts_at": "2026-10-25T18:30:00Z", "ends_at": "2026-11-01T18:30:00Z"}
 
 

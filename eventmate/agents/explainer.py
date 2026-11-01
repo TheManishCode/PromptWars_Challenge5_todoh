@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import re
 import time
-from typing import List, Optional
 
 from eventmate.llm import LLMClient, PromptError, PromptStore, guard_rewrite
 from eventmate.logs import RunLogs
@@ -37,7 +36,7 @@ class Explanation(_Model):
     version: int
     markdown: str
     used_llm: bool = False
-    llm_rejection_reason: Optional[str] = None
+    llm_rejection_reason: str | None = None
 
 
 def _esc(text: str) -> str:
@@ -58,12 +57,12 @@ def _when(dt) -> str:
 class ExplainerAgent:
     agent_name = AgentName.EXPLAINER
 
-    def __init__(self, logs: RunLogs, llm: Optional[LLMClient] = None, prompts: Optional[PromptStore] = None):
+    def __init__(self, logs: RunLogs, llm: LLMClient | None = None, prompts: PromptStore | None = None):
         self.logs = logs
         self.llm = llm
         self.prompts = prompts or PromptStore()
 
-    def explain(self, plan: PlanVersion, diff: Optional[PlanDiff] = None, community=None, verification: Optional[dict] = None) -> Explanation:
+    def explain(self, plan: PlanVersion, diff: PlanDiff | None = None, community=None, verification: dict | None = None) -> Explanation:
         markdown = self._render(plan, diff, community, verification)
         used, reason = False, None
         if self.llm is not None:
@@ -113,10 +112,10 @@ class ExplainerAgent:
 
     # ------------------------------------------------------------- render
 
-    def _render(self, plan: PlanVersion, diff: Optional[PlanDiff], community=None, verification: Optional[dict] = None) -> str:
+    def _render(self, plan: PlanVersion, diff: PlanDiff | None, community=None, verification: dict | None = None) -> str:
         r = plan.request
         vstatus = verification or {"state": "verified" if plan.validation.fully_verified else "needs_verification", "label": plan.validation.verification_label(), "items": [{"detail": u.detail, "repair": u.repair} for u in plan.validation.blocking_unverified()]}
-        out: List[str] = [
+        out: list[str] = [
             f"# {_esc(r.event_type.value.replace('_', ' ').title())} in {_esc(r.city)} on {r.event_date.strftime('%d %b %Y')}",
             "",
             f"Plan `{plan.plan_id}` version {plan.version}"
@@ -174,7 +173,7 @@ class ExplainerAgent:
         return "\n".join(out).rstrip() + "\n"
 
     @staticmethod
-    def _community_section(c) -> List[str]:
+    def _community_section(c) -> list[str]:
         """What was checked, what could not be decided, and what only the user can mark. Never says safe, compliant or approved."""
         out = ["## Community checks", f"- {_esc(c.profile_label)} (profile v{c.profile_version}{', not reviewed by any authority' if not c.profile_reviewed else ''})"]
         out += [f"- {'Checked and passed' if k.passed else 'FAILED'}: {_esc(k.name.replace('_', ' '))}: {_esc(k.detail)}" for k in c.checks]
@@ -187,7 +186,7 @@ class ExplainerAgent:
         return out + [""]
 
     @staticmethod
-    def _render_diff(diff: PlanDiff) -> List[str]:
+    def _render_diff(diff: PlanDiff) -> list[str]:
         def line(i: DiffItem, sign: str) -> str:
             if sign == "~":
                 text = f"{_esc(i.key)}: {_esc(i.before or '-')} -> {_esc(i.after or '-')}"

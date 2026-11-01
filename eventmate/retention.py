@@ -13,9 +13,8 @@ import os
 import re
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Dict, List, Optional
 
 PLAN_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 LOG_FILE = re.compile(r"(?:decisions|tool_calls|llm_traces|validation_failures|assistant_[a-z]+)-[A-Za-z0-9_-]{1,64}\.jsonl(?:\.\d{8}T\d{6}Z-\d{1,4})?")  # a rotated log is still a log
@@ -65,14 +64,14 @@ def delete_plan_files(root: Path, plan_id: str) -> int:
     return gone + wipe(Path(root) / "guests" / f"guests-{plan_id}.json")  # the imported guest list holds names: overwritten, then removed
 
 
-def purge_old_logs(log_dir: Path, max_age_days: Optional[int] = None, now: Optional[float] = None) -> List[str]:
+def purge_old_logs(log_dir: Path, max_age_days: int | None = None, now: float | None = None) -> list[str]:
     """Delete run logs not modified for ``max_age_days`` (default ``EVENTMATE_LOG_RETENTION_DAYS``, else 90). Returns the names removed."""
     if max_age_days is None:
         max_age_days = int(os.environ.get("EVENTMATE_LOG_RETENTION_DAYS", DEFAULT_LOG_RETENTION_DAYS))
     if max_age_days < 1:
         raise ValueError("retention must be at least 1 day")
     cutoff = (time.time() if now is None else now) - max_age_days * 86400
-    removed: List[str] = []
+    removed: list[str] = []
     for p in sorted(Path(log_dir).iterdir()):
         if LOG_FILE.fullmatch(p.name) and not p.is_symlink() and p.is_file() and p.stat().st_mtime < cutoff:
             _unlink(p)
@@ -80,10 +79,10 @@ def purge_old_logs(log_dir: Path, max_age_days: Optional[int] = None, now: Optio
     return removed
 
 
-def write_tombstone(path: Path, kind: str, ident: str, now: Optional[datetime] = None, workspace: Optional[str] = None) -> None:
+def write_tombstone(path: Path, kind: str, ident: str, now: datetime | None = None, workspace: str | None = None) -> None:
     """One line saying that something was deleted and when: ``{kind, id, deleted_at}`` and nothing else, so the deletion is provable and no content survives in it.
     The server's own deletion log also names the (opaque) workspace a plan was in, because a restore needs to know where to remove it."""
-    doc = {"kind": kind, "id": ident, "deleted_at": (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")}
+    doc = {"kind": kind, "id": ident, "deleted_at": (now or datetime.now(UTC)).isoformat(timespec="seconds")}
     if workspace:
         doc["workspace"] = workspace
     line = json.dumps(doc, sort_keys=True) + "\n"
@@ -131,7 +130,7 @@ def scrub_plan_from_logs(log_dir: Path, plan_id: str) -> int:
 TEMP_NAME = re.compile(r"\.(?:tmp|heads|scrub)-[A-Za-z0-9_.-]+")
 
 
-def sweep_stale_temp(*dirs: Path, max_age_s: float = 600.0, now: Optional[float] = None) -> List[str]:
+def sweep_stale_temp(*dirs: Path, max_age_s: float = 600.0, now: float | None = None) -> list[str]:
     """Remove temporary files a crash left behind (a half-written guest list holds names, a half-written plan holds the plan). Only files older than ``max_age_s``
     are touched, so a write that is happening right now in another process is safe; each is overwritten before it is unlinked."""
     cutoff, removed = (time.time() if now is None else now) - max_age_s, []
@@ -150,5 +149,5 @@ def sweep_stale_temp(*dirs: Path, max_age_s: float = 600.0, now: Optional[float]
     return removed
 
 
-def report(versions: int, files: int, jobs: int) -> Dict[str, int]:
+def report(versions: int, files: int, jobs: int) -> dict[str, int]:
     return {"plan_versions": versions, "message_and_ledger_files": files, "jobs": jobs}

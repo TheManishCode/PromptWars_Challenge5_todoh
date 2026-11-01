@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 from pydantic import Field, ValidationError, field_validator, model_validator
 
@@ -42,13 +41,13 @@ class RulePack(_Model):
     version: int = Field(ge=1)
     source: str = Field(min_length=1, max_length=200)
     reviewed: bool
-    reviewed_by: Optional[str] = Field(default=None, max_length=120)
-    items: Tuple[PackItem, ...] = Field(min_length=1, max_length=20)
+    reviewed_by: str | None = Field(default=None, max_length=120)
+    items: tuple[PackItem, ...] = Field(min_length=1, max_length=20)
 
     _check = field_validator("source", "reviewed_by")(lambda v: v if v is None else _plain(v))
 
     @model_validator(mode="after")
-    def _review_needs_a_reviewer(self) -> "RulePack":
+    def _review_needs_a_reviewer(self) -> RulePack:
         if self.reviewed and not self.reviewed_by:
             raise ValueError("a pack marked reviewed must name who reviewed it")
         return self
@@ -65,7 +64,7 @@ class Advisory(_Model):
     advisory: bool = True  # always true: these never act as constraints
 
 
-def load_packs(path: Optional[Path] = None) -> List[RulePack]:
+def load_packs(path: Path | None = None) -> list[RulePack]:
     path = Path(path) if path else PACK_FILE
     try:
         if path.stat().st_size > MAX_PACK_BYTES:
@@ -82,7 +81,7 @@ def load_packs(path: Optional[Path] = None) -> List[RulePack]:
     return packs
 
 
-def advisories_for(request: EventRequest, packs: Optional[List[RulePack]] = None) -> List[Advisory]:
+def advisories_for(request: EventRequest, packs: list[RulePack] | None = None) -> list[Advisory]:
     packs = load_packs() if packs is None else packs
     wanted = set(request.dietary)
     return [

@@ -2,7 +2,7 @@
 
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import pytest
 
@@ -42,7 +42,7 @@ class World:
     def __init__(self, em, *replies, delay=0.0, **kw):
         self.model = Scripted(*replies, delay=delay)
         self.assistant = Assistant(em, {"large": self.model, "small": self.model})
-        self.now = [datetime(2026, 11, 1, 9, 0, tzinfo=timezone.utc)]
+        self.now = [datetime(2026, 11, 1, 9, 0, tzinfo=UTC)]
         self.mono = [0.0]
         self.svc = VoiceService(self.assistant, em, clock=lambda: self.now[0], mono=lambda: self.mono[0], **kw)
         self.n = 0

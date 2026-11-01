@@ -5,7 +5,7 @@ were already queued; and only the user lifts it.
 """
 
 import json
-from datetime import timedelta
+from datetime import timedelta, UTC
 
 import pytest
 
@@ -445,11 +445,11 @@ def test_a_bounce_never_blocks_a_different_address_at_the_same_domain(mail):
 # ---- the model
 
 def test_a_suppression_record_is_validated():
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    base = dict(suppression_id="s1", channel="email", value="a@b.example", reason="user", created_at=datetime.now(timezone.utc), created_by="Asha")
+    base = dict(suppression_id="s1", channel="email", value="a@b.example", reason="user", created_at=datetime.now(UTC), created_by="Asha")
     Suppression(**base)
-    for bad in ({"reason": "because"}, {"channel": "sms"}, {"lifted_at": datetime.now(timezone.utc)}, {"lifted_by": "Asha"}, {"lifted_at": datetime.now(timezone.utc), "lifted_by": "Asha"}, {"surprise": 1}):
+    for bad in ({"reason": "because"}, {"channel": "sms"}, {"lifted_at": datetime.now(UTC)}, {"lifted_by": "Asha"}, {"lifted_at": datetime.now(UTC), "lifted_by": "Asha"}, {"surprise": 1}):
         with pytest.raises(ValidationError):
             Suppression(**{**base, **bad})
 

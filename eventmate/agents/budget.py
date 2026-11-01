@@ -7,7 +7,6 @@ Prices come from vendor records via ``cost_for``; this agent never invents one.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
 
 from pydantic import Field, field_validator
 
@@ -32,12 +31,12 @@ from eventmate.schemas import (
 class BudgetPolicy(_Model):
     """Allocation weights in basis points (1 bp = 0.01%). Tunable, not prompt-driven."""
 
-    weights_bp: Dict[str, int] = {"venue": 3500, "caterer": 4000, "photographer": 1200}
+    weights_bp: dict[str, int] = {"venue": 3500, "caterer": 4000, "photographer": 1200}
     contingency_bp: int = Field(default=1000, ge=0, lt=10_000)
     # "comfortable" = the cheapest eligible set uses at most this share of the budget left after contingency
     comfortable_bp: int = Field(default=8500, gt=0, le=10_000)
 
-    def for_request(self, request: EventRequest) -> "BudgetPolicy":
+    def for_request(self, request: EventRequest) -> BudgetPolicy:
         """A community event uses its own profile's shares (data, adjustable by the user through cap_weights), not the wedding-style default."""
         if request.event_type != EventType.COMMUNITY:
             return self
@@ -47,7 +46,7 @@ class BudgetPolicy(_Model):
 
     @field_validator("weights_bp")
     @classmethod
-    def _weights_valid(cls, v: Dict[str, int]) -> Dict[str, int]:
+    def _weights_valid(cls, v: dict[str, int]) -> dict[str, int]:
         expected = {c.value for c in VendorCategory}
         if set(v) != expected:
             raise ValueError(f"weights_bp must define exactly {sorted(expected)}")
@@ -83,7 +82,7 @@ def compute_allocation(request: EventRequest, policy: BudgetPolicy) -> BudgetAll
 class BudgetAgent:
     agent_name = AgentName.BUDGET
 
-    def __init__(self, logger: DecisionLogger, policy: Optional[BudgetPolicy] = None):
+    def __init__(self, logger: DecisionLogger, policy: BudgetPolicy | None = None):
         self.logger = logger
         self.policy = policy or BudgetPolicy()
 
@@ -123,10 +122,10 @@ class BudgetAgent:
 
     # ----------------------------------------------------------- helpers
 
-    def _rebalance_violations(self, request, allocation, shortlists, empty) -> List[ConstraintViolation]:
+    def _rebalance_violations(self, request, allocation, shortlists, empty) -> list[ConstraintViolation]:
         """If an empty category is blocked only by its cap, say whether moving money fixes it."""
         usable = allocation.total - allocation.contingency
-        out: List[ConstraintViolation] = []
+        out: list[ConstraintViolation] = []
         for cat in empty:
             budget_only = [
                 r for r in shortlists[cat].rejected if {c.name for c in r.failed} == {"budget_cap"}

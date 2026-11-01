@@ -13,9 +13,9 @@ import os
 import secrets
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Callable, Iterable, Mapping, Optional
+from typing import Callable, Iterable, Mapping
 
 from eventmate.messaging.channels import Channel, ChannelError, OutcomeUnknown
 from eventmate.messaging.conversations import IST
@@ -55,7 +55,7 @@ class OwnerNotifier:
     def __init__(
         self, root: Path, digests: DigestStore, channel: Callable[[], Channel], jobs: Callable[[str], Iterable[Job]], names: Callable[[], Mapping[str, str]],
         vendor_addresses: Callable[[], set], own_addresses: Callable[[], set], killed: Callable[[], bool],
-        now: Callable[[], datetime] = lambda: datetime.now(timezone.utc), limits: NotifyLimits = NotifyLimits(),
+        now: Callable[[], datetime] = lambda: datetime.now(UTC), limits: NotifyLimits = NotifyLimits(),
     ):
         self.root = Path(root) / "notify"
         self.digests, self._channel, self._jobs, self._names = digests, channel, jobs, names
@@ -68,10 +68,10 @@ class OwnerNotifier:
     def _settings(self) -> _SettingFile:
         return _SettingFile(self.root, run_id="owner")
 
-    def _log(self) -> "_LogFile":
+    def _log(self) -> _LogFile:
         return _LogFile(self.root, run_id="owner")
 
-    def _latest(self) -> Optional[NotifySetting]:
+    def _latest(self) -> NotifySetting | None:
         items = self._settings().read()
         return items[-1] if items else None
 

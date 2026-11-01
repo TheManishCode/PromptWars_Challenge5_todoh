@@ -18,7 +18,6 @@ import sqlite3
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Optional
 
 from eventmate.plan_store import DEFAULT_PLAN_DIR
 from eventmate.wall.store import WallConfig, WallError, WallStore
@@ -26,7 +25,7 @@ from eventmate.wall.store import WallConfig, WallError, WallStore
 DEFAULT_DB = DEFAULT_PLAN_DIR.parent / "wall_data" / "wall.sqlite3"
 
 
-def db_path(arg: Optional[str]) -> Path:
+def db_path(arg: str | None) -> Path:
     return Path(arg or os.environ.get("EVENTMATE_WALL_DB") or DEFAULT_DB)
 
 
@@ -66,7 +65,7 @@ def restore_backup(src: Path, dest: Path, force: bool = False) -> None:
     WallStore(dest)  # opens it once: refuses a schema newer than this build
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="eventmate.wall_admin", description="Owner tools for the wall.")
     ap.add_argument("--db", help="wall database (default: EVENTMATE_WALL_DB or eventmate/wall_data/wall.sqlite3)")
     sub = ap.add_subparsers(dest="cmd", required=True)

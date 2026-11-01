@@ -15,7 +15,7 @@ import time
 import unicodedata
 import uuid
 from datetime import date
-from typing import Iterable, List, Literal, Optional, Sequence, Tuple
+from typing import Iterable, Literal, Sequence
 
 from pydantic import Field, ValidationError, field_validator
 
@@ -70,16 +70,16 @@ def _plain(v):
 class IntakeDraft(_Model):
     """What we know so far. Every field may be missing; a draft is never a plan input until confirmed."""
 
-    event_type: Optional[EventType] = None
-    community_subtype: Optional[str] = Field(default=None, pattern=r"^[a-z0-9_]{1,40}$")  # one of the community profiles (data), only for a community event
-    guest_count: Optional[int] = Field(default=None, ge=1, le=MAX_GUESTS)
-    city: Optional[str] = Field(default=None, min_length=1, max_length=80)
-    event_date: Optional[date] = None
-    budget_total: Optional[int] = Field(default=None, gt=0, le=MAX_BUDGET_INR)
-    dietary: Tuple[DietaryRequirement, ...] = ()
-    venue_setting: Optional[VenueSetting] = None
-    services: Tuple[VendorCategory, ...] = ()
-    reminders: Tuple[ReminderKind, ...] = ()
+    event_type: EventType | None = None
+    community_subtype: str | None = Field(default=None, pattern=r"^[a-z0-9_]{1,40}$")  # one of the community profiles (data), only for a community event
+    guest_count: int | None = Field(default=None, ge=1, le=MAX_GUESTS)
+    city: str | None = Field(default=None, min_length=1, max_length=80)
+    event_date: date | None = None
+    budget_total: int | None = Field(default=None, gt=0, le=MAX_BUDGET_INR)
+    dietary: tuple[DietaryRequirement, ...] = ()
+    venue_setting: VenueSetting | None = None
+    services: tuple[VendorCategory, ...] = ()
+    reminders: tuple[ReminderKind, ...] = ()
 
     _check = field_validator("city")(_plain)
 
@@ -97,7 +97,7 @@ class IntakeDraft(_Model):
             raise ValueError("city must be a short name: letters, spaces, '.', '-' and apostrophes only")
         return v
 
-    def missing(self) -> Tuple[str, ...]:
+    def missing(self) -> tuple[str, ...]:
         return tuple(f for f in REQUIRED if getattr(self, f) is None)
 
 
@@ -106,16 +106,16 @@ class IntakeChoice(_Model):
 
     field: Literal["guest_count", "budget_total", "event_date"]
     prompt: str = Field(max_length=120)
-    options: Tuple[str, ...] = Field(min_length=2, max_length=6)
+    options: tuple[str, ...] = Field(min_length=2, max_length=6)
 
 
 class IntakeTurn(_Model):
     draft: IntakeDraft
-    choices: Tuple[IntakeChoice, ...] = ()
-    missing: Tuple[str, ...] = ()
-    flags: Tuple[str, ...] = ()  # fields the AI filled that the parser could not corroborate: ask the user to check
-    notes: Tuple[str, ...] = ()
-    question: Optional[str] = None
+    choices: tuple[IntakeChoice, ...] = ()
+    missing: tuple[str, ...] = ()
+    flags: tuple[str, ...] = ()  # fields the AI filled that the parser could not corroborate: ask the user to check
+    notes: tuple[str, ...] = ()
+    question: str | None = None
     ready: bool = False
     source: str  # "llm:<model>" or "rule:parser"
 
@@ -123,16 +123,16 @@ class IntakeTurn(_Model):
 # ------------------------------------------------------------ deterministic
 
 
-def _rule_draft(text: str, today: date, notes: List[str], choices: List[IntakeChoice]) -> IntakeDraft:
+def _rule_draft(text: str, today: date, notes: list[str], choices: list[IntakeChoice]) -> IntakeDraft:
     """Best-effort field-by-field read of ``text`` with the deterministic parser; failures become notes."""
     t = unicodedata.normalize("NFKC", text)
-    problems: List[str] = []
-    assumptions: List[str] = []
+    problems: list[str] = []
+    assumptions: list[str] = []
     t = mgr._ascii_digits(t, problems, assumptions)
     guests = mgr._parse_guests(t, [])
     city = mgr._parse_city(t, (), [])
     when = mgr._parse_dates(t, today, problems, assumptions)
-    budget_problems: List[str] = []
+    budget_problems: list[str] = []
     budget = mgr._parse_budget(t, budget_problems)
     # only ambiguity or invalid values deserve a note; plain absence becomes a question
     notes.extend(p for p in problems if "not found" not in p and not p.startswith("multiple different event dates"))
@@ -241,7 +241,7 @@ def _llm_draft(llm: LLMClient, prompts: PromptStore, logs: RunLogs, message: str
         "message": _FENCE.sub("", Placeholders().mask(clean_message)),  # contact details never reach the model
         "community_subtypes": ", ".join(load_profiles().profiles),
     })
-    for attempt in range(1, _ATTEMPTS + 1):
+    for _attempt in range(1, _ATTEMPTS + 1):
         started = time.perf_counter()
         output, reason, draft = "", None, None
         try:
@@ -297,19 +297,19 @@ def _source_label(llm) -> str:
 
 def propose(
     messages: Sequence[str],
-    prior: Optional[IntakeDraft],
+    prior: IntakeDraft | None,
     today: date,
     known_cities: Iterable[str],
     logs: RunLogs,
-    llm: Optional[LLMClient] = None,
-    prompts: Optional[PromptStore] = None,
+    llm: LLMClient | None = None,
+    prompts: PromptStore | None = None,
 ) -> IntakeTurn:
     """Read the newest message, merge it into the reviewed draft and say what is still needed. Pure proposal."""
     clean = check_messages(messages)
     latest, prior = clean[-1], prior or IntakeDraft()
     known = tuple(known_cities)
-    notes: List[str] = []
-    choices: List[IntakeChoice] = []
+    notes: list[str] = []
+    choices: list[IntakeChoice] = []
     rules = _rule_draft(latest, today, notes, choices)
     source, flags = "rule:parser", ()
     new = rules
@@ -343,7 +343,7 @@ def propose(
     return IntakeTurn(draft=draft, choices=tuple(choices), missing=missing, flags=flags, notes=tuple(dict.fromkeys(notes)), question=question, ready=not missing, source=source)
 
 
-def check_messages(messages: Sequence[str]) -> List[str]:
+def check_messages(messages: Sequence[str]) -> list[str]:
     if not isinstance(messages, (list, tuple)) or not messages or len(messages) > MAX_MESSAGES:
         raise IntakeError(f"send between 1 and {MAX_MESSAGES} messages")
     clean = []
@@ -368,7 +368,7 @@ def to_request(draft: IntakeDraft, raw_text: str, today: date, source: str = "ru
     if (draft.event_date - today).days > mgr.MAX_EVENT_AHEAD_DAYS:
         raise IntakeError("event date is more than 3 years away")
     digest = hashlib.sha256(draft.model_dump_json().encode()).hexdigest()[:12]
-    assumptions: List[str] = [f"details approved by the user on the review card (read by {source}; draft sha256:{digest})"]
+    assumptions: list[str] = [f"details approved by the user on the review card (read by {source}; draft sha256:{digest})"]
     services = list(dict.fromkeys((VendorCategory.VENUE, *draft.services)))
     if VendorCategory.VENUE not in draft.services:
         assumptions.append("a venue is always required; added to services")

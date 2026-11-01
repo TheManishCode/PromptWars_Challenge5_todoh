@@ -22,15 +22,16 @@ import re
 import secrets
 import stat
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable
 
 from pydantic import Field, ValidationError
 
 from eventmate import migrations
 from eventmate.plan_store import PlanStore, _canonical, new_plan_id
 from eventmate.schemas import DealLead, Guest, LedgerEntry, PlanVersion, _Model
+import contextlib
 
 FORMAT = "todoh-export"
 SCHEMA = 1
@@ -68,7 +69,7 @@ class _FileEntry(_Model):
 
 class _PlanEntry(_Model):
     plan_id: str = Field(pattern=rf"^{PID}$")
-    versions: Tuple[Tuple[int, str], ...] = Field(max_length=MAX_VERSIONS)  # (version, the hash stored inside the version file)
+    versions: tuple[tuple[int, str], ...] = Field(max_length=MAX_VERSIONS)  # (version, the hash stored inside the version file)
 
 
 class Manifest(_Model):
@@ -76,9 +77,9 @@ class Manifest(_Model):
     schema_version: int
     exported_at: str = Field(max_length=40)
     contains_personal_data: bool
-    not_included: Tuple[str, ...] = Field(max_length=20)
-    files: Tuple[_FileEntry, ...] = Field(max_length=MAX_MEMBERS)
-    plans: Tuple[_PlanEntry, ...] = Field(max_length=MAX_PLANS)
+    not_included: tuple[str, ...] = Field(max_length=20)
+    files: tuple[_FileEntry, ...] = Field(max_length=MAX_MEMBERS)
+    plans: tuple[_PlanEntry, ...] = Field(max_length=MAX_PLANS)
 
 
 def _sha(data: bytes) -> str:
@@ -95,11 +96,11 @@ def _zipinfo(name: str) -> zipfile.ZipInfo:
 # --------------------------------------------------------------------------- export
 
 
-def export_workspace(em, now: Optional[datetime] = None) -> bytes:
+def export_workspace(em, now: datetime | None = None) -> bytes:
     """The archive for the workspace ``em`` belongs to. Plan versions are re-verified as they are read: a damaged one stops the export rather than being passed on."""
     root, store = Path(em.store.root), em.store
-    members: Dict[str, Tuple[bytes, str]] = {}
-    plans: List[_PlanEntry] = []
+    members: dict[str, tuple[bytes, str]] = {}
+    plans: list[_PlanEntry] = []
     for plan_id in store.list_plans():
         entry = []
         for plan in store.versions(plan_id):  # verifies the hash and the model of every version
@@ -119,7 +120,7 @@ def export_workspace(em, now: Optional[datetime] = None) -> bytes:
     if jobs:
         members["history/jobs.jsonl"] = ("".join(j.model_dump_json() + "\n" for j in jobs).encode("utf-8"), "jobs_history")
     manifest = Manifest(
-        format=FORMAT, schema_version=SCHEMA, exported_at=(now or datetime.now(timezone.utc)).isoformat(timespec="seconds"), contains_personal_data=True,
+        format=FORMAT, schema_version=SCHEMA, exported_at=(now or datetime.now(UTC)).isoformat(timespec="seconds"), contains_personal_data=True,
         not_included=("logs, traces and the assistant's memory", "answer caches", "any credential, key or recovery code", "send caps and the do-not-contact lists (they are not per plan)"),
         files=tuple(_FileEntry(path=n, sha256=_sha(d), bytes=len(d), kind=k, personal_data=n.startswith(PERSONAL)) for n, (d, k) in sorted(members.items())), plans=tuple(plans),
     )
@@ -134,7 +135,7 @@ def export_workspace(em, now: Optional[datetime] = None) -> bytes:
 # --------------------------------------------------------------------------- import: reading
 
 
-def _read_members(raw: bytes) -> Dict[str, bytes]:
+def _read_members(raw: bytes) -> dict[str, bytes]:
     if len(raw) > MAX_ARCHIVE:
         raise TransferError("archive_too_large", f"the archive is larger than {MAX_ARCHIVE // (1024 * 1024)} MB", 413)
     try:
@@ -178,14 +179,14 @@ def _json(data: bytes):
         raise TransferError("bad_json", "a file in the archive is not valid JSON") from None
 
 
-def _lines(data: bytes, limit: int = MAX_LINES) -> List[bytes]:
+def _lines(data: bytes, limit: int = MAX_LINES) -> list[bytes]:
     lines = [x for x in data.split(b"\n") if x.strip()]
     if len(lines) > limit:
         raise TransferError("too_many_records", "a file in the archive has too many records")
     return lines
 
 
-def _validated(members: Dict[str, bytes]) -> Tuple[Manifest, Dict[str, List[PlanVersion]]]:
+def _validated(members: dict[str, bytes]) -> tuple[Manifest, dict[str, list[PlanVersion]]]:
     try:
         manifest = Manifest.model_validate(_json(members["manifest.json"]))
     except ValidationError:
@@ -198,7 +199,7 @@ def _validated(members: Dict[str, bytes]) -> Tuple[Manifest, Dict[str, List[Plan
     for path, entry in listed.items():
         if _sha(members[path]) != entry.sha256 or len(members[path]) != entry.bytes:
             raise TransferError("tampered", "a file in the archive does not match its recorded hash")
-    plans: Dict[str, List[PlanVersion]] = {}
+    plans: dict[str, list[PlanVersion]] = {}
     for entry in manifest.plans:
         versions = []
         for number, recorded in entry.versions:
@@ -223,11 +224,11 @@ def _validated(members: Dict[str, bytes]) -> Tuple[Manifest, Dict[str, List[Plan
     return manifest, plans
 
 
-def _parse_records(members: Dict[str, bytes], plans: Dict[str, List[PlanVersion]]):
-    ledger: Dict[str, List[LedgerEntry]] = {}
-    leads: Dict[str, List[DealLead]] = {}
-    guests: Dict[str, Tuple[Guest, ...]] = {}
-    history: Dict[str, List[dict]] = {}
+def _parse_records(members: dict[str, bytes], plans: dict[str, list[PlanVersion]]):
+    ledger: dict[str, list[LedgerEntry]] = {}
+    leads: dict[str, list[DealLead]] = {}
+    guests: dict[str, tuple[Guest, ...]] = {}
+    history: dict[str, list[dict]] = {}
     try:
         for name, data in members.items():
             kind, _, rest = name.partition("/")
@@ -262,7 +263,7 @@ def _bad():
 # --------------------------------------------------------------------------- import: applying
 
 
-def _reverify(em, plans: Dict[str, List[PlanVersion]]) -> None:
+def _reverify(em, plans: dict[str, list[PlanVersion]]) -> None:
     """A hash proves the files agree with each other, not that anyone checked the plan: the model only demands ``validation.passed``, so an archive can carry a plan whose
     vendors, prices and checks were written by hand and would be shown as verified (F-010). Every version is therefore run through this application's own validator, against
     its own parent, before anything is written; a plan that does not pass here is refused. (A plan that only fails because the vendor data has moved on since it was made is
@@ -283,7 +284,7 @@ def _reverify(em, plans: Dict[str, List[PlanVersion]]) -> None:
                 raise TransferError("not_verified", f"plan {plan_id} version {plan.version} does not pass this application's own checks, so it was not imported")
 
 
-def import_archive(raw: bytes, em, now: Optional[datetime] = None, check_space: Optional[Callable[[int], None]] = None) -> dict:
+def import_archive(raw: bytes, em, now: datetime | None = None, check_space: Callable[[int], None] | None = None) -> dict:
     """Validate the whole archive, then write it into the workspace ``em``. Returns a report. Raises ``TransferError`` before writing anything for a bad archive.
     ``check_space`` is called with the size the archive will occupy once unpacked, before anything is written, so a quota can refuse it (F-013)."""
     members = _read_members(raw)
@@ -294,7 +295,7 @@ def import_archive(raw: bytes, em, now: Optional[datetime] = None, check_space: 
         check_space(sum(len(d) for d in members.values()))
     store: PlanStore = em.store
     taken = set(store.list_plans())
-    mapping: Dict[str, str] = {}
+    mapping: dict[str, str] = {}
     for old in plans:
         new = old
         while new in taken or new in mapping.values():
@@ -302,7 +303,7 @@ def import_archive(raw: bytes, em, now: Optional[datetime] = None, check_space: 
         taken.add(new)
         if new != old:
             mapping[old] = new
-    created: List[str] = []
+    created: list[str] = []
     counts = {"plans": 0, "versions": 0, "ledger_entries": 0, "guest_lists": 0, "leads": 0}
     marker = _write_marker(Path(store.root), [mapping.get(old, old) for old in plans])  # a crash from here to the end leaves this behind, and the next start rolls the import back
     try:
@@ -338,7 +339,7 @@ def import_archive(raw: bytes, em, now: Optional[datetime] = None, check_space: 
 PENDING = "import-pending-"
 
 
-def _write_marker(root: Path, plan_ids: List[str]) -> Path:
+def _write_marker(root: Path, plan_ids: list[str]) -> Path:
     """Before an import writes anything: which plan ids it is about to create (all brand new), and which process is doing it. Removed when the import ends either way."""
     path = root / f"{PENDING}{secrets.token_hex(6)}.json"
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -350,10 +351,8 @@ def _write_marker(root: Path, plan_ids: List[str]) -> Path:
 
 
 def _drop_marker(path: Path) -> None:
-    try:
+    with contextlib.suppress(FileNotFoundError):
         os.unlink(path)
-    except FileNotFoundError:
-        pass
 
 
 def _alive(pid: int) -> bool:
@@ -366,7 +365,7 @@ def _alive(pid: int) -> bool:
     return True
 
 
-def recover_interrupted_imports(em) -> List[str]:
+def recover_interrupted_imports(em) -> list[str]:
     """Roll back every import whose process died part-way (a crash, a kill, a power cut): the plans it listed are new ids nobody else could have used, so they are removed with
     everything attached to them, and the marker goes. An import that is still running (its process is alive) is left alone. Returns the plan ids removed."""
     root, removed = Path(em.store.root), []
@@ -396,12 +395,12 @@ def _undo(em, plan_id: str) -> None:
     em.store.delete(plan_id)
 
 
-def _keep_history(root: Path, history: Dict[str, List[dict]], mapping: Dict[str, str]) -> Dict[str, int]:
+def _keep_history(root: Path, history: dict[str, list[dict]], mapping: dict[str, str]) -> dict[str, int]:
     if not history:
         return {}
     home = root / "imported" / secrets.token_hex(6)
     home.mkdir(parents=True, exist_ok=True, mode=0o700)
-    kept: Dict[str, int] = {}
+    kept: dict[str, int] = {}
     for name, rows in history.items():
         label = name.replace("history/", "").replace("/", "-")
         for old, new in mapping.items():

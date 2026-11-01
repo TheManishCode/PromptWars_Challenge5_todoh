@@ -18,9 +18,9 @@ import os
 import re
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Sequence
 
 from eventmate.agents.vendor import DATA_DIR
 from eventmate.jsonl import JsonlLog
@@ -44,12 +44,12 @@ class ProfileError(Exception):
 class Profile:
     key: str
     label: str
-    keywords: Tuple[str, ...]
-    weights: Dict[str, int]
+    keywords: tuple[str, ...]
+    weights: dict[str, int]
     start_hour: int
     minutes: int
-    roles: Tuple[Tuple[str, str], ...]
-    always_items: Tuple[str, ...]
+    roles: tuple[tuple[str, str], ...]
+    always_items: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -57,8 +57,8 @@ class ItemDef:
     item_id: str
     title: str
     check_with: str
-    triggers: Tuple[str, ...]
-    when_service: Tuple[str, ...] = ()
+    triggers: tuple[str, ...]
+    when_service: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -66,8 +66,8 @@ class Profiles:
     version: int
     reviewed: bool
     default: str
-    profiles: Dict[str, Profile]
-    items: Tuple[ItemDef, ...]
+    profiles: dict[str, Profile]
+    items: tuple[ItemDef, ...]
 
     def get(self, subtype: str) -> Profile:
         if subtype not in self.profiles:
@@ -87,7 +87,7 @@ def _clean(text, what: str, limit: int = 200) -> str:
     return text.strip()
 
 
-def _parse_item_def(it, defs: List[ItemDef]) -> ItemDef:
+def _parse_item_def(it, defs: list[ItemDef]) -> ItemDef:
     if not isinstance(it, dict) or set(it) - {"id", "title", "check_with", "triggers", "when_service"}:
         _fail("a conditional item has unknown or missing fields")
     iid = it.get("id")
@@ -102,7 +102,7 @@ def _parse_item_def(it, defs: List[ItemDef]) -> ItemDef:
     return ItemDef(iid, _clean(it.get("title"), f"{iid}.title"), _clean(it.get("check_with"), f"{iid}.check_with"), trig, svc)
 
 
-def _parse_keywords(key: str, p: dict, seen_kw: Dict[str, str]) -> Tuple[str, ...]:
+def _parse_keywords(key: str, p: dict, seen_kw: dict[str, str]) -> tuple[str, ...]:
     kws = tuple(k.strip().lower() for k in p.get("keywords", []) if isinstance(k, str) and k.strip())
     if not kws or len(kws) != len(p.get("keywords", [])):
         _fail(f"{key}: keywords must be non-empty text")
@@ -113,7 +113,7 @@ def _parse_keywords(key: str, p: dict, seen_kw: Dict[str, str]) -> Tuple[str, ..
     return kws
 
 
-def _parse_profile(key: str, p, item_ids: set, seen_kw: Dict[str, str]) -> Profile:
+def _parse_profile(key: str, p, item_ids: set, seen_kw: dict[str, str]) -> Profile:
     if not _SLUG.fullmatch(key or "") or not isinstance(p, dict) or set(p) - {"label", "keywords", "budget_weights_bp", "event_window", "suggested_roles", "always_items"}:
         _fail(f"profile {key!r} has a bad name or unknown fields")
     kws = _parse_keywords(key, p, seen_kw)
@@ -136,11 +136,11 @@ def parse_profiles(doc) -> Profiles:
     raw = doc.get("profiles")
     if not isinstance(raw, dict) or not raw:
         _fail("no profiles")
-    defs: List[ItemDef] = []
+    defs: list[ItemDef] = []
     for it in doc.get("conditional_items", []):
         defs.append(_parse_item_def(it, defs))
     item_ids = {d.item_id for d in defs}
-    seen_kw: Dict[str, str] = {}
+    seen_kw: dict[str, str] = {}
     out = {key: _parse_profile(key, p, item_ids, seen_kw) for key, p in raw.items()}
     default = doc.get("default_subtype")
     if default not in out:
@@ -148,10 +148,10 @@ def parse_profiles(doc) -> Profiles:
     return Profiles(doc["version"], doc["reviewed"], default, out, tuple(defs))
 
 
-_CACHE: Dict[Tuple[str, str], Profiles] = {}
+_CACHE: dict[tuple[str, str], Profiles] = {}
 
 
-def load_profiles(path: Optional[Path] = None) -> Profiles:
+def load_profiles(path: Path | None = None) -> Profiles:
     """The validated profiles. Re-read when the file changes, so editing the data changes behaviour with no code edit."""
     path = Path(path or os.environ.get("EVENTMATE_COMMUNITY_PROFILES") or PROFILES_PATH)
     try:
@@ -177,10 +177,10 @@ def profile_for(request) -> Profile:
     return profiles.profiles.get(sub) or profiles.profiles[profiles.default]
 
 
-def match_subtype(text: str, profiles: Optional[Profiles] = None) -> Optional[Tuple[str, str]]:
+def match_subtype(text: str, profiles: Profiles | None = None) -> tuple[str, str] | None:
     """(subtype, keyword) for the longest profile keyword found in the text, or None. Keywords are whole words or phrases."""
     profiles = profiles or load_profiles()
-    best: Optional[Tuple[int, int, str, str]] = None
+    best: tuple[int, int, str, str] | None = None
     for order, (key, p) in enumerate(profiles.profiles.items()):
         for kw in p.keywords:
             if re.search(r"(?<![\w-])" + r"\s+".join(map(re.escape, kw.split())) + r"(?![\w-])", text, re.I):
@@ -201,7 +201,7 @@ class _AccessFile(JsonlLog[AccessRecord]):
 class AccessibilityStore:
     """What venues told the user, append-only. The latest record for a venue wins. Venue records themselves say nothing unless the seed data does."""
 
-    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
         self.root = Path(root) / "accessibility"
         self.now = now
         self._lock = threading.RLock()
@@ -214,12 +214,12 @@ class AccessibilityStore:
         with self._lock:
             return self._file()._append(rec, venue_id)
 
-    def latest(self, venue_id: str) -> Optional[AccessRecord]:
+    def latest(self, venue_id: str) -> AccessRecord | None:
         found = [r for r in self._file().read() if r.venue_id == venue_id]
         return found[-1] if found else None
 
-    def all(self) -> List[AccessRecord]:
-        latest: Dict[str, AccessRecord] = {}
+    def all(self) -> list[AccessRecord]:
+        latest: dict[str, AccessRecord] = {}
         for r in self._file().read():
             latest[r.venue_id] = r
         return list(latest.values())
@@ -238,9 +238,9 @@ def _hhmm(minutes: int, origin: datetime) -> str:
     return (origin + timedelta(minutes=minutes)).strftime("%H:%M")
 
 
-def _phase_windows(d: PlanDraft) -> Dict[str, Tuple[int, int]]:
+def _phase_windows(d: PlanDraft) -> dict[str, tuple[int, int]]:
     e = {x.task_id: x for x in d.solution.entries}
-    out: Dict[str, Tuple[int, int]] = {}
+    out: dict[str, tuple[int, int]] = {}
     for phase, task in (("setup", "venue_setup"), ("event", "event"), ("teardown", "teardown")):
         if task in e:
             out[phase] = (e[task].start, e[task].end)
@@ -276,14 +276,14 @@ def _funding(d: PlanDraft) -> ConstraintCheck:
     return _chk("funding_vs_budget", basis >= need, detail)
 
 
-def _shift_span(sh, ps: int, pe: int) -> Tuple[int, int]:
+def _shift_span(sh, ps: int, pe: int) -> tuple[int, int]:
     """A shift's absolute (start, end) minutes, clipped to its phase; an open end runs to the end of the phase."""
     return ps + sh.start_min, min(pe, ps + (sh.end_min if sh.end_min is not None else pe - ps))
 
 
-def _slot_problems(d: PlanDraft, det: CommunityDetails, windows: Dict[str, Tuple[int, int]]) -> List[str]:
+def _slot_problems(d: PlanDraft, det: CommunityDetails, windows: dict[str, tuple[int, int]]) -> list[str]:
     """Each confirmed slot must lie inside its phase and be covered by enough distinct volunteers for its whole length."""
-    problems: List[str] = []
+    problems: list[str] = []
     for slot in det.slots:
         if slot.phase not in windows:
             problems.append(f"{slot.role} ({slot.phase}): the plan has no {slot.phase} phase")
@@ -306,9 +306,9 @@ def _slot_problems(d: PlanDraft, det: CommunityDetails, windows: Dict[str, Tuple
     return problems
 
 
-def _double_booked(det: CommunityDetails, windows: Dict[str, Tuple[int, int]]) -> List[str]:
+def _double_booked(det: CommunityDetails, windows: dict[str, tuple[int, int]]) -> list[str]:
     """Volunteers with two overlapping shifts."""
-    spans: Dict[str, List[Tuple[int, int]]] = {}
+    spans: dict[str, list[tuple[int, int]]] = {}
     for sh in det.shifts:
         if sh.phase in windows:
             a, b = _shift_span(sh, *windows[sh.phase])
@@ -317,10 +317,10 @@ def _double_booked(det: CommunityDetails, windows: Dict[str, Tuple[int, int]]) -
     return sorted(who for who, s in spans.items() if any(s[i][0] < s[j][1] and s[j][0] < s[i][1] for i in range(len(s)) for j in range(i + 1, len(s))))
 
 
-def _volunteers(d: PlanDraft) -> Tuple[Optional[ConstraintCheck], List[UnverifiedItem]]:
+def _volunteers(d: PlanDraft) -> tuple[ConstraintCheck | None, list[UnverifiedItem]]:
     det = d.request.community or CommunityDetails()
     in_play = bool(det.volunteers or det.slots or det.shifts)
-    unverified: List[UnverifiedItem] = []
+    unverified: list[UnverifiedItem] = []
     if not in_play and not (det.setup_owner or det.cleanup_owner):
         unverified.append(UnverifiedItem(
             name="setup_cleanup_owners", detail="nobody is named to own setup and cleanup",
@@ -345,7 +345,7 @@ def _volunteers(d: PlanDraft) -> Tuple[Optional[ConstraintCheck], List[Unverifie
 
 def _timeline(d: PlanDraft, policy) -> ConstraintCheck:
     e = {x.task_id: x for x in d.solution.entries}
-    problems: List[str] = []
+    problems: list[str] = []
     if all(k in e for k in ("venue_setup", "event", "teardown")):
         if e["venue_setup"].end + policy.setup_buffer_minutes > e["event"].start:
             problems.append("setup does not finish before doors open")
@@ -354,7 +354,7 @@ def _timeline(d: PlanDraft, policy) -> ConstraintCheck:
     else:
         problems.append("setup, event or cleanup is missing from the schedule")
     det = d.request.community or CommunityDetails()
-    by_resource: Dict[str, List[Tuple[int, int, str]]] = {}
+    by_resource: dict[str, list[tuple[int, int, str]]] = {}
     for a in det.program:
         entry = e.get(f"activity_{a.activity_id}")
         if entry is None:
@@ -369,13 +369,13 @@ def _timeline(d: PlanDraft, policy) -> ConstraintCheck:
         by_resource.setdefault(a.resource, []).append((entry.start, entry.end, a.title))
     for res, spans in by_resource.items():
         spans.sort()
-        for (s1, e1, t1), (s2, e2, t2) in zip(spans, spans[1:]):
+        for (_s1, e1, t1), (s2, _e2, t2) in zip(spans, spans[1:]):
             if s2 < e1:
                 problems.append(f"{t1} and {t2} overlap on {res}")
     return _chk("timeline_dependencies", not problems, "setup ends before doors, cleanup follows the close" + (f", {len(det.program)} programme activities fit with no clash" if det.program else "") if not problems else "; ".join(problems))
 
 
-def _accessibility(d: PlanDraft, repo) -> Tuple[Optional[ConstraintCheck], List[UnverifiedItem]]:
+def _accessibility(d: PlanDraft, repo) -> tuple[ConstraintCheck | None, list[UnverifiedItem]]:
     det = d.request.community
     if det is None or not det.access_needs:
         return None, []
@@ -394,7 +394,7 @@ def _accessibility(d: PlanDraft, repo) -> Tuple[Optional[ConstraintCheck], List[
     return _chk("accessibility_declared", True, f"the venue declares: {', '.join(have)}"), []
 
 
-def evaluate(d: PlanDraft, repo, policy) -> Tuple[List[ConstraintCheck], List[UnverifiedItem]]:
+def evaluate(d: PlanDraft, repo, policy) -> tuple[list[ConstraintCheck], list[UnverifiedItem]]:
     """The community hard checks for a draft, re-derived from the request, the schedule and the database. (checks, unverified)."""
     if d.request.event_type.value != "community":
         return [], []
@@ -411,7 +411,7 @@ def evaluate(d: PlanDraft, repo, policy) -> Tuple[List[ConstraintCheck], List[Un
     return checks, unverified + unknown
 
 
-def summary(details: Optional[CommunityDetails]) -> str:
+def summary(details: CommunityDetails | None) -> str:
     """One line for the plan diff and the UI."""
     if details is None:
         return "none"
@@ -441,7 +441,7 @@ class _ChecklistFile(JsonlLog[ChecklistRecord]):
 class ChecklistStore:
     """The user's marks on conditional items. to;doh-the event planner writes here only when the user acts; nothing in this module marks an item itself."""
 
-    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
         self.root = Path(root) / "community"
         self.now = now
         self._lock = threading.RLock()
@@ -449,8 +449,8 @@ class ChecklistStore:
     def _file(self, plan_id: str) -> _ChecklistFile:
         return _ChecklistFile(self.root, run_id=plan_id)
 
-    def latest(self, plan_id: str) -> Dict[str, ChecklistRecord]:
-        out: Dict[str, ChecklistRecord] = {}
+    def latest(self, plan_id: str) -> dict[str, ChecklistRecord]:
+        out: dict[str, ChecklistRecord] = {}
         for r in self._file(plan_id).read():
             out[r.item_id] = r
         return out
@@ -471,7 +471,7 @@ class ChecklistStore:
             return self._file(plan_id)._append(rec, item_id)
 
 
-def shown_items(request, profiles: Optional[Profiles] = None) -> List[Tuple[ItemDef, Tuple[str, ...]]]:
+def shown_items(request, profiles: Profiles | None = None) -> list[tuple[ItemDef, tuple[str, ...]]]:
     """Conditional items for a request with what triggered each. Only an explicit "no" hides an item; "unsure" and unanswered show it."""
     profiles = profiles or load_profiles()
     det = request.community or CommunityDetails()
@@ -488,7 +488,7 @@ def shown_items(request, profiles: Optional[Profiles] = None) -> List[Tuple[Item
     return out
 
 
-def conditional_items(request, records: Dict[str, ChecklistRecord]) -> Tuple[ConditionalItem, ...]:
+def conditional_items(request, records: dict[str, ChecklistRecord]) -> tuple[ConditionalItem, ...]:
     items = []
     for d, why in shown_items(request):
         rec = records.get(d.item_id)

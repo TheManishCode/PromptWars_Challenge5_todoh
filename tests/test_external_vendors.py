@@ -1,6 +1,6 @@
 """External businesses (ADR-049): a discovered business has its own identity, is never a seed vendor, and is contactable only through a confirmed address."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import pytest
 from pydantic import ValidationError
@@ -74,7 +74,7 @@ def test_a_discovered_business_can_never_be_a_test_vendor_or_the_other_way_round
     for kwargs in (dict(source="test", external_id="osm:node/5"), dict(source="osm", external_id="test:me")):
         with pytest.raises((ValidationError, ValueError)):
             em.add_discovered(kwargs["external_id"], "N", "Pune", C.CATERER, kwargs["source"])
-    base = dict(vendor_id=external_vendor_id("osm:node/9"), external_id="osm:node/9", name="N", city="Pune", category=C.CATERER, source="osm", created_at=datetime.now(timezone.utc))
+    base = dict(vendor_id=external_vendor_id("osm:node/9"), external_id="osm:node/9", name="N", city="Pune", category=C.CATERER, source="osm", created_at=datetime.now(UTC))
     ExternalBusiness(**base)
     for bad in ({"is_test": True}, {"vendor_id": external_vendor_id("osm:node/10")}, {"source": "test"}, {"website": "javascript:alert(1)"}, {"source_url": "ftp://x"}, {"surprise": 1}, {"rating": 9.0}, {"name": "x\ny"}):
         with pytest.raises(ValidationError):

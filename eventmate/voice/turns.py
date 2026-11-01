@@ -17,8 +17,8 @@ import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Deque, Dict, Iterator, List, Optional
+from datetime import datetime, timedelta, UTC
+from typing import Any, Callable, Iterator
 
 from eventmate.assistant.approvals import ApprovalQueue
 from eventmate.assistant.identity import Principal
@@ -59,7 +59,7 @@ class Turn:
     text: str
     input_mode: str
     memory_user: str
-    confidence: Optional[float] = None
+    confidence: float | None = None
     staging: ApprovalQueue = field(default_factory=_staging_queue)
     state: str = "thinking"  # thinking (before the barrier) | answered (committed) | cancelled | interrupted | done
     result: Any = None
@@ -98,10 +98,10 @@ class Session:
     user_id: str
     created: datetime
     last_activity: datetime
-    turns: Dict[str, Turn] = field(default_factory=dict)
+    turns: dict[str, Turn] = field(default_factory=dict)
     generation: int = 0
-    turn_times: Deque[float] = field(default_factory=deque)
-    cancel_times: Deque[float] = field(default_factory=deque)
+    turn_times: deque[float] = field(default_factory=deque)
+    cancel_times: deque[float] = field(default_factory=deque)
     ended: bool = False
 
     @property
@@ -109,7 +109,7 @@ class Session:
         return f"{self.user_id}|voice|{self.session_id}"
 
 
-def _bounded(q: Deque[float], now: float, limit: int, window: float = 60.0) -> bool:
+def _bounded(q: deque[float], now: float, limit: int, window: float = 60.0) -> bool:
     while q and now - q[0] > window:
         q.popleft()
     if len(q) >= limit:
@@ -119,14 +119,14 @@ def _bounded(q: Deque[float], now: float, limit: int, window: float = 60.0) -> b
 
 
 class VoiceService:
-    def __init__(self, assistant, em, *, clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc), mono: Callable[[], float] = time.monotonic,
+    def __init__(self, assistant, em, *, clock: Callable[[], datetime] = lambda: datetime.now(UTC), mono: Callable[[], float] = time.monotonic,
                  idle_s: int = 90, cap_s: int = 900, max_chars: int = MAX_TURN_CHARS, turns_per_min: int = 20, cancels_per_min: int = 60, max_sessions: int = 3,
                  max_turns_kept: int = 50, run_timeout_s: float = 90.0):
         self.assistant, self.em, self.clock, self.mono = assistant, em, clock, mono
         self.idle_s, self.cap_s, self.max_chars = idle_s, cap_s, max_chars
         self.turns_per_min, self.cancels_per_min, self.max_sessions = turns_per_min, cancels_per_min, max_sessions
         self.max_turns_kept, self.run_timeout_s = max_turns_kept, run_timeout_s
-        self._sessions: Dict[str, Session] = {}
+        self._sessions: dict[str, Session] = {}
         self._lock = threading.RLock()
         self._pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="voice-turn")
 
@@ -179,7 +179,7 @@ class VoiceService:
 
     # --------------------------------------------------------------- turns
 
-    def start_turn(self, principal: Principal, session_id: str, turn_id: Any, generation: Any, text: Any, input_mode: Any, confidence: Optional[float] = None, language: Optional[str] = None) -> Turn:
+    def start_turn(self, principal: Principal, session_id: str, turn_id: Any, generation: Any, text: Any, input_mode: Any, confidence: float | None = None, language: str | None = None) -> Turn:
         if not isinstance(turn_id, str) or not ID.fullmatch(turn_id) or isinstance(generation, bool) or not isinstance(generation, int) or generation < 1:
             raise VoiceError(400, "turn_id and generation are required")
         if input_mode not in INPUT_MODES:
@@ -317,7 +317,7 @@ class VoiceService:
     def _played_prefix(turn: Turn, chars: int) -> str:
         """The part of the displayed answer that corresponds to ``chars`` characters of speech: whole sentences played, and a proportional part of the one in progress.
         An estimate from the speech engine's boundary events, not proof of what the user heard."""
-        out: List[str] = []
+        out: list[str] = []
         offset = 0
         for say, show in turn.spoken.sentences:
             if say == MORE:

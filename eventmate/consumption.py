@@ -13,7 +13,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from contextlib import contextmanager
-from typing import Callable, Deque, Dict, Iterator, Tuple
+from typing import Callable, Iterator
 
 LOCAL = "local"
 WINDOW_S = 3600
@@ -55,14 +55,14 @@ class WorkspaceBudgets:
     def __init__(self, clock: Callable[[], float] = time.monotonic):
         self._clock = clock
         self._lock = threading.Lock()
-        self._calls: Dict[str, Deque[Tuple[float, int]]] = defaultdict(deque)  # workspace -> (time, estimated tokens)
-        self._inflight: Dict[str, int] = defaultdict(int)
+        self._calls: dict[str, deque[tuple[float, int]]] = defaultdict(deque)  # workspace -> (time, estimated tokens)
+        self._inflight: dict[str, int] = defaultdict(int)
 
-    def limits(self) -> Tuple[int, int, int]:
+    def limits(self) -> tuple[int, int, int]:
         return (_int_env("EVENTMATE_WS_LLM_CALLS_PER_HOUR", 200, 1, 100000), _int_env("EVENTMATE_WS_LLM_TOKENS_PER_HOUR", 300000, 100, 100000000),
                 _int_env("EVENTMATE_WS_LLM_CONCURRENCY", 2, 1, 32))
 
-    def _trim(self, q: Deque[Tuple[float, int]], now: float) -> None:
+    def _trim(self, q: deque[tuple[float, int]], now: float) -> None:
         while q and now - q[0][0] > WINDOW_S:
             q.popleft()
 
@@ -92,7 +92,7 @@ class WorkspaceBudgets:
                 t, used = q[-1]
                 q[-1] = (t, used + extra)
 
-    def status(self) -> Dict[str, int]:
+    def status(self) -> dict[str, int]:
         with self._lock:
             now = self._clock()
             for q in self._calls.values():

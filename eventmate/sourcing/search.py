@@ -8,7 +8,6 @@ covers every category but needs an API key. A found business becomes an ``Extern
 from __future__ import annotations
 
 import re
-from typing import List
 
 from eventmate.integrations.discovery import OverpassSource
 from eventmate.integrations.places import PlacesSource
@@ -75,7 +74,7 @@ class VendorSearch:
     def _places(self, plan: PlanVersion, category: VendorCategory, city: str, limit: int) -> SearchOutcome:
         result = self.places.search(category.value, city, limit=limit, websites=True)  # websites are the higher-priced field: asked for here because this is the contact step
         added, skipped = 0, 0
-        warnings: List[str] = list(result.warnings)
+        warnings: list[str] = list(result.warnings)
         for p in result.places:
             if not p.place_id:
                 skipped += 1

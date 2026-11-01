@@ -13,7 +13,7 @@ import os
 from collections import Counter
 from pathlib import Path
 from datetime import date
-from typing import Callable, Collection, List, Optional, Tuple, Union
+from typing import Callable, Collection, Union
 
 from pydantic import ValidationError
 
@@ -48,7 +48,7 @@ class DataIntegrityError(Exception):
     """Seed data is malformed. The agent fails closed rather than guessing."""
 
 
-def _load_records(path: Path) -> List[dict]:
+def _load_records(path: Path) -> list[dict]:
     try:
         if path.stat().st_size > MAX_DATA_BYTES:
             raise DataIntegrityError(f"{path.name} exceeds {MAX_DATA_BYTES} bytes")
@@ -66,7 +66,7 @@ def _load_records(path: Path) -> List[dict]:
 class VendorRepository:
     """Read-only, validated view over the seed JSON files."""
 
-    def __init__(self, venues_path: Optional[Path] = None, vendors_path: Optional[Path] = None):
+    def __init__(self, venues_path: Path | None = None, vendors_path: Path | None = None):
         # The demonstration catalogue (9 cities) is the default; EVENTMATE_CATALOG=seed selects the small fixed one the unit tests are written against.
         prefix = "seed" if os.environ.get("EVENTMATE_CATALOG", "full") == "seed" else "catalog"
         venues_path = Path(venues_path) if venues_path else DATA_DIR / f"{prefix}_venues.json"
@@ -94,14 +94,14 @@ class VendorRepository:
         venue = self.get(VendorCategory.VENUE, venue_id)
         return getattr(venue, "accessibility", None)
 
-    def _quote(self, provider: "Provider"):
+    def _quote(self, provider: Provider):
         return self.quotes.pricing_quote(provider.id) if self.quotes is not None else None
 
-    def quote_expired(self, provider: "Provider") -> bool:
+    def quote_expired(self, provider: Provider) -> bool:
         q = self._quote(provider)
         return q is not None and self.clock() > q.expires_at
 
-    def price(self, provider: "Provider", guests: int) -> int:
+    def price(self, provider: Provider, guests: int) -> int:
         """Price for ``guests``: the latest unexpired recorded quote (plus its known hidden costs), else the seed record.
 
         An expired quote is not used; ``evaluate`` then fails the vendor on ``quote_valid`` instead of silently using stale money.
@@ -112,15 +112,15 @@ class VendorRepository:
         base = q.amount_inr * guests if q.basis == "per_plate" else q.amount_inr
         return base + sum(h.amount_inr for h in q.hidden_costs if h.amount_inr)
 
-    def providers(self, category: VendorCategory) -> Tuple[Provider, ...]:
+    def providers(self, category: VendorCategory) -> tuple[Provider, ...]:
         if category == VendorCategory.VENUE:
             return self._venues
         return tuple(v for v in self._vendors if v.category == category)
 
-    def get(self, category: VendorCategory, provider_id: str) -> Optional[Provider]:
+    def get(self, category: VendorCategory, provider_id: str) -> Provider | None:
         return next((p for p in self.providers(category) if p.id == provider_id), None)
 
-    def cities(self) -> Tuple[str, ...]:
+    def cities(self) -> tuple[str, ...]:
         return tuple(sorted({p.city for p in self._venues + self._vendors}))
 
 
@@ -130,8 +130,8 @@ def _norm(text: str) -> str:
 
 def evaluate(
     provider: Provider, request: EventRequest, category: VendorCategory, cap: int, excluded: bool = False,
-    price: Optional[int] = None, quote_expired: bool = False,
-) -> List[ConstraintCheck]:
+    price: int | None = None, quote_expired: bool = False,
+) -> list[ConstraintCheck]:
     """Run every hard constraint against one record."""
     guests = request.guest_count
     checks = [
@@ -225,8 +225,8 @@ class VendorAgent:
     def shortlist_category(
         self, request: EventRequest, category: VendorCategory, cap: int, exclude_ids: Collection[str] = ()
     ) -> VendorShortlist:
-        passed: List[Tuple[Provider, int, float, List[ConstraintCheck]]] = []
-        rejected: List[Tuple[Provider, List[ConstraintCheck]]] = []
+        passed: list[tuple[Provider, int, float, list[ConstraintCheck]]] = []
+        rejected: list[tuple[Provider, list[ConstraintCheck]]] = []
         providers = self.repo.providers(category)
         for p in providers:
             checks = evaluate(p, request, category, cap, excluded=p.id in exclude_ids, price=self.repo.price(p, request.guest_count), quote_expired=self.repo.quote_expired(p))
@@ -274,7 +274,7 @@ class VendorAgent:
 
     # ------------------------------------------------------------ repairs
 
-    def _repair(self, request, category, cap, providers, rejected) -> List[ConstraintViolation]:
+    def _repair(self, request, category, cap, providers, rejected) -> list[ConstraintViolation]:
         label = category.value
         if not providers:
             return [
@@ -374,8 +374,8 @@ class VendorAgent:
         )
 
     @staticmethod
-    def _alternatives(shortlist: VendorShortlist, rest) -> Tuple[Alternative, ...]:
-        alts: List[Alternative] = []
+    def _alternatives(shortlist: VendorShortlist, rest) -> tuple[Alternative, ...]:
+        alts: list[Alternative] = []
         for c in shortlist.candidates[1:]:
             alts.append(
                 Alternative(

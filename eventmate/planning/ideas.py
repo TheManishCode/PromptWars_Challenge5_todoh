@@ -13,9 +13,9 @@ import json
 import re
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Iterable, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -100,7 +100,7 @@ def _words(text: str) -> str:
     return " ".join(text.split())
 
 
-def _shape_problem(item, available_fields: Optional[Sequence[str]]) -> Optional[str]:
+def _shape_problem(item, available_fields: Sequence[str] | None) -> str | None:
     """Is it the right shape, with a known kind and only facts that were actually provided?"""
     if not isinstance(item, dict):
         return "shape: not an object"
@@ -117,7 +117,7 @@ def _shape_problem(item, available_fields: Optional[Sequence[str]]) -> Optional[
     return None
 
 
-def _content_problem(blob: str, cost_note: str) -> Optional[str]:
+def _content_problem(blob: str, cost_note: str) -> str | None:
     """Markup, links, prices, availability, capacity, hazards, instructions and cultural claims: none may appear in an idea."""
     if _MARKUP.search(blob):
         return "markup: not allowed"
@@ -143,7 +143,7 @@ def _content_problem(blob: str, cost_note: str) -> Optional[str]:
     return None
 
 
-def _vendor_problem(blob: str, vendor_names: Iterable[str]) -> Optional[str]:
+def _vendor_problem(blob: str, vendor_names: Iterable[str]) -> str | None:
     """An idea may only name businesses that are in the database."""
     known = [v.casefold() for v in vendor_names if v]
     for m in _BUSINESS.finditer(blob):
@@ -155,7 +155,7 @@ def _vendor_problem(blob: str, vendor_names: Iterable[str]) -> Optional[str]:
     return None
 
 
-def guard_idea(item: dict, vendor_names: Iterable[str], available_fields: Optional[Sequence[str]] = None) -> Optional[str]:
+def guard_idea(item: dict, vendor_names: Iterable[str], available_fields: Sequence[str] | None = None) -> str | None:
     """None if the idea may be shown, otherwise "<category>: <detail>". Order matters only for which reason is reported first."""
     problem = _shape_problem(item, available_fields)
     if problem:
@@ -177,11 +177,11 @@ def idea_review_note(item: dict) -> str:
 class _Conditions(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    min_guests: Optional[int] = Field(default=None, ge=1)
-    max_guests: Optional[int] = Field(default=None, ge=1)
-    dietary_any: Tuple[str, ...] = ()
-    setting: Optional[str] = Field(default=None, pattern=r"^(indoor|outdoor)$")
-    budget_bands: Tuple[str, ...] = ()
+    min_guests: int | None = Field(default=None, ge=1)
+    max_guests: int | None = Field(default=None, ge=1)
+    dietary_any: tuple[str, ...] = ()
+    setting: str | None = Field(default=None, pattern=r"^(indoor|outdoor)$")
+    budget_bands: tuple[str, ...] = ()
 
 
 class _Template(BaseModel):
@@ -190,10 +190,10 @@ class _Template(BaseModel):
     id: str = Field(pattern=r"^[a-z0-9_]{1,40}$")
     kind: str
     title: str
-    fields: Tuple[str, ...]
+    fields: tuple[str, ...]
     cost_note: str = ""
     note: str = ""
-    tags: Tuple[str, ...] = ()
+    tags: tuple[str, ...] = ()
     conditions: _Conditions = _Conditions()
 
 
@@ -260,7 +260,7 @@ _FACT_LABEL = {
 }
 
 
-def clean_preferences(prefs: Sequence[str]) -> Tuple[str, ...]:
+def clean_preferences(prefs: Sequence[str]) -> tuple[str, ...]:
     if isinstance(prefs, str) or len(prefs) > MAX_PREFERENCES:
         raise ValueError(f"give at most {MAX_PREFERENCES} preferences")
     out = []
@@ -278,8 +278,8 @@ def budget_band(plan: PlanVersion) -> str:
 
 
 class IdeaService:
-    def __init__(self, root: Path, logs: RunLogs, repo: VendorRepository, llm: Optional[LLMClient] = None, prompts: Optional[PromptStore] = None,
-                 templates: Callable[[], dict] = load_templates, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+    def __init__(self, root: Path, logs: RunLogs, repo: VendorRepository, llm: LLMClient | None = None, prompts: PromptStore | None = None,
+                 templates: Callable[[], dict] = load_templates, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
         self.root = Path(root) / "ideas"
         self.logs, self.repo, self.llm = logs, repo, llm
         self.prompts = prompts or PromptStore()
@@ -296,12 +296,12 @@ class IdeaService:
 
     # ------------------------------------------------------------ facts
 
-    def _facts(self, plan: PlanVersion, preferences: Tuple[str, ...], community_subtype: Optional[str] = None) -> Dict:
+    def _facts(self, plan: PlanVersion, preferences: tuple[str, ...], community_subtype: str | None = None) -> dict:
         r = plan.request
         venue = plan.selection_for(VendorCategory.VENUE)
         rec = self.repo.get(VendorCategory.VENUE, venue.vendor_id) if venue else None
         setting = getattr(rec, "setting", None) or (r.venue_setting.value if r.venue_setting.value != "any" else None)
-        facts: Dict = {"event_type": r.event_type.value, "guest_count": r.guest_count, "city": r.city, "budget_band": budget_band(plan)}
+        facts: dict = {"event_type": r.event_type.value, "guest_count": r.guest_count, "city": r.city, "budget_band": budget_band(plan)}
         if r.dietary:
             facts["dietary"] = [d.value for d in r.dietary]
         if setting:
@@ -320,8 +320,8 @@ class IdeaService:
         facts = self._facts(plan, prefs, sub)
         facts_used = tuple(f for f in IDEA_FIELDS if f in facts)
         vendor_names = [p.name for c in VendorCategory for p in self.repo.providers(c)]
-        dropped: List[DroppedIdea] = []
-        model_ideas: List[Idea] = []
+        dropped: list[DroppedIdea] = []
+        model_ideas: list[Idea] = []
         prompt_version = None
         model = ""
         if self.llm is not None:
@@ -349,7 +349,7 @@ class IdeaService:
         )
         return result
 
-    def _ask_model(self, plan: PlanVersion, facts: Dict, facts_used: Tuple[str, ...], vendor_names: List[str], dropped: List[DroppedIdea]):
+    def _ask_model(self, plan: PlanVersion, facts: dict, facts_used: tuple[str, ...], vendor_names: list[str], dropped: list[DroppedIdea]):
         try:
             body, version = self.prompts.load(PROMPT_ID)
         except PromptError:
@@ -394,7 +394,7 @@ class IdeaService:
     def _idea_id(plan_id: str, kind: str, title: str) -> str:
         return hashlib.sha256(f"{plan_id}|{kind}|{title.strip().casefold()}".encode()).hexdigest()[:20]
 
-    def _from_templates(self, doc: dict, plan: PlanVersion, facts: Dict, subtype: Optional[str]) -> List[Idea]:
+    def _from_templates(self, doc: dict, plan: PlanVersion, facts: dict, subtype: str | None) -> list[Idea]:
         pool = list(doc["event_types"].get(plan.request.event_type.value, [])) + (list(doc["community_subtypes"].get(subtype, [])) if subtype else [])
         want = {p.casefold() for p in facts.get("preferences", [])}
         scored = []
@@ -423,22 +423,22 @@ class IdeaService:
 
     # ------------------------------------------------------- reading back
 
-    def latest(self, plan_id: str) -> Optional[IdeaSet]:
+    def latest(self, plan_id: str) -> IdeaSet | None:
         sets = self._sets(plan_id).read()
         return sets[-1] if sets else None
 
-    def _state(self, plan_id: str) -> Tuple[Dict[str, str], Dict[str, str]]:
+    def _state(self, plan_id: str) -> tuple[dict[str, str], dict[str, str]]:
         """Latest decision per idea and the note each pinned idea created."""
-        decision: Dict[str, str] = {}
-        note_of: Dict[str, str] = {}
+        decision: dict[str, str] = {}
+        note_of: dict[str, str] = {}
         for d in self._decisions(plan_id).read():
             decision[d.idea_id] = d.decision
             if d.note_id:
                 note_of[d.idea_id] = d.note_id
         return decision, note_of
 
-    def notes(self, plan_id: str) -> List[PlanNote]:
-        latest: Dict[str, PlanNote] = {}
+    def notes(self, plan_id: str) -> list[PlanNote]:
+        latest: dict[str, PlanNote] = {}
         for n in self._note_file(plan_id).read():
             latest[n.note_id] = n
         return list(latest.values())

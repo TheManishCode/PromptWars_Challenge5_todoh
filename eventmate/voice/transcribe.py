@@ -13,7 +13,7 @@ import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from pathlib import Path
-from typing import Mapping, NamedTuple, Optional, Protocol
+from typing import Mapping, NamedTuple, Protocol
 
 from eventmate.voice import audio
 
@@ -41,7 +41,7 @@ class Engine(Protocol):
     model: str
     languages: tuple
 
-    def transcribe(self, path: Path, language: Optional[str]) -> Transcript: ...
+    def transcribe(self, path: Path, language: str | None) -> Transcript: ...
 
 
 class FasterWhisperEngine:
@@ -57,12 +57,12 @@ class FasterWhisperEngine:
         self.model = Path(model_path).name
         self._model = WhisperModel(model_path, device=device, compute_type=compute_type, local_files_only=True)
 
-    def transcribe(self, path: Path, language: Optional[str]) -> Transcript:
+    def transcribe(self, path: Path, language: str | None) -> Transcript:
         segments, info = self._model.transcribe(str(path), language=language if language in self.languages else None, vad_filter=True)
         return Transcript(" ".join(s.text.strip() for s in segments).strip(), info.language, float(info.duration))
 
 
-def engine_from_env(environ: Mapping[str, str]) -> Optional[Engine]:
+def engine_from_env(environ: Mapping[str, str]) -> Engine | None:
     """The engine the owner enabled, or None. Off unless ``EVENTMATE_VOICE_ENGINE=faster-whisper`` and ``EVENTMATE_VOICE_MODEL`` names an existing folder."""
     if environ.get("EVENTMATE_VOICE_ENGINE", "").strip().lower() != "faster-whisper":
         return None
@@ -76,7 +76,7 @@ def engine_from_env(environ: Mapping[str, str]) -> Optional[Engine]:
 
 
 class Transcriber:
-    def __init__(self, engine: Optional[Engine], tmp_dir: Path, max_seconds: int = audio.MAX_SECONDS, max_bytes: int = audio.MAX_BYTES, queue_limit: int = 3,
+    def __init__(self, engine: Engine | None, tmp_dir: Path, max_seconds: int = audio.MAX_SECONDS, max_bytes: int = audio.MAX_BYTES, queue_limit: int = 3,
                  timeout_margin_s: float = TIMEOUT_MARGIN_S):
         self.engine, self.max_seconds, self.max_bytes = engine, max_seconds, max_bytes
         self.tmp_dir, self.queue_limit, self.margin = Path(tmp_dir), queue_limit, timeout_margin_s
@@ -91,7 +91,7 @@ class Transcriber:
             return {"route": "none", "engine": None, "model": None, "languages": [], "max_seconds": self.max_seconds, "max_bytes": self.max_bytes}
         return {"route": "server", "engine": self.engine.name, "model": self.engine.model, "languages": list(self.engine.languages), "max_seconds": self.max_seconds, "max_bytes": self.max_bytes}
 
-    def transcribe(self, data: bytes, declared_type: str, language: Optional[str] = None) -> Transcript:
+    def transcribe(self, data: bytes, declared_type: str, language: str | None = None) -> Transcript:
         """Check the upload, run the engine, delete the audio. Raises TranscribeError with the HTTP status to report."""
         if self.engine is None:
             raise TranscribeError(503, "voice transcription is not set up here; type your message instead", "transcriber_unavailable")
@@ -116,7 +116,7 @@ class Transcriber:
             with self._count:
                 self._waiting -= 1
 
-    def _run(self, data: bytes, kind: str, length: Optional[float], language: Optional[str]) -> Transcript:
+    def _run(self, data: bytes, kind: str, length: float | None, language: str | None) -> Transcript:
         self.tmp_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         fd, name = tempfile.mkstemp(dir=self.tmp_dir, suffix=audio.EXTENSION[kind])  # a random name: nothing the client sent is used as a path
         path = Path(name)

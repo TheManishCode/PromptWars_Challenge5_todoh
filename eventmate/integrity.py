@@ -24,9 +24,8 @@ import shutil
 import sqlite3
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from pydantic import ValidationError
 
@@ -46,7 +45,7 @@ class StoreDamaged(ValueError):
 class Damage:
     path: str  # relative to the store root
     kind: str  # "authoritative" or "derived"
-    line: Optional[int]
+    line: int | None
     reason: str
 
     def __str__(self) -> str:
@@ -55,9 +54,9 @@ class Damage:
 
 @dataclass
 class Report:
-    damaged: List[Damage] = field(default_factory=list)
-    plan_problems: List[str] = field(default_factory=list)
-    orphans: List[str] = field(default_factory=list)
+    damaged: list[Damage] = field(default_factory=list)
+    plan_problems: list[str] = field(default_factory=list)
+    orphans: list[str] = field(default_factory=list)
     files_checked: int = 0
 
     @property
@@ -65,20 +64,20 @@ class Report:
         return not (self.damaged or self.plan_problems or self.orphans)
 
     @property
-    def authoritative_damage(self) -> List[Damage]:
+    def authoritative_damage(self) -> list[Damage]:
         return [d for d in self.damaged if d.kind == "authoritative"]
 
-    def lines(self) -> List[str]:
+    def lines(self) -> list[str]:
         out = [f"damaged ({d.kind}): {d}" for d in self.damaged] + [f"plan: {p}" for p in self.plan_problems] + [f"orphan: {o}" for o in self.orphans]
         return out or [f"ok: {self.files_checked} file(s) checked"]
 
 
-def _models() -> Dict[str, type]:
+def _models() -> dict[str, type]:
     """channel name -> record model, from every store the application defines."""
     importlib.import_module("eventmate.service")  # importing it loads every store class
     from eventmate.jsonl import JsonlLog
 
-    found: Dict[str, type] = {}
+    found: dict[str, type] = {}
     todo = list(JsonlLog.__subclasses__())
     while todo:
         cls = todo.pop()
@@ -89,9 +88,9 @@ def _models() -> Dict[str, type]:
     return found
 
 
-def check_jsonl(path: Path, channel: str, model) -> List[Tuple[Optional[int], str]]:
+def check_jsonl(path: Path, channel: str, model) -> list[tuple[int | None, str]]:
     """Every unreadable line of one file as (line number, reason). The content of a line is never part of a reason."""
-    problems: List[Tuple[Optional[int], str]] = []
+    problems: list[tuple[int | None, str]] = []
     try:
         raw = path.read_bytes()
     except OSError:
@@ -112,14 +111,14 @@ def check_jsonl(path: Path, channel: str, model) -> List[Tuple[Optional[int], st
     return problems
 
 
-def jsonl_files(root: Path, log_dir: Optional[Path] = None) -> List[Path]:
+def jsonl_files(root: Path, log_dir: Path | None = None) -> list[Path]:
     files = [p for p in sorted(Path(root).rglob("*.jsonl")) if not p.is_symlink() and JSONL_NAME.fullmatch(p.name)]
     if log_dir and Path(log_dir).is_dir():
         files += [p for p in sorted(Path(log_dir).glob("*.jsonl")) if not p.is_symlink() and JSONL_NAME.fullmatch(p.name)]
     return files
 
 
-def scan(root: Path, log_dir: Optional[Path] = None) -> Report:
+def scan(root: Path, log_dir: Path | None = None) -> Report:
     """Read every store under ``root`` (and the logs in ``log_dir``). Changes nothing."""
     root, report, models = Path(root), Report(), _models()
     for path in jsonl_files(root, log_dir):
@@ -192,14 +191,14 @@ class Guard:
 
     def __init__(self, root: Path):
         self.root = Path(root)
-        self._signature: Optional[tuple] = None
-        self._damage: List[Damage] = []
+        self._signature: tuple | None = None
+        self._damage: list[Damage] = []
         self._lock = threading.Lock()
 
-    def _files(self) -> List[Path]:
+    def _files(self) -> list[Path]:
         return [p for p in jsonl_files(self.root) if JSONL_NAME.fullmatch(p.name).group(1) in AUTHORITATIVE] + ([self.root / "jobs.db"] if (self.root / "jobs.db").exists() else [])
 
-    def damage(self) -> List[Damage]:
+    def damage(self) -> list[Damage]:
         with self._lock:
             files = self._files()
             signature = tuple((str(p), p.stat().st_mtime_ns, p.stat().st_size) for p in files)
@@ -215,7 +214,7 @@ class Guard:
                 self._damage, self._signature = found, signature
             return list(self._damage)
 
-    def blocker(self) -> Optional[str]:
+    def blocker(self) -> str | None:
         """Why nothing may be sent or approved in this workspace right now, or None."""
         found = self.damage()
         if not found:
@@ -224,7 +223,7 @@ class Guard:
         return ("a stored record file is damaged (" + ", ".join(names) + "), so nothing can be sent or approved until the owner repairs it: run `python -m eventmate verify`")
 
 
-def scan_jobs_only(root: Path) -> List[Damage]:
+def scan_jobs_only(root: Path) -> list[Damage]:
     report = Report()
     jobs = Path(root) / "jobs.db"
     try:
@@ -248,14 +247,14 @@ class Quarantine:
     damaged_copy: Path
     candidate: Path
     kept: int
-    dropped: List[Tuple[int, str]]
+    dropped: list[tuple[int, str]]
 
 
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def quarantine(path: Path, now: Optional[datetime] = None) -> Quarantine:
+def quarantine(path: Path, now: datetime | None = None) -> Quarantine:
     """Copy a damaged file aside (read-only), and write the lines that can be read to a separate candidate file. The live file is not touched."""
     path = Path(path)
     m = JSONL_NAME.fullmatch(path.name)
@@ -264,7 +263,7 @@ def quarantine(path: Path, now: Optional[datetime] = None) -> Quarantine:
     channel, model = m.group(1), _models().get(m.group(1))
     if model is None:
         raise ValueError("not a store file this application writes")
-    stamp = (now or datetime.now(timezone.utc)).strftime("%Y%m%dT%H%M%SZ")
+    stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
     raw = path.read_bytes()
     problems = dict((n, why) for n, why in check_jsonl(path, channel, model) if n is not None)  # the same reasons verify gives
     dropped, kept = [], []
@@ -313,12 +312,12 @@ def apply_repair(candidate: Path, confirm_dropped: int) -> Path:
     return live
 
 
-def reset_derived(path: Path, now: Optional[datetime] = None) -> Path:
+def reset_derived(path: Path, now: datetime | None = None) -> Path:
     """Start a derived store afresh: the file is kept aside (read-only) and the live name is freed. Refused for an authoritative store."""
     m = JSONL_NAME.fullmatch(Path(path).name)
     if m is None or m.group(1) in AUTHORITATIVE:
         raise ValueError("only a derived store can be reset; repair an authoritative one with quarantine and apply")
-    stamp = (now or datetime.now(timezone.utc)).strftime("%Y%m%dT%H%M%SZ")
+    stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
     aside = Path(path).with_name(f"{Path(path).name}.damaged-{stamp}")
     os.replace(path, aside)
     os.chmod(aside, 0o444)

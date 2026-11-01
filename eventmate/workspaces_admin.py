@@ -18,7 +18,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 from eventmate.transfer import TransferError, export_workspace, import_archive
@@ -67,7 +67,7 @@ def main(argv=None) -> int:
     elif a.cmd == "list":
         for (wid,) in _ids(reg):
             info = reg.directory.info(wid)
-            print(f"{wid}  created {datetime.fromtimestamp(info['created'], timezone.utc):%Y-%m-%d %H:%M}  last used {datetime.fromtimestamp(info['last_seen'], timezone.utc):%Y-%m-%d %H:%M}  {'has data' if reg.has_data(wid) else 'empty'}")
+            print(f"{wid}  created {datetime.fromtimestamp(info['created'], UTC):%Y-%m-%d %H:%M}  last used {datetime.fromtimestamp(info['last_seen'], UTC):%Y-%m-%d %H:%M}  {'has data' if reg.has_data(wid) else 'empty'}")
     elif a.cmd == "rotate":
         credential = reg.rotate(a.id)
         if credential is None:

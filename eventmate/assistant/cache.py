@@ -11,12 +11,12 @@ import json
 import re
 import threading
 import time
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable
 
 from eventmate.assistant.trace import sha
 
 
-def cache_key(question: str, roles: Tuple[str, ...], plan_id: str, plan_state: str, kb_version: str, prompt_sha: str) -> str:
+def cache_key(question: str, roles: tuple[str, ...], plan_id: str, plan_state: str, kb_version: str, prompt_sha: str) -> str:
     q = re.sub(r"\s+", " ", question.strip().lower())
     return sha(json.dumps([q, sorted(roles), plan_id, plan_state, kb_version, prompt_sha]))
 
@@ -24,8 +24,8 @@ def cache_key(question: str, roles: Tuple[str, ...], plan_id: str, plan_state: s
 class AnswerCache:
     def __init__(self, ttl_seconds: float = 300, max_items: int = 1000, wait_seconds: float = 30):
         self.ttl, self.max, self.wait = ttl_seconds, max_items, wait_seconds
-        self._store: Dict[str, Tuple[float, Any]] = {}
-        self._inflight: Dict[str, threading.Event] = {}
+        self._store: dict[str, tuple[float, Any]] = {}
+        self._inflight: dict[str, threading.Event] = {}
         self._lock = threading.Lock()
         self.hits = self.misses = self.coalesced = 0
 
@@ -41,7 +41,7 @@ class AnswerCache:
         self._store.pop(key, None)
         return None
 
-    def get_or_compute(self, key: str, compute: Callable[[], Tuple[Any, bool]]) -> Tuple[Any, str]:
+    def get_or_compute(self, key: str, compute: Callable[[], tuple[Any, bool]]) -> tuple[Any, str]:
         """``compute`` returns (value, cacheable). Returns (value, "hit" | "miss" | "coalesced")."""
         with self._lock:
             val = self._fresh(key)

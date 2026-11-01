@@ -17,7 +17,7 @@ import time
 import uuid
 from datetime import date
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable
 
 from eventmate.guestlist import GuestListStore, GuestPreview, check_against, parse_guest_csv, totals_of
 from eventmate.voice.notes import VoiceNoteStore
@@ -79,20 +79,20 @@ class _NoClients:
 class EventMate:
     def __init__(
         self,
-        log_dir: Optional[Path] = None,
-        plan_dir: Optional[Path] = None,
-        run_id: Optional[str] = None,
-        repo: Optional[VendorRepository] = None,
-        guest_repo: Optional[GuestRepository] = None,
-        symbolic: Optional[SymbolicChecker] = None,
-        llm: Optional[LLMClient] = None,
+        log_dir: Path | None = None,
+        plan_dir: Path | None = None,
+        run_id: str | None = None,
+        repo: VendorRepository | None = None,
+        guest_repo: GuestRepository | None = None,
+        symbolic: SymbolicChecker | None = None,
+        llm: LLMClient | None = None,
         require_symbolic: bool = True,
         store_llm_text: bool = False,
-        flights: Optional[FlightProvider] = None,
-        discovery: Optional[OverpassSource] = None,
-        weather: Optional[OpenWeatherSource] = None,
-        places: Optional[PlacesSource] = None,
-        channels: Optional[Dict[str, Channel]] = None,
+        flights: FlightProvider | None = None,
+        discovery: OverpassSource | None = None,
+        weather: OpenWeatherSource | None = None,
+        places: PlacesSource | None = None,
+        channels: dict[str, Channel] | None = None,
     ):
         self.env = load_env()  # secrets from .env (names only are kept); values already in the environment win
         self._today = date.today()
@@ -122,9 +122,9 @@ class EventMate:
         self.voice_notes = VoiceNoteStore(self.store.root)
         self.repo.access = self.access_store
         self.outreach_store = OutreachStore(self.store.root, self.observations.checklists)
-        self._jobs: Optional[JobWorker] = None
+        self._jobs: JobWorker | None = None
         self.jobs_clock = None  # tests inject a clock here before the worker is first used
-        self._job_store: Optional[JobStore] = None
+        self._job_store: JobStore | None = None
         self.digest_store = DigestStore(self.store.root)
         self.conversations = ConversationService(self.outreach_store, channels or channels_from_env(os.environ), self.store.latest)
         self.integrity = Guard(self.store.root)  # while an authoritative record file is damaged, nothing is sent or approved (docs/DURABILITY.md)
@@ -149,7 +149,7 @@ class EventMate:
         self.explainer = ExplainerAgent(self.logs, llm)
         self.manager = ManagerAgent(self.repo, decisions, budget, vendor, guest, planner, self.validator, self.explainer, self.store)
         self.tradeoff = TradeoffAgent(self.repo, decisions, self._dry_run_ok, budget_policy)
-        self._guest_list_id: Optional[str] = None
+        self._guest_list_id: str | None = None
         with contextlib.suppress(Exception):  # approve and dispatch re-check every draft anyway; a store that cannot be read yet must not stop start-up
             self.conversations.supersede_all_stale()  # drafts that predate version tracking, or that no longer match their plan, are marked stale once
         self.replanner = ReplannerAgent(self.logs, self.repo, budget, vendor, guest, planner, self.validator, self.store)
@@ -158,20 +158,20 @@ class EventMate:
 
         recover_interrupted_imports(self)  # an import whose process died part-way is rolled back, so a plan never exists without its ledger and guest list
 
-    def _clock(self, today: Optional[date]) -> None:
+    def _clock(self, today: date | None) -> None:
         """Quote expiry is judged against the caller's 'today' (tests and the web app inject one)."""
         if today is not None:
             self.repo.clock = lambda: today
 
-    def plan(self, text: str, today: Optional[date] = None, guest_list_id: Optional[str] = None) -> PlanOutcome:
+    def plan(self, text: str, today: date | None = None, guest_list_id: str | None = None) -> PlanOutcome:
         self._clock(today)
         return self.manager.run(text, today=today, guest_list_id=guest_list_id)
 
-    def intake_turn(self, messages, prior: Optional[intake.IntakeDraft] = None, today: Optional[date] = None) -> intake.IntakeTurn:
+    def intake_turn(self, messages, prior: intake.IntakeDraft | None = None, today: date | None = None) -> intake.IntakeTurn:
         """Propose a draft from the organiser's words. Nothing is planned or stored until ``confirm_intake``."""
         return intake.propose(messages, prior, today or date.today(), self.repo.cities(), self.logs, self.llm)
 
-    def confirm_intake(self, draft: intake.IntakeDraft, raw_text: str, today: Optional[date] = None, guest_list_id: Optional[str] = None, source: str = "rule:parser") -> PlanOutcome:
+    def confirm_intake(self, draft: intake.IntakeDraft, raw_text: str, today: date | None = None, guest_list_id: str | None = None, source: str = "rule:parser") -> PlanOutcome:
         """The user confirmed the review card: run the full pipeline on exactly what they approved."""
         today = today or date.today()
         self._clock(today)
@@ -185,7 +185,7 @@ class EventMate:
             return False, ()
         return True, tuple(u.label or u.name for u in out.plan.validation.blocking_unverified())
 
-    def verification(self, plan_id: str, version: Optional[int] = None) -> dict:
+    def verification(self, plan_id: str, version: int | None = None) -> dict:
         """Where a plan stands right now: "verified" or "needs_verification". Community plans are re-checked against today's data, so a venue's answer recorded after the plan was made counts at once."""
         plan = self.store.load(plan_id, version)
         report = self.revalidate(plan_id, version) if plan.request.event_type.value == "community" else plan.validation
@@ -197,20 +197,20 @@ class EventMate:
             "other_unverified": [{"name": u.name, "label": u.label or u.name, "detail": u.detail} for u in report.unverified if not u.blocks_verified],
         }
 
-    def tradeoffs(self, text: str, today: Optional[date] = None, guest_list_id: Optional[str] = None) -> TradeoffReport:
+    def tradeoffs(self, text: str, today: date | None = None, guest_list_id: str | None = None) -> TradeoffReport:
         """Ranked, verified ways to make a failing request plannable. Nothing is stored or applied."""
         self._today, self._guest_list_id = today or date.today(), guest_list_id
         self._clock(self._today)
         return self.tradeoff.propose(self.manager.parse(text, self._today), self._today)
 
-    def apply_tradeoff(self, option: TradeoffOption, today: Optional[date] = None, guest_list_id: Optional[str] = None) -> PlanOutcome:
+    def apply_tradeoff(self, option: TradeoffOption, today: date | None = None, guest_list_id: str | None = None) -> PlanOutcome:
         """The user chose this option: run it through the full pipeline and store the resulting plan."""
         self._clock(today)
         return self.manager.run_request(
             option.request, today=today, guest_list_id=guest_list_id, change_reason=f"trade-off chosen by the user: {option.title}"[:500]
         )
 
-    def advisories(self, plan_id: str) -> List[Advisory]:
+    def advisories(self, plan_id: str) -> list[Advisory]:
         """Advisory checklists for the plan's dietary requirements. Never constraints."""
         return advisories_for(self.store.latest(plan_id).request)
 
@@ -230,7 +230,7 @@ class EventMate:
         self._log_guest_list(plan_id, f"Guest list saved for plan {plan_id}: {totals.rows} row(s), {totals.heads} people")
         return {"totals": json.loads(totals.model_dump_json()), "check": json.loads(check_against(totals, plan.request.guest_count).model_dump_json())}
 
-    def guest_summary(self, plan_id: str) -> Optional[dict]:
+    def guest_summary(self, plan_id: str) -> dict | None:
         """Totals and the check against the stated headcount for the saved list, or None. Never names."""
         plan = self.store.latest(plan_id)
         guests = self.guest_lists.load(plan_id)
@@ -274,7 +274,7 @@ class EventMate:
         )
         return report(versions, files, jobs)
 
-    def purge_logs(self, max_age_days: Optional[int] = None) -> List[str]:
+    def purge_logs(self, max_age_days: int | None = None) -> list[str]:
         """Delete run logs older than the retention period (default 90 days, ``EVENTMATE_LOG_RETENTION_DAYS``) and kept voice notes older than theirs. Returns what was removed."""
         return purge_old_logs(self.logs.decisions.log_dir, max_age_days) + [f"voice note {n}" for n in self.voice_notes.purge_expired()]
 
@@ -293,11 +293,11 @@ class EventMate:
         """Record a vendor quote you were given (ADR-025). Later plans and validation price from it (ADR-026)."""
         return self.observations.add_quote(vendor_id, category, **fields)
 
-    def vendor_scores(self, category: VendorCategory, today: Optional[date] = None):
+    def vendor_scores(self, category: VendorCategory, today: date | None = None):
         """Transparent score of every vendor with a current quote in a category (ADR-040). Reads only; changes no price."""
         return score_category(self.observations, category, today or date.today())
 
-    def quote_status(self, plan_id: str, today: Optional[date] = None) -> List[SelectionQuoteStatus]:
+    def quote_status(self, plan_id: str, today: date | None = None) -> list[SelectionQuoteStatus]:
         """Quote report, staleness and confirmation source for each selection of the latest plan (ADR-006, ADR-027)."""
         today = today or date.today()
         self._clock(today)
@@ -354,7 +354,7 @@ class EventMate:
             self._jobs = JobWorker(self, JobStore(self.store.root), self.jobs_clock) if self.jobs_clock else JobWorker(self, JobStore(self.store.root))
         return self._jobs
 
-    def _job_guard(self, draft) -> Optional[str]:
+    def _job_guard(self, draft) -> str | None:
         """Dispatch-time veto, independent of the standing permission: an automatic follow-up that belongs to a finished or cancelled job never goes out."""
         if draft.kind != "followup" or not (self.store.root / "jobs.db").exists():
             return None
@@ -391,7 +391,7 @@ class EventMate:
             return self.jobs.tick()
         return self.poll_conversations()
 
-    def draft_outreach(self, plan_id: str, category: VendorCategory, channel: str, recipient: str, sender_name: str, vendor_id: Optional[str] = None):
+    def draft_outreach(self, plan_id: str, category: VendorCategory, channel: str, recipient: str, sender_name: str, vendor_id: str | None = None):
         """Write a quote request for a vendor in the plan, or for another vendor of the category when ``vendor_id`` is given (to compare quotes).
         It is a proposal: nothing leaves until it is approved (ADR-041, ADR-042)."""
         vendor = None
@@ -462,7 +462,7 @@ class EventMate:
         self.store.latest(plan_id)
         return self.outreach_store.mark_read(plan_id, message_id)
 
-    def resolve_vendor(self, vendor_id: str, category: Optional[VendorCategory] = None) -> ResolvedVendor:
+    def resolve_vendor(self, vendor_id: str, category: VendorCategory | None = None) -> ResolvedVendor:
         """The one place a vendor id becomes a vendor. A seed id is looked up in the vendor database, an ``ext_`` id only in the external store; nothing crosses over."""
         ref = VendorRef.of(vendor_id)  # a malformed id fails here
         if ref.kind == "external":
@@ -490,7 +490,7 @@ class EventMate:
         if have is None or have.casefold() != want:
             raise ValueError(f"that recipient is not the confirmed address for {rv.name}")
 
-    def set_vendor_contact(self, vendor_id: str, email: Optional[str], whatsapp: Optional[str], preferred: str):
+    def set_vendor_contact(self, vendor_id: str, email: str | None, whatsapp: str | None, preferred: str):
         """The user types a contact for a seed vendor. A discovered business gets its contact only by confirming a found address."""
         if VendorRef.of(vendor_id).kind == "external":
             raise ValueError("a discovered business's contact is saved only by confirming an address found on its own page or listing, or as a test vendor")
@@ -498,14 +498,14 @@ class EventMate:
             raise ValueError(f"unknown vendor {vendor_id!r}")
         return self.outreach_store.set_contact(vendor_id, email, whatsapp, preferred)
 
-    def add_discovered(self, external_id: str, name: str, city: str, category: VendorCategory, source: str, source_url: Optional[str] = None,
-                       website: Optional[str] = None, rating: Optional[float] = None) -> ExternalBusiness:
+    def add_discovered(self, external_id: str, name: str, city: str, category: VendorCategory, source: str, source_url: str | None = None,
+                       website: str | None = None, rating: float | None = None) -> ExternalBusiness:
         """Record a business that discovery found. It is not a vendor record and is never promoted to one (ADR-028, ADR-049)."""
         if source not in ("osm", "gplaces"):
             raise ValueError("a discovered business comes from OpenStreetMap or Google Places")
         return self.externals.add(external_id, name, city, category, source, source_url, website, rating)
 
-    def add_test_vendor(self, name: str, city: str, category: VendorCategory, email: str, owns_address: bool, confirmed_by: str, plan_id: Optional[str] = None):
+    def add_test_vendor(self, name: str, city: str, category: VendorCategory, email: str, owns_address: bool, confirmed_by: str, plan_id: str | None = None):
         """A vendor for testing whose address is the user's own. Needs the user's explicit statement that they own it, and is labelled TEST VENDOR everywhere."""
         if owns_address is not True or not (confirmed_by or "").strip():
             raise ValueError("a test vendor needs your confirmation that you own the address")
@@ -534,11 +534,11 @@ class EventMate:
         """Labels the UI must show next to a business: a test vendor says so and whose address it is. Seed vendors and discovered businesses have none."""
         return {b.vendor_id: f"TEST VENDOR (address owned by {b.owner_confirmed_by})" for b in self.externals.all() if b.is_test}
 
-    def search_vendors(self, plan_id: str, category: VendorCategory, source: Optional[str] = None, limit: int = 10) -> SearchOutcome:
+    def search_vendors(self, plan_id: str, category: VendorCategory, source: str | None = None, limit: int = 10) -> SearchOutcome:
         """Find businesses for a plan's city and category and shortlist them. Not vendor records, and nothing is contacted."""
         return self.vendor_search.search(self.store.latest(plan_id), category, source, limit)
 
-    def shortlist_view(self, plan_id: str, category: Optional[VendorCategory] = None) -> List[ShortlistItem]:
+    def shortlist_view(self, plan_id: str, category: VendorCategory | None = None) -> list[ShortlistItem]:
         self.store.latest(plan_id)
         contacts = self.outreach_store.contacts()
         out = []
@@ -594,7 +594,7 @@ class EventMate:
             raise ValueError(f"that address is already {cand.status}")
         return self.shortlist.update(candidate_id, status="rejected")
 
-    def confirm_contact(self, vendor_id: str, candidate_id: str, by: str, edited_value: Optional[str] = None, acknowledge_bounce: bool = False) -> VendorContact:
+    def confirm_contact(self, vendor_id: str, candidate_id: str, by: str, edited_value: str | None = None, acknowledge_bounce: bool = False) -> VendorContact:
         """The user confirms an address that was found for a discovered business, optionally correcting it. Only this creates its contact."""
         biz = self.externals.get(vendor_id)
         cand = self.shortlist.get_candidate(candidate_id)
@@ -674,7 +674,7 @@ class EventMate:
         check_search(origin, destination, kw.get("adults", 1), kw.get("cabin", "economy"), kw.get("limit", 10))  # whatever the provider is
         return self.flights.search_one_way(origin, destination, day, **kw)
 
-    def plan_trip(self, request, today: Optional[date] = None, **kw):
+    def plan_trip(self, request, today: date | None = None, **kw):
         """Order the stops, choose dates, search every distinct leg and rank complete itineraries (ADR-030). Every search is logged."""
         rid = "trip-" + uuid.uuid4().hex[:16]
 
@@ -694,7 +694,7 @@ class EventMate:
         self._after_new_version(plan_id)
         return outcome
 
-    def replan(self, plan_id: str, disruption: Disruption, today: Optional[date] = None) -> ReplanOutcome:
+    def replan(self, plan_id: str, disruption: Disruption, today: date | None = None) -> ReplanOutcome:
         self._clock(today)
         outcome = self.replanner.replan(plan_id, disruption, today)
         self._after_new_version(plan_id)
@@ -705,7 +705,7 @@ class EventMate:
         if self.conversations.supersede_stale(plan_id) and (self.store.root / "jobs.db").exists():
             self.jobs.reevaluate(plan_id)
 
-    def update_community(self, plan_id: str, details, today: Optional[date] = None) -> ReplanOutcome:
+    def update_community(self, plan_id: str, details, today: date | None = None) -> ReplanOutcome:
         """Replace a community plan's details (attendance, funding, volunteers, programme, access needs) as a validated new version, or refuse with repairs."""
         return self.replan(plan_id, Disruption(kind=DisruptionKind.COMMUNITY_UPDATE, new_community=details), today)
 
@@ -715,7 +715,7 @@ class EventMate:
             raise ValueError(f"{venue_id!r} is not a venue in the database")
         return self.access_store.record(venue_id, features, evidence_ref, entered_by)
 
-    def explain(self, plan_id: str, version: Optional[int] = None, with_diff: bool = True) -> Explanation:
+    def explain(self, plan_id: str, version: int | None = None, with_diff: bool = True) -> Explanation:
         plan = self.store.load(plan_id, version)
         diff = None
         if with_diff and plan.parent_version:
@@ -723,13 +723,13 @@ class EventMate:
         comm = community_mod.build_status(plan, self.checklist_store, self.revalidate(plan_id, version)) if plan.request.event_type.value == "community" else None
         return self.explainer.explain(plan, diff, comm, self.verification(plan_id, version))
 
-    def community_status(self, plan_id: str, today: Optional[date] = None):
+    def community_status(self, plan_id: str, today: date | None = None):
         """The community view of a plan: hard checks, what could not be decided, and the conditional items with the user's marks."""
         plan = self.store.latest(plan_id)
         report = self.revalidate(plan_id) if plan.request.event_type.value == "community" else None  # current data: a venue's recorded answer counts at once
         return community_mod.build_status(plan, self.checklist_store, report)
 
-    def set_community_item(self, plan_id: str, item_id: str, status: str, by, on, note: str = "", today: Optional[date] = None):
+    def set_community_item(self, plan_id: str, item_id: str, status: str, by, on, note: str = "", today: date | None = None):
         """The user's mark on one conditional item (confirmed, not applicable, or reopened). Nothing else ever changes an item."""
         plan = self.store.latest(plan_id)
         if plan.request.event_type.value != "community":
@@ -756,7 +756,7 @@ class EventMate:
                             found.append(entry)
         return sorted(found, key=lambda e: e.timestamp)
 
-    def revalidate(self, plan_id: str, version: Optional[int] = None) -> ValidationReport:
+    def revalidate(self, plan_id: str, version: int | None = None) -> ValidationReport:
         """Re-check a stored plan against the *current* database and rules."""
         plan = self.store.load(plan_id, version)
         parent = self.store.load(plan_id, plan.parent_version) if plan.parent_version else None

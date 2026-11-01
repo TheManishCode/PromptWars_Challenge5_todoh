@@ -14,9 +14,9 @@ import random
 import secrets
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Tuple
+from typing import Any, Callable, Iterator, Mapping
 from zoneinfo import ZoneInfo
 
 from eventmate.wall import layout
@@ -118,13 +118,13 @@ class WallConfig:
     submission_ttl_hours: int = 24
 
     @classmethod
-    def from_env(cls, environ: "Mapping[str, str]") -> "WallConfig":
+    def from_env(cls, environ: Mapping[str, str]) -> WallConfig:
         """Settings the owner may change without code (docs/WALL.md). An unset name keeps the default; a bad value stops the app at start, not at the first visitor."""
         ints = {"EVENTMATE_WALL_CAPACITY": "section_capacity", "EVENTMATE_WALL_DAILY_CAP": "daily_submission_cap", "EVENTMATE_WALL_TOTAL_CAP": "total_cap",
                 "EVENTMATE_WALL_PENDING_CAP": "pending_cap", "EVENTMATE_WALL_WINDOW_MS": "window_ms", "EVENTMATE_WALL_ALLOWANCE_MS": "allowance_ms",
                 "EVENTMATE_WALL_ROUNDS_PER_DAY": "rounds_per_day", "EVENTMATE_WALL_SPEED_FLOOR_MS": "speed_floor_ms"}
         texts = {"EVENTMATE_WALL_MODERATION": "moderation", "EVENTMATE_WALL_ZONE": "hall_zone", "EVENTMATE_WALL_HALL_KIND": "hall_kind"}
-        values: Dict[str, Any] = {}
+        values: dict[str, Any] = {}
         for name, field_name in ints.items():
             raw = environ.get(name, "").strip()
             if raw:
@@ -147,13 +147,13 @@ class WallConfig:
         ZoneInfo(self.hall_zone)
 
 
-def _iso(ms: Optional[int]) -> Optional[str]:
-    return None if ms is None else datetime.fromtimestamp(ms / MS, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+def _iso(ms: int | None) -> str | None:
+    return None if ms is None else datetime.fromtimestamp(ms / MS, tz=UTC).isoformat().replace("+00:00", "Z")
 
 
 class WallStore:
-    def __init__(self, path: Path, config: WallConfig = WallConfig(), clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
-                 rng: Optional[random.Random] = None):
+    def __init__(self, path: Path, config: WallConfig = WallConfig(), clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+                 rng: random.Random | None = None):
         self.path, self.config, self.clock = Path(path), config, clock
         self.rng = rng or random.SystemRandom()
         self._zone = ZoneInfo(config.hall_zone)
@@ -167,10 +167,8 @@ class WallStore:
             self._open_schema(conn)
         finally:
             conn.close()
-        try:
+        with contextlib.suppress(OSError):
             os.chmod(self.path, 0o600)
-        except OSError:
-            pass
 
     # ------------------------------------------------------------ plumbing
 
@@ -232,9 +230,9 @@ class WallStore:
 
     # ------------------------------------------------------------ periods (docs/WALL.md, 8.8)
 
-    def period_at(self, now_ms: int) -> Dict[str, Any]:
+    def period_at(self, now_ms: int) -> dict[str, Any]:
         """The ranking period the server clock says it is: id plus absolute UTC bounds, so a visitor in any zone sees the real reset time."""
-        local = datetime.fromtimestamp(now_ms / MS, tz=timezone.utc).astimezone(self._zone)
+        local = datetime.fromtimestamp(now_ms / MS, tz=UTC).astimezone(self._zone)
         if self.config.hall_kind == "week":
             start = (local - timedelta(days=local.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
             end = start + timedelta(days=7)
@@ -244,7 +242,7 @@ class WallStore:
             start = local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             end = (start.replace(year=start.year + 1, month=1) if start.month == 12 else start.replace(month=start.month + 1))
             pid = f"{start.year}-{start.month:02d}"
-        to_utc = lambda d: d.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        to_utc = lambda d: d.astimezone(UTC).isoformat().replace("+00:00", "Z")
         return {"id": pid, "kind": self.config.hall_kind, "starts_at": to_utc(start), "ends_at": to_utc(end)}
 
     def _roll_period(self, conn: sqlite3.Connection, now_ms: int) -> str:
@@ -293,7 +291,7 @@ class WallStore:
     # ------------------------------------------------------------ marks
 
     @staticmethod
-    def _mark_summary(row: sqlite3.Row) -> Dict[str, Any]:
+    def _mark_summary(row: sqlite3.Row) -> dict[str, Any]:
         if row["status"] == "removed":
             return {"mark_id": row["mark_id"], "status": "removed", "name": None, "section_id": None, "slot": None}
         placed = row["status"] in ("visible", "hidden")
@@ -303,7 +301,7 @@ class WallStore:
     def _meta(self, c: sqlite3.Connection) -> sqlite3.Row:
         return c.execute("SELECT * FROM meta WHERE id = 1").fetchone()
 
-    def _accepting(self, c: sqlite3.Connection, now_ms: int) -> Tuple[bool, str]:
+    def _accepting(self, c: sqlite3.Connection, now_ms: int) -> tuple[bool, str]:
         m = self._meta(c)
         if not m["accepting"]:
             return False, "the wall is not taking names right now"
@@ -316,7 +314,7 @@ class WallStore:
             return False, "too many names are waiting to be reviewed; try again later"
         return True, ""
 
-    def _assign_slot(self, c: sqlite3.Connection, mark_id: int, now_ms: int) -> Tuple[int, int]:
+    def _assign_slot(self, c: sqlite3.Connection, mark_id: int, now_ms: int) -> tuple[int, int]:
         """First approval only. Inside the caller's BEGIN IMMEDIATE: take the open section's next slot, open a new section when it is full. Never reused."""
         sec = c.execute("SELECT section_id, capacity, next_slot FROM sections ORDER BY section_id DESC LIMIT 1").fetchone()
         if sec is None or sec["next_slot"] >= sec["capacity"]:
@@ -334,7 +332,7 @@ class WallStore:
         c.execute("UPDATE marks SET status = 'visible' WHERE mark_id = ?", (mark_id,))
         c.execute("UPDATE meta SET visible_count = visible_count + 1, accepted_lifetime = accepted_lifetime + 1 WHERE id = 1")
 
-    def submit(self, cred_hash: str, idempotency_key: str, raw_name: Any) -> Tuple[int, Dict[str, Any], bool]:
+    def submit(self, cred_hash: str, idempotency_key: str, raw_name: Any) -> tuple[int, dict[str, Any], bool]:
         """(http status, body, created: a new mark was made by this call). One transaction on the credential row: exactly one mark per credential, and a retry with the same key returns the original."""
         try:
             name = validate(raw_name)
@@ -363,7 +361,7 @@ class WallStore:
             c.execute("INSERT INTO submissions VALUES (?, ?, ?, ?, ?, ?)", (cred_hash, idempotency_key, mark_id, now, 201, json.dumps(body)))
             return 201, body, True
 
-    def me(self, cred_hash: str) -> Dict[str, Any]:
+    def me(self, cred_hash: str) -> dict[str, Any]:
         now = self._now_ms()
         self._roll_if_needed(now)
         with self._read() as c:
@@ -376,7 +374,7 @@ class WallStore:
             return {"has_mark": True, "mark": self._mark_summary(row), "hall": bool(row["hall"]), "hall_eligible": row["found_at"] is not None,
                     "best_elapsed_ms": best[0] if best else None, "has_recovery_code": ses["recovery_hash"] is not None}
 
-    def session_state(self, cred_hash: str) -> Dict[str, Any]:
+    def session_state(self, cred_hash: str) -> dict[str, Any]:
         with self._read() as c:
             ses = self._session(c, cred_hash)
             status = None
@@ -395,7 +393,7 @@ class WallStore:
                 raise WallError(409, "code_exists", "a recovery code already exists; replace it only if you did not save it")
             c.execute("UPDATE wall_sessions SET recovery_hash = ? WHERE cred_hash = ?", (code_hash, cred_hash))
 
-    def recover(self, code_hash: str, caller_cred_hash: str, new_cred_hash: str) -> Dict[str, Any]:
+    def recover(self, code_hash: str, caller_cred_hash: str, new_cred_hash: str) -> dict[str, Any]:
         """One transaction: find the mark by the code's hash, consume the code, give its row a new credential (the old cookie secret stops working)."""
         with self._tx() as c:
             self._session(c, caller_cred_hash)
@@ -457,7 +455,7 @@ class WallStore:
 
     # ------------------------------------------------------------ public reads (8.6 items 1 to 3)
 
-    def meta(self) -> Dict[str, Any]:
+    def meta(self) -> dict[str, Any]:
         now = self._now_ms()
         self._roll_if_needed(now)
         with self._read() as c:
@@ -469,7 +467,7 @@ class WallStore:
                     "limits": {"name_min": NAME_MIN, "name_max": NAME_MAX},
                     "round": {"window_ms_default": self.config.window_ms, "untimed_available": True}}
 
-    def section(self, section_id: int, after_slot: int = -1, limit: int = 100) -> Dict[str, Any]:
+    def section(self, section_id: int, after_slot: int = -1, limit: int = 100) -> dict[str, Any]:
         if not 0 <= section_id < SQLITE_MAX_INT:
             raise _not_found()
         limit = max(1, min(int(limit), HARD_MAX_CAPACITY))
@@ -491,7 +489,7 @@ class WallStore:
         return base64.urlsafe_b64encode(json.dumps([found_at, mark_id]).encode()).decode().rstrip("=")
 
     @staticmethod
-    def _decode_cursor(raw: str) -> Tuple[int, int]:
+    def _decode_cursor(raw: str) -> tuple[int, int]:
         import base64
         try:
             pad = "=" * (-len(raw) % 4)
@@ -502,7 +500,7 @@ class WallStore:
         except Exception:
             raise WallError(400, "bad_request", "that page marker is not valid") from None
 
-    def hall(self, order: str = "newest", cursor: Optional[str] = None, limit: Optional[int] = None) -> Dict[str, Any]:
+    def hall(self, order: str = "newest", cursor: str | None = None, limit: int | None = None) -> dict[str, Any]:
         if order not in ("newest", "fastest"):
             raise WallError(400, "bad_request", "order must be newest or fastest")
         now = self._now_ms()
@@ -532,13 +530,13 @@ class WallStore:
 
     # ------------------------------------------------------------ rounds (8.7)
 
-    def _snapshot(self, c: sqlite3.Connection, section_id: int) -> Dict[str, Any]:
+    def _snapshot(self, c: sqlite3.Connection, section_id: int) -> dict[str, Any]:
         sec = c.execute("SELECT * FROM sections WHERE section_id = ?", (section_id,)).fetchone()
         rows = c.execute("SELECT slot, mark_id, display_name FROM marks WHERE section_id = ? AND status = 'visible' ORDER BY slot LIMIT ?", (section_id, HARD_MAX_CAPACITY)).fetchall()
         return {"layout_version": sec["layout_version"], "capacity": sec["capacity"], "next_slot": sec["next_slot"],
                 "slots": [{"slot": r["slot"], "mark_id": r["mark_id"], "name": r["display_name"]} for r in rows]}
 
-    def _targets(self, c: sqlite3.Connection, mark: sqlite3.Row, snap: Dict[str, Any]) -> List[int]:
+    def _targets(self, c: sqlite3.Connection, mark: sqlite3.Row, snap: dict[str, Any]) -> list[int]:
         """Positions the owner's name may be shown at: another visible name (a swap), a removed tombstone, or a slot not yet assigned (a move). Never a hidden mark's slot."""
         capacity, next_slot, from_slot = snap["capacity"], snap["next_slot"], mark["slot"]
         hidden = {r[0] for r in c.execute("SELECT slot FROM marks WHERE section_id = ? AND status = 'hidden'", (mark["section_id"],))}
@@ -549,7 +547,7 @@ class WallStore:
         fresh = [s for s in pool if s not in recent]
         return fresh or pool  # finite slots mean repeats must eventually happen: when only recent ones remain, the bag is refilled
 
-    def issue_round(self, cred_hash: str, mode: str) -> Dict[str, Any]:
+    def issue_round(self, cred_hash: str, mode: str) -> dict[str, Any]:
         if mode not in ("timed", "untimed"):
             raise WallError(400, "bad_request", "mode must be timed or untimed")
         now = self._now_ms()
@@ -587,9 +585,9 @@ class WallStore:
             raise _not_found()  # unknown and foreign are the same answer
         return row
 
-    def ready_round(self, cred_hash: str, round_id: str) -> Dict[str, Any]:
+    def ready_round(self, cred_hash: str, round_id: str) -> dict[str, Any]:
         now = self._now_ms()
-        refusal: Optional[WallError] = None
+        refusal: WallError | None = None
         with self._tx() as c:  # a refusal that changes the round is raised after this block commits: raising inside would roll the change back
             self._session(c, cred_hash)
             r = self._own_round(c, cred_hash, round_id)
@@ -617,7 +615,7 @@ class WallStore:
                     return {"ready_at": _iso(now), "deadline_at": _iso(deadline), "server_now": _iso(now)}
         raise refusal
 
-    def tap_round(self, cred_hash: str, round_id: str, slot: Optional[int], mark_id: Optional[int]) -> Dict[str, Any]:
+    def tap_round(self, cred_hash: str, round_id: str, slot: int | None, mark_id: int | None) -> dict[str, Any]:
         now = self._now_ms()
         with self._tx() as c:
             self._session(c, cred_hash)
@@ -666,7 +664,7 @@ class WallStore:
 
     # ------------------------------------------------------------ owner tools (wall_admin CLI; there is no web route for any of these)
 
-    def list_marks(self, status: str, limit: int = 200) -> List[Dict[str, Any]]:
+    def list_marks(self, status: str, limit: int = 200) -> list[dict[str, Any]]:
         with self._read() as c:
             rows = c.execute("SELECT * FROM marks WHERE status = ? ORDER BY created_at, mark_id LIMIT ?", (status, limit)).fetchall()
         return [{"mark_id": r["mark_id"], "name": r["display_name"], "status": r["status"], "created_at": _iso(r["created_at"]), "section_id": r["section_id"], "slot": r["slot"]} for r in rows]
@@ -677,7 +675,7 @@ class WallStore:
             raise WallError(404, "not_found", f"no mark {mark_id}")
         return row
 
-    def approve(self, mark_id: int) -> Dict[str, Any]:
+    def approve(self, mark_id: int) -> dict[str, Any]:
         now = self._now_ms()
         with self._tx() as c:
             row = self._mark_for_admin(c, mark_id)
@@ -734,13 +732,13 @@ class WallStore:
         with self._tx() as c:
             c.execute("UPDATE meta SET layout_version_current = ?, mod_seq = mod_seq + 1 WHERE id = 1", (version,))
 
-    def export_public(self) -> List[Dict[str, Any]]:
+    def export_public(self) -> list[dict[str, Any]]:
         """Only what is already public: visible marks as {section_id, slot, name}. No hashes, sessions, hidden or removed names."""
         with self._read() as c:
             rows = c.execute("SELECT section_id, slot, display_name FROM marks WHERE status = 'visible' ORDER BY section_id, slot").fetchall()
         return [{"section_id": r["section_id"], "slot": r["slot"], "name": r["display_name"]} for r in rows]
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         with self._read() as c:
             m = self._meta(c)
             counts = {r[0]: r[1] for r in c.execute("SELECT status, COUNT(*) FROM marks GROUP BY status")}
@@ -768,7 +766,7 @@ class WallStore:
         os.chmod(dest, 0o600)
         return dest
 
-    def sweep(self) -> Dict[str, int]:
+    def sweep(self) -> dict[str, int]:
         """Housekeeping, safe to run any time: expired idempotency keys, long-unclaimed sessions, old rounds, ended periods. Never touches a mark."""
         now = self._now_ms()
         with self._tx() as c:
@@ -789,4 +787,4 @@ class WallStore:
             self.sweep()
 
 
-UPGRADERS: Dict[int, Callable[[sqlite3.Connection], None]] = {}  # step n upgrades schema n to n+1; empty until a second schema exists
+UPGRADERS: dict[int, Callable[[sqlite3.Connection], None]] = {}  # step n upgrades schema n to n+1; empty until a second schema exists

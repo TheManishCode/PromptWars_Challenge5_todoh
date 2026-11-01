@@ -25,7 +25,7 @@ from pathlib import Path
 
 from eventmate import consumption
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
-from typing import Iterable, Optional, Protocol, Tuple
+from typing import Iterable, Protocol
 
 PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts"
 _PROMPT_ID = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){1,3}")
@@ -63,14 +63,14 @@ class LLMClient(Protocol):
 
 
 class PromptStore:
-    def __init__(self, directory: Optional[Path] = None):
+    def __init__(self, directory: Path | None = None):
         self.dir = Path(directory) if directory is not None else PROMPT_DIR
 
-    def load(self, prompt_id: str) -> Tuple[str, int]:
+    def load(self, prompt_id: str) -> tuple[str, int]:
         """Return (body, version) of the highest version of ``prompt_id``."""
         if not isinstance(prompt_id, str) or not _PROMPT_ID.fullmatch(prompt_id):
             raise PromptError(f"invalid prompt id {prompt_id!r}")
-        best: Optional[Tuple[int, Path]] = None
+        best: tuple[int, Path] | None = None
         for p in self.dir.glob(f"{prompt_id}.v*.md"):
             m = re.fullmatch(re.escape(prompt_id) + r"\.v(\d+)\.md", p.name)
             if m and (best is None or int(m.group(1)) > best[0]):
@@ -84,7 +84,7 @@ class PromptStore:
         return text.strip(), best[0]
 
 
-def guard_rewrite(output: str, source: str, names: Iterable[str]) -> Optional[str]:
+def guard_rewrite(output: str, source: str, names: Iterable[str]) -> str | None:
     """Return None if ``output`` is an acceptable rewording of ``source``, else the reason."""
     if not output.strip():
         return "empty output"
@@ -135,7 +135,7 @@ def _int_env(name: str, default: int, lo: int, hi: int) -> int:
 class UsageMeter:
     """Counts model calls so a bug or a loop cannot burn credits. Failed calls count: the provider may still have billed them."""
 
-    def __init__(self, max_calls: Optional[int] = None):
+    def __init__(self, max_calls: int | None = None):
         self._max = max_calls
         self._lock = threading.Lock()
         self.reset()
@@ -166,7 +166,7 @@ def _post(url: str, headers: dict, data: bytes, timeout: float) -> bytes:
 
 
 class OpenAICompatClient:
-    def __init__(self, name: str, base_url: str, api_key: str, model: str, transport=_post, meter: Optional[UsageMeter] = None, extra: Optional[dict] = None, timeout: float = TIMEOUT_S):
+    def __init__(self, name: str, base_url: str, api_key: str, model: str, transport=_post, meter: UsageMeter | None = None, extra: dict | None = None, timeout: float = TIMEOUT_S):
         if not base_url.startswith("https://"):
             raise ValueError("a model endpoint must be https")
         self.name, self.model, self._url, self._key, self._transport, self._meter = name, model, base_url.rstrip("/") + "/chat/completions", api_key, transport, meter or METER
@@ -213,7 +213,7 @@ class FallbackClient:
 
     def __init__(self, clients):
         self.clients = list(clients)
-        self.last_used: Optional[str] = None
+        self.last_used: str | None = None
 
     @property
     def name(self) -> str:
@@ -233,12 +233,12 @@ class FallbackClient:
         raise LLMError("no model answered: " + "; ".join(errors))
 
 
-def _key(name: str) -> Optional[str]:
+def _key(name: str) -> str | None:
     v = os.environ.get(name, "").strip()
     return v if _KEY_OK.fullmatch(v) else None
 
 
-def client_from_env(model: Optional[str] = None, tier: str = "heavy", transport=_post) -> Optional[FallbackClient]:
+def client_from_env(model: str | None = None, tier: str = "heavy", transport=_post) -> FallbackClient | None:
     """NVIDIA and/or OpenRouter, ordered by ``tier``; None when no key is set or EVENTMATE_ENABLE_LLM=0.
 
     heavy: NVIDIA first (the big model), OpenRouter's free heavy model as backup. light: OpenRouter's free light model first, NVIDIA as backup.

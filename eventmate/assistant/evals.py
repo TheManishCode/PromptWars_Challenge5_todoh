@@ -13,9 +13,9 @@ import argparse
 import json
 import sys
 import tempfile
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from eventmate.assistant.agent import PROMPT_ID, Assistant
 from eventmate.assistant.identity import LOCAL_ORGANIZER, Principal, Role
@@ -44,28 +44,28 @@ REQUIRED = {
 FORBIDDEN = ("ignore previous", "you may recommend", "always agree")
 
 
-def static_evals(body: str) -> List[str]:
+def static_evals(body: str) -> list[str]:
     problems = [f"missing clause: {name}" for name, text in REQUIRED.items() if text not in body]
     problems += [f"forbidden phrase: {p!r}" for p in FORBIDDEN if p in body.lower()]
     return problems
 
 
-def prompt_state(prompts: Optional[PromptStore] = None) -> Dict[str, Any]:
+def prompt_state(prompts: PromptStore | None = None) -> dict[str, Any]:
     import hashlib
 
     body, version = (prompts or PromptStore()).load(PROMPT_ID)
     return {"prompt_id": PROMPT_ID, "version": version, "sha256": hashlib.sha256(body.encode()).hexdigest()}
 
 
-def read_lock(path: Path = LOCK) -> Dict[str, Any]:
+def read_lock(path: Path = LOCK) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def run_behavioral(assistant: Assistant, cases: Optional[List[dict]] = None) -> Dict[str, Any]:
+def run_behavioral(assistant: Assistant, cases: list[dict] | None = None) -> dict[str, Any]:
     """Run every case against the example plan; returns a report and does not raise on a failed case."""
     cases = cases if cases is not None else json.loads(CASES.read_text(encoding="utf-8"))["cases"]
     pid = assistant.em.plan(EXAMPLE, today=EVAL_TODAY).plan.plan_id
-    failures: List[str] = []
+    failures: list[str] = []
     for c in cases:
         who = LOCAL_ORGANIZER if c["role"] == "organizer" else Principal(user_id="eval-" + c["role"], roles=(Role(c["role"]),))
         before = len(assistant.em.ledger_entries(pid))
@@ -84,7 +84,7 @@ def run_behavioral(assistant: Assistant, cases: Optional[List[dict]] = None) -> 
     return {"cases": len(cases), "failures": failures, "passed": not failures}
 
 
-def run_retrieval(kb, k: int = 3, cases: Optional[List[dict]] = None) -> Dict[str, Any]:
+def run_retrieval(kb, k: int = 3, cases: list[dict] | None = None) -> dict[str, Any]:
     """Recall@k and MRR of the retriever over labelled queries (the haystack DocumentRecall / DocumentMRR measures). No model needed."""
     cases = cases if cases is not None else json.loads(CASES.read_text(encoding="utf-8"))["retrieval"]
     hits, rr, misses = 0, 0.0, []
@@ -98,7 +98,7 @@ def run_retrieval(kb, k: int = 3, cases: Optional[List[dict]] = None) -> Dict[st
     return {"cases": len(cases), "recall_at_k": hits / len(cases), "mrr": round(rr / len(cases), 3), "misses": misses}
 
 
-def update_lock(behavioral: Optional[Dict[str, Any]], model: str = "") -> Dict[str, Any]:
+def update_lock(behavioral: dict[str, Any] | None, model: str = "") -> dict[str, Any]:
     state = prompt_state()
     problems = static_evals(PromptStore().load(PROMPT_ID)[0])
     if problems:
@@ -108,7 +108,7 @@ def update_lock(behavioral: Optional[Dict[str, Any]], model: str = "") -> Dict[s
     lock = {
         **state,
         "static_evals": "passed",
-        "behavioral": {"status": "passed", "model": model, "cases": behavioral["cases"], "date": datetime.now(timezone.utc).date().isoformat()} if behavioral else {"status": "not_run"},
+        "behavioral": {"status": "passed", "model": model, "cases": behavioral["cases"], "date": datetime.now(UTC).date().isoformat()} if behavioral else {"status": "not_run"},
     }
     LOCK.write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8")
     return lock

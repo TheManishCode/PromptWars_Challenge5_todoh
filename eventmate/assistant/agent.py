@@ -13,7 +13,7 @@ import re
 import time
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Any, Deque, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Sequence
 
 from pydantic import Field
 
@@ -48,33 +48,33 @@ NO_EVIDENCE = "I could not find that in this plan or in to;doh-the event planner
 
 class AnswerResult(_Model):
     answer: str
-    citations: Tuple[str, ...] = ()
-    proposals: Tuple[Proposal, ...] = ()
+    citations: tuple[str, ...] = ()
+    proposals: tuple[Proposal, ...] = ()
     route: str
     cache: str
     outcome: str  # answered | refused | degraded | cancelled (a voice turn dropped before it could commit anything)
     trace_id: str
-    degraded_reason: Optional[str] = Field(default=None, max_length=300)
+    degraded_reason: str | None = Field(default=None, max_length=300)
 
 
 class AssistantError(ValueError):
     pass
 
 
-def prompt_sha(prompts: Optional[PromptStore] = None) -> str:
+def prompt_sha(prompts: PromptStore | None = None) -> str:
     body, _ = (prompts or PromptStore()).load(PROMPT_ID)
     return sha(body)
 
 
 class Assistant:
-    def __init__(self, em: EventMate, llms: Optional[Dict[str, LLMClient]] = None, kb: Optional[KnowledgeBase] = None, prompts: Optional[PromptStore] = None,
-                 cache: Optional[AnswerCache] = None, policy: Optional[dict] = None, exporter: Optional[LangfuseExporter] = None, log_dir: Optional[Path] = None, run_id: Optional[str] = None):
+    def __init__(self, em: EventMate, llms: dict[str, LLMClient] | None = None, kb: KnowledgeBase | None = None, prompts: PromptStore | None = None,
+                 cache: AnswerCache | None = None, policy: dict | None = None, exporter: LangfuseExporter | None = None, log_dir: Path | None = None, run_id: str | None = None):
         self.em = em
         self.llms = {k: v for k, v in (llms or {}).items() if v is not None}
         self.kb = kb or build_default(em.manager.budget.policy)
         self.prompts = prompts or PromptStore()
         self.cache = cache or AnswerCache()
-        self.tools: Dict[str, Tool] = build_tools()
+        self.tools: dict[str, Tool] = build_tools()
         log_dir = log_dir or em.logs.decisions.log_dir
         run_id = run_id or em.logs.decisions.run_id
         self.traces = TraceLog(log_dir, run_id)
@@ -87,10 +87,10 @@ class Assistant:
         self.feedback_log = FeedbackLog(log_dir, run_id)
         self.exporter = exporter if exporter is not None else LangfuseExporter.from_env()
         self.sessions = SessionStore()
-        self._spend: Dict[str, Deque[Tuple[float, int]]] = defaultdict(deque)  # user -> (time, est. tokens) in the last hour
+        self._spend: dict[str, deque[tuple[float, int]]] = defaultdict(deque)  # user -> (time, est. tokens) in the last hour
 
     @classmethod
-    def from_env(cls, em: EventMate, **kw) -> "Assistant":
+    def from_env(cls, em: EventMate, **kw) -> Assistant:
         """Small and large models from the environment; either falls back to the other, and to ``em.llm``."""
         large = client_from_env(tier="heavy") or em.llm
         small = client_from_env(tier="light") or large
@@ -105,7 +105,7 @@ class Assistant:
 
     # ------------------------------------------------------------------ ask
 
-    def ask(self, question: str, plan_id: str, principal: Principal, turn: Optional[Any] = None) -> AnswerResult:
+    def ask(self, question: str, plan_id: str, principal: Principal, turn: Any | None = None) -> AnswerResult:
         """Answer one question. ``turn`` is given for a voice turn (eventmate.voice.turns.Turn): it stages proposals, never writes the answer cache, and is
         checked for cancellation after every blocking step, so a cancelled turn commits nothing. Typed chat passes no turn and behaves exactly as before."""
         if not isinstance(question, str) or not question.strip():
@@ -169,7 +169,7 @@ class Assistant:
                 return AnswerResult(answer="", route=r.kind, cache="skipped", outcome="cancelled", trace_id=tb.id)
         return final.model_copy(update={"answer": ph.restore(final.answer)})  # real values back only in what this person sees; the trace and memory hold the masked text
 
-    def _record(self, tb: TraceBuilder, result: AnswerResult, principal: Principal, plan_id: str, roles: Tuple[str, ...], question: Optional[str] = None) -> AnswerResult:
+    def _record(self, tb: TraceBuilder, result: AnswerResult, principal: Principal, plan_id: str, roles: tuple[str, ...], question: str | None = None) -> AnswerResult:
         question = tb.question if question is None else question
         result = result.model_copy(update={"trace_id": tb.id})
         try:
@@ -181,7 +181,7 @@ class Assistant:
             self.exporter.export_trace(entry)
         return result
 
-    def _write_trace(self, tb: TraceBuilder, result: AnswerResult, principal: Principal, plan_id: str, roles: Tuple[str, ...], question: str):
+    def _write_trace(self, tb: TraceBuilder, result: AnswerResult, principal: Principal, plan_id: str, roles: tuple[str, ...], question: str):
         return self.traces.write(
             request_id=tb.id, plan_id=plan_id, user_id=principal.user_id, roles=roles, question_sha256=sha(question), question_masked=guard.mask_pii(question)[:240],
             answer_masked=guard.mask_pii(result.answer)[:600], route=result.route, cache=result.cache, outcome=result.outcome, steps=tuple(tb.steps), cited=result.citations,
@@ -191,13 +191,13 @@ class Assistant:
 
     # ------------------------------------------- curation and feedback (humans)
 
-    def _own_trace(self, trace_id: str, principal: Principal, need: Optional[Perm] = None):
+    def _own_trace(self, trace_id: str, principal: Principal, need: Perm | None = None):
         t = self.traces.find(trace_id)
         if t is None or (t.user_id != principal.user_id and not principal.can(Perm.TRACE_READ)) or (need and not principal.can(need)):
             raise AssistantError("not allowed or unknown answer")
         return t
 
-    def approve_answer(self, trace_id: str, principal: Principal, answer: Optional[str] = None) -> Annotation:
+    def approve_answer(self, trace_id: str, principal: Principal, answer: str | None = None) -> Annotation:
         """An approver turns a real answer into a reusable approved answer (optionally rewording it first)."""
         t = self._own_trace(trace_id, principal, Perm.APPROVE)
         if t.outcome != "answered" and answer is None:
@@ -224,10 +224,10 @@ class Assistant:
             q.popleft()
         return sum(t for _, t in q) >= self.policy["token_cap"]
 
-    def _complete(self, kind: str, prompt: str, user_id: str, tb: TraceBuilder) -> Tuple[str, str, str]:
+    def _complete(self, kind: str, prompt: str, user_id: str, tb: TraceBuilder) -> tuple[str, str, str]:
         """Retry with backoff, then fall back to the other model tier (the gateway pattern). Returns (reply, model name, tier that answered)."""
         tiers = [k for k in dict.fromkeys((kind, "large", "small")) if k in self.llms]
-        last: Optional[Exception] = None
+        last: Exception | None = None
         for tier in tiers:
             client = self.llms[tier]
             for attempt in range(self.policy["retries"] + 1):
@@ -255,11 +255,11 @@ class Assistant:
 
     # --------------------------------------------------------------- answering
 
-    def _answer(self, question: str, plan_id: str, principal: Principal, r: Route, tb: TraceBuilder, memory: str = "", turn: Optional[Any] = None) -> Tuple[AnswerResult, bool]:
+    def _answer(self, question: str, plan_id: str, principal: Principal, r: Route, tb: TraceBuilder, memory: str = "", turn: Any | None = None) -> tuple[AnswerResult, bool]:
         ctx = ToolContext(self.em, principal, plan_id, self.kb, turn.staging if turn is not None else self.queue)
-        evidence: List[str] = []
-        cited: Dict[str, str] = {}  # id -> text that may be cited
-        proposals: List[Proposal] = []
+        evidence: list[str] = []
+        cited: dict[str, str] = {}  # id -> text that may be cited
+        proposals: list[Proposal] = []
         hostile = [False]
 
         def call(name: str, args: Any) -> str:
@@ -281,7 +281,7 @@ class Assistant:
                     cited[p["id"]] = p["text"]
             return text
 
-        def done(answer: str, citations: Tuple[str, ...], outcome: str, reason: Optional[str] = None) -> Tuple[AnswerResult, bool]:
+        def done(answer: str, citations: tuple[str, ...], outcome: str, reason: str | None = None) -> tuple[AnswerResult, bool]:
             tb.step("output", outcome, ok=outcome == "answered", detail=reason or "")
             answer = guard.mask_pii(answer)
             return AnswerResult(answer=answer, citations=citations, proposals=tuple(proposals), route=r.kind, cache="miss", outcome=outcome, trace_id=tb.id, degraded_reason=reason), hostile[0]
@@ -295,7 +295,7 @@ class Assistant:
                 return done("You don't have access to that information for this event.", (), "refused", data["error"])
             return done(_render(r.tool, data), (r.tool,), "answered")
 
-        def fallback(reason: str, outcome: str = "degraded") -> Tuple[AnswerResult, bool]:
+        def fallback(reason: str, outcome: str = "degraded") -> tuple[AnswerResult, bool]:
             lines = [x for x in (_readable(t) for t in evidence[-2:]) if x]
             if lines:  # the tool results in words, never as raw JSON (an outside verifier saw '{"passages": [...]}' shown to a user)
                 return done("Here is what I found:\n" + "\n".join(f"- {x}" for x in lines), tuple(cited), outcome, reason)
@@ -354,7 +354,7 @@ class Assistant:
             return fallback(problem, "degraded" if evidence else "refused")
         return fallback("no final answer within the step limit")
 
-    def _verify(self, msg: Dict[str, Any], question: str, evidence: List[str], cited: Dict[str, str], proposals: Sequence[Proposal] = ()) -> Tuple[Optional[str], Tuple[str, ...]]:
+    def _verify(self, msg: dict[str, Any], question: str, evidence: list[str], cited: dict[str, str], proposals: Sequence[Proposal] = ()) -> tuple[str | None, tuple[str, ...]]:
         """The output guard: None if the answer may be shown, else why not."""
         answer = msg["answer"].strip()
         if proposals and _ACTION_CLAIM.search(answer):  # a proposal changes nothing until a human approves it, so no answer may say it was done
@@ -412,7 +412,7 @@ def _inr(n: Any) -> str:
     return f"INR {int(n):,}"
 
 
-def _render(tool: str, d: Dict[str, Any]) -> str:
+def _render(tool: str, d: dict[str, Any]) -> str:
     """Deterministic wording for routine questions: no model, so nothing can be invented."""
     if tool == "get_public_event_info":
         venue = f" at {d['venue']}" if d.get("venue") else ""

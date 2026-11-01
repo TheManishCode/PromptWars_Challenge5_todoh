@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 import time
 from typing import Any
+import contextlib
 
 # 6 MB: the largest upload route is audio (5 MB) plus a multipart envelope; every other route is held to 64 KB by the app itself
 MAX_REQUEST_BYTES = 6 * 1024 * 1024
@@ -60,10 +61,8 @@ def run(app, host: str, port: int, requested: str = "auto", remote: bool = False
         def pull(fn):
             """Ask the loop's own thread to run ``fn``. If the wake-up pipe is already closed (EBADF) the loop has finished closing everything, which is exactly what the stop wanted:
             nothing is left to ask. Seen about one stop in four under load as a traceback from the helper thread."""
-            try:
+            with contextlib.suppress(OSError):
                 server.trigger.pull_trigger(fn)
-            except OSError:
-                pass
 
         def busy(ch):  # a request being handled, queued, or a response not yet fully sent
             return bool(getattr(ch, "running_tasks", False) or getattr(ch, "requests", None) or getattr(ch, "total_outbufs_len", 0))

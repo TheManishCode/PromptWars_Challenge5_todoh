@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -32,7 +32,7 @@ class _Entry(BaseModel):
 
 class ToolCallEntry(_Entry):
     tool: str = Field(min_length=1, max_length=80)
-    args: Dict[str, Scalar]
+    args: dict[str, Scalar]
     ok: bool
     result: str = Field(max_length=2000)
     duration_ms: float = Field(ge=0)
@@ -47,10 +47,10 @@ class LLMTraceEntry(_Entry):
     input_chars: int = Field(ge=0)
     output_chars: int = Field(ge=0)
     accepted: bool
-    rejection_reason: Optional[str] = Field(default=None, max_length=500)
+    rejection_reason: str | None = Field(default=None, max_length=500)
     duration_ms: float = Field(ge=0)
-    input_text: Optional[str] = None
-    output_text: Optional[str] = None
+    input_text: str | None = None
+    output_text: str | None = None
 
 
 class ValidationFailureEntry(_Entry):
@@ -61,7 +61,7 @@ class ValidationFailureEntry(_Entry):
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _sha(text: str) -> str:
@@ -125,7 +125,7 @@ class RunLogs:
         self.validation_failures = validation_failures
 
     @classmethod
-    def create(cls, log_dir: Optional[Path] = None, run_id: Optional[str] = None, store_llm_text: bool = False) -> "RunLogs":
+    def create(cls, log_dir: Path | None = None, run_id: str | None = None, store_llm_text: bool = False) -> RunLogs:
         run_id = run_id or uuid.uuid4().hex
         return cls(
             DecisionLogger(log_dir, run_id),

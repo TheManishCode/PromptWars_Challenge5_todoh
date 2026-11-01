@@ -21,7 +21,7 @@ import os
 import re
 from datetime import date
 from pathlib import Path
-from typing import Dict, List, Literal, Optional
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 from eventmate.planning import intake
 from eventmate.voice import audio as voice_audio
@@ -56,7 +56,7 @@ LONG_CACHE = frozenset({"avatar.glb", "cabinet.glb", "three.min.js", "alley_van.
 VENDOR_FILES = frozenset({"three.min.js", "CopyShader.js", "LuminosityHighPassShader.js", "EffectComposer.js", "RenderPass.js", "ShaderPass.js", "MaskPass.js", "UnrealBloomPass.js", "GLTFLoader.js", "meshopt_decoder.js"})
 GZIP_MIN = 1024  # below this the header overhead outweighs the saving
 GZIP_MAX = 6 * 1024 * 1024  # above this a file is sent as it is: the 55 MB cat machine would stall the request and sit in memory. Measured: the 3.6 MB mural shrinks 44% (3.6 -> 2.0 MB), the Hall table 50%; compression is done once per file and cached
-_gzip_cache: Dict[tuple, bytes] = {}  # (name, mtime_ns) -> compressed bytes; the file set is fixed and small
+_gzip_cache: dict[tuple, bytes] = {}  # (name, mtime_ns) -> compressed bytes; the file set is fixed and small
 WORKSPACE_EXEMPT = ("/api/owner/status", "/metrics", "/api/wall/")  # /api routes with their own authentication: no workspace is looked up or made for them
 # POST routes that send, or let something send later, through the owner's mailbox or gateway; refused for every guest workspace
 SENDING_ROUTES = re.compile(
@@ -86,7 +86,7 @@ def csp_for(base: str) -> str:
 
 
 # model name -> content-addressed file name on the model host (``tools/assets/publish_models.sh`` writes this); a changed model is a new name, so the host can cache it for good
-CDN_MODELS: Dict[str, str] = {k: v["file"] for k, v in json.loads((Path(__file__).parent / "cdn_models.json").read_text(encoding="utf-8")).items()}
+CDN_MODELS: dict[str, str] = {k: v["file"] for k, v in json.loads((Path(__file__).parent / "cdn_models.json").read_text(encoding="utf-8")).items()}
 HEAVY_MAX = 4  # concurrent network-bound searches
 _PLAN_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 GUEST_UPLOAD_LIMIT = 640 * 1024  # a 256 KB CSV can grow when JSON-escaped; the parser enforces the real 256 KB limit
@@ -108,19 +108,19 @@ class _Strict(BaseModel):
 
 class PlanBody(_Strict):
     request: str = Field(min_length=1, max_length=2000)
-    guest_list_id: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    guest_list_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
 
 class IntakeBody(_Strict):
-    messages: List[str] = Field(min_length=1, max_length=intake.MAX_MESSAGES)
-    draft: Optional[intake.IntakeDraft] = None
+    messages: list[str] = Field(min_length=1, max_length=intake.MAX_MESSAGES)
+    draft: intake.IntakeDraft | None = None
 
 
 class IntakeConfirmBody(_Strict):
     draft: intake.IntakeDraft
     raw_text: str = Field(default="", max_length=2000)
     source: str = Field(default="rule:parser", max_length=80, pattern=r"^[A-Za-z0-9:._-]+$")
-    guest_list_id: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    guest_list_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
 
 class AskBody(_Strict):
@@ -137,10 +137,10 @@ class QuoteBody(_Strict):
     evidence_ref: str = Field(default="", max_length=200)
     amount_inr: int = Field(gt=0)
     basis: Literal["total", "per_plate"]
-    guest_count: Optional[int] = Field(default=None, ge=1)
-    inclusions: List[str] = Field(default_factory=list, max_length=30)
-    exclusions: List[str] = Field(default_factory=list, max_length=30)
-    hidden_costs: List[HiddenCost] = Field(default_factory=list, max_length=20)
+    guest_count: int | None = Field(default=None, ge=1)
+    inclusions: list[str] = Field(default_factory=list, max_length=30)
+    exclusions: list[str] = Field(default_factory=list, max_length=30)
+    hidden_costs: list[HiddenCost] = Field(default_factory=list, max_length=20)
     note: str = Field(default="", max_length=200)
 
 
@@ -181,8 +181,8 @@ class RequestAllBody(_Strict):
 
 class ContactBody(_Strict):
     vendor_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
-    email: Optional[str] = Field(default=None, max_length=254)
-    whatsapp: Optional[str] = Field(default=None, max_length=30)
+    email: str | None = Field(default=None, max_length=254)
+    whatsapp: str | None = Field(default=None, max_length=30)
     preferred: Literal["email", "whatsapp"] = "whatsapp"
 
 
@@ -195,12 +195,12 @@ class AutoreplyBody(_Strict):
 
 class JobBody(_Strict):
     category: VendorCategory
-    vendor_ids: List[str] = Field(min_length=1, max_length=10)
+    vendor_ids: list[str] = Field(min_length=1, max_length=10)
     goal: str = Field(min_length=1, max_length=300)
     sender_name: str = Field(min_length=1, max_length=80)
     deadline_days: int = Field(default=7, ge=1, le=60)
     min_quotes: int = Field(default=3, ge=1, le=10)
-    max_amount_inr: Optional[int] = Field(default=None, gt=0)
+    max_amount_inr: int | None = Field(default=None, gt=0)
     max_nudges_per_vendor: int = Field(default=2, ge=0, le=5)
     reply_window_hours: int = Field(default=24, ge=1, le=168)
 
@@ -214,7 +214,7 @@ class ResolveItemBody(_Strict):
 
 
 class IdeasBody(_Strict):
-    preferences: List[str] = Field(default_factory=list, max_length=5)
+    preferences: list[str] = Field(default_factory=list, max_length=5)
 
 
 class DoneBody(_Strict):
@@ -229,7 +229,7 @@ class CommunityItemBody(_Strict):
 
 
 class AccessBody(_Strict):
-    features: List[Literal["step_free_access", "accessible_toilet", "reserved_seating", "hearing_support", "accessible_parking"]] = Field(default_factory=list, max_length=5)
+    features: list[Literal["step_free_access", "accessible_toilet", "reserved_seating", "hearing_support", "accessible_parking"]] = Field(default_factory=list, max_length=5)
     evidence_ref: str = Field(min_length=1, max_length=200)
     entered_by: str = Field(min_length=1, max_length=80)
 
@@ -247,7 +247,7 @@ class NotifyConfirmBody(_Strict):
 
 class ShortlistSearchBody(_Strict):
     category: VendorCategory
-    source: Optional[Literal["osm", "places"]] = None
+    source: Literal["osm", "places"] | None = None
     limit: int = Field(default=10, ge=1, le=20)
 
 
@@ -257,7 +257,7 @@ class WebsiteBody(_Strict):
 
 class ConfirmContactBody(_Strict):
     by: str = Field(min_length=1, max_length=60)
-    edited_value: Optional[str] = Field(default=None, max_length=254)
+    edited_value: str | None = Field(default=None, max_length=254)
     acknowledge_bounce: bool = False  # required to confirm an address that bounced earlier
 
 
@@ -284,7 +284,7 @@ class TestVendorBody(_Strict):
     email: str = Field(min_length=3, max_length=254)
     owns_address: bool
     by: str = Field(min_length=1, max_length=60)
-    city: Optional[str] = Field(default=None, max_length=80)
+    city: str | None = Field(default=None, max_length=80)
 
 
 class SessionClearBody(_Strict):
@@ -313,8 +313,8 @@ class VoiceTurnBody(_Strict):
     generation: StrictInt
     text: str = Field(min_length=1, max_length=4000)
     input_mode: str = Field(max_length=20)
-    confidence: Optional[float] = None
-    language: Optional[str] = Field(default=None, max_length=12)
+    confidence: float | None = None
+    language: str | None = Field(default=None, max_length=12)
 
 
 class VoiceCancelBody(_Strict):
@@ -334,7 +334,7 @@ class FeedbackBody(_Strict):
 
 class ApproveAnswerBody(_Strict):
     trace_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
-    answer: Optional[str] = Field(default=None, min_length=1, max_length=1500)
+    answer: str | None = Field(default=None, min_length=1, max_length=1500)
 
 
 class PlanRefBody(_Strict):
@@ -343,7 +343,7 @@ class PlanRefBody(_Strict):
 
 class ApplyBody(_Strict):
     option: TradeoffOption
-    guest_list_id: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    guest_list_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
 
 class LedgerBody(_Strict):
@@ -362,7 +362,7 @@ class FlightBody(_Strict):
     date: date
     adults: int = Field(default=1, ge=1, le=9)
     cabin: Literal[CABINS] = "economy"
-    max_stops: Optional[int] = Field(default=None, ge=0, le=2)
+    max_stops: int | None = Field(default=None, ge=0, le=2)
     limit: int = Field(default=10, ge=1, le=30)
 
 
@@ -373,10 +373,10 @@ class LegBody(_Strict):
 
 
 class MultiCityBody(_Strict):
-    legs: List[LegBody] = Field(min_length=2, max_length=MAX_MULTI_CITY_LEGS)
+    legs: list[LegBody] = Field(min_length=2, max_length=MAX_MULTI_CITY_LEGS)
     adults: int = Field(default=1, ge=1, le=9)
     cabin: Literal[CABINS] = "economy"
-    max_stops: Optional[int] = Field(default=None, ge=0, le=2)
+    max_stops: int | None = Field(default=None, ge=0, le=2)
     limit: int = Field(default=5, ge=1, le=10)
 
 

@@ -8,7 +8,7 @@ offer of the rest on screen. Nothing is generated: ``verify_spoken`` recomputes 
 from __future__ import annotations
 
 import re
-from typing import List, NamedTuple, Set, Tuple
+from typing import NamedTuple
 
 MAX_SENTENCES = 3
 MAX_WORDS = 55  # about twenty seconds at a normal speaking pace
@@ -40,7 +40,7 @@ def strip_markup(text: str) -> str:
 
 def _words_for(value: int) -> str:
     """Indian grouping in words: 139000 -> '1 lakh 39 thousand'; below one thousand the digits are left alone."""
-    parts: List[str] = []
+    parts: list[str] = []
     for size, name in ((10_000_000, "crore"), (100_000, "lakh"), (1000, "thousand")):
         n, value = divmod(value, size)
         if n:
@@ -50,7 +50,7 @@ def _words_for(value: int) -> str:
     return " ".join(parts)
 
 
-def _amount(match: "re.Match[str]") -> str:
+def _amount(match: re.Match[str]) -> str:
     raw = match.group(1).replace(",", "")
     if "." in raw:
         return f"{raw} rupees"  # a fractional amount is said as written
@@ -64,9 +64,9 @@ def speak_numbers(text: str) -> str:
     return _PERCENT.sub(r"\1 percent", text)
 
 
-def split_sentences(text: str) -> List[str]:
+def split_sentences(text: str) -> list[str]:
     """Split on sentence ends and line breaks, not on decimals ("1.5"), "Rs." or "e.g."."""
-    out: List[str] = []
+    out: list[str] = []
     for line in text.splitlines():
         line = line.strip()
         start = 0
@@ -84,7 +84,7 @@ def split_sentences(text: str) -> List[str]:
 
 
 class Spoken(NamedTuple):
-    sentences: Tuple[Tuple[str, str], ...]  # (what to say, what to show)
+    sentences: tuple[tuple[str, str], ...]  # (what to say, what to show)
     text: str  # the sentences to say, joined
     truncated: bool
 
@@ -97,7 +97,7 @@ def spoken_answer(answer: str, max_sentences: int = MAX_SENTENCES, max_words: in
     """The checked answer as short speech. ``readback`` (the summary of a change the user may confirm) is always said, so a mis-heard number is caught."""
     said = [(_speak(s), s) for s in split_sentences(answer)]
     said = [(spoken, shown) for spoken, shown in said if spoken]
-    pairs: List[Tuple[str, str]] = []
+    pairs: list[tuple[str, str]] = []
     words = 0
     for spoken, shown in said:
         n = len(spoken.split())
@@ -125,9 +125,9 @@ _NUMBER_RUN = re.compile(r"\d+(?:\.\d+)?(?: (?:crore|lakh|thousand))?(?: \d+(?:\
 _UNIT = {"crore": 10_000_000, "lakh": 100_000, "thousand": 1000}
 
 
-def spoken_values(text: str) -> Set[float]:
+def spoken_values(text: str) -> set[float]:
     """Every number said in ``text``; "1 lakh 39 thousand" is one number, 139000."""
-    values: Set[float] = set()
+    values: set[float] = set()
     for run in _NUMBER_RUN.findall(re.sub(r"(?<=\d),(?=\d)", "", text)):  # "61,000" is one number, as it is in the answer
         total, pending = 0.0, None
         for tok in run.split():
@@ -142,13 +142,13 @@ def spoken_values(text: str) -> Set[float]:
     return values
 
 
-def answer_values(text: str) -> Set[float]:
+def answer_values(text: str) -> set[float]:
     """Every number written in the answer (commas removed)."""
     return {float(m.replace(",", "")) for m in re.findall(r"\d[\d,]*(?:\.\d+)?", text)}
 
 
-def _names(text: str) -> Set[str]:
-    out: Set[str] = set()
+def _names(text: str) -> set[str]:
+    out: set[str] = set()
     for sentence in split_sentences(text) or [text]:
         for w in sentence.split()[1:]:  # the first word of a sentence is capitalised anyway
             w = w.strip(".,;:!?()\"'")

@@ -1,6 +1,6 @@
 """F9 part 2: recorded quotes drive prices everywhere; an expired quote fails closed (ADR-026)."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 
 import pytest
 
@@ -17,7 +17,7 @@ def em(tmp_path):
 
 
 def rec(em, vendor=RASOI, category=C.CATERER, **kw):
-    base = dict(source_type="user_input", entered_by="asha", observed_at=datetime(2026, 10, 30, tzinfo=timezone.utc),
+    base = dict(source_type="user_input", entered_by="asha", observed_at=datetime(2026, 10, 30, tzinfo=UTC),
                 expires_at=date(2026, 11, 20), confidence=0.8, amount_inr=500, basis="per_plate", guest_count=100)
     base.update(kw)
     return em.observe_quote(vendor, category, **base)

@@ -11,7 +11,7 @@ written to the validation-failure log.
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable
 
 from eventmate.planning import community
 from eventmate.agents.budget import BudgetPolicy, compute_allocation
@@ -71,7 +71,7 @@ def _chk(name: str, passed: bool, detail: str) -> ConstraintCheck:
 class ValidatorAgent:
     agent_name = AgentName.VALIDATOR
 
-    def __init__(self, repo: VendorRepository, logs: RunLogs, policy: Optional[EventPolicy] = None, require_symbolic: bool = True, budget_policy: Optional[BudgetPolicy] = None):
+    def __init__(self, repo: VendorRepository, logs: RunLogs, policy: EventPolicy | None = None, require_symbolic: bool = True, budget_policy: BudgetPolicy | None = None):
         self.budget_policy = budget_policy or BudgetPolicy()
         self.repo = repo
         self.logs = logs
@@ -81,14 +81,14 @@ class ValidatorAgent:
     def validate(
         self,
         draft: PlanDraft,
-        parent: Optional[PlanVersion] = None,
+        parent: PlanVersion | None = None,
         released_vendor_ids: Iterable[str] = (),
         newly_confirmed_vendor_ids: Iterable[str] = (),
     ) -> ValidationReport:
         released = set(released_vendor_ids)
         newly = set(newly_confirmed_vendor_ids)  # per-call state: the validator is shared across threads
-        checks: List[ConstraintCheck] = []
-        warnings: List[str] = []
+        checks: list[ConstraintCheck] = []
+        warnings: list[str] = []
         checks += self._request_and_guests(draft)
         checks += self._vendors(draft, parent, newly)
         checks += self._budget(draft, warnings)
@@ -113,7 +113,7 @@ class ValidatorAgent:
 
     # --------------------------------------------------------- request/guests
 
-    def _request_and_guests(self, d: PlanDraft) -> List[ConstraintCheck]:
+    def _request_and_guests(self, d: PlanDraft) -> list[ConstraintCheck]:
         cats = [s.category for s in d.selections]
         want = sorted(c.value for c in d.request.services)
         out = [
@@ -127,8 +127,8 @@ class ValidatorAgent:
 
     # ----------------------------------------------------------------- vendors
 
-    def _vendors(self, d: PlanDraft, parent: Optional[PlanVersion], newly: set) -> List[ConstraintCheck]:
-        out: List[ConstraintCheck] = []
+    def _vendors(self, d: PlanDraft, parent: PlanVersion | None, newly: set) -> list[ConstraintCheck]:
+        out: list[ConstraintCheck] = []
         diets = tuple(dict.fromkeys(list(d.request.dietary) + list(d.guests.required_diets)))
         eff = d.request.with_changes(dietary=diets)
         for s in d.selections:
@@ -157,7 +157,7 @@ class ValidatorAgent:
 
     # ------------------------------------------------------------------ budget
 
-    def _budget(self, d: PlanDraft, warnings: List[str]) -> List[ConstraintCheck]:
+    def _budget(self, d: PlanDraft, warnings: list[str]) -> list[ConstraintCheck]:
         total = sum(s.cost for s in d.selections)
         budget = d.request.budget_total
         if total <= budget and total > budget - d.allocation.contingency:
@@ -166,7 +166,7 @@ class ValidatorAgent:
 
     # ---------------------------------------------------------------- schedule
 
-    def _policy_structure(self, d: PlanDraft) -> List[ConstraintCheck]:
+    def _policy_structure(self, d: PlanDraft) -> list[ConstraintCheck]:
         """The spec is part of the draft, so it cannot be trusted: compare it with the policy."""
         p = self.policy
         _, event_minutes = p.event_window(d.request)
@@ -201,7 +201,7 @@ class ValidatorAgent:
             problems.append(f"resources must be exactly {expected} (organizers come from the request, all others capacity 1), spec has {dict(d.spec.resources)}")
         return [_chk("spec_matches_policy", not problems, "task durations, resources and capacities follow the policy" if not problems else "; ".join(problems[:5]))]
 
-    def _schedule(self, d: PlanDraft) -> List[ConstraintCheck]:
+    def _schedule(self, d: PlanDraft) -> list[ConstraintCheck]:
         spec, entries = d.spec, {e.task_id: e for e in d.solution.entries}
         tasks = {t.id: t for t in spec.tasks}
         known = [t for t in tasks.values() if t.id in entries]
@@ -269,10 +269,10 @@ class ValidatorAgent:
         return ids
 
     @staticmethod
-    def _resource_overuse(spec, entries) -> List[str]:
-        bad: List[str] = []
+    def _resource_overuse(spec, entries) -> list[str]:
+        bad: list[str] = []
         for resource, cap in spec.resources.items():
-            events: List[Tuple[int, int]] = []
+            events: list[tuple[int, int]] = []
             for t in spec.tasks:
                 if t.resource == resource and t.id in entries:
                     events += [(entries[t.id].start, 1), (entries[t.id].end, -1)]
@@ -284,12 +284,12 @@ class ValidatorAgent:
                     break
         return bad
 
-    def _policy_rules(self, d: PlanDraft) -> List[ConstraintCheck]:
+    def _policy_rules(self, d: PlanDraft) -> list[ConstraintCheck]:
         """Business rules re-derived from the request, not read back from the spec."""
         p, e = self.policy, {x.task_id: x for x in d.solution.entries}
         day0 = (d.request.event_date - d.origin.date()).days * DAY
         hour, minutes = p.event_window(d.request)
-        out: List[ConstraintCheck] = []
+        out: list[ConstraintCheck] = []
         ev = e.get("event")
         out.append(_chk("event_time", ev is not None and ev.start == day0 + hour * 60 and ev.end - ev.start == minutes, f"event must run {hour:02d}:00 for {minutes} min on {d.request.event_date.isoformat()}"))
         if "send_invitations" in e:
@@ -312,7 +312,7 @@ class ValidatorAgent:
 
     # ---------------------------------------------------------------- symbolic
 
-    def _symbolic(self, d: PlanDraft, warnings: List[str]) -> List[ConstraintCheck]:
+    def _symbolic(self, d: PlanDraft, warnings: list[str]) -> list[ConstraintCheck]:
         s = d.symbolic.status
         if s == "valid":
             return [_chk("symbolic_feasibility", True, "Fast Downward found a plan and VAL validated it")]
@@ -323,8 +323,8 @@ class ValidatorAgent:
 
     # ------------------------------------------------------------ preservation
 
-    def _preservation(self, d: PlanDraft, parent: PlanVersion, released: set) -> List[ConstraintCheck]:
-        out: List[ConstraintCheck] = []
+    def _preservation(self, d: PlanDraft, parent: PlanVersion, released: set) -> list[ConstraintCheck]:
+        out: list[ConstraintCheck] = []
         now = {s.vendor_id: s for s in d.selections}
         old_items = {i.task_id: i for i in parent.items}
         new_items = {i.task_id: i for i in d.items}

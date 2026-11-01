@@ -1,7 +1,7 @@
 """F10 vendor score: a transparent formula over recorded quotes. No quote, no score; nothing is invented (ADR-040)."""
 
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 
 import pytest
 
@@ -13,7 +13,7 @@ from tests.conftest import TODAY
 from eventmate.pricing.vendorscore import WEIGHTS, score_category
 from eventmate.web.app import create_app
 
-NOW = datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 30, 9, 0, tzinfo=UTC)
 CATERERS = ["cat-pune-annapurna", "cat-pune-rasoi", "cat-pune-spice", "cat-pune-darbar"]
 FULL = ("service staff", "crockery and cutlery", "serving counters", "taxes", "transport")
 

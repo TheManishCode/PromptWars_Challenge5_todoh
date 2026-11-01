@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Tuple
 
 from pydantic import Field
 
@@ -38,7 +37,7 @@ ROLE_PERMS = {
 
 class Principal(_Model):
     user_id: str = Field(pattern=r"^[A-Za-z0-9_.@-]{1,64}$")
-    roles: Tuple[Role, ...] = Field(min_length=1)
+    roles: tuple[Role, ...] = Field(min_length=1)
 
     def perms(self) -> frozenset:
         return frozenset().union(*(ROLE_PERMS[r] for r in self.roles))

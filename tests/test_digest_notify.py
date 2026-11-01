@@ -6,7 +6,7 @@ It can never reach a non-owner address and never includes the budget.
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import pytest
 from pydantic import ValidationError
@@ -21,7 +21,7 @@ from tests.test_conversations import Clock
 from tests.test_jobs_worker import NoWhatsApp
 from eventmate.web.app import create_app
 
-T0 = datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 30, 9, 0, tzinfo=UTC)
 COLLEGE = "Plan a 150-person college fest in Pune on December 12 under INR 250,000. Venue and catering."
 ADDR = {"cat-pune-annapurna": "a@annapurna.test", "cat-pune-rasoi": "r@rasoi.test", "cat-pune-spice": "s@spice.test"}
 VENDORS = {vid: ("email", to) for vid, to in ADDR.items()}

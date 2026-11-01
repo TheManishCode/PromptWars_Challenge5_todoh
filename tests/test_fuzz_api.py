@@ -115,7 +115,7 @@ def test_every_route_survives_random_and_mutated_input(world):
     hdr = {"X-EventMate-CSRF": tok, "Content-Type": "application/json"}
     for rule, method in routes(app):
         n = 40 if rule in VALID and rule.startswith("/api/plans/<") else 6 if rule in ("/api/plans", "/api/tradeoffs", "/api/intake", "/api/assistant/ask") else 25
-        for i in range(n):
+        for _i in range(n):
             url = fill(rule, pid, r)
             if method == "GET":
                 q = "&".join(f"{r.choice(KEYS)}={r.choice(STRINGS + [str(x) for x in NUMBERS]).replace('&', '%26').replace('#', '%23')}" for _ in range(r.randint(0, 4)))

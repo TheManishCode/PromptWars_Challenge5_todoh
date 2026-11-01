@@ -12,7 +12,6 @@ import re
 import urllib.parse
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
-from typing import Dict, List, Optional, Tuple
 
 from eventmate.integrations.web_access import FetchError
 from eventmate.schemas import _EMAIL
@@ -43,9 +42,9 @@ _SKIP = frozenset({"script", "style", "noscript", "template", "svg", "iframe", "
 
 @dataclass
 class ContactSearch:
-    found: List[dict] = field(default_factory=list)
-    pages: List[str] = field(default_factory=list)  # every address that was fetched
-    notes: List[str] = field(default_factory=list)
+    found: list[dict] = field(default_factory=list)
+    pages: list[str] = field(default_factory=list)  # every address that was fetched
+    notes: list[str] = field(default_factory=list)
 
 
 class _Visible(HTMLParser):
@@ -53,14 +52,14 @@ class _Visible(HTMLParser):
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.text: List[str] = []
-        self.links: List[Tuple[str, str]] = []  # (href, anchor text)
-        self._stack: List[Tuple[str, bool]] = []  # (tag, hides what is inside it)
+        self.text: list[str] = []
+        self.links: list[tuple[str, str]] = []  # (href, anchor text)
+        self._stack: list[tuple[str, bool]] = []  # (tag, hides what is inside it)
         self._hidden = 0
-        self._anchor: Optional[List] = None
+        self._anchor: list | None = None
 
     @staticmethod
-    def _hides(tag: str, attrs: Dict[str, Optional[str]]) -> bool:
+    def _hides(tag: str, attrs: dict[str, str | None]) -> bool:
         if tag in _SKIP or "hidden" in attrs or (attrs.get("aria-hidden") or "").strip().lower() == "true":
             return True
         if tag == "input" and (attrs.get("type") or "").lower() == "hidden":
@@ -102,7 +101,7 @@ class _Visible(HTMLParser):
                 self._anchor[1].append(data)
 
 
-def _parse(html: str) -> Tuple[str, List[Tuple[str, str]]]:
+def _parse(html: str) -> tuple[str, list[tuple[str, str]]]:
     p = _Visible()
     try:
         p.feed(html)
@@ -112,14 +111,14 @@ def _parse(html: str) -> Tuple[str, List[Tuple[str, str]]]:
     return " ".join("".join(p.text).split()), p.links
 
 
-def _valid_email(value: str) -> Optional[str]:
+def _valid_email(value: str) -> str | None:
     value = value.strip()
     if not _EMAIL.fullmatch(value) or value.rsplit(".", 1)[-1].casefold() in _IMAGE_TLD:
         return None
     return value.casefold()
 
 
-def _mailto_addresses(href: str) -> List[str]:
+def _mailto_addresses(href: str) -> list[str]:
     if not href[:7].casefold() == "mailto:":
         return []
     decoded = urllib.parse.unquote(href[7:])
@@ -142,7 +141,7 @@ def _same_business(email_domain: str, site_host: str) -> bool:
     return bool(site_host) and (email_domain == site_host or email_domain.endswith("." + site_host))
 
 
-def _flags(value: str, site_host: str) -> Tuple[str, ...]:
+def _flags(value: str, site_host: str) -> tuple[str, ...]:
     domain = value.rsplit("@", 1)[1]
     flags = []
     if domain in FREE_MAIL:
@@ -152,7 +151,7 @@ def _flags(value: str, site_host: str) -> Tuple[str, ...]:
     return tuple(flags)
 
 
-def _contact_link(links: List[Tuple[str, str]], base_url: str) -> Optional[str]:
+def _contact_link(links: list[tuple[str, str]], base_url: str) -> str | None:
     base_host, best = _host(base_url), None
     for href, text in links:
         if len(href) > MAX_URL or href[:11].casefold() in ("javascript:",) or href[:7].casefold() == "mailto:":
@@ -180,7 +179,7 @@ def find_contacts(fetcher, website_url: str, max_pages: int = MAX_PAGES) -> Cont
         res.notes.append("the website address is not a plain http(s) address, so it could not be read")
         return res
     site_host = _host(website_url)
-    seen: Dict[str, dict] = {}
+    seen: dict[str, dict] = {}
     overflow = False
 
     def take(value: str, source_url: str, kind: str) -> None:
@@ -195,7 +194,7 @@ def find_contacts(fetcher, website_url: str, max_pages: int = MAX_PAGES) -> Cont
             return
         seen[value] = {"channel": "email", "value": value, "source_url": source_url, "source_kind": kind, "flags": _flags(value, site_host)}
 
-    next_url: Optional[str] = website_url
+    next_url: str | None = website_url
     for n in range(max(1, min(max_pages, MAX_PAGES))):
         if next_url is None:
             break

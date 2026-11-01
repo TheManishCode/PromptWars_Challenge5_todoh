@@ -9,7 +9,7 @@ This sandbox renders WebGL in software, so frame times here say nothing about a 
 """
 
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 
@@ -34,7 +34,7 @@ BUDGET_MS = 34  # the page's own proposed budget (30 fps): arcade3d.js
 
 @pytest.fixture
 def base(tmp_path):
-    store, _ = make_wall(tmp_path, clock=lambda: datetime.now(timezone.utc), section_capacity=12)
+    store, _ = make_wall(tmp_path, clock=lambda: datetime.now(UTC), section_capacity=12)
     em = EventMate(log_dir=tmp_path / "logs", plan_dir=tmp_path / "plans", run_id="perf")
     app = create_app(em, today_fn=lambda: TODAY, wall_store=store)
     srv = make_server("127.0.0.1", 0, app, threaded=True)

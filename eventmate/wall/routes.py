@@ -12,7 +12,7 @@ import hashlib
 import hmac
 import re
 import secrets
-from typing import Any, Callable, Dict, FrozenSet, Optional, Tuple
+from typing import Any, Callable
 
 from flask import Flask, Request, Response, jsonify, request
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, ValidationError
@@ -32,7 +32,7 @@ PUBLIC_READS = ("/api/wall/meta", "/api/wall/sections/<int:section_id>", "/api/w
 PRIVATE_READS = ("/api/wall/session", "/api/wall/me")
 WRITES = ("/api/wall/marks", "/api/wall/me/recovery-code", "/api/wall/recover", "/api/wall/me/remove", "/api/wall/me/hall", "/api/wall/rounds",
           "/api/wall/rounds/<round_id>/ready", "/api/wall/rounds/<round_id>/tap", "/api/wall/rounds/<round_id>/cancel")
-WALL_RULES: FrozenSet[str] = frozenset(PUBLIC_READS + PRIVATE_READS + WRITES)
+WALL_RULES: frozenset[str] = frozenset(PUBLIC_READS + PRIVATE_READS + WRITES)
 
 PUBLIC_MAX_AGE, HALL_MAX_AGE = 60, 30
 
@@ -55,7 +55,7 @@ def new_recovery_code() -> str:
     return "-".join(raw[i:i + 4] for i in range(0, len(raw), 4))
 
 
-def code_hash(code: str) -> Optional[str]:
+def code_hash(code: str) -> str | None:
     plain = re.sub(r"[\s-]", "", code).upper()
     if not re.fullmatch(r"[A-Z2-7]{26}", plain):
         return None
@@ -79,7 +79,7 @@ class IssueCodeBody(_Strict):
 
 
 class RemoveBody(_Strict):
-    recovery_code: Optional[str] = None
+    recovery_code: str | None = None
 
 
 class HallBody(_Strict):
@@ -95,14 +95,14 @@ class EmptyBody(_Strict):
 
 
 class TapBody(_Strict):
-    slot: Optional[StrictInt] = None
-    mark_id: Optional[StrictInt] = None
+    slot: StrictInt | None = None
+    mark_id: StrictInt | None = None
 
 
 class Wall:
     """Registers the 14 wall routes on an app and answers the app's guard about them."""
 
-    def __init__(self, app: Flask, store: WallStore, limits: Optional[WallLimits] = None, *, bearer_check: Optional[Callable[[Request], bool]] = None,
+    def __init__(self, app: Flask, store: WallStore, limits: WallLimits | None = None, *, bearer_check: Callable[[Request], bool] | None = None,
                  secure_cookies: bool = False, client_ip: Callable[[], str] = lambda: request.remote_addr or "?"):
         self.store, self.limits = store, limits or WallLimits()
         self.bearer_check, self.secure_cookies, self.client_ip = bearer_check, secure_cookies, client_ip
@@ -118,7 +118,7 @@ class Wall:
     def unknown(self) -> Response:
         return self._err(404, "not_found", "not found")
 
-    def guard(self, req: Request) -> Optional[Response]:
+    def guard(self, req: Request) -> Response | None:
         """None means the app's private checks (bearer token, private CSRF) are skipped and the route runs. A Response is the answer."""
         if self.bearer_check is not None and not self.bearer_check(req):
             return self._err(401, "bearer_required", "authentication required")
@@ -143,14 +143,14 @@ class Wall:
         resp.headers["Cache-Control"] = "no-store"
         return resp
 
-    def _private(self, payload: Dict[str, Any], status: int = 200) -> Response:
+    def _private(self, payload: dict[str, Any], status: int = 200) -> Response:
         resp = jsonify(payload)
         resp.status_code = status
         resp.headers["Cache-Control"] = "no-store"
         resp.headers["Vary"] = "Cookie"
         return resp
 
-    def _public(self, payload: Dict[str, Any], max_age: int) -> Response:
+    def _public(self, payload: dict[str, Any], max_age: int) -> Response:
         body = jsonify(payload)
         tag = 'W/"' + hashlib.sha1(body.get_data(), usedforsecurity=False).hexdigest() + '"'  # nosec B324: an ETag, not a security control
         if request.headers.get("If-None-Match") == tag:
@@ -165,11 +165,11 @@ class Wall:
         resp.set_cookie(COOKIE, cred, max_age=COOKIE_MAX_AGE, httponly=True, samesite="Lax", secure=self.secure_cookies or request.is_secure, path="/")
         return resp
 
-    def _cred(self) -> Optional[str]:
+    def _cred(self) -> str | None:
         raw = request.cookies.get(COOKIE, "")
         return raw if _CRED.fullmatch(raw) else None
 
-    def _owner(self, write: bool) -> Tuple[str, str]:
+    def _owner(self, write: bool) -> tuple[str, str]:
         """(credential, its hash) of a valid session; for a write also the wall CSRF header. Anything else is 401 and changes nothing."""
         cred = self._cred()
         if cred is None or not self.store.session_exists(hash_credential(cred)):
@@ -214,7 +214,7 @@ class Wall:
             wrapper.__name__ = "wall_" + fn.__name__
             return wrapper
 
-        def route(rule: str, methods: Tuple[str, ...]):
+        def route(rule: str, methods: tuple[str, ...]):
             def deco(fn):
                 app.add_url_rule(rule, endpoint="wall_" + fn.__name__, view_func=handled(fn), methods=list(methods))
                 return fn

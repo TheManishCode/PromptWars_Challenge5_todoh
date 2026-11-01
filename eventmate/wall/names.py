@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 import unicodedata
 from pathlib import Path
-from typing import Optional, Tuple
 
 NAME_MIN, NAME_MAX = 2, 24
 _ALLOWED_PUNCT = frozenset(" -'’.")
@@ -21,7 +20,7 @@ class InvalidName(ValueError):
     """The name cannot go on the wall. The message is short and safe to show to the visitor."""
 
 
-def _blocklist(path: Path = BLOCKLIST_PATH) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+def _blocklist(path: Path = BLOCKLIST_PATH) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """(whole words, fragments). A file that cannot be read blocks nothing: moderation, not this list, is the control."""
     try:
         lines = [x.strip().casefold() for x in path.read_text(encoding="utf-8").splitlines()]
@@ -46,7 +45,7 @@ def normalize(raw: str) -> str:
     return " ".join(text.split())
 
 
-def _script(ch: str) -> Optional[str]:
+def _script(ch: str) -> str | None:
     if not ch.isalpha():
         return None
     word = unicodedata.name(ch, "").split(" ", 1)[0]
@@ -60,7 +59,7 @@ def _folded(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", base)
 
 
-def validate(raw: object, blocklist: Optional[Tuple[Tuple[str, ...], Tuple[str, ...]]] = None) -> str:
+def validate(raw: object, blocklist: tuple[tuple[str, ...], tuple[str, ...]] | None = None) -> str:
     """The stored form of a name, or ``InvalidName``."""
     if not isinstance(raw, str):
         raise InvalidName("a name is text")

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from datetime import date
 from statistics import median
-from typing import Dict, List, Optional
 
 from eventmate.pricing.observations import ObservationStore
 from eventmate.schemas import (
@@ -36,7 +35,7 @@ def _unit_price(o: QuoteObservation, r: QuoteReport) -> float:
     return r.effective_total / o.guest_count if o.basis == "per_plate" else float(r.effective_total)
 
 
-def _price(o: QuoteObservation, unit: float, medians: Dict[str, float], counts: Dict[str, int], notes: List[str]) -> ScoreComponent:
+def _price(o: QuoteObservation, unit: float, medians: dict[str, float], counts: dict[str, int], notes: list[str]) -> ScoreComponent:
     w = WEIGHTS["price"]
     if o.source_type == ObservationSource.PUBLIC_LISTING:
         return ScoreComponent(name="price", weight=w, detail="an advertised price, not a quote: it is not compared")
@@ -80,7 +79,7 @@ def score_category(store: ObservationStore, category: VendorCategory, today: dat
         UnscoredVendor(vendor_id=o.vendor_id, reason=f"re-quote needed: the quote expired on {o.expires_at.isoformat()}")
         for o, r in pairs if r.status == "expired"
     )
-    units: Dict[str, List[float]] = {}
+    units: dict[str, list[float]] = {}
     for o, r in live:
         if o.source_type != ObservationSource.PUBLIC_LISTING:
             units.setdefault(o.basis, []).append(_unit_price(o, r))
@@ -89,13 +88,13 @@ def score_category(store: ObservationStore, category: VendorCategory, today: dat
     expected = len(store.checklists.get(category.value, ()))
     scores = []
     for o, r in live:
-        notes: List[str] = []
+        notes: list[str] = []
         if r.status == "expiring":
             notes.append(f"quote expires on {o.expires_at.isoformat()}; confirm or re-quote soon")
         components = (_price(o, _unit_price(o, r), medians, counts, notes), _completeness(r, expected), _evidence(o))
         have = [c for c in components if c.score is not None]
         weight = sum(c.weight for c in have)
-        overall: Optional[int] = round(sum(c.weight * c.score for c in have) / weight) if weight else None
+        overall: int | None = round(sum(c.weight * c.score for c in have) / weight) if weight else None
         scores.append(VendorScore(
             vendor_id=o.vendor_id, category=category, observation_id=o.observation_id, status=r.status, overall=overall,
             coverage=round(weight, 4), components=components, not_scored=NOT_SCORED, notes=tuple(notes),

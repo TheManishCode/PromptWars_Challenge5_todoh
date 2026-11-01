@@ -6,7 +6,6 @@ requested service (caps lifted), so it is a lower bound, not a quote; the output
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
 
 from eventmate.agents.budget import BudgetPolicy, compute_allocation
 from eventmate.agents.vendor import Provider, VendorRepository, evaluate
@@ -15,9 +14,9 @@ from eventmate.schemas import CategoryFloor, EventRequest, RealityCheck, VendorC
 NO_CAP = 10**12
 
 
-def cheapest_eligible(repo: VendorRepository, request: EventRequest) -> Tuple[Dict[VendorCategory, Provider], Optional[VendorCategory]]:
+def cheapest_eligible(repo: VendorRepository, request: EventRequest) -> tuple[dict[VendorCategory, Provider], VendorCategory | None]:
     """Cheapest eligible provider per service (category caps lifted); second value names a service with none."""
-    found: Dict[VendorCategory, Provider] = {}
+    found: dict[VendorCategory, Provider] = {}
     for category in request.services:
         eligible = [
             p for p in repo.providers(category)
@@ -38,7 +37,7 @@ def _minimum_budget(floor: int, contingency_bp: int) -> int:
     return max(1, budget)
 
 
-def minimum_budget_default_split(request: EventRequest, policy: BudgetPolicy, costs: Dict[VendorCategory, int]) -> Optional[int]:
+def minimum_budget_default_split(request: EventRequest, policy: BudgetPolicy, costs: dict[VendorCategory, int]) -> int | None:
     """The least total budget at which every service's share (the cap the planner enforces) is at least its cheapest eligible vendor, with the
     request's own split. None when a requested service has no share at all. Computed with the planner's own allocation, never estimated."""
     def holds(total: int) -> bool:

@@ -27,7 +27,7 @@ Nothing here sends email, makes payments or books a vendor.
 import argparse
 import json
 import sys
-from datetime import date
+from datetime import date, UTC
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -521,7 +521,7 @@ def _outreach(em: EventMate, a) -> int:
 
 
 def _jobs(em: EventMate, a) -> int:
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from eventmate.followthrough.worker import digest
 
@@ -534,7 +534,7 @@ def _jobs(em: EventMate, a) -> int:
             print("jobs start PLAN_ID CATEGORY --vendors id1,id2,id3 --name NAME [--min 3 --cap INR --days 7]", file=sys.stderr)
             return 2
         job = w.start_job(a.target, VendorCategory(a.extra), [v.strip() for v in a.vendors.split(",") if v.strip()], a.goal or f"{a.min_quotes} {a.extra} quotes",
-                          datetime.now(timezone.utc) + timedelta(days=a.days), a.name, a.min_quotes, a.cap)
+                          datetime.now(UTC) + timedelta(days=a.days), a.name, a.min_quotes, a.cap)
         print(f"job {job.job_id}: {len(job.vendors)} requests drafted, nothing sent. Read them with `inbox show {job.plan_id}`, then `jobs approve {job.job_id}`.")
         return 0
     if a.what in ("approve", "cancel"):

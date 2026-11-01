@@ -6,7 +6,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import OrderedDict, deque
-from typing import Callable, Deque
+from typing import Callable
 
 MAX_KEYS = 20_000  # bounded: a flood of distinct addresses cannot grow this without limit; the oldest keys are dropped first
 
@@ -16,10 +16,10 @@ class Window:
 
     def __init__(self, limit: int, seconds: float, clock: Callable[[], float] = time.monotonic):
         self.limit, self.seconds, self.clock = limit, seconds, clock
-        self._events: "OrderedDict[str, Deque[float]]" = OrderedDict()
+        self._events: OrderedDict[str, deque[float]] = OrderedDict()
         self._lock = threading.Lock()
 
-    def _trim(self, q: Deque[float], now: float) -> None:
+    def _trim(self, q: deque[float], now: float) -> None:
         while q and now - q[0] > self.seconds:
             q.popleft()
 

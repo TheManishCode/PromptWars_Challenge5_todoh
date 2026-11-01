@@ -13,8 +13,8 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
-from typing import Callable, Dict, List, Optional, Tuple
+from datetime import datetime, UTC
+from typing import Callable
 
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
 from eventmate.schemas import DiscoveryResult, VenueCandidate
@@ -82,12 +82,12 @@ def _opt(model, **fields):
 
 
 class OverpassSource:
-    def __init__(self, url: Optional[str] = None, transport: Callable[[str, str, float], bytes] = _urllib_transport, clock: Callable[[], float] = time.monotonic):
+    def __init__(self, url: str | None = None, transport: Callable[[str, str, float], bytes] = _urllib_transport, clock: Callable[[], float] = time.monotonic):
         url = url or os.environ.get("EVENTMATE_OVERPASS_URL") or DEFAULT_URL
         if not url.startswith("https://"):
             raise ValueError("the Overpass endpoint must be https")
         self.url, self._transport, self._clock = url, transport, clock
-        self._cache: Dict[Tuple[str, str, int], Tuple[float, DiscoveryResult]] = {}
+        self._cache: dict[tuple[str, str, int], tuple[float, DiscoveryResult]] = {}
         self._lock = threading.Lock()  # guards the cache only, never held during a request
 
     def venues(self, city: str, kind: str = "venue", limit: int = 20) -> DiscoveryResult:
@@ -118,7 +118,7 @@ class OverpassSource:
         if isinstance(remark, str) and ("error" in remark.lower() or "timed out" in remark.lower()):
             raise DiscoveryError(f"the place search was incomplete: {remark[:120]}")
         candidates, warnings = self._parse(doc["elements"], kind)
-        result = DiscoveryResult(city=city, kind=kind, candidates=tuple(candidates[:limit]), fetched_at=datetime.now(timezone.utc), warnings=tuple(warnings))
+        result = DiscoveryResult(city=city, kind=kind, candidates=tuple(candidates[:limit]), fetched_at=datetime.now(UTC), warnings=tuple(warnings))
         with self._lock:
             if len(self._cache) >= CACHE_MAX:
                 self._cache.pop(next(iter(self._cache)))
@@ -126,7 +126,7 @@ class OverpassSource:
         return result
 
     @staticmethod
-    def _parse(elements: List[object], kind: str) -> Tuple[List[VenueCandidate], List[str]]:
+    def _parse(elements: list[object], kind: str) -> tuple[list[VenueCandidate], list[str]]:
         seen, out = set(), []
         unnamed = bad = 0
         for el in elements:

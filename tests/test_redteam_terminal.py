@@ -1,6 +1,6 @@
 """Red-team finding: the CLI printed inbound email and web text raw, so a sender could use escape sequences against the operator's terminal."""
 
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from types import SimpleNamespace
 
 
@@ -21,7 +21,7 @@ def test_strip_terminal_removes_escape_sequences_controls_and_bidi_and_keeps_one
 
 
 def test_the_inbox_command_prints_a_hostile_reply_as_inert_text(tmp_path, monkeypatch, capsys):
-    reply = SimpleNamespace(read=False, received_at=datetime(2026, 11, 1, tzinfo=timezone.utc), body=HOSTILE, analysis=SimpleNamespace(amounts=[]))
+    reply = SimpleNamespace(read=False, received_at=datetime(2026, 11, 1, tzinfo=UTC), body=HOSTILE, analysis=SimpleNamespace(amounts=[]))
     thread = SimpleNamespace(request=SimpleNamespace(vendor_name="Royal\x1b[31m Rasoi", channel="email", status="sent"), drafts=[], replies=[reply])
     box = SimpleNamespace(channels=[], unread_total=1, approvals_total=0, threads=[thread])
     monkeypatch.setattr(EventMate, "inbox", lambda self, plan_id: box)

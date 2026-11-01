@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from itertools import combinations
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable
 
 from pydantic import Field
 
@@ -43,7 +43,7 @@ from eventmate.schemas import (
 class TradeoffPolicy(_Model):
     """How much each sacrifice hurts (0 = nothing, 1 = defeats the purpose). Tunable data."""
 
-    drop_harm: Dict[str, float] = {"caterer": 0.8, "photographer": 0.3}
+    drop_harm: dict[str, float] = {"caterer": 0.8, "photographer": 0.3}
     date_harm_per_day: float = Field(default=0.02, ge=0.0, le=1.0)
     date_harm_max: float = Field(default=0.6, ge=0.0, le=1.0)
     rebalance_base_harm: float = Field(default=0.05, ge=0.0, le=1.0)
@@ -55,7 +55,7 @@ class TradeoffPolicy(_Model):
 class _Silent:
     """Decision-logger stand-in for pricing probes: many what-ifs, no log noise."""
 
-    entry_ids: List[str] = []
+    entry_ids: list[str] = []
 
     def log(self, **_fields) -> None:
         return None
@@ -80,8 +80,8 @@ class TradeoffAgent:
         repo: VendorRepository,
         logger: DecisionLogger,
         verify: Callable[[EventRequest], object],  # returns bool, or (bool, what the plan would leave undecided)
-        budget_policy: Optional[BudgetPolicy] = None,
-        policy: Optional[TradeoffPolicy] = None,
+        budget_policy: BudgetPolicy | None = None,
+        policy: TradeoffPolicy | None = None,
     ):
         self.repo, self.logger, self.verify = repo, logger, verify
         self.budget_policy = budget_policy or BudgetPolicy()
@@ -100,8 +100,8 @@ class TradeoffAgent:
             return report
         found = self._candidates(request, today)
         ranked = sorted(found, key=lambda c: (-c.utility(request.budget_total), c.extra, c.kind.value, c.title))
-        options: List[TradeoffOption] = []
-        rejected: List[_Candidate] = []
+        options: list[TradeoffOption] = []
+        rejected: list[_Candidate] = []
         for cand in ranked:
             if len(options) >= self.policy.max_options:
                 break
@@ -129,8 +129,8 @@ class TradeoffAgent:
 
     # --------------------------------------------------------- candidates
 
-    def _candidates(self, request: EventRequest, today: date) -> List[_Candidate]:
-        out: List[_Candidate] = []
+    def _candidates(self, request: EventRequest, today: date) -> list[_Candidate]:
+        out: list[_Candidate] = []
         out += self._rebalance(request)
         out += self._drops(request)
         out += self._dates(request, today)
@@ -146,12 +146,12 @@ class TradeoffAgent:
         shortlists = vendor.shortlist(request, allocation)
         return budget.assess(request, allocation, shortlists).status in ("within_budget", "contingency_breach")
 
-    def _cheapest_by_category(self, request: EventRequest) -> Optional[Dict[VendorCategory, int]]:
+    def _cheapest_by_category(self, request: EventRequest) -> dict[VendorCategory, int] | None:
         """Cheapest eligible price per service with the caps lifted, or None if a service has no eligible vendor."""
         found, missing = cheapest_eligible(self.repo, request)
         return None if missing is not None else {c: self.repo.price(p, request.guest_count) for c, p in found.items()}
 
-    def _rebalanced(self, request: EventRequest) -> Optional[Tuple[EventRequest, float, str, int]]:
+    def _rebalanced(self, request: EventRequest) -> tuple[EventRequest, float, str, int] | None:
         """(request with cap_weights, harm, description, cheapest total) if re-splitting the caps makes it fit."""
         cheapest = self._cheapest_by_category(request)
         if cheapest is None:
@@ -175,7 +175,7 @@ class TradeoffAgent:
         moves = ", ".join(f"{c.value} INR {policy_caps[c.value]:,} -> INR {caps[c]:,}" for c in request.services if policy_caps[c.value] != caps[c])
         return changed, round(harm, 4), moves, need
 
-    def _rebalance(self, request: EventRequest) -> List[_Candidate]:
+    def _rebalance(self, request: EventRequest) -> list[_Candidate]:
         found = self._rebalanced(request)
         if found is None:
             return []
@@ -192,13 +192,13 @@ class TradeoffAgent:
             )
         ]
 
-    def _drops(self, request: EventRequest) -> List[_Candidate]:
+    def _drops(self, request: EventRequest) -> list[_Candidate]:
         optional = [c for c in request.services if c != VendorCategory.VENUE]
-        out: List[_Candidate] = []
+        out: list[_Candidate] = []
         for n in range(1, len(optional) + 1):
             for dropped in combinations(optional, n):
                 services = tuple(c for c in request.services if c not in dropped)
-                changes: Dict[str, object] = {"services": services, "cap_weights": ()}
+                changes: dict[str, object] = {"services": services, "cap_weights": ()}
                 changed = request.with_changes(**changes)
                 if not self._quick_ok(changed):
                     continue
@@ -218,7 +218,7 @@ class TradeoffAgent:
                 )
         return out
 
-    def _dates(self, request: EventRequest, today: date) -> List[_Candidate]:
+    def _dates(self, request: EventRequest, today: date) -> list[_Candidate]:
         horizon = today + timedelta(days=MAX_EVENT_AHEAD_DAYS)
         dates = {
             d
@@ -227,7 +227,7 @@ class TradeoffAgent:
             for d in p.available_dates
             if today < d <= horizon and d != request.event_date
         }
-        out: List[_Candidate] = []
+        out: list[_Candidate] = []
         for d in sorted(dates, key=lambda d: (abs((d - request.event_date).days), d)):
             if len(out) >= self.policy.max_date_candidates:
                 break
@@ -251,14 +251,14 @@ class TradeoffAgent:
             )
         return out
 
-    def _fits(self, request: EventRequest) -> Optional[EventRequest]:
+    def _fits(self, request: EventRequest) -> EventRequest | None:
         """The request as-is, or with re-split caps, whichever the real checks accept."""
         if self._quick_ok(request):
             return request
         found = self._rebalanced(request)
         return found[0] if found else None
 
-    def _raise_budget(self, request: EventRequest) -> List[_Candidate]:
+    def _raise_budget(self, request: EventRequest) -> list[_Candidate]:
         if self._fits(request) is not None:
             return []  # caps alone are the blocker; the rebalance option already covers it at no extra spend
         if self._fits(request.with_changes(budget_total=MAX_BUDGET_INR)) is None:
@@ -305,7 +305,7 @@ class TradeoffAgent:
             needs_verification=needs,
         )
 
-    def _log(self, request: EventRequest, report: TradeoffReport, rejected: List[_Candidate]) -> None:
+    def _log(self, request: EventRequest, report: TradeoffReport, rejected: list[_Candidate]) -> None:
         if report.status == "not_needed":
             summary, decision = "No trade-off needed: the request already plans", DecisionType.ASSESSMENT
         elif report.status == "options":

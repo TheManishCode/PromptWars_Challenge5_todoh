@@ -13,14 +13,13 @@ import re
 import secrets
 import threading
 from collections import Counter
-from typing import Dict, Optional
 
 REQUEST_ID = re.compile(r"[A-Za-z0-9_-]{8,64}")
 BUCKETS_MS = (50, 200, 1000, 5000)
 access_log = logging.getLogger("eventmate.access")
 
 
-def new_request_id(supplied: Optional[str] = None) -> str:
+def new_request_id(supplied: str | None = None) -> str:
     """A caller's own id is kept (so a proxy's id threads through) only if it is a plain token; anything else, which could be used to forge a log line, is replaced."""
     return supplied if supplied and REQUEST_ID.fullmatch(supplied) else secrets.token_hex(8)
 
@@ -40,7 +39,7 @@ class Metrics:
         with self._lock:
             self.in_flight += 1
 
-    def end(self, status: int, ms: float, route: Optional[str] = None) -> None:
+    def end(self, status: int, ms: float, route: str | None = None) -> None:
         with self._lock:
             self._sum_s += ms / 1000
             for b in PROM_BUCKETS_S:
@@ -53,7 +52,7 @@ class Metrics:
             self._by_class[f"{status // 100}xx"] += 1
             self._latency[next((f"<{b}ms" for b in BUCKETS_MS if ms < b), f">={BUCKETS_MS[-1]}ms")] += 1
 
-    def snapshot(self) -> Dict[str, object]:
+    def snapshot(self) -> dict[str, object]:
         with self._lock:
             return {"total": self.total, "in_flight": self.in_flight, "by_status_class": dict(sorted(self._by_class.items())),
                     "latency": {k: self._latency.get(k, 0) for k in [f"<{b}ms" for b in BUCKETS_MS] + [f">={BUCKETS_MS[-1]}ms"]}}
@@ -66,7 +65,7 @@ def _label(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
 
 
-def prometheus(metrics: "Metrics", gauges: Dict[str, float], model_calls: Dict[str, int]) -> str:
+def prometheus(metrics: Metrics, gauges: dict[str, float], model_calls: dict[str, int]) -> str:
     """The counters in the Prometheus text format (version 0.0.4): totals by route template and status class, a latency histogram, and the gauges the server hands in.
     Labels are route templates and status classes only: no ids, no addresses, no content."""
     with metrics._lock:
@@ -86,7 +85,7 @@ def prometheus(metrics: "Metrics", gauges: Dict[str, float], model_calls: Dict[s
     return "\n".join(out) + "\n"
 
 
-def log_request(rid: str, method: str, route: Optional[str], status: int, ms: float, workspace: Optional[str]) -> None:
+def log_request(rid: str, method: str, route: str | None, status: int, ms: float, workspace: str | None) -> None:
     access_log.info(json.dumps({"rid": rid, "method": method, "route": route or "unmatched", "status": status, "ms": round(ms, 1), "ws": workspace}, separators=(",", ":")))
 
 

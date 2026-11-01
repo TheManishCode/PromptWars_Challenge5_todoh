@@ -14,8 +14,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
-from datetime import date, datetime, timedelta, timezone
-from typing import Callable, Dict, List, Optional, Tuple
+from datetime import date, datetime, timedelta, UTC
+from typing import Callable
 
 from eventmate.integrations.discovery import clean_city
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
@@ -45,9 +45,9 @@ def _urllib_get(url: str, timeout: float) -> bytes:
 
 
 class OpenWeatherSource:
-    def __init__(self, api_key: Optional[str] = None, transport: Callable[[str, float], bytes] = _urllib_get, clock: Callable[[], float] = time.monotonic):
+    def __init__(self, api_key: str | None = None, transport: Callable[[str, float], bytes] = _urllib_get, clock: Callable[[], float] = time.monotonic):
         self._key, self._transport, self._clock = api_key, transport, clock
-        self._cache: Dict[str, Tuple[float, str, dict]] = {}
+        self._cache: dict[str, tuple[float, str, dict]] = {}
         self._lock = threading.Lock()  # guards the cache only, never held during a request
 
     def __repr__(self) -> str:
@@ -120,12 +120,12 @@ class OpenWeatherSource:
     def _day(city: str, day: date, place: str, doc: dict) -> WeatherDay:
         tz = doc.get("city", {}).get("timezone", 0) if isinstance(doc.get("city"), dict) else 0
         tz = tz if isinstance(tz, int) and abs(tz) <= 14 * 3600 else 0
-        slots: List[WeatherSlot] = []
-        local_days: List[date] = []
+        slots: list[WeatherSlot] = []
+        local_days: list[date] = []
         skipped = 0
         for item in doc["list"]:
             try:
-                local = datetime.fromtimestamp(int(item["dt"]), timezone.utc) + timedelta(seconds=tz)
+                local = datetime.fromtimestamp(int(item["dt"]), UTC) + timedelta(seconds=tz)
             except (KeyError, TypeError, ValueError, OverflowError, OSError):
                 skipped += 1
                 continue
@@ -148,7 +148,7 @@ class OpenWeatherSource:
             except (KeyError, TypeError, ValueError, IndexError, AttributeError):
                 skipped += 1
         warnings = (f"{skipped} forecast entr{'y' if skipped == 1 else 'ies'} could not be read and were skipped",) if skipped else ()
-        common = dict(city=city, travel_date=day, resolved_place=place, warnings=warnings, fetched_at=datetime.now(timezone.utc))
+        common = dict(city=city, travel_date=day, resolved_place=place, warnings=warnings, fetched_at=datetime.now(UTC))
         if not slots:
             if local_days and day > max(local_days):
                 note = f"{day.isoformat()} is beyond the forecast horizon (the forecast ends {max(local_days).isoformat()}); check again within five days of the date"

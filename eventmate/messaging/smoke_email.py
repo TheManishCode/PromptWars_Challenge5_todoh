@@ -15,13 +15,14 @@ import os
 import smtplib
 import ssl
 import sys
-from typing import Callable, List, Mapping, Optional, Tuple
+from typing import Callable, Mapping
 
 from eventmate.messaging.channels import ChannelError, EmailChannel, EmailConfig
 from eventmate.env import load_env
 from eventmate.schemas import _EMAIL
+import contextlib
 
-Row = Tuple[str, str, str]  # (status, name, text)
+Row = tuple[str, str, str]  # (status, name, text)
 
 
 def _category(exc: BaseException) -> str:
@@ -43,10 +44,8 @@ def check_smtp(cfg: EmailConfig, factory: Callable) -> Row:
             if noop:
                 noop()
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 server.quit()
-            except Exception:
-                pass
     except Exception as exc:  # never show the server's own words: they can echo the user name or password
         return ("FAIL", "smtp", f"{_category(exc)} ({cfg.smtp_host})")
     return ("PASS", "smtp", f"logged in ({cfg.smtp_host}); nothing sent")
@@ -63,16 +62,14 @@ def check_imap(cfg: EmailConfig, factory: Callable) -> Row:
             box.login(cfg.user, cfg.password)
             box.select("INBOX", readonly=True)  # read-only: nothing is marked seen or deleted
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 box.logout()
-            except Exception:
-                pass
     except Exception as exc:
         return ("FAIL", "imap", f"{_category(exc)} ({cfg.imap_host})")
     return ("PASS", "imap", f"logged in and opened the inbox read-only ({cfg.imap_host})")
 
 
-def main(argv: Optional[List[str]] = None, env: Optional[Mapping[str, str]] = None, smtp_factory: Optional[Callable] = None, imap_factory: Optional[Callable] = None) -> int:
+def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None, smtp_factory: Callable | None = None, imap_factory: Callable | None = None) -> int:
     ap = argparse.ArgumentParser(prog="eventmate.messaging.smoke_email")
     ap.add_argument("--send-test-to", metavar="ADDRESS", help="also send one real test message to this address (it must be yours)")
     ap.add_argument("--i-own-this-address", action="store_true", help="required with --send-test-to")

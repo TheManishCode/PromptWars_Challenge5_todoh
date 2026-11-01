@@ -23,13 +23,14 @@ import ssl
 import unicodedata
 from html.parser import HTMLParser
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from email.message import EmailMessage
-from typing import Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple
+from typing import Callable, Mapping, Protocol, Sequence
 from urllib.parse import quote, urlencode, urlsplit
 
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
 from eventmate.schemas import ChannelStatus, _EMAIL
+import contextlib
 
 MAX_BODY_CHARS = 4000
 MAX_POLL_MESSAGES = 50
@@ -83,7 +84,7 @@ class Inbound:
     references: str = ""
     attachments: int = 0
     truncated: bool = False
-    bounce: Optional[Bounce] = None
+    bounce: Bounce | None = None
 
 
 class Channel(Protocol):
@@ -91,9 +92,9 @@ class Channel(Protocol):
 
     def status(self) -> ChannelStatus: ...
 
-    def send(self, recipient: str, subject: str, body: str, thread: Optional[ThreadRef] = None) -> str: ...
+    def send(self, recipient: str, subject: str, body: str, thread: ThreadRef | None = None) -> str: ...
 
-    def poll(self, threads: Sequence[KnownThread]) -> List[Inbound]: ...
+    def poll(self, threads: Sequence[KnownThread]) -> list[Inbound]: ...
 
 
 # ----------------------------------------------------------------- text hygiene
@@ -103,7 +104,7 @@ _FROM_LINE = re.compile(r"^From:\s.+$", re.I)
 _HEADER_LINE = re.compile(r"^(?:Sent|Date|To|Cc|Subject):\s", re.I)
 
 
-def _starts_quoted_history(lines: List[str], i: int) -> bool:
+def _starts_quoted_history(lines: list[str], i: int) -> bool:
     """A line that opens quoted history. "From: ..." counts only when mail-header lines follow it (Sent, To, Subject...): a vendor writing
     "From: INR 66,000 onwards" is giving a price, and cutting the reply there would lose it."""
     line = lines[i].strip()
@@ -115,11 +116,11 @@ def _starts_quoted_history(lines: List[str], i: int) -> bool:
     return False
 
 
-def clean_reply_text(raw: str) -> Tuple[str, bool]:
+def clean_reply_text(raw: str) -> tuple[str, bool]:
     """The vendor's new text only: quoted history and signatures' boilerplate cut, control characters removed, size capped."""
     raw = raw.replace("\r\n", "\n").replace("\r", "\n")
     raw = "".join(ch for ch in raw if ch in "\n\t" or unicodedata.category(ch) != "Cc")
-    kept: List[str] = []
+    kept: list[str] = []
     lines = raw.split("\n")
     for i, line in enumerate(lines):
         if kept and any(k.strip() for k in kept) and _starts_quoted_history(lines, i):
@@ -137,7 +138,7 @@ class _MailText(HTMLParser):
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.parts: List[str] = []
+        self.parts: list[str] = []
         self._skip = 0
 
     def handle_starttag(self, tag, attrs):
@@ -185,7 +186,7 @@ class EmailConfig:
     from_addr: str = ""
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str]) -> "EmailConfig":
+    def from_env(cls, env: Mapping[str, str]) -> EmailConfig:
         def num(name: str, default: int) -> int:
             raw = env.get(name, "").strip()
             return int(raw) if raw.isascii() and raw.isdigit() and 0 < int(raw) < 65536 else default
@@ -205,7 +206,7 @@ def _imap_date(d: datetime) -> str:
 class EmailChannel:
     name = "email"
 
-    def __init__(self, config: EmailConfig, smtp_factory: Optional[Callable] = None, imap_factory: Optional[Callable] = None, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+    def __init__(self, config: EmailConfig, smtp_factory: Callable | None = None, imap_factory: Callable | None = None, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
         self.config = config
         self._smtp = smtp_factory or self._default_smtp
         self._imap = imap_factory or self._default_imap
@@ -229,7 +230,7 @@ class EmailChannel:
     def _default_imap(self):
         return imaplib.IMAP4_SSL(self.config.imap_host, self.config.imap_port, ssl_context=ssl.create_default_context(), timeout=TIMEOUT_S)
 
-    def send(self, recipient: str, subject: str, body: str, thread: Optional[ThreadRef] = None) -> str:
+    def send(self, recipient: str, subject: str, body: str, thread: ThreadRef | None = None) -> str:
         c = self.config
         if not self.status().can_send:
             raise ChannelError("email sending is not configured")
@@ -253,10 +254,8 @@ class EmailChannel:
             server.login(c.user, c.password)
         except (smtplib.SMTPException, OSError, ssl.SSLError) as exc:
             if server is not None:  # connected but not logged in: do not leave the connection open
-                try:
+                with contextlib.suppress(Exception):
                     server.quit()
-                except Exception:
-                    pass
             if isinstance(exc, smtplib.SMTPAuthenticationError):
                 raise ChannelError("the mail server rejected the login") from None
             raise ChannelError("could not connect to the mail server") from None
@@ -273,13 +272,13 @@ class EmailChannel:
                 pass
         return msg["Message-ID"]
 
-    def poll(self, threads: Sequence[KnownThread]) -> List[Inbound]:
+    def poll(self, threads: Sequence[KnownThread]) -> list[Inbound]:
         if not threads:
             return []
         if not self.status().can_receive:
             raise ChannelError("email reading is not configured")
         since = min(t.sent_at for t in threads) - timedelta(days=1)
-        out: List[Inbound] = []
+        out: list[Inbound] = []
         try:
             box = self._imap()
             try:
@@ -294,10 +293,8 @@ class EmailChannel:
                     if item:
                         out.append(item)
             finally:
-                try:
+                with contextlib.suppress(Exception):
                     box.logout()
-                except Exception:
-                    pass
         except imaplib.IMAP4.error:
             raise ChannelError("the mail server rejected the login or the request") from None
         except (OSError, ssl.SSLError):
@@ -309,12 +306,12 @@ class EmailChannel:
         now = self._now()
         try:
             when = email.utils.parsedate_to_datetime(str(msg["Date"])) if msg["Date"] else now
-            when = (when if when.tzinfo else when.replace(tzinfo=timezone.utc)).astimezone(timezone.utc)
+            when = (when if when.tzinfo else when.replace(tzinfo=UTC)).astimezone(UTC)
         except (ValueError, TypeError, OverflowError, IndexError):
             return now
         return min(when, now)
 
-    def _headers_only(self, raw: bytes, why: str) -> Optional[Inbound]:
+    def _headers_only(self, raw: bytes, why: str) -> Inbound | None:
         """A message whose body cannot be read safely still reaches the person as "could not be read", so a reply, a stop request or a bounce is never
         lost and never stops the poll. Only the header block is parsed: no MIME tree, so nothing to recurse into."""
         try:
@@ -332,7 +329,7 @@ class EmailChannel:
         except Exception:  # not even the headers are usable: nothing safe to show
             return None
 
-    def _parse(self, raw: bytes) -> Optional[Inbound]:
+    def _parse(self, raw: bytes) -> Inbound | None:
         if len(_NESTED_PART.findall(raw[:MAX_FETCH_BYTES])) > MAX_MIME_NESTING:
             return self._headers_only(raw, "unusually many nested parts")
         try:
@@ -342,7 +339,7 @@ class EmailChannel:
         except Exception as exc:  # RecursionError and anything else the parser did not expect: never abort the poll
             return self._headers_only(raw, type(exc).__name__)
 
-    def _parse_full(self, raw: bytes) -> Optional[Inbound]:
+    def _parse_full(self, raw: bytes) -> Inbound | None:
         msg = email.message_from_bytes(raw, policy=email.policy.default)
         sender = email.utils.parseaddr(str(msg.get("From", "")))[1].lower()
         if not sender or sender == self.config.from_addr.lower():
@@ -371,7 +368,7 @@ class EmailChannel:
         )
 
 
-def _dsn(msg) -> Optional[Bounce]:
+def _dsn(msg) -> Bounce | None:
     """A structured delivery-status report, or None. A plain message that merely looks like a bounce is not one."""
     try:
         if msg.get_content_type() != "multipart/report" or (msg.get_param("report-type") or "").lower() != "delivery-status":
@@ -406,15 +403,15 @@ class WahaConfig:
     session: str = "default"
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str]) -> "WahaConfig":
+    def from_env(cls, env: Mapping[str, str]) -> WahaConfig:
         session = env.get("EVENTMATE_WAHA_SESSION", "").strip()
         return cls(url=env.get("EVENTMATE_WAHA_URL", "").strip().rstrip("/"), api_key=env.get("EVENTMATE_WAHA_API_KEY", ""), session=session if re.fullmatch(r"[A-Za-z0-9_-]{1,40}", session) else "default")
 
 
-HttpFn = Callable[[str, str, Dict[str, str], Optional[bytes]], Tuple[int, bytes]]
+HttpFn = Callable[[str, str, dict[str, str], bytes | None], tuple[int, bytes]]
 
 
-def _http(method: str, url: str, headers: Dict[str, str], body: Optional[bytes]) -> Tuple[int, bytes]:
+def _http(method: str, url: str, headers: dict[str, str], body: bytes | None) -> tuple[int, bytes]:
     parts = urlsplit(url)
     conn_cls = http.client.HTTPSConnection if parts.scheme == "https" else http.client.HTTPConnection
     conn = conn_cls(parts.hostname, parts.port, timeout=TIMEOUT_S)  # no redirects are followed
@@ -429,11 +426,11 @@ def _http(method: str, url: str, headers: Dict[str, str], body: Optional[bytes])
 class WhatsAppChannel:
     name = "whatsapp"
 
-    def __init__(self, config: WahaConfig, http_fn: HttpFn = _http, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+    def __init__(self, config: WahaConfig, http_fn: HttpFn = _http, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
         self.config = config
         self._http = http_fn
         self._now = now
-        self._chat_ids: Dict[str, str] = {}
+        self._chat_ids: dict[str, str] = {}
 
     def _valid_url(self) -> bool:
         p = urlsplit(self.config.url)
@@ -443,7 +440,7 @@ class WhatsAppChannel:
         ok = self._valid_url()
         return ChannelStatus(channel="whatsapp", can_send=ok, can_receive=ok, detail="ready" if ok else "not set: EVENTMATE_WAHA_URL (a self-hosted WAHA gateway; see docs)")
 
-    def _call(self, method: str, path: str, query: Optional[Dict[str, str]] = None, payload: Optional[dict] = None):
+    def _call(self, method: str, path: str, query: dict[str, str] | None = None, payload: dict | None = None):
         if not self._valid_url():
             raise ChannelError("WhatsApp gateway is not configured")
         import json
@@ -477,7 +474,7 @@ class WhatsAppChannel:
             self._chat_ids[digits] = chat if isinstance(chat, str) and re.fullmatch(r"[0-9A-Za-z.:_-]{3,60}@(?:c\.us|lid|s\.whatsapp\.net)", chat) else f"{digits}@c.us"
         return self._chat_ids[digits]
 
-    def send(self, recipient: str, subject: str, body: str, thread: Optional[ThreadRef] = None) -> str:
+    def send(self, recipient: str, subject: str, body: str, thread: ThreadRef | None = None) -> str:
         chat = self._chat_id(recipient)  # refuses numbers that are not on WhatsApp before anything is sent
         res = self._call("POST", "/api/sendText", payload={"session": self.config.session, "chatId": chat, "text": body, "linkPreview": False})
         mid = res.get("id") if isinstance(res, dict) else None
@@ -487,8 +484,8 @@ class WhatsAppChannel:
             raise OutcomeUnknown("the gateway accepted the request but gave no message id")
         return mid[:400]
 
-    def poll(self, threads: Sequence[KnownThread]) -> List[Inbound]:
-        out: List[Inbound] = []
+    def poll(self, threads: Sequence[KnownThread]) -> list[Inbound]:
+        out: list[Inbound] = []
         for t in threads:
             chat = self._chat_id(t.recipient)
             res = self._call("GET", f"/api/{quote(self.config.session, safe='')}/chats/{quote(chat, safe='@')}/messages", {"limit": "20", "downloadMedia": "false"})
@@ -501,7 +498,7 @@ class WhatsAppChannel:
                 if not isinstance(ts, (int, float)) or isinstance(ts, bool) or not isinstance(mid, str) or not isinstance(text, str):
                     continue
                 try:
-                    when = min(datetime.fromtimestamp(ts, tz=timezone.utc), self._now())  # never later than now
+                    when = min(datetime.fromtimestamp(ts, tz=UTC), self._now())  # never later than now
                 except (ValueError, OverflowError, OSError):
                     continue  # not a date: skip this message, keep the rest
                 if when < t.sent_at - timedelta(seconds=60):
@@ -511,5 +508,5 @@ class WhatsAppChannel:
         return out
 
 
-def channels_from_env(env: Mapping[str, str]) -> Dict[str, "Channel"]:
+def channels_from_env(env: Mapping[str, str]) -> dict[str, Channel]:
     return {"email": EmailChannel(EmailConfig.from_env(env)), "whatsapp": WhatsAppChannel(WahaConfig.from_env(env))}

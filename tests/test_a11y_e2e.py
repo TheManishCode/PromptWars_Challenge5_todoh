@@ -12,7 +12,7 @@ What is proved here, and how:
 
 import re
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 
@@ -42,7 +42,7 @@ LAPTOP = {"width": 1300, "height": 900}
 @pytest.fixture
 def world(tmp_path):
     """The real app with a real wall store (12 spots a section, so 14 names make two sections). Yields (base url, store)."""
-    store, _ = make_wall(tmp_path, clock=lambda: datetime.now(timezone.utc), section_capacity=12)
+    store, _ = make_wall(tmp_path, clock=lambda: datetime.now(UTC), section_capacity=12)
     em = EventMate(log_dir=tmp_path / "logs", plan_dir=tmp_path / "plans", run_id="a11y")
     app = create_app(em, today_fn=lambda: TODAY, wall_store=store)
     srv = make_server("127.0.0.1", 0, app, threaded=True)

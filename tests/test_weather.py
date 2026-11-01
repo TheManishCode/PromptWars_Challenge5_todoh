@@ -3,7 +3,7 @@
 import json
 import os
 import urllib.error
-from datetime import date
+from datetime import date, UTC
 
 import pytest
 
@@ -22,9 +22,9 @@ def slot(dt_utc, temp=24.0, pop=0.0, desc="clear sky"):
 
 
 def ts(y, m, d, h):  # a UTC timestamp
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    return int(datetime(y, m, d, h, tzinfo=timezone.utc).timestamp())
+    return int(datetime(y, m, d, h, tzinfo=UTC).timestamp())
 
 
 FORECAST = {"city": {"timezone": TZ}, "list": [

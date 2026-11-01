@@ -2,7 +2,7 @@
 
 import multiprocessing
 import stat
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import pytest
 
@@ -10,7 +10,7 @@ from eventmate.assistant.approvals import APPLY_LEASE, MAX_PENDING_PER_PLAN, PRO
 from eventmate.assistant.identity import LOCAL_ORGANIZER, Perm, Principal, Role
 from eventmate.assistant.trace import ProposalLog
 
-T0 = datetime(2026, 11, 1, 9, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
 ARGS = {"kind": "payment", "category": "venue", "amount": 5000}
 
 

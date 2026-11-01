@@ -15,13 +15,13 @@ import os
 import threading
 import time
 from collections import deque
-from typing import Callable, Deque, Dict, Iterable, List, Optional, Tuple
+from typing import Callable, Iterable
 
 MAX_KEYS = 20_000
 _OVERFLOW = "~overflow"  # every key beyond MAX_KEYS shares this bucket, so memory stays bounded and the flood limits itself
 
 
-def _networks(spec: str) -> List[ipaddress._BaseNetwork]:
+def _networks(spec: str) -> list[ipaddress._BaseNetwork]:
     out = []
     for item in (s.strip() for s in spec.split(",")):
         if not item:
@@ -33,18 +33,18 @@ def _networks(spec: str) -> List[ipaddress._BaseNetwork]:
     return out
 
 
-def trusted_proxies(environ=None) -> List[ipaddress._BaseNetwork]:
+def trusted_proxies(environ=None) -> list[ipaddress._BaseNetwork]:
     return _networks((os.environ if environ is None else environ).get("EVENTMATE_TRUSTED_PROXY", ""))
 
 
-def _ip(text: str) -> Optional[ipaddress._BaseAddress]:
+def _ip(text: str) -> ipaddress._BaseAddress | None:
     try:
         return ipaddress.ip_address(text.strip().strip("[]"))
     except ValueError:
         return None
 
 
-def client_address(remote_addr: Optional[str], forwarded_for: Optional[str], proxies: Iterable[ipaddress._BaseNetwork]) -> str:
+def client_address(remote_addr: str | None, forwarded_for: str | None, proxies: Iterable[ipaddress._BaseNetwork]) -> str:
     """The caller's address. ``forwarded_for`` is believed only when ``remote_addr`` is a trusted proxy; the entries are read from the right, and the first
     one that is not itself a trusted proxy is the client. Anything unreadable falls back to the connection's own address."""
     proxies = list(proxies)
@@ -80,7 +80,7 @@ class WindowLimiter:
 
     def __init__(self, limit: int, window_s: float = 60.0, clock: Callable[[], float] = time.monotonic, max_keys: int = MAX_KEYS):
         self.limit, self.window, self._clock, self._max = limit, window_s, clock, max_keys
-        self._hits: Dict[str, Deque[float]] = {}
+        self._hits: dict[str, deque[float]] = {}
         self._lock = threading.Lock()
         self._swept = clock()
 
@@ -114,11 +114,11 @@ class FairShare:
 
     def __init__(self, total: int, per_workspace: int):
         self.total, self.per = total, max(1, min(per_workspace, total))
-        self._held: Dict[str, int] = {}
+        self._held: dict[str, int] = {}
         self._used = 0
         self._lock = threading.Lock()
 
-    def acquire(self, workspace: str) -> Optional[str]:
+    def acquire(self, workspace: str) -> str | None:
         """A reason for refusing ('busy' when the pool is full, 'share' when this workspace holds its share), or None when a slot was taken."""
         with self._lock:
             if self._used >= self.total:
@@ -137,6 +137,6 @@ class FairShare:
                 if not self._held[workspace]:
                     del self._held[workspace]
 
-    def status(self) -> Tuple[int, int]:
+    def status(self) -> tuple[int, int]:
         with self._lock:
             return self._used, self.total

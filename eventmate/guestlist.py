@@ -16,9 +16,8 @@ import threading
 import time
 import unicodedata
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from pydantic import Field, ValidationError
 
@@ -63,8 +62,8 @@ class GuestListTotals(_Model):
     yes: int = Field(ge=0)
     no: int = Field(ge=0)
     pending: int = Field(ge=0)
-    dietary_counts: Dict[str, int] = {}
-    required_diets: Tuple[str, ...] = ()
+    dietary_counts: dict[str, int] = {}
+    required_diets: tuple[str, ...] = ()
 
 
 class ListCheck(_Model):
@@ -79,18 +78,18 @@ class GuestPreview(_Model):
     """What the preview endpoint returns, in the names the page reads: ``can_commit``, ``preview_token``, ``row_errors``, ``totals.rows`` and ``totals.heads``.
     The parsed rows are for the user's own screen; ``check`` sets the totals beside the stated headcount."""
 
-    guests: Tuple[Guest, ...] = ()
-    row_errors: Tuple[RowError, ...] = ()
+    guests: tuple[Guest, ...] = ()
+    row_errors: tuple[RowError, ...] = ()
     totals: GuestListTotals
     check: ListCheck
     can_commit: bool = False
-    preview_token: Optional[str] = None  # absent while any row has a problem: nothing can be saved from a file with errors
+    preview_token: str | None = None  # absent while any row has a problem: nothing can be saved from a file with errors
     notice: str = "Nothing is saved until you commit. Only counts and diet totals are ever shown to the assistant; names stay on this machine."
 
 
 class ParseResult(_Model):
-    guests: Tuple[Guest, ...] = ()
-    errors: Tuple[RowError, ...] = ()
+    guests: tuple[Guest, ...] = ()
+    errors: tuple[RowError, ...] = ()
     totals: GuestListTotals
 
 
@@ -112,7 +111,7 @@ def _starts_like_formula(value: str) -> bool:
     return False
 
 
-def totals_of(guests: Tuple[Guest, ...]) -> GuestListTotals:
+def totals_of(guests: tuple[Guest, ...]) -> GuestListTotals:
     heads = Counter()
     diets: Counter = Counter()
     for g in guests:
@@ -172,8 +171,8 @@ def parse_guest_csv(raw) -> ParseResult:
     if len(body) > MAX_ROWS:
         raise GuestListError(f"the list has {len(body)} rows; the limit is {MAX_ROWS}")
 
-    guests: List[Guest] = []
-    errors: List[RowError] = []
+    guests: list[Guest] = []
+    errors: list[RowError] = []
     for n, cells in body:
         problems = _row(n, cells, names, len(guests) + 1)
         if isinstance(problems, Guest):
@@ -183,8 +182,8 @@ def parse_guest_csv(raw) -> ParseResult:
     return ParseResult(guests=tuple(guests), errors=tuple(errors), totals=totals_of(tuple(guests)))
 
 
-def _row(line: int, cells: List[str], names: List[str], index: int):
-    errors: List[RowError] = []
+def _row(line: int, cells: list[str], names: list[str], index: int):
+    errors: list[RowError] = []
 
     def bad(column: str, message: str) -> None:
         errors.append(RowError(line=line, column=column, message=message))
@@ -213,7 +212,7 @@ def _row(line: int, cells: List[str], names: List[str], index: int):
     rsvp_text = row.get("rsvp", "").lower() or "pending"
     if rsvp_text not in ("yes", "no", "pending"):
         bad("rsvp", "must be yes, no or pending")
-    diet: List[DietaryRequirement] = []
+    diet: list[DietaryRequirement] = []
     for part in (p.strip().lower() for p in row.get("dietary", "").split(";")):
         if not part:
             continue
@@ -240,8 +239,8 @@ class GuestListStore:
         self.dir = Path(root) / "guests"
         self._clock = clock
         self._lock = threading.Lock()
-        self._previews: Dict[str, Tuple[str, int, float, Tuple[Guest, ...]]] = {}  # token -> (plan, generation, expires, guests)
-        self._generation: Dict[str, int] = {}
+        self._previews: dict[str, tuple[str, int, float, tuple[Guest, ...]]] = {}  # token -> (plan, generation, expires, guests)
+        self._generation: dict[str, int] = {}
 
     def _path(self, plan_id: str) -> Path:
         if not PLAN_ID.fullmatch(plan_id):
@@ -264,7 +263,7 @@ class GuestListStore:
             self._previews[token] = (plan_id, self._generation.get(plan_id, 0), now + PREVIEW_TTL_S, result.guests)
             return token
 
-    def commit(self, plan_id: str, token: str) -> Tuple[Guest, ...]:
+    def commit(self, plan_id: str, token: str) -> tuple[Guest, ...]:
         now = self._clock()
         with self._lock:
             held = self._previews.pop(token, None) if isinstance(token, str) else None
@@ -274,9 +273,9 @@ class GuestListStore:
             self._write(plan_id, guests)
             return guests
 
-    def _write(self, plan_id: str, guests: Tuple[Guest, ...]) -> None:
+    def _write(self, plan_id: str, guests: tuple[Guest, ...]) -> None:
         self.dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        doc = {"schema_version": 1, "plan_id": plan_id, "committed_at": datetime.now(timezone.utc).isoformat(), "guests": [json.loads(g.model_dump_json()) for g in guests]}
+        doc = {"schema_version": 1, "plan_id": plan_id, "committed_at": datetime.now(UTC).isoformat(), "guests": [json.loads(g.model_dump_json()) for g in guests]}
         tmp = self.dir / f".tmp-{secrets.token_hex(8)}"
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
         try:
@@ -290,12 +289,12 @@ class GuestListStore:
                 tmp.unlink()
         self._generation[plan_id] = self._generation.get(plan_id, 0) + 1
 
-    def restore(self, plan_id: str, guests: Tuple[Guest, ...]) -> None:
+    def restore(self, plan_id: str, guests: tuple[Guest, ...]) -> None:
         """Put back a list that was exported (workspace import). The caller has already validated every guest; no preview or token is involved."""
         with self._lock:
             self._write(plan_id, tuple(guests))
 
-    def load(self, plan_id: str) -> Optional[Tuple[Guest, ...]]:
+    def load(self, plan_id: str) -> tuple[Guest, ...] | None:
         path = self._path(plan_id)
         try:
             fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))

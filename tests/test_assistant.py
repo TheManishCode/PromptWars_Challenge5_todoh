@@ -534,6 +534,7 @@ def test_retrieval_quality_is_measured_not_assumed(em):
 
 from eventmate.assistant.annotations import AnnotationStore, similarity  # noqa: E402
 from eventmate.assistant.langfuse import LangfuseExporter, trace_events  # noqa: E402
+from datetime import UTC
 
 
 class Sink:
@@ -571,9 +572,9 @@ def test_a_trace_maps_to_langfuse_events_with_masked_text_and_a_session_per_plan
 
 def test_failed_steps_are_exported_as_warnings():
     from eventmate.assistant.trace import Step, TraceEntry
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    t = TraceEntry(entry_id="e", timestamp=datetime.now(timezone.utc), run_id="r", request_id="t1", plan_id="p", user_id="u", roles=("guest",), question_sha256="0" * 64, question_masked="q",
+    t = TraceEntry(entry_id="e", timestamp=datetime.now(UTC), run_id="r", request_id="t1", plan_id="p", user_id="u", roles=("guest",), question_sha256="0" * 64, question_masked="q",
                    route="large", cache="miss", outcome="refused", steps=(Step(kind="tool", name="x", ok=False, detail="nope", ms=3),), prompt_sha256="0" * 64, kb_version="v", tokens_in_est=1, tokens_out_est=1, total_ms=5)
     assert [e["body"].get("level") for e in trace_events(t) if e["type"] == "span-create"] == ["WARNING"]
 

@@ -10,8 +10,7 @@ from __future__ import annotations
 import hashlib
 import time
 import uuid
-from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from datetime import datetime, UTC
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -36,16 +35,16 @@ class TraceEntry(BaseModel):
     request_id: str = Field(max_length=64)  # = trace id
     plan_id: str
     user_id: str
-    roles: Tuple[str, ...]
+    roles: tuple[str, ...]
     question_sha256: str
     question_masked: str = Field(max_length=240)
     answer_masked: str = Field(default="", max_length=600)
     route: str
     cache: str  # miss | hit | coalesced | skipped
     outcome: str  # answered | refused | degraded | error
-    steps: Tuple[Step, ...]
-    cited: Tuple[str, ...] = ()
-    models: Tuple[str, ...] = ()
+    steps: tuple[Step, ...]
+    cited: tuple[str, ...] = ()
+    models: tuple[str, ...] = ()
     prompt_sha256: str
     kb_version: str
     tokens_in_est: int = Field(ge=0)
@@ -86,7 +85,7 @@ class FeedbackLog(JsonlLog[FeedbackEvent]):
 
     def write(self, **fields) -> FeedbackEvent:
         eid = uuid.uuid4().hex
-        return self._append(FeedbackEvent(entry_id=eid, timestamp=datetime.now(timezone.utc), run_id=self.run_id, **fields), eid)
+        return self._append(FeedbackEvent(entry_id=eid, timestamp=datetime.now(UTC), run_id=self.run_id, **fields), eid)
 
 
 class TraceLog(JsonlLog[TraceEntry]):
@@ -96,9 +95,9 @@ class TraceLog(JsonlLog[TraceEntry]):
 
     def write(self, **fields) -> TraceEntry:
         eid = uuid.uuid4().hex
-        return self._append(TraceEntry(entry_id=eid, timestamp=datetime.now(timezone.utc), run_id=self.run_id, **fields), eid)
+        return self._append(TraceEntry(entry_id=eid, timestamp=datetime.now(UTC), run_id=self.run_id, **fields), eid)
 
-    def find(self, trace_id: str) -> Optional[TraceEntry]:
+    def find(self, trace_id: str) -> TraceEntry | None:
         return next((e for e in reversed(self.read()) if e.request_id == trace_id), None)
 
 
@@ -108,7 +107,7 @@ class ProposalLog(JsonlLog[ProposalEvent]):
 
     def write(self, **fields) -> ProposalEvent:
         eid = uuid.uuid4().hex
-        return self._append(ProposalEvent(entry_id=eid, timestamp=datetime.now(timezone.utc), run_id=self.run_id, **fields), eid)
+        return self._append(ProposalEvent(entry_id=eid, timestamp=datetime.now(UTC), run_id=self.run_id, **fields), eid)
 
 
 def sha(text: str) -> str:
@@ -120,15 +119,15 @@ def tokens(text: str) -> int:
 
 
 class TraceBuilder:
-    def __init__(self, plan_id: str, user_id: str, roles: Tuple[str, ...], question: str):
+    def __init__(self, plan_id: str, user_id: str, roles: tuple[str, ...], question: str):
         self.id = uuid.uuid4().hex[:16]
         self.plan_id, self.user_id, self.roles, self.question = plan_id, user_id, roles, question
-        self.steps: List[Step] = []
-        self.models: List[str] = []
+        self.steps: list[Step] = []
+        self.models: list[str] = []
         self.t0 = time.perf_counter()
         self.tin = self.tout = 0
 
-    def step(self, kind: str, name: str, ok: bool = True, detail: str = "", started: Optional[float] = None) -> None:
+    def step(self, kind: str, name: str, ok: bool = True, detail: str = "", started: float | None = None) -> None:
         ms = round((time.perf_counter() - (started if started is not None else self.t0)) * 1000, 2) if started is not None else 0
         self.steps.append(Step(kind=kind, name=name[:80], ok=ok, detail=mask_pii(detail)[:400], ms=ms))
 

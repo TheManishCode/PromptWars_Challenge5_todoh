@@ -12,7 +12,6 @@ import json
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Dict, Optional, Tuple
 
 from pydantic import ValidationError
 
@@ -42,13 +41,13 @@ class GuestDataError(Exception):
 class _GuestList(_Model):
     list_id: str
     source: str
-    guests: Tuple[Guest, ...]
+    guests: tuple[Guest, ...]
 
 
 class GuestRepository:
     """Read-only, validated view over the guest seed file."""
 
-    def __init__(self, path: Optional[Path] = None):
+    def __init__(self, path: Path | None = None):
         path = Path(path) if path else DATA_PATH
         try:
             if path.stat().st_size > MAX_DATA_BYTES:
@@ -72,14 +71,14 @@ class GuestRepository:
                 lists[gl.list_id] = gl
         except ValidationError as exc:
             raise GuestDataError(f"invalid record: {exc}") from exc
-        self._lists: Dict[str, _GuestList] = lists
+        self._lists: dict[str, _GuestList] = lists
 
     def get(self, list_id: str) -> _GuestList:
         if not isinstance(list_id, str) or not _LIST_ID.fullmatch(list_id) or list_id not in self._lists:
             raise GuestDataError(f"unknown guest list {list_id!r}")
         return self._lists[list_id]
 
-    def list_ids(self) -> Tuple[str, ...]:
+    def list_ids(self) -> tuple[str, ...]:
         return tuple(sorted(self._lists))
 
 
@@ -90,7 +89,7 @@ class GuestAgent:
         self.repo = repo
         self.logger = logger
 
-    def summarize(self, request: EventRequest, guest_list_id: Optional[str] = None) -> GuestSummary:
+    def summarize(self, request: EventRequest, guest_list_id: str | None = None) -> GuestSummary:
         headcount = request.guest_count
         if guest_list_id is None:
             summary = GuestSummary(
@@ -151,7 +150,7 @@ class GuestAgent:
         )
 
     @staticmethod
-    def dietary_check(summary: GuestSummary, caterer_options: Tuple[DietaryRequirement, ...]) -> ConstraintCheck:
+    def dietary_check(summary: GuestSummary, caterer_options: tuple[DietaryRequirement, ...]) -> ConstraintCheck:
         missing = [d for d in summary.required_diets if d not in caterer_options]
         return ConstraintCheck(
             name="guest_dietary",

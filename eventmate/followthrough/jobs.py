@@ -14,20 +14,21 @@ import json
 import os
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Dict, Iterator, List, Literal, Optional, Tuple
+from typing import Iterator, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from eventmate import migrations
+import builtins
 
 JobStatus = Literal["active", "waiting_vendor", "waiting_user", "blocked", "done", "expired", "cancelled"]
 TERMINAL = ("done", "expired", "cancelled")
 VendorState = Literal["drafted", "asked", "replied", "unavailable", "unresponsive"]
 _ID = r"^[A-Za-z0-9_-]{1,64}$"
 
-TRANSITIONS: Dict[str, Tuple[str, ...]] = {
+TRANSITIONS: dict[str, tuple[str, ...]] = {
     "active": ("waiting_vendor", "waiting_user", "blocked", "done", "expired", "cancelled"),
     "waiting_vendor": ("active", "waiting_user", "blocked", "done", "expired", "cancelled"),
     "waiting_user": ("active", "waiting_vendor", "blocked", "done", "expired", "cancelled"),
@@ -45,7 +46,7 @@ class VendorProgress(_M):
     recipient: str
     draft_id: str
     state: VendorState = "drafted"
-    asked_at: Optional[datetime] = None
+    asked_at: datetime | None = None
     nudges: int = 0
     pending_nudge_draft_id: str = ""
 
@@ -61,7 +62,7 @@ class QuoteClaim(_M):
     basis: Literal["total", "per_plate"]
     status: Literal["proposed", "confirmed", "rejected", "superseded"] = "proposed"
     extractor: Literal["rule:reply_analysis"] = "rule:reply_analysis"
-    stated_valid_days: Optional[int] = Field(default=None, ge=1, le=365)  # only when the vendor wrote it ("valid for 10 days"); never a default
+    stated_valid_days: int | None = Field(default=None, ge=1, le=365)  # only when the vendor wrote it ("valid for 10 days"); never a default
 
 
 class UserItem(_M):
@@ -82,33 +83,33 @@ class Job(_M):
     goal: str = Field(max_length=300)
     sender_name: str = Field(min_length=1, max_length=80)
     min_quotes: int = Field(default=3, ge=1, le=10)
-    max_amount_inr: Optional[int] = Field(default=None, gt=0)
+    max_amount_inr: int | None = Field(default=None, gt=0)
     deadline: datetime
     status: JobStatus = "waiting_user"
     next_action: str = ""
-    wake_at: Optional[datetime] = None
+    wake_at: datetime | None = None
     reply_window_hours: int = Field(default=24, ge=1, le=168)
     poll_minutes: int = Field(default=15, ge=1, le=1440)
     max_nudges_per_vendor: int = Field(default=2, ge=0, le=5)
-    vendors: Dict[str, VendorProgress]
-    seen_message_ids: Tuple[str, ...] = ()
-    answered_replies: Tuple[str, ...] = ()  # replies the Mandate is answering: watched until its answer goes out, so a denied or failed answer still reaches the user
-    claims: Tuple[QuoteClaim, ...] = ()
-    items: Tuple[UserItem, ...] = ()
+    vendors: dict[str, VendorProgress]
+    seen_message_ids: tuple[str, ...] = ()
+    answered_replies: tuple[str, ...] = ()  # replies the Mandate is answering: watched until its answer goes out, so a denied or failed answer still reaches the user
+    claims: tuple[QuoteClaim, ...] = ()
+    items: tuple[UserItem, ...] = ()
     version: int = 1
     created_at: datetime
 
     @field_validator("deadline", "created_at", "wake_at")
     @classmethod
-    def _aware(cls, v: Optional[datetime]) -> Optional[datetime]:
+    def _aware(cls, v: datetime | None) -> datetime | None:
         if v is not None and (v.tzinfo is None or v.utcoffset() is None):
             raise ValueError("timestamps must carry a time zone (a naive time could mean the wrong moment)")
         return v
 
-    def open_items(self) -> List[UserItem]:
+    def open_items(self) -> list[UserItem]:
         return [i for i in self.items if not i.resolved]
 
-    def confirmed(self) -> List[QuoteClaim]:
+    def confirmed(self) -> list[QuoteClaim]:
         return [c for c in self.claims if c.status == "confirmed"]
 
 
@@ -116,7 +117,7 @@ class StaleJob(Exception):
     """Someone else changed this job first. Reload and decide again."""
 
 
-def _load_job(raw: str) -> "Job":
+def _load_job(raw: str) -> Job:
     """A job row, upgraded in memory to the current schema (a row written before schema versions existed is version 1)."""
     return Job.model_validate(migrations.parse_line("job", raw, "jobs.db", 0))
 
@@ -143,8 +144,8 @@ class JobStore:
             db.close()
 
     @staticmethod
-    def _iso(t: Optional[datetime]) -> Optional[str]:
-        return None if t is None else t.astimezone(timezone.utc).isoformat()
+    def _iso(t: datetime | None) -> str | None:
+        return None if t is None else t.astimezone(UTC).isoformat()
 
     def create(self, job: Job, now: datetime) -> Job:
         with self._lock, self._db() as db:
@@ -172,13 +173,13 @@ class JobStore:
             raise ValueError(f"unknown job {job_id!r}")
         return _load_job(row[0])
 
-    def list(self, plan_id: Optional[str] = None) -> List[Job]:
+    def list(self, plan_id: str | None = None) -> builtins.list[Job]:
         with self._db() as db:
             rows = db.execute("SELECT data FROM jobs ORDER BY rowid").fetchall()
         jobs = [_load_job(r[0]) for r in rows]
         return [j for j in jobs if plan_id is None or j.plan_id == plan_id]
 
-    def due(self, now: datetime, limit: int = 20) -> List[Job]:
+    def due(self, now: datetime, limit: int = 20) -> builtins.list[Job]:
         with self._db() as db:
             rows = db.execute(
                 "SELECT data FROM jobs WHERE status NOT IN ('done','expired','cancelled') AND wake_at IS NOT NULL AND wake_at <= ? ORDER BY wake_at LIMIT ?",
@@ -186,7 +187,7 @@ class JobStore:
             ).fetchall()
         return [_load_job(r[0]) for r in rows]
 
-    def save(self, job: Job, actor: str, event: str, now: datetime, detail: Optional[dict] = None) -> Job:
+    def save(self, job: Job, actor: str, event: str, now: datetime, detail: dict | None = None) -> Job:
         """Compare-and-swap on ``version``: only the writer who read the latest version wins. Illegal status changes are refused."""
         with self._lock, self._db() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -210,7 +211,7 @@ class JobStore:
             db.execute("COMMIT")
         return new
 
-    def history(self, job_id: str) -> List[Tuple[str, str, str, dict]]:
+    def history(self, job_id: str) -> builtins.list[tuple[str, str, str, dict]]:
         with self._db() as db:
             rows = db.execute("SELECT ts, actor, event, detail FROM events WHERE job_id=? ORDER BY id", (job_id,)).fetchall()
         return [(ts, a, e, json.loads(d)) for ts, a, e, d in rows]

@@ -7,9 +7,9 @@ listing it came from. Nothing here writes to the vendor database, and nothing he
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence
+from typing import Callable, Sequence
 
 from eventmate.jsonl import InterProcessLock, JsonlLog
 from eventmate.schemas import ContactCandidate, ShortlistEntry, VendorCategory
@@ -29,7 +29,7 @@ MAX_CANDIDATES_PER_BUSINESS = 5
 
 
 class ShortlistStore:
-    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
         self.root = Path(root) / "shortlist"
         self.now = now
         self._lock = InterProcessLock(self.root / ".lock")
@@ -49,23 +49,23 @@ class ShortlistStore:
                     return e
             return self._entries(plan_id)._append(ShortlistEntry(plan_id=plan_id, category=category, vendor_id=vendor_id, added_at=self.now()), vendor_id)
 
-    def entries(self, plan_id: str, category: Optional[VendorCategory] = None) -> List[ShortlistEntry]:
+    def entries(self, plan_id: str, category: VendorCategory | None = None) -> list[ShortlistEntry]:
         return [e for e in self._entries(plan_id).read() if category is None or e.category == category]
 
     # --------------------------------------------------------- candidates
 
-    def candidates(self, vendor_id: Optional[str] = None) -> List[ContactCandidate]:
-        latest: Dict[str, ContactCandidate] = {}
+    def candidates(self, vendor_id: str | None = None) -> list[ContactCandidate]:
+        latest: dict[str, ContactCandidate] = {}
         for c in self._cands().read():
             latest[c.candidate_id] = c
         return [c for c in latest.values() if vendor_id is None or c.vendor_id == vendor_id]
 
-    def get_candidate(self, candidate_id: str) -> Optional[ContactCandidate]:
+    def get_candidate(self, candidate_id: str) -> ContactCandidate | None:
         return next((c for c in self.candidates() if c.candidate_id == candidate_id), None)
 
-    def add_candidates(self, vendor_id: str, found: Sequence[dict]) -> List[ContactCandidate]:
+    def add_candidates(self, vendor_id: str, found: Sequence[dict]) -> list[ContactCandidate]:
         """Store what an extractor found, once per address. An address the user already rejected is not offered again."""
-        added: List[ContactCandidate] = []
+        added: list[ContactCandidate] = []
         with self._lock():
             have = self.candidates(vendor_id)
             seen = {(c.channel, c.value.casefold()) for c in have}

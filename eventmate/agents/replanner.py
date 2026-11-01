@@ -19,7 +19,6 @@ import contextlib
 from datetime import date
 
 from pydantic import ValidationError
-from typing import Dict, List, Optional, Set, Tuple
 
 from eventmate.agents.budget import BudgetAgent
 from eventmate.agents.guest import GuestAgent
@@ -53,10 +52,10 @@ _NO_CAP = 10**12  # confirmed bookings are held to the total budget, not a categ
 
 
 def diff_plans(old: PlanVersion, new: PlanVersion) -> PlanDiff:
-    added: List[DiffItem] = []
-    removed: List[DiffItem] = []
-    changed: List[DiffItem] = []
-    preserved: List[DiffItem] = []
+    added: list[DiffItem] = []
+    removed: list[DiffItem] = []
+    changed: list[DiffItem] = []
+    preserved: list[DiffItem] = []
 
     def req(o, n):
         return (
@@ -182,7 +181,7 @@ class ReplannerAgent:
 
     # ------------------------------------------------------------- replan
 
-    def replan(self, plan_id: str, disruption: Disruption, today: Optional[date] = None) -> ReplanOutcome:
+    def replan(self, plan_id: str, disruption: Disruption, today: date | None = None) -> ReplanOutcome:
         today = today or date.today()
         parent = self.store.latest(plan_id)
         start = len(self.logs.decisions.entry_ids)
@@ -257,7 +256,7 @@ class ReplannerAgent:
 
     # ------------------------------------------------------------ helpers
 
-    def _save(self, plan: PlanVersion) -> Optional[ReplanOutcome]:
+    def _save(self, plan: PlanVersion) -> ReplanOutcome | None:
         """Write the new version; if another writer got there first, say so instead of crashing."""
         try:
             self.store.save(plan)
@@ -277,7 +276,7 @@ class ReplannerAgent:
             raise
         return None
 
-    def _apply(self, parent: PlanVersion, d: Disruption, today: date) -> Tuple[EventRequest, Tuple[str, ...], Set[str], str]:
+    def _apply(self, parent: PlanVersion, d: Disruption, today: date) -> tuple[EventRequest, tuple[str, ...], set[str], str]:
         confirmed = {s.vendor_id for s in parent.selections if s.booking_status == BookingStatus.CONFIRMED}
         bogus = sorted(set(d.override_confirmed) - confirmed)
         if bogus:
@@ -307,9 +306,9 @@ class ReplannerAgent:
             raise _Rejected(ConstraintViolation(constraint="event_date_in_past", detail=f"{d.new_date.isoformat()} is before today ({today.isoformat()})", repair="choose a date today or later"))
         return req.with_changes(event_date=d.new_date), excluded, release, f"date change: {req.event_date.isoformat()} to {d.new_date.isoformat()}"
 
-    def _preserve(self, parent: PlanVersion, request: EventRequest, release: Set[str]):
-        forced: Dict[VendorCategory, VendorSelection] = {}
-        conflicts: List[ConstraintViolation] = []
+    def _preserve(self, parent: PlanVersion, request: EventRequest, release: set[str]):
+        forced: dict[VendorCategory, VendorSelection] = {}
+        conflicts: list[ConstraintViolation] = []
         for s in parent.selections:
             if s.booking_status != BookingStatus.CONFIRMED or s.vendor_id in release:
                 continue
@@ -351,7 +350,7 @@ class ReplannerAgent:
             decision_entry_ids=tuple(self.logs.decisions.entry_ids[start:]),
         )
 
-    def _fail(self, rid: str, summary: str, violations: List[ConstraintViolation]) -> None:
+    def _fail(self, rid: str, summary: str, violations: list[ConstraintViolation]) -> None:
         self._log_decision(rid, DecisionType.FAILURE, summary, violations, "nothing was changed")
 
     def _log_decision(self, rid, kind, summary, violations, note, alternatives=()) -> None:

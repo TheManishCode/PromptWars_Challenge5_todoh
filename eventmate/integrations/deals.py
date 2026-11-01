@@ -16,9 +16,9 @@ import urllib.parse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, Dict, List, NamedTuple, Optional, Tuple
+from typing import Callable, NamedTuple
 
 from eventmate.integrations.discovery import clean_city
 from eventmate.schemas import MAX_BUDGET_INR, DealOffer, DealQuery, DealReport, MarketSummary, SkippedPage
@@ -31,7 +31,7 @@ MAX_OFFERS_PER_DOMAIN = 3
 UNUSUALLY_LOW_PCT = -50
 WIDE_RANGE_FACTOR = 5
 CORROBORATION_BAND = 0.25
-OnCall = Callable[[str, Dict[str, object], bool, str, float], None]
+OnCall = Callable[[str, dict[str, object], bool, str, float], None]
 
 _CUR = r"(?<![A-Za-z])(?:₹|Rs\.?|INR)"
 _NUM = r"\d[\d,]*(?:\.\d+)?"
@@ -59,7 +59,7 @@ class Mention:
     snippet: str
 
 
-def _value(num: str, suffix: Optional[str]) -> Optional[int]:
+def _value(num: str, suffix: str | None) -> int | None:
     try:
         v = float(num.replace(",", "")) * (_MULT[suffix.lower()] if suffix else 1)
     except ValueError:
@@ -74,10 +74,10 @@ def _label(before: str) -> str:
     return " ".join(words[-8:]).strip(" -:(),;|")[:100]
 
 
-def extract_mentions(text: str) -> List[Mention]:
+def extract_mentions(text: str) -> list[Mention]:
     """Advertised price mentions in page text. Pure regular expressions: a mention exists only if its digits are in the text."""
     text = _clean(text)
-    out: List[Mention] = []
+    out: list[Mention] = []
     seen = set()
     prev_end = 0
     for m in _PRICE.finditer(text):
@@ -116,7 +116,7 @@ def _domain(url: str) -> str:
     return host[4:] if host.startswith("www.") else host
 
 
-def clean_hit_url(url: object) -> Optional[str]:
+def clean_hit_url(url: object) -> str | None:
     """A search-result URL we are willing to even try: plain http(s), bounded, no control or bidi characters, a real host and port."""
     if not isinstance(url, str) or len(url) > 2048 or not url.startswith(("http://", "https://")):
         return None
@@ -149,12 +149,12 @@ class _Row(NamedTuple):
     cand: _Candidate
     corroborated: int
     vs_market_pct: int
-    flags: Tuple[str, ...]
-    est_low: Optional[int]
-    est_high: Optional[int]
+    flags: tuple[str, ...]
+    est_low: int | None
+    est_high: int | None
 
 
-def _cap_per_domain(cands: List[_Candidate]) -> List[_Candidate]:
+def _cap_per_domain(cands: list[_Candidate]) -> list[_Candidate]:
     """Cheapest first, at most MAX_OFFERS_PER_DOMAIN from any one site."""
     kept, per_domain = [], Counter()
     for c in sorted(cands, key=lambda c: (c.low, c.high, c.domain, c.label)):
@@ -164,7 +164,7 @@ def _cap_per_domain(cands: List[_Candidate]) -> List[_Candidate]:
     return kept
 
 
-def _score(q: DealQuery, c: _Candidate, cands: List[_Candidate], med_low: int, unit: str) -> _Row:
+def _score(q: DealQuery, c: _Candidate, cands: list[_Candidate], med_low: int, unit: str) -> _Row:
     """Corroboration by other sites, distance from the market median, honesty flags, and the estimate scaled to the user's event."""
     corr = len({o.domain for o in cands if o.domain != c.domain and abs(o.low - c.low) <= CORROBORATION_BAND * c.low})
     pct = round((c.low - med_low) / med_low * 100) if med_low else 0
@@ -195,21 +195,21 @@ class DealAgent:
         self,
         search: SearchProvider,
         fetcher,
-        on_call: Optional[OnCall] = None,
+        on_call: OnCall | None = None,
         max_queries: int = 3,
         results_per_query: int = 8,
         max_pages: int = 8,
         max_per_domain: int = 2,
         deadline_s: float = 60.0,
         workers: int = 4,
-        rules: Optional[dict] = None,
+        rules: dict | None = None,
     ):
         self.search, self.fetcher, self.on_call = search, fetcher, on_call
         self.max_queries, self.results_per_query, self.max_pages = max_queries, results_per_query, max_pages
         self.max_per_domain, self.deadline_s, self.workers = max_per_domain, deadline_s, workers
         self.rules = rules or load_rules()
 
-    def _log(self, tool: str, args: Dict[str, object], ok: bool, text: str, t0: float) -> None:
+    def _log(self, tool: str, args: dict[str, object], ok: bool, text: str, t0: float) -> None:
         if self.on_call:
             self.on_call(tool, args, ok, text, (time.monotonic() - t0) * 1000)
 
@@ -218,9 +218,9 @@ class DealAgent:
     def run(self, q: DealQuery) -> DealReport:
         city = clean_city(q.city)  # the only user text that reaches a search query
         kind = self.rules["kinds"][q.kind]
-        warnings: List[str] = []
+        warnings: list[str] = []
         queries = tuple(dict.fromkeys(t.format(city=city) for t in kind["queries"][: self.max_queries]))
-        hits: List[Tuple[str, str]] = []
+        hits: list[tuple[str, str]] = []
         failures = 0
         for query in queries:
             t0 = time.monotonic()
@@ -237,7 +237,7 @@ class DealAgent:
             raise SearchError(warnings[-1].removeprefix("a search failed: ") if warnings else "the web search failed")
 
         urls, per_domain, seen = [], Counter(), set()
-        for url, title in hits:
+        for url, _title in hits:
             clean = clean_hit_url(url)
             dom = _domain(clean) if clean else ""
             if not clean or clean in seen or not dom or per_domain[dom] >= self.max_per_domain:
@@ -252,7 +252,7 @@ class DealAgent:
             return self._report(q, (), None, 0, (), queries, warnings)
 
         pages, skipped = self._fetch_all(urls, warnings)
-        candidates: List[_Candidate] = []
+        candidates: list[_Candidate] = []
         for page in pages:
             mentions = extract_mentions(page.text)
             if not mentions:
@@ -266,7 +266,7 @@ class DealAgent:
 
     # --------------------------------------------------------------- fetching
 
-    def _fetch_all(self, urls: List[str], warnings: List[str]):
+    def _fetch_all(self, urls: list[str], warnings: list[str]):
         pages, skipped = {}, []
 
         def one(url: str) -> None:
@@ -294,7 +294,7 @@ class DealAgent:
 
     # ---------------------------------------------------------------- ranking
 
-    def _candidates(self, page, mentions: List[Mention], kind: dict) -> List[_Candidate]:
+    def _candidates(self, page, mentions: list[Mention], kind: dict) -> list[_Candidate]:
         out = []
         for m in mentions:
             assumed = m.unit == "unspecified"
@@ -317,7 +317,7 @@ class DealAgent:
         hay = f"{m.label} {m.snippet} {page.title}".casefold()
         return any(w in hay for w in words)
 
-    def _rank(self, q: DealQuery, cands: List[_Candidate], pages_read: int, skipped: List[SkippedPage], queries, warnings) -> DealReport:
+    def _rank(self, q: DealQuery, cands: list[_Candidate], pages_read: int, skipped: list[SkippedPage], queries, warnings) -> DealReport:
         if not cands:
             return self._report(q, (), None, pages_read, skipped, queries, warnings)
         unit = Counter(c.unit for c in cands).most_common(1)[0][0]
@@ -341,5 +341,5 @@ class DealAgent:
     def _report(self, q, offers, market, pages_read, skipped, queries, warnings) -> DealReport:
         return DealReport(
             query=q, offers=tuple(offers), market=market, pages_read=pages_read, skipped=tuple(skipped), queries_run=tuple(queries),
-            provider=self.search.name[:40], warnings=tuple(warnings), fetched_at=datetime.now(timezone.utc),
+            provider=self.search.name[:40], warnings=tuple(warnings), fetched_at=datetime.now(UTC),
         )

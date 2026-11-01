@@ -6,10 +6,9 @@ fractions of the wall's inscription area (0 to 1, origin top-left); the frontend
 
 from __future__ import annotations
 
-from typing import Dict, Tuple
 
 # layout_version -> (columns, margin). Rows follow from the section's capacity. Never edit an existing entry: add a new version.
-LAYOUTS: Dict[int, Tuple[int, float]] = {
+LAYOUTS: dict[int, tuple[int, float]] = {
     1: (8, 0.04),
 }
 CURRENT_LAYOUT = 1
@@ -19,7 +18,7 @@ class UnknownLayout(ValueError):
     pass
 
 
-def slot_position(layout_version: int, capacity: int, slot: int) -> Tuple[float, float]:
+def slot_position(layout_version: int, capacity: int, slot: int) -> tuple[float, float]:
     """(u, v) of the centre of a slot. Raises for a layout this code does not know or a slot outside the section."""
     if layout_version not in LAYOUTS:
         raise UnknownLayout(f"layout version {layout_version} is not known to this build")

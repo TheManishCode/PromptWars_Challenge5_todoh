@@ -16,22 +16,23 @@ import re
 import threading
 import unicodedata
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Callable, Iterable
 from urllib.parse import quote
 
 from eventmate.jsonl import JsonlLog
 from eventmate.schemas import (
     InboundMessage, Mandate, OutreachDraft, PlanVersion, VendorCategory, VendorContact, _EMAIL,
 )
+import builtins
 
 _SERVICE = {VendorCategory.VENUE: "a venue", VendorCategory.CATERER: "catering", VendorCategory.PHOTOGRAPHER: "photography"}
 _PHONE_CHARS = re.compile(r"^\+?[0-9 ()./-]+$")
 PROPOSAL_TTL = timedelta(hours=24)
 MAX_FOLLOWUP_CHARS = 1000
 MAX_FOLLOWUPS_PER_THREAD = 5
-_utcnow = lambda: datetime.now(timezone.utc)  # noqa: E731
+_utcnow = lambda: datetime.now(UTC)  # noqa: E731
 
 
 class _OutreachFile(JsonlLog[OutreachDraft]):
@@ -98,7 +99,7 @@ def _event_phrase(event_type: str) -> str:
     return ("an " if noun[0] in "aeiou" else "a ") + noun
 
 
-def _message(plan: PlanVersion, category: VendorCategory, vendor_name: str, sender: str, checklist: Tuple[str, ...]) -> Tuple[str, str]:
+def _message(plan: PlanVersion, category: VendorCategory, vendor_name: str, sender: str, checklist: tuple[str, ...]) -> tuple[str, str]:
     r = plan.request
     event = _event_phrase(r.event_type.value)
     subject = f"Quote request: {_SERVICE[category].replace('a venue', 'venue')} for {event} on {r.event_date.isoformat()}"
@@ -141,7 +142,7 @@ def _check_recipient(channel: str, recipient: str) -> str:
 
 
 class OutreachStore:
-    def __init__(self, root: Path, checklists: Dict[str, Tuple[str, ...]], now: Callable[[], datetime] = _utcnow):
+    def __init__(self, root: Path, checklists: dict[str, tuple[str, ...]], now: Callable[[], datetime] = _utcnow):
         self.base = Path(root)
         self.root = self.base / "outreach"
         self.checklists = checklists
@@ -185,21 +186,21 @@ class OutreachStore:
     def _contacts(self) -> _ContactFile:
         return _ContactFile(self.base / "contacts", run_id="all")
 
-    def plan_ids(self) -> List[str]:
+    def plan_ids(self) -> builtins.list[str]:
         if not self.root.exists():
             return []
         return sorted(p.name[len("outreach-"):-len(".jsonl")] for p in self.root.glob("outreach-*.jsonl"))
 
     # ------------------------------------------------------------ drafts
 
-    def list(self, plan_id: str) -> List[OutreachDraft]:
+    def list(self, plan_id: str) -> builtins.list[OutreachDraft]:
         """Latest state of every draft, in creation order. Earlier lines stay in the file."""
-        latest: Dict[str, OutreachDraft] = {}
+        latest: dict[str, OutreachDraft] = {}
         for d in self._file(plan_id).read():
             latest[d.draft_id] = d
         return list(latest.values())
 
-    def get(self, plan_id: str, draft_id: str) -> Optional[OutreachDraft]:
+    def get(self, plan_id: str, draft_id: str) -> OutreachDraft | None:
         return next((d for d in self.list(plan_id) if d.draft_id == draft_id), None)
 
     def transition(self, plan_id: str, draft_id: str, allowed: Iterable[str], **changes) -> OutreachDraft:
@@ -218,7 +219,7 @@ class OutreachStore:
         draft = OutreachDraft(draft_id=uuid.uuid4().hex, plan_id=plan_id, created_at=now, expires_at=now + PROPOSAL_TTL, **fields)
         return self._file(plan_id)._append(draft, draft.draft_id)
 
-    def draft(self, plan: PlanVersion, category: VendorCategory, channel: str, recipient: str, sender_name: str, vendor: Optional[Tuple[str, ...]] = None) -> OutreachDraft:
+    def draft(self, plan: PlanVersion, category: VendorCategory, channel: str, recipient: str, sender_name: str, vendor: tuple[str, ...] | None = None) -> OutreachDraft:
         """``vendor`` = (vendor_id, name[, origin]) asks a vendor other than the plan's pick, to compare quotes (jobs). The caller has checked that it exists."""
         selection = plan.selection_for(category)
         if selection is None:
@@ -270,13 +271,13 @@ class OutreachStore:
 
     # ------------------------------------------------------------ replies
 
-    def inbound(self, plan_id: str) -> List[InboundMessage]:
-        latest: Dict[str, InboundMessage] = {}
+    def inbound(self, plan_id: str) -> builtins.list[InboundMessage]:
+        latest: dict[str, InboundMessage] = {}
         for m in self._inbound(plan_id).read():
             latest[m.message_id] = m
         return sorted(latest.values(), key=lambda m: m.received_at)  # stable: equal timestamps keep arrival order
 
-    def add_inbound(self, msg: InboundMessage) -> Optional[InboundMessage]:
+    def add_inbound(self, msg: InboundMessage) -> InboundMessage | None:
         """Store a reply once. The same message (channel and external id) seen twice is ignored."""
         with self._locked():
             if any((m.channel, m.external_id) == (msg.channel, msg.external_id) for m in self.inbound(msg.plan_id)):
@@ -303,14 +304,14 @@ class OutreachStore:
     def _mandates(self, plan_id: str) -> _MandateFile:
         return _MandateFile(self.base / "mandates", run_id=plan_id)
 
-    def mandate(self, plan_id: str) -> Optional[Mandate]:
+    def mandate(self, plan_id: str) -> Mandate | None:
         items = self._mandates(plan_id).read()
         return items[-1] if items else None
 
     def set_mandate(self, m: Mandate) -> Mandate:
         return self._mandates(m.plan_id)._append(m, m.plan_id)
 
-    def revoke_mandate(self, plan_id: str) -> Optional[Mandate]:
+    def revoke_mandate(self, plan_id: str) -> Mandate | None:
         with self._locked():
             cur = self.mandate(plan_id)
             if cur is None or cur.revoked_at is not None:
@@ -335,8 +336,8 @@ class OutreachStore:
 
     # ------------------------------------------------------------ contacts
 
-    def contacts(self) -> Dict[str, VendorContact]:
-        latest: Dict[str, VendorContact] = {}
+    def contacts(self) -> dict[str, VendorContact]:
+        latest: dict[str, VendorContact] = {}
         for c in self._contacts().read():
             latest[c.vendor_id] = c
         return latest
@@ -346,7 +347,7 @@ class OutreachStore:
         with self._locked():
             return self._contacts()._append(contact, contact.vendor_id)
 
-    def set_contact(self, vendor_id: str, email: Optional[str], whatsapp: Optional[str], preferred: str) -> VendorContact:
+    def set_contact(self, vendor_id: str, email: str | None, whatsapp: str | None, preferred: str) -> VendorContact:
         email = _check_recipient("email", email) if email else None
         whatsapp = normalise_phone(whatsapp) if whatsapp else None
         contact = VendorContact(vendor_id=vendor_id, email=email, whatsapp=whatsapp, preferred=preferred, updated_at=self.now())

@@ -1,6 +1,6 @@
 """Behaviour that mutation testing showed nothing pinned (audit): claim digits and boundaries, job field limits, and the job store's guards."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import pytest
 from pydantic import ValidationError
@@ -10,7 +10,7 @@ from eventmate.followthrough.jobs import Job, JobStore, StaleJob, VendorProgress
 from eventmate.schemas import AmountMention, ReplyAnalysis
 from tests.test_claims import msg
 
-NOW = datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 30, 9, 0, tzinfo=UTC)
 
 
 # ---- claims
@@ -89,7 +89,7 @@ def test_text_limits_are_exact(field, limit):
 def test_a_time_without_a_zone_is_refused_on_every_time_field(field):
     with pytest.raises(ValidationError, match="time zone"):
         job(**{field: datetime(2026, 11, 1, 9, 0)})
-    assert job(**{field: datetime(2026, 11, 1, 9, 0, tzinfo=timezone.utc)})
+    assert job(**{field: datetime(2026, 11, 1, 9, 0, tzinfo=UTC)})
 
 
 def test_a_job_refuses_unknown_fields_and_cannot_be_edited_in_place():

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 from flask import jsonify, request
 from eventmate.state import build_state
 from eventmate.integrations.explore import route as explore_route
@@ -39,7 +39,7 @@ def register(app, k):
             except ValueError:
                 raise ValueError("changes_since must be an ISO 8601 time") from None
             if since.tzinfo is None:
-                since = since.replace(tzinfo=timezone.utc)
+                since = since.replace(tzinfo=UTC)
         with lock:
             state = build_state(em, plan_id, changes_since=since, today=today_fn())
         return out(state)
@@ -66,7 +66,7 @@ def register(app, k):
         vendor_id, b = pid(vendor_id), body(QuoteBody)
         fields = b.model_dump(exclude={"category"})
         with lock:
-            obs = em.observe_quote(vendor_id, b.category, observed_at=datetime.now(timezone.utc), **fields)
+            obs = em.observe_quote(vendor_id, b.category, observed_at=datetime.now(UTC), **fields)
             report = em.observations.report(vendor_id, today_fn())
         return jsonify({"observation": json.loads(obs.model_dump_json()), "report": json.loads(report.model_dump_json())}), 201
 

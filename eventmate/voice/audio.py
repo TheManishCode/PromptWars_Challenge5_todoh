@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import struct
-from typing import Optional
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_SECONDS = 120
@@ -26,7 +25,7 @@ class AudioRejected(ValueError):
         self.status = status
 
 
-def sniff(data: bytes) -> Optional[str]:
+def sniff(data: bytes) -> str | None:
     """The container family from the first bytes, or None."""
     if data[:4] == b"\x1a\x45\xdf\xa3":
         return "webm"
@@ -54,7 +53,7 @@ def check(data: bytes, declared: str, max_bytes: int = MAX_BYTES) -> str:
     return kind
 
 
-def probe_seconds(data: bytes, kind: str) -> Optional[float]:
+def probe_seconds(data: bytes, kind: str) -> float | None:
     """The recording's length from its headers when they say, else None (a live-recorded webm usually carries no duration; the decoder then decides)."""
     try:
         if kind == "wav":
@@ -68,7 +67,7 @@ def probe_seconds(data: bytes, kind: str) -> Optional[float]:
     return None
 
 
-def _wav(data: bytes) -> Optional[float]:
+def _wav(data: bytes) -> float | None:
     """Length from a PCM WAV's headers. A byte rate that is not rate x channels x bits would make a long recording look short, so it is not believed: the length
     is then unknown and the transcriber's own timeout, not this number, bounds the work (F-006). A data size that is too large only makes the note look longer."""
     pos, byte_rate, fmt = 12, 0, None
@@ -87,7 +86,7 @@ def _wav(data: bytes) -> Optional[float]:
     return None
 
 
-def _ogg(data: bytes) -> Optional[float]:
+def _ogg(data: bytes) -> float | None:
     first = data.find(b"OpusHead", 0, 400)
     vorbis = data.find(b"\x01vorbis", 0, 400)
     if first >= 0:
@@ -101,7 +100,7 @@ def _ogg(data: bytes) -> Optional[float]:
     return granule / rate if granule > 0 and rate else None
 
 
-def _mp4(data: bytes) -> Optional[float]:
+def _mp4(data: bytes) -> float | None:
     def boxes(buf: bytes, start: int, end: int):
         pos = start
         while pos + 8 <= end:

@@ -10,6 +10,7 @@ from eventmate.messaging.channels import clean_reply_text
 from eventmate.voice.speech import strip_markup
 from eventmate.guestlist import parse_guest_csv
 from eventmate.agents.manager import parse_request
+import contextlib
 
 N = int(__import__("os").environ.get("REDOS_SIZE", "60000"))  # 200000 reproduces the F-001 numbers but takes minutes while F-001 is open
 PAY = {
@@ -23,10 +24,8 @@ PAY = {
 }
 def t(name, fn, arg):
     s = time.perf_counter()
-    try:
+    with contextlib.suppress(Exception):
         fn(arg)
-    except Exception:
-        pass
     d = time.perf_counter() - s
     return d
 

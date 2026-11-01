@@ -17,8 +17,8 @@ import time
 import urllib.error
 import urllib.request
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional
+from datetime import datetime, timedelta, UTC
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 from eventmate.assistant.trace import FeedbackEvent, TraceEntry
@@ -30,14 +30,14 @@ TIMEOUT = 5
 
 
 def _iso(t: datetime) -> str:
-    return t.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return t.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-def trace_events(t: TraceEntry) -> List[Dict[str, Any]]:
+def trace_events(t: TraceEntry) -> list[dict[str, Any]]:
     """Map one trace to Langfuse ingestion events: a trace, a span or generation per step, sessions keyed by plan."""
     end = t.timestamp
     start = end - timedelta(milliseconds=t.total_ms)
-    events: List[Dict[str, Any]] = [{
+    events: list[dict[str, Any]] = [{
         "id": uuid.uuid4().hex, "type": "trace-create", "timestamp": _iso(start),
         "body": {"id": t.request_id, "timestamp": _iso(start), "name": "eventmate-assistant", "userId": t.user_id, "sessionId": t.plan_id,
                  "input": t.question_masked, "output": t.answer_masked, "tags": [t.route, t.outcome, f"cache:{t.cache}", *t.roles],
@@ -46,7 +46,7 @@ def trace_events(t: TraceEntry) -> List[Dict[str, Any]]:
     cursor = start
     for i, s in enumerate(t.steps):
         s_start, cursor = cursor, cursor + timedelta(milliseconds=s.ms)
-        body: Dict[str, Any] = {"id": f"{t.request_id}-{i}", "traceId": t.request_id, "name": f"{s.kind}:{s.name}", "startTime": _iso(s_start), "endTime": _iso(cursor),
+        body: dict[str, Any] = {"id": f"{t.request_id}-{i}", "traceId": t.request_id, "name": f"{s.kind}:{s.name}", "startTime": _iso(s_start), "endTime": _iso(cursor),
                                 "level": "DEFAULT" if s.ok else "WARNING", "statusMessage": s.detail or None, "metadata": {"kind": s.kind}}
         kind = "generation-create" if s.kind == "llm" and s.name not in ("unusable_reply",) and s.ok else "span-create"
         if kind == "generation-create":
@@ -56,27 +56,27 @@ def trace_events(t: TraceEntry) -> List[Dict[str, Any]]:
     return events
 
 
-def score_event(f: FeedbackEvent) -> Dict[str, Any]:
+def score_event(f: FeedbackEvent) -> dict[str, Any]:
     return {"id": uuid.uuid4().hex, "type": "score-create", "timestamp": _iso(f.timestamp),
             "body": {"id": f.entry_id, "traceId": f.request_id, "name": "user-feedback", "value": f.value, "dataType": "NUMERIC", "comment": f.comment or None}}
 
 
 class LangfuseExporter:
-    def __init__(self, host: str, public_key: str, secret_key: str, post: Optional[Callable[[str, bytes, Dict[str, str]], None]] = None):
+    def __init__(self, host: str, public_key: str, secret_key: str, post: Callable[[str, bytes, dict[str, str]], None] | None = None):
         u = urlparse(host)
         if u.scheme not in ("http", "https") or not u.hostname or (u.scheme == "http" and u.hostname not in LOCAL_HOSTS):
             raise ValueError("LANGFUSE_HOST must be https (http only for localhost)")
         self.url = host.rstrip("/") + "/api/public/ingestion"
         self.headers = {"Content-Type": "application/json", "Authorization": "Basic " + base64.b64encode(f"{public_key}:{secret_key}".encode()).decode()}
         self._post = post or self._http
-        self._q: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(maxsize=2000)
+        self._q: queue.Queue[dict[str, Any] | None] = queue.Queue(maxsize=2000)
         self.sent = self.failed = self.dropped = 0
         self._pending = 0
         self._lock = threading.Lock()
         threading.Thread(target=self._run, daemon=True, name="langfuse-export").start()
 
     @classmethod
-    def from_env(cls) -> Optional["LangfuseExporter"]:
+    def from_env(cls) -> LangfuseExporter | None:
         host = os.environ.get("LANGFUSE_HOST") or os.environ.get("LANGFUSE_BASE_URL")  # Langfuse's own SDKs say BASE_URL
         pub, sec = os.environ.get("LANGFUSE_PUBLIC_KEY"), os.environ.get("LANGFUSE_SECRET_KEY")
         if not (host and pub and sec):
@@ -94,7 +94,7 @@ class LangfuseExporter:
     def export_score(self, f: FeedbackEvent) -> None:
         self._enqueue(score_event(f))
 
-    def _enqueue(self, event: Dict[str, Any]) -> None:
+    def _enqueue(self, event: dict[str, Any]) -> None:
         try:
             self._q.put_nowait(event)
             with self._lock:
@@ -126,7 +126,7 @@ class LangfuseExporter:
                 self._pending -= len(batch)
 
     @staticmethod
-    def _http(url: str, data: bytes, headers: Dict[str, str]) -> None:
+    def _http(url: str, data: bytes, headers: dict[str, str]) -> None:
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # nosec B310 - https checked in __init__
             if resp.status >= 300:

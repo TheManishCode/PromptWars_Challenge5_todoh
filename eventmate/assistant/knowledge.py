@@ -14,7 +14,7 @@ import math
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Sequence
 
 from eventmate.agents.budget import BudgetPolicy
 from eventmate.assistant.identity import Perm, Principal
@@ -41,7 +41,7 @@ class Hit(_Model):
     score: float
 
 
-def _tokens(text: str) -> List[str]:
+def _tokens(text: str) -> list[str]:
     out = []
     for w in _WORD.findall(text.lower()):
         if w in _STOP:
@@ -54,7 +54,7 @@ class KnowledgeBase:
     def __init__(self, chunks: Sequence[Chunk]):
         if len({c.id for c in chunks}) != len(chunks):
             raise ValueError("duplicate chunk ids")
-        self.chunks: Tuple[Chunk, ...] = tuple(chunks)
+        self.chunks: tuple[Chunk, ...] = tuple(chunks)
         self._tf = [Counter(_tokens(c.title + " " + c.text)) for c in self.chunks]
         self._len = [sum(tf.values()) or 1 for tf in self._tf]
         self._avg = sum(self._len) / max(1, len(self._len))
@@ -62,14 +62,14 @@ class KnowledgeBase:
         for tf in self._tf:
             df.update(tf.keys())
         n = len(self.chunks)
-        self._idf: Dict[str, float] = {t: math.log(1 + (n - d + 0.5) / (d + 0.5)) for t, d in df.items()}
+        self._idf: dict[str, float] = {t: math.log(1 + (n - d + 0.5) / (d + 0.5)) for t, d in df.items()}
         self.min_score = 0.0  # set from policy: weak matches are no match (the Dify score threshold)
         self.version = hashlib.sha256("\n".join(f"{c.id}|{c.permission}|{c.text}" for c in self.chunks).encode()).hexdigest()[:16]
 
-    def get(self, chunk_id: str) -> Optional[Chunk]:
+    def get(self, chunk_id: str) -> Chunk | None:
         return next((c for c in self.chunks if c.id == chunk_id), None)
 
-    def search(self, query: str, principal: Principal, k: int = 4) -> List[Hit]:
+    def search(self, query: str, principal: Principal, k: int = 4) -> list[Hit]:
         """Top chunks the principal may read. Chunks outside their permissions are never scored."""
         allowed = principal.perms()
         q = _tokens(query)
@@ -84,8 +84,8 @@ class KnowledgeBase:
         return sorted(hits, key=lambda h: (-h.score, h.chunk.id))[:k]
 
 
-def _doc_chunks(directory: Path) -> List[Chunk]:
-    chunks: List[Chunk] = []
+def _doc_chunks(directory: Path) -> list[Chunk]:
+    chunks: list[Chunk] = []
     for path in sorted(directory.glob("*.md")):
         text = path.read_text(encoding="utf-8")
         m = _FRONT.match(text)
@@ -101,7 +101,7 @@ def _doc_chunks(directory: Path) -> List[Chunk]:
     return chunks
 
 
-def _policy_chunks(policy: BudgetPolicy) -> List[Chunk]:
+def _policy_chunks(policy: BudgetPolicy) -> list[Chunk]:
     split = ", ".join(f"{k} {v / 100:g} percent" for k, v in sorted(policy.weights_bp.items()))
     text = (
         f"The budget is split across services by weight: {split}. "
@@ -111,7 +111,7 @@ def _policy_chunks(policy: BudgetPolicy) -> List[Chunk]:
     return [Chunk(id="policy-budget", title="Budget split and contingency", text=text, source="code:BudgetPolicy", permission=Perm.KB_READ.value)]
 
 
-def _pack_chunks() -> List[Chunk]:
+def _pack_chunks() -> list[Chunk]:
     out = []
     for p in load_packs():
         status = "reviewed by " + (p.reviewed_by or "?") if p.reviewed else "an unreviewed draft"
@@ -120,5 +120,5 @@ def _pack_chunks() -> List[Chunk]:
     return out
 
 
-def build_default(policy: Optional[BudgetPolicy] = None, directory: Optional[Path] = None) -> KnowledgeBase:
+def build_default(policy: BudgetPolicy | None = None, directory: Path | None = None) -> KnowledgeBase:
     return KnowledgeBase(_doc_chunks(directory or KNOWLEDGE_DIR) + _policy_chunks(policy or BudgetPolicy()) + _pack_chunks())

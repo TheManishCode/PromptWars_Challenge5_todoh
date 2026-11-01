@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from eventmate.jsonl import DEFAULT_LOG_DIR, RUN_ID_PATTERN, JsonlLog
 
@@ -20,7 +20,7 @@ class DecisionLogger(JsonlLog[DecisionLogEntry]):
         """Validate, then append one entry. Raises before writing if invalid."""
         entry = DecisionLogEntry(
             entry_id=uuid.uuid4().hex,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             run_id=self.run_id,
             **fields,
         )

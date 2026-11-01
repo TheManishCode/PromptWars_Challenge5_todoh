@@ -12,15 +12,15 @@ import os
 import re
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 from pydantic import Field
 
 from eventmate.assistant.guard import mask_pii
 from eventmate.assistant.knowledge import _tokens
 from eventmate.schemas import _Model
+import builtins
 
 MATCH_THRESHOLD = 0.8
 MAX_ANNOTATIONS = 500
@@ -30,10 +30,10 @@ _PLAIN = re.compile(r"[<>]")
 class Annotation(_Model):
     id: str
     plan_id: str
-    roles: Tuple[str, ...]
+    roles: tuple[str, ...]
     question: str = Field(max_length=240)
     answer: str = Field(min_length=1, max_length=1500)
-    citations: Tuple[str, ...] = ()
+    citations: tuple[str, ...] = ()
     state: str  # plan version : ledger entries when approved
     created_by: str
     created_at: datetime
@@ -48,7 +48,7 @@ class AnnotationStore:
     def __init__(self, directory: Path):
         self.path = Path(directory) / "assistant_annotations.json"
         self._lock = threading.Lock()
-        self._items: List[Annotation] = []
+        self._items: list[Annotation] = []
         if self.path.exists():
             self._items = [Annotation.model_validate(a) for a in json.loads(self.path.read_text(encoding="utf-8"))]
 
@@ -57,7 +57,7 @@ class AnnotationStore:
         tmp.write_text(json.dumps([json.loads(a.model_dump_json()) for a in self._items], indent=1), encoding="utf-8")
         os.replace(tmp, self.path)
 
-    def add(self, *, plan_id: str, roles: Tuple[str, ...], question: str, answer: str, citations: Tuple[str, ...], state: str, created_by: str) -> Annotation:
+    def add(self, *, plan_id: str, roles: tuple[str, ...], question: str, answer: str, citations: tuple[str, ...], state: str, created_by: str) -> Annotation:
         answer = mask_pii(answer.strip())
         if not answer or _PLAIN.search(answer):
             raise ValueError("an approved answer must be plain text")
@@ -65,7 +65,7 @@ class AnnotationStore:
             if len(self._items) >= MAX_ANNOTATIONS:
                 raise ValueError("too many approved answers; remove some first")
             a = Annotation(id=uuid.uuid4().hex[:12], plan_id=plan_id, roles=tuple(sorted(roles)), question=mask_pii(question)[:240], answer=answer[:1500],
-                           citations=citations, state=state, created_by=created_by, created_at=datetime.now(timezone.utc))
+                           citations=citations, state=state, created_by=created_by, created_at=datetime.now(UTC))
             self._items = [x for x in self._items if not (x.plan_id == plan_id and x.roles == a.roles and x.question == a.question)] + [a]  # re-approving replaces
             self._save()
             return a
@@ -89,11 +89,11 @@ class AnnotationStore:
                 self._save()
             return changed
 
-    def list(self, plan_id: str) -> List[Annotation]:
+    def list(self, plan_id: str) -> builtins.list[Annotation]:
         with self._lock:
             return [a for a in self._items if a.plan_id == plan_id]
 
-    def match(self, question: str, plan_id: str, roles: Tuple[str, ...], state: str) -> Optional[Annotation]:
+    def match(self, question: str, plan_id: str, roles: tuple[str, ...], state: str) -> Annotation | None:
         best, best_score = None, 0.0
         with self._lock:
             for a in self._items:

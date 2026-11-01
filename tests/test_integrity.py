@@ -230,7 +230,7 @@ def test_only_a_derived_store_can_be_reset_and_the_old_file_is_kept(em, pid):
 
 def test_a_send_history_file_with_a_cut_off_final_line_keeps_blocking_and_the_unknown_send_still_counts_against_the_caps(em, pid, chans):
     policy_cap = em.conversations.policy.per_vendor_per_day
-    for i in range(policy_cap - 1):
+    for _i in range(policy_cap - 1):
         drafted_and_approved(em, pid, to="sales@annapurna.in")
     assert len(chans["email"].sent) == policy_cap - 1
     last = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Asha")

@@ -4,7 +4,7 @@
 import multiprocessing as mp
 import os
 import stat
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import pytest
 
@@ -16,7 +16,7 @@ from eventmate.service import EventMate
 from tests.conftest import EXAMPLE, TODAY
 from eventmate.followthrough.worker import JobWorker, NUDGE_TEXT, digest
 
-T0 = datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 30, 9, 0, tzinfo=UTC)
 VENDORS = {"cat-pune-annapurna": ("email", "a@annapurna.test"), "cat-pune-rasoi": ("email", "r@rasoi.test"), "cat-pune-spice": ("email", "s@spice.test")}
 
 
@@ -155,7 +155,7 @@ def test_the_job_file_is_private_and_start_refuses_bad_input(w, pid, clock, tmp_
 
 
 def test_start_can_use_saved_contacts(w, pid, em, clock):
-    for vid, (ch, to) in VENDORS.items():
+    for vid, (_ch, to) in VENDORS.items():
         em.set_vendor_contact(vid, to, None, "email")
     job = w.start_job(pid, C.CATERER, list(VENDORS), "3 quotes", clock() + timedelta(days=7), "Asha")
     assert {p.recipient for p in job.vendors.values()} == {to for _, to in VENDORS.values()}
@@ -399,7 +399,7 @@ def _save_same_version(path, job_json, q):
 
     store = JobStore(path)
     try:
-        store.save(Job.model_validate_json(job_json).model_copy(update={"next_action": f"writer {os.getpid()}"}), "t", "race", datetime.now(timezone.utc))
+        store.save(Job.model_validate_json(job_json).model_copy(update={"next_action": f"writer {os.getpid()}"}), "t", "race", datetime.now(UTC))
         q.put("won")
     except StaleJob:
         q.put("stale")

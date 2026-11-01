@@ -25,7 +25,7 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable
 
 from eventmate.assistant.identity import Principal, Role
 from eventmate.web.limits import WindowLimiter
@@ -84,7 +84,7 @@ class WorkspaceDirectory:
     def _db(self):
         return _Tx(sqlite3.connect(self.path, timeout=10))
 
-    def create(self) -> Tuple[str, str]:
+    def create(self) -> tuple[str, str]:
         for _ in range(5):
             workspace_id, credential = "ws-" + secrets.token_hex(8), secrets.token_urlsafe(24)
             try:
@@ -96,7 +96,7 @@ class WorkspaceDirectory:
                 continue
         raise WorkspaceError(503, "workspace_unavailable", "a workspace could not be created; try again")
 
-    def lookup(self, credential: str) -> Optional[str]:
+    def lookup(self, credential: str) -> str | None:
         """The workspace id this credential opens, or None for an unknown, malformed or revoked one. The credential is compared by its hash."""
         if not isinstance(credential, str) or not CREDENTIAL.fullmatch(credential):
             return None
@@ -114,12 +114,12 @@ class WorkspaceDirectory:
         with self._db() as db:
             return db.execute("SELECT 1 FROM workspaces WHERE id = ?", (workspace_id,)).fetchone() is not None
 
-    def info(self, workspace_id: str) -> Optional[Dict[str, float]]:
+    def info(self, workspace_id: str) -> dict[str, float] | None:
         with self._db() as db:
             row = db.execute("SELECT created, last_seen FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
         return None if row is None else {"created": row[0], "last_seen": row[1]}
 
-    def rotate(self, workspace_id: str) -> Optional[str]:
+    def rotate(self, workspace_id: str) -> str | None:
         """A new credential; the old one stops working at once."""
         credential = secrets.token_urlsafe(24)
         with self._lock, self._db() as db:
@@ -139,7 +139,7 @@ class WorkspaceDirectory:
         with self._db() as db:
             return db.execute("SELECT COUNT(*) FROM workspaces").fetchone()[0]
 
-    def idle_before(self, cutoff: float) -> List[str]:
+    def idle_before(self, cutoff: float) -> list[str]:
         with self._db() as db:
             return [r[0] for r in db.execute("SELECT id FROM workspaces WHERE last_seen < ?", (cutoff,)).fetchall()]
 
@@ -161,10 +161,10 @@ class _Tx:
         return False
 
 
-Factory = Callable[[str, Path], Tuple[object, object, object]]
+Factory = Callable[[str, Path], tuple[object, object, object]]
 
 
-def default_factory(workspace_id: str, home: Path) -> Tuple[object, object, object]:
+def default_factory(workspace_id: str, home: Path) -> tuple[object, object, object]:
     """EventMate, Assistant and VoiceService for one workspace. Channels are unconfigured, so nothing a visitor does can send an email or a message."""
     from eventmate.assistant.agent import Assistant
     from eventmate.llm import client_from_env
@@ -189,9 +189,9 @@ class WorkspaceRegistry:
         self.root, self.secret, self._factory, self.max_workspaces, self.max_live = Path(root), secret, factory, max_workspaces, max_live
         self.directory = WorkspaceDirectory(self.root, clock)
         self._clock = clock
-        self._live: "OrderedDict[str, Workspace]" = OrderedDict()
+        self._live: OrderedDict[str, Workspace] = OrderedDict()
         self._lock = threading.RLock()
-        self._usage_cache: Dict[str, Tuple[float, int]] = {}
+        self._usage_cache: dict[str, tuple[float, int]] = {}
         self._global = WindowLimiter(create_per_hour, 3600.0)
         self._per_address = WindowLimiter(create_per_address_per_hour, 3600.0)
 
@@ -242,11 +242,11 @@ class WorkspaceRegistry:
             if len(self._live) > self.max_live:
                 self._evict()
 
-    def open(self, credential: Optional[str]) -> Optional[Workspace]:
+    def open(self, credential: str | None) -> Workspace | None:
         workspace_id = self.directory.lookup(credential) if credential else None
         return self._build(workspace_id) if workspace_id else None
 
-    def create(self, address: str) -> Tuple[Workspace, str]:
+    def create(self, address: str) -> tuple[Workspace, str]:
         """A new empty workspace, or a WorkspaceError: 429 when this address or the server as a whole is creating too many, 503 when the cap is reached."""
         if not self._per_address.allow(address or "?") or not self._global.allow("all"):
             raise WorkspaceError(429, "workspace_rate_limited", "too many new workspaces are being created; try again later")
@@ -255,7 +255,7 @@ class WorkspaceRegistry:
         workspace_id, credential = self.directory.create()
         return self._build(workspace_id), credential
 
-    def rotate(self, workspace_id: str) -> Optional[str]:
+    def rotate(self, workspace_id: str) -> str | None:
         return self.directory.rotate(workspace_id)
 
     def revoke(self, workspace_id: str) -> bool:
@@ -275,7 +275,7 @@ class WorkspaceRegistry:
         except ValueError:
             return default
 
-    def usage(self, workspace_id: str) -> Tuple[int, int]:
+    def usage(self, workspace_id: str) -> tuple[int, int]:
         """(bytes on disk, plans first saved today) for one workspace. The byte count is cached for a few seconds so a burst of writes does not walk the tree each time."""
         now = self._clock()
         cached = self._usage_cache.get(workspace_id)
@@ -285,9 +285,9 @@ class WorkspaceRegistry:
             home = self.home(workspace_id)
             size = sum(p.stat().st_size for p in home.rglob("*") if p.is_file()) if home.exists() else 0
             self._usage_cache[workspace_id] = (now, size)
-        today = datetime.datetime.fromtimestamp(now, datetime.timezone.utc).date()
+        today = datetime.datetime.fromtimestamp(now, datetime.UTC).date()
         plans = self.home(workspace_id) / "plans"
-        started = sum(1 for p in plans.glob("plan-*-v0001.json") if datetime.datetime.fromtimestamp(p.stat().st_mtime, datetime.timezone.utc).date() == today) if plans.exists() else 0
+        started = sum(1 for p in plans.glob("plan-*-v0001.json") if datetime.datetime.fromtimestamp(p.stat().st_mtime, datetime.UTC).date() == today) if plans.exists() else 0
         return size, started
 
     def check_write(self, workspace_id: str, creating_plan: bool = False, incoming: int = 0) -> None:
@@ -327,7 +327,7 @@ class WorkspaceRegistry:
             home.rmdir()
         self.directory.forget(workspace_id)
         if existed:
-            write_tombstone(self.root / "tombstones.jsonl", "workspace", workspace_id, datetime.datetime.fromtimestamp(self._clock(), datetime.timezone.utc))
+            write_tombstone(self.root / "tombstones.jsonl", "workspace", workspace_id, datetime.datetime.fromtimestamp(self._clock(), datetime.UTC))
         return existed
 
     def record_plan_deletion(self, workspace_id: str, plan_id: str) -> None:
@@ -335,9 +335,9 @@ class WorkspaceRegistry:
         is restored with this log, so the plan does not come back (docs/RUNBOOK.md)."""
         from eventmate.retention import write_tombstone
 
-        write_tombstone(self.root / "tombstones.jsonl", "plan", plan_id, datetime.datetime.fromtimestamp(self._clock(), datetime.timezone.utc), workspace=workspace_id)
+        write_tombstone(self.root / "tombstones.jsonl", "plan", plan_id, datetime.datetime.fromtimestamp(self._clock(), datetime.UTC), workspace=workspace_id)
 
-    def sweep_idle_empty(self, idle_s: float) -> List[str]:
+    def sweep_idle_empty(self, idle_s: float) -> list[str]:
         """Remove workspaces that never saved anything and have been idle for ``idle_s``. A workspace with any data is never touched here."""
         removed = []
         for workspace_id in self.directory.idle_before(self._clock() - idle_s):

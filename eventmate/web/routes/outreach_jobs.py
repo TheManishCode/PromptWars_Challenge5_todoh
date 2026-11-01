@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from flask import g, jsonify
 from eventmate.followthrough.worker import digest
 from eventmate.web.base import (
@@ -174,7 +174,7 @@ def register(app, k):
         plan_id, b = pid(plan_id), body(JobBody)
         with lock:
             em.store.latest(plan_id)
-            job = em.jobs.start_job(plan_id, b.category, b.vendor_ids, b.goal, datetime.now(timezone.utc) + timedelta(days=b.deadline_days), b.sender_name,
+            job = em.jobs.start_job(plan_id, b.category, b.vendor_ids, b.goal, datetime.now(UTC) + timedelta(days=b.deadline_days), b.sender_name,
                                     b.min_quotes, b.max_amount_inr, b.max_nudges_per_vendor, b.reply_window_hours)
         return out(job, 201)
 

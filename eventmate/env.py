@@ -11,7 +11,7 @@ import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from typing import MutableMapping, Optional, Tuple
+from typing import MutableMapping
 
 ALLOWED = frozenset({
     "OPENWEATHER_API_KEY", "NVIDIA_API_KEY", "OPENROUTER_API_KEY", "EVENTMATE_ENABLE_LLM", "EVENTMATE_ASSET_BASE", "EVENTMATE_OVERPASS_URL",
@@ -31,8 +31,8 @@ _LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$"
 
 @dataclass(frozen=True)
 class EnvLoad:
-    loaded: Tuple[str, ...] = ()  # names only
-    warnings: Tuple[str, ...] = ()
+    loaded: tuple[str, ...] = ()  # names only
+    warnings: tuple[str, ...] = ()
 
     def __repr__(self) -> str:
         return f"EnvLoad(loaded={self.loaded!r}, warnings={len(self.warnings)})"
@@ -44,7 +44,7 @@ def _unquote(v: str) -> str:
     return v.split(" #", 1)[0].strip()
 
 
-def load_env(path: Optional[Path] = None, environ: Optional[MutableMapping[str, str]] = None) -> EnvLoad:
+def load_env(path: Path | None = None, environ: MutableMapping[str, str] | None = None) -> EnvLoad:
     environ = os.environ if environ is None else environ
     if path is None:
         path = Path(environ.get("EVENTMATE_ENV_FILE") or DEFAULT_PATH)
@@ -78,7 +78,7 @@ def load_env(path: Optional[Path] = None, environ: Optional[MutableMapping[str, 
     return EnvLoad(loaded=tuple(loaded), warnings=tuple(warnings))
 
 
-def redact_secrets(text: str, environ: Optional[MutableMapping[str, str]] = None) -> str:
+def redact_secrets(text: str, environ: MutableMapping[str, str] | None = None) -> str:
     """Remove secrets from text that is about to be logged or shown: the value of every secret-named environment variable and common key shapes.
     Error text from a provider or a library can echo the key it was sent; this is the last line of defence, not a licence to log raw errors."""
     env = os.environ if environ is None else environ

@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable
 
 from eventmate.jsonl import InterProcessLock, JsonlLog
 from eventmate.schemas import Suppression, UnmatchedMessage, _EMAIL
@@ -76,7 +76,7 @@ class _UnmatchedFile(JsonlLog[UnmatchedMessage]):
 
 
 class SuppressionStore:
-    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
         self.root = Path(root) / "suppression"
         self.now = now
         self._lock = InterProcessLock(self.root / ".lock")
@@ -84,13 +84,13 @@ class SuppressionStore:
     def _file(self) -> _SuppressionFile:
         return _SuppressionFile(self.root, run_id="all")
 
-    def all(self) -> List[Suppression]:
-        latest: Dict[str, Suppression] = {}
+    def all(self) -> list[Suppression]:
+        latest: dict[str, Suppression] = {}
         for s in self._file().read():
             latest[s.suppression_id] = s
         return list(latest.values())
 
-    def active_for(self, channel: str, value: str) -> Optional[Suppression]:
+    def active_for(self, channel: str, value: str) -> Suppression | None:
         try:
             key = normalise_address(channel, value)
         except ValueError:
@@ -121,7 +121,7 @@ class SuppressionStore:
             new = Suppression.model_validate({**cur.model_dump(), "lifted_at": self.now(), "lifted_by": by.strip()[:80], "lift_reason": reason.strip()[:200]})
             return self._file()._append(new, suppression_id)
 
-    def lift_bad_address(self, channel: str, value: str, by: str, reason: str, acknowledge_reason: bool = False) -> Optional[Suppression]:
+    def lift_bad_address(self, channel: str, value: str, by: str, reason: str, acknowledge_reason: bool = False) -> Suppression | None:
         """A bad address is cleared when the user edits or re-confirms the contact, having read why it failed. A stop request or the user's own entry is never cleared this way."""
         cur = self.active_for(channel, value)
         return self.lift(cur.suppression_id, by, reason, acknowledge_reason) if cur is not None and cur.reason == "bad_address" else None
@@ -137,20 +137,20 @@ class UnmatchedStore:
     def _file(self) -> _UnmatchedFile:
         return _UnmatchedFile(self.root, run_id="all")
 
-    def all(self) -> List[UnmatchedMessage]:
-        latest: Dict[str, UnmatchedMessage] = {}
+    def all(self) -> list[UnmatchedMessage]:
+        latest: dict[str, UnmatchedMessage] = {}
         for m in self._file().read():
             latest[m.message_id] = m
         return list(latest.values())
 
-    def add(self, channel: str, sender: str, received_at: datetime, external_id: str, kind: str, body: str) -> Optional[UnmatchedMessage]:
+    def add(self, channel: str, sender: str, received_at: datetime, external_id: str, kind: str, body: str) -> UnmatchedMessage | None:
         with self._lock():
             if any((m.channel, m.external_id) == (channel, external_id) for m in self.all()):
                 return None
             m = UnmatchedMessage(message_id=uuid.uuid4().hex, channel=channel, sender=sender[:254], received_at=received_at, external_id=external_id[:400], kind=kind, body=body[:1000])
             return self._file()._append(m, m.message_id)
 
-    def get(self, message_id: str) -> Optional[UnmatchedMessage]:
+    def get(self, message_id: str) -> UnmatchedMessage | None:
         return next((m for m in self.all() if m.message_id == message_id), None)
 
     def dismiss(self, message_id: str) -> UnmatchedMessage:

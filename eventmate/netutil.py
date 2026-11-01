@@ -10,13 +10,13 @@ from __future__ import annotations
 import http.client
 import json
 import time
-from typing import Any, Union
+from typing import Any
 
 NETWORK_ERRORS = (OSError, TimeoutError, http.client.HTTPException)
 CHUNK = 65536
 
 
-def loads(raw: Union[str, bytes, bytearray]) -> Any:
+def loads(raw: str | bytes | bytearray) -> Any:
     try:
         return json.loads(raw)
     except RecursionError:

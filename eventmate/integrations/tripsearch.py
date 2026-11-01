@@ -9,18 +9,18 @@ import itertools
 import statistics
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
-from datetime import date, datetime, timedelta, timezone
-from typing import Callable, Dict, List, Optional, Tuple
+from datetime import date, datetime, timedelta, UTC
+from typing import Callable
 
 from eventmate.schemas import FlightOption, FlightSearch, TripLeg, TripPackage, TripRequest, TripSearchResult
 from eventmate.integrations.travel import MULTI_CITY_NOTE, check_date, FlightProvider, TravelError
 
-Leg = Tuple[str, str, date]
+Leg = tuple[str, str, date]
 OnCall = Callable[[Leg, bool, str, float], None]
 EXTRA_PACKAGES = 4
 
 
-def _plans(req: TripRequest) -> List[Tuple[Tuple[str, ...], date, Tuple[Leg, ...]]]:
+def _plans(req: TripRequest) -> list[tuple[tuple[str, ...], date, tuple[Leg, ...]]]:
     by_code = {s.code: s.nights for s in req.stops}
     orders = [tuple(s.code for s in req.stops)] if req.fixed_order else list(itertools.permutations(by_code))
     end = req.return_to or req.origin
@@ -37,7 +37,7 @@ def _plans(req: TripRequest) -> List[Tuple[Tuple[str, ...], date, Tuple[Leg, ...
     return plans
 
 
-def _pick(search: FlightSearch, key) -> Optional[FlightOption]:
+def _pick(search: FlightSearch, key) -> FlightOption | None:
     priced = [o for o in search.options if o.price_inr is not None]
     return min(priced, key=key) if priced else None
 
@@ -47,11 +47,11 @@ def _label(leg: Leg) -> str:
 
 
 def _fetch_legs(
-    provider: FlightProvider, req: TripRequest, unique: List[Leg], deadline_s: float, workers: int, on_call: Optional[OnCall]
-) -> Tuple[Dict[Leg, FlightSearch], Dict[Leg, str], bool]:
+    provider: FlightProvider, req: TripRequest, unique: list[Leg], deadline_s: float, workers: int, on_call: OnCall | None
+) -> tuple[dict[Leg, FlightSearch], dict[Leg, str], bool]:
     """Search every distinct leg once, in parallel, until the deadline. Returns (results, errors, timed_out)."""
-    results: Dict[Leg, FlightSearch] = {}
-    errors: Dict[Leg, str] = {}
+    results: dict[Leg, FlightSearch] = {}
+    errors: dict[Leg, str] = {}
 
     def run(leg: Leg) -> None:
         o, d, day = leg
@@ -75,8 +75,8 @@ def _fetch_legs(
     return results, errors, bool(pending)
 
 
-def _leg_warnings(unique: List[Leg], results: Dict[Leg, FlightSearch], errors: Dict[Leg, str]) -> List[str]:
-    out: List[str] = []
+def _leg_warnings(unique: list[Leg], results: dict[Leg, FlightSearch], errors: dict[Leg, str]) -> list[str]:
+    out: list[str] = []
     for leg in unique:
         if leg in errors:
             out.append(f"{_label(leg)} could not be searched: {errors[leg]}")
@@ -86,14 +86,14 @@ def _leg_warnings(unique: List[Leg], results: Dict[Leg, FlightSearch], errors: D
 
 
 def _candidates(
-    plans, results: Dict[Leg, FlightSearch], metrics: Dict[str, Callable], hours: float
-) -> Tuple[Dict[str, List[TripPackage]], Dict[Tuple[Tuple[str, ...], date], int], int]:
+    plans, results: dict[Leg, FlightSearch], metrics: dict[str, Callable], hours: float
+) -> tuple[dict[str, list[TripPackage]], dict[tuple[tuple[str, ...], date], int], int]:
     """Price every plan under each metric. A plan with any unpriceable leg is dropped. Returns (candidates, cheapest totals, dropped)."""
-    candidates: Dict[str, List[TripPackage]] = {k: [] for k in metrics}
-    cheapest_totals: Dict[Tuple[Tuple[str, ...], date], int] = {}
+    candidates: dict[str, list[TripPackage]] = {k: [] for k in metrics}
+    cheapest_totals: dict[tuple[tuple[str, ...], date], int] = {}
     dropped = 0
     for order, start, legs in plans:
-        chosen: Dict[str, List[TripLeg]] = {k: [] for k in metrics}
+        chosen: dict[str, list[TripLeg]] = {k: [] for k in metrics}
         complete = True
         for leg in legs:
             res = results.get(leg)
@@ -131,12 +131,12 @@ def _signature(p: TripPackage) -> tuple:
     return (p.order, p.start_date, tuple(l.option.price_inr for l in p.legs))
 
 
-def _choose_packages(candidates: Dict[str, List[TripPackage]], median: int) -> List[TripPackage]:
+def _choose_packages(candidates: dict[str, list[TripPackage]], median: int) -> list[TripPackage]:
     """The best package under each metric, then up to EXTRA_PACKAGES distinct best-value alternatives."""
     top = [min(candidates[k], key=_RANK[k]) for k in ("cheapest", "fastest", "best_value")]
     packages = [p.model_copy(update={"below_median_inr": median - p.total_price_inr}) for p in top]
     seen = {_signature(p) for p in packages}
-    extras: List[TripPackage] = []
+    extras: list[TripPackage] = []
     for p in sorted(candidates["best_value"], key=_RANK["best_value"]):
         if _signature(p) not in seen:
             seen.add(_signature(p))
@@ -147,7 +147,7 @@ def _choose_packages(candidates: Dict[str, List[TripPackage]], median: int) -> L
 
 
 def search_trip(
-    provider: FlightProvider, req: TripRequest, today: date, deadline_s: float = 90.0, workers: int = 4, on_call: Optional[OnCall] = None
+    provider: FlightProvider, req: TripRequest, today: date, deadline_s: float = 90.0, workers: int = 4, on_call: OnCall | None = None
 ) -> TripSearchResult:
     check_date(req.earliest_start, today)
     plans = _plans(req)
@@ -158,7 +158,7 @@ def search_trip(
         )
 
     results, errors, timed_out = _fetch_legs(provider, req, unique, deadline_s, workers, on_call)
-    warnings: List[str] = []
+    warnings: list[str] = []
     if timed_out:
         warnings.append(f"the search stopped at the time limit ({deadline_s:g}s); results are partial")
     warnings += _leg_warnings(unique, results, errors)
@@ -171,7 +171,7 @@ def search_trip(
     }
     candidates, cheapest_totals, dropped = _candidates(plans, results, metrics, hours)
     shared = dict(request=req, searches_planned=len(unique), searches_used=len(results) + len(errors), orderings_considered=len({p[0] for p in plans}),
-                  dropped_orders=dropped, fetched_at=datetime.now(timezone.utc), note=MULTI_CITY_NOTE)
+                  dropped_orders=dropped, fetched_at=datetime.now(UTC), note=MULTI_CITY_NOTE)
     if not cheapest_totals:
         warnings.append("no complete itinerary could be priced; widen the dates, try fixed_order, or search again later")
         return TripSearchResult(warnings=tuple(warnings), **shared)
@@ -180,9 +180,9 @@ def search_trip(
     return TripSearchResult(packages=tuple(_choose_packages(candidates, median)), insights=tuple(_insights(req, cheapest_totals)), warnings=tuple(warnings), **shared)
 
 
-def _insights(req: TripRequest, totals: Dict[Tuple[Tuple[str, ...], date], int]) -> List[str]:
-    out: List[str] = []
-    best_by_order: Dict[Tuple[str, ...], int] = {}
+def _insights(req: TripRequest, totals: dict[tuple[tuple[str, ...], date], int]) -> list[str]:
+    out: list[str] = []
+    best_by_order: dict[tuple[str, ...], int] = {}
     for (order, _), t in totals.items():
         best_by_order[order] = min(t, best_by_order.get(order, t))
     if len(best_by_order) > 1:

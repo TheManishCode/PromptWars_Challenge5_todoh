@@ -5,6 +5,7 @@ import time
 import pytest
 
 from eventmate.messaging import channels as ch
+from datetime import UTC
 
 HEAD = b"From: vendor@example.net\r\nTo: owner@example.com\r\nSubject: Re: quote\r\nMessage-ID: <a@b>\r\nDate: Sat, 01 Nov 2026 10:00:00 +0000\r\n"
 
@@ -45,8 +46,8 @@ def test_one_poison_message_does_not_stop_the_messages_after_it(chan, monkeypatc
         def logout(self): pass
 
     chan._imap = lambda: Box()
-    from datetime import datetime, timezone
-    out = chan.poll([ch.KnownThread(draft_id="d", recipient="vendor@example.net", sent_at=datetime(2026, 10, 30, tzinfo=timezone.utc), external_id="<x@y>")])
+    from datetime import datetime
+    out = chan.poll([ch.KnownThread(draft_id="d", recipient="vendor@example.net", sent_at=datetime(2026, 10, 30, tzinfo=UTC), external_id="<x@y>")])
     assert len(out) == 2 and "could not be read safely" in out[0].body and "50000" in out[1].body
 
 

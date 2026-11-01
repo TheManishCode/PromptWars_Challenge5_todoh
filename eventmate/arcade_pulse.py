@@ -15,7 +15,6 @@ from __future__ import annotations
 import contextvars
 import threading
 import time
-from typing import Dict, List, Optional
 
 # The stages the arcade shows, in pipeline order. Names are stable API.
 STAGES = (
@@ -39,7 +38,7 @@ class ArcadePulse:
         self._label = ""
         self._state = "idle"  # idle | running | done | failed
         self._error = ""
-        self._stages: Dict[str, Dict[str, Optional[float]]] = {}
+        self._stages: dict[str, dict[str, float | None]] = {}
         self._t0 = 0.0
 
     def begin_run(self, label: str) -> int:
@@ -89,13 +88,13 @@ class ArcadePulse:
     def snapshot(self) -> dict:
         with self._lock:
             now = time.monotonic()
-            stages: List[dict] = []
+            stages: list[dict] = []
             for name in STAGES:
                 st = self._stages.get(name)
                 if not st:
                     stages.append({"name": name, "state": "waiting", "ms": None})
                     continue
-                ms: Optional[float] = None
+                ms: float | None = None
                 if st["t0"] is not None:
                     ms = round(((st["t1"] or now) - st["t0"]) * 1000, 1)
                 stages.append({"name": name, "state": st["state"], "ms": ms})
@@ -116,7 +115,7 @@ class _CurrentPulse:
 
     def __init__(self) -> None:
         self._default = ArcadePulse()
-        self._var: "contextvars.ContextVar[Optional[ArcadePulse]]" = contextvars.ContextVar("eventmate_pulse", default=None)
+        self._var: contextvars.ContextVar[ArcadePulse | None] = contextvars.ContextVar("eventmate_pulse", default=None)
 
     def bind(self, pulse_: ArcadePulse):
         return self._var.set(pulse_)

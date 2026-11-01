@@ -1,7 +1,7 @@
 """Throw hostile text at every parser of third-party text; report any exception type that is not a deliberate refusal."""
 import random, sys, time, traceback
 sys.path.insert(0, ".")
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from eventmate.messaging.conversations import analyze_reply
 from eventmate.messaging.channels import clean_reply_text, _strip_html
 from eventmate.integrations.deals import extract_mentions
@@ -20,7 +20,7 @@ def junk(n):
     return "".join(r.choice(ATOMS) if r.random() < .6 else chr(r.randrange(32, 0x2fff)) for _ in range(n))
 
 def msg(body):
-    return InboundMessage(message_id="m1", external_id="x1", plan_id="p", draft_id="d", vendor_id="v", vendor_name="V", category=VendorCategory.CATERER, channel="email", sender="a@b.co", received_at=datetime(2026, 11, 1, tzinfo=timezone.utc), body=body[:4000])
+    return InboundMessage(message_id="m1", external_id="x1", plan_id="p", draft_id="d", vendor_id="v", vendor_name="V", category=VendorCategory.CATERER, channel="email", sender="a@b.co", received_at=datetime(2026, 11, 1, tzinfo=UTC), body=body[:4000])
 
 class Fetch:
     def __init__(self, html): self.html = html
@@ -39,7 +39,7 @@ def run(name, fn):
     d = time.perf_counter() - t
     if d > 2: bad[(name, "SLOW")] = (f"{d:.1f}s", [])
 
-for i in range(3000):
+for _i in range(3000):
     s = junk(r.randrange(0, 400))
     run("analyze_reply", lambda: analyze_reply(s, ("service staff", "taxes")))
     run("clean_reply_text", lambda: clean_reply_text(s))

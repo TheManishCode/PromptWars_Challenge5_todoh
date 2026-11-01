@@ -4,6 +4,7 @@ import pytest
 
 from eventmate.__main__ import main
 from tests.conftest import EXAMPLE
+from datetime import UTC
 
 
 @pytest.fixture
@@ -127,14 +128,14 @@ def test_ledger_command_records_user_reported_money_and_prints_the_table(run):
 
 
 def test_quotes_command_reads_recorded_quotes_and_fails_for_unknown(run, tmp_path):
-    from datetime import date, datetime, timezone
+    from datetime import date, datetime
 
     from eventmate.service import EventMate
     from eventmate.schemas import VendorCategory as C
 
     em = EventMate(log_dir=tmp_path / "logs", plan_dir=tmp_path / "plans", run_id="q")
     em.observe_quote(
-        "cat-pune-annapurna", C.CATERER, source_type="user_input", entered_by="asha", observed_at=datetime.now(timezone.utc),
+        "cat-pune-annapurna", C.CATERER, source_type="user_input", entered_by="asha", observed_at=datetime.now(UTC),
         expires_at=date(2026, 12, 1), confidence=0.7, amount_inr=600, basis="per_plate", guest_count=100,
     )
     code, out, _ = run("quotes", "show", "cat-pune-annapurna")

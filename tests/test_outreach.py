@@ -14,6 +14,7 @@ from eventmate.schemas import VendorCategory as C
 from eventmate.service import EventMate
 from tests.conftest import EXAMPLE, TODAY
 from eventmate.web.app import create_app
+from datetime import UTC
 
 
 @pytest.fixture
@@ -210,10 +211,10 @@ def test_the_request_reads_naturally_for_every_event_type(tmp_path, brief, phras
 # ---- audit: what may be followed up, how often, and with what text
 
 def _sent(em, pid):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     d = mail(em, pid)
-    return em.outreach_store.transition(pid, d.draft_id, ("prepared",), status="sent", sent_at=datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc), external_id="<s1@x.test>")
+    return em.outreach_store.transition(pid, d.draft_id, ("prepared",), status="sent", sent_at=datetime(2026, 10, 30, 9, 0, tzinfo=UTC), external_id="<s1@x.test>")
 
 
 def test_only_a_request_that_was_sent_can_be_followed_up(em, pid):

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable
 
 from eventmate.jsonl import InterProcessLock, JsonlLog
 from eventmate.schemas import ExternalBusiness, VendorCategory, VendorRef, external_vendor_id, _EMAIL
@@ -22,7 +22,7 @@ class ResolvedVendor:
     name: str
     category: VendorCategory
     origin: str  # seed | discovered | test
-    source_url: Optional[str] = None
+    source_url: str | None = None
 
 
 class _ExternalFile(JsonlLog[ExternalBusiness]):
@@ -35,7 +35,7 @@ def slug(text: str) -> str:
 
 
 class ExternalStore:
-    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
         self.root = Path(root) / "externals"
         self.now = now
         self._lock = InterProcessLock(self.root / ".lock")
@@ -43,17 +43,17 @@ class ExternalStore:
     def _file(self) -> _ExternalFile:
         return _ExternalFile(self.root, run_id="all")
 
-    def all(self) -> List[ExternalBusiness]:
-        latest: Dict[str, ExternalBusiness] = {}
+    def all(self) -> list[ExternalBusiness]:
+        latest: dict[str, ExternalBusiness] = {}
         for b in self._file().read():
             latest[b.vendor_id] = b
         return list(latest.values())
 
-    def get(self, vendor_id: str) -> Optional[ExternalBusiness]:
+    def get(self, vendor_id: str) -> ExternalBusiness | None:
         return next((b for b in self.all() if b.vendor_id == vendor_id), None)
 
-    def add(self, external_id: str, name: str, city: str, category: VendorCategory, source: str, source_url: Optional[str] = None,
-            website: Optional[str] = None, rating: Optional[float] = None, owner_confirmed_by: Optional[str] = None) -> ExternalBusiness:
+    def add(self, external_id: str, name: str, city: str, category: VendorCategory, source: str, source_url: str | None = None,
+            website: str | None = None, rating: float | None = None, owner_confirmed_by: str | None = None) -> ExternalBusiness:
         """Record a business once. The same source reference is the same business; its first record stays."""
         vid = external_vendor_id(external_id)
         with self._lock():

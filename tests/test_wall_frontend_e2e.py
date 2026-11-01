@@ -21,6 +21,7 @@ from eventmate.service import EventMate  # noqa: E402
 from eventmate.web.app import create_app  # noqa: E402
 from tests.conftest import TODAY  # noqa: E402
 from tests.wall_helpers import make_wall  # noqa: E402
+from datetime import UTC
 
 OBSERVE_THREE = """
 (() => {
@@ -66,9 +67,9 @@ BOARD_POINT = """
 
 @pytest.fixture
 def world(tmp_path):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    store, _clock = make_wall(tmp_path, clock=lambda: datetime.now(timezone.utc), section_capacity=12)  # the real clock: the time of a round is the server's
+    store, _clock = make_wall(tmp_path, clock=lambda: datetime.now(UTC), section_capacity=12)  # the real clock: the time of a round is the server's
     em = EventMate(log_dir=tmp_path / "logs", plan_dir=tmp_path / "plans", run_id="fe")
     app = create_app(em, today_fn=lambda: TODAY, wall_store=store)
     srv = make_server("127.0.0.1", 0, app, threaded=True)
@@ -94,12 +95,12 @@ def shared_world(tmp_path):
 @pytest.fixture(params=["local", "shared"])
 def wall_world(request, tmp_path):
     """The wall flow runs in both modes: in shared mode the wall must keep its own cookie and CSRF ahead of workspace resolution."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from eventmate.wall.store import WallConfig, WallStore
     from eventmate.workspaces import WorkspaceRegistry
 
-    now = lambda: datetime.now(timezone.utc)
+    now = lambda: datetime.now(UTC)
     if request.param == "local":
         store, _ = make_wall(tmp_path, clock=now, section_capacity=12)
         app = create_app(EventMate(log_dir=tmp_path / "logs", plan_dir=tmp_path / "plans", run_id="fe"), today_fn=lambda: TODAY, wall_store=store)

@@ -9,8 +9,8 @@ waiting does not approve, send or spend anything.
 from __future__ import annotations
 
 import contextlib
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Literal, Optional, Tuple, Union
+from datetime import datetime, timedelta, UTC
+from typing import Literal
 
 from eventmate.guestlist import check_against, totals_of
 from eventmate.schemas import LedgerKind, VendorCategory, _Model
@@ -23,7 +23,7 @@ ChangeKind = Literal["plan_version", "ledger", "message", "reply", "job"]
 
 MAX_CHANGES = 50
 # What closes each kind of open item; shown to the user so "nothing left hanging" is checkable.
-CLOSES_WHEN: Dict[str, str] = {
+CLOSES_WHEN: dict[str, str] = {
     "pending_rsvps": "the guest list is updated and nobody is left pending",
     "approval_waiting": "you approve or deny the message, or it expires",
     "unanswered_vendor": "the vendor replies",
@@ -42,7 +42,7 @@ JOB_ITEM_LABELS = {
 class Fact(_Model):
     key: str
     label: str
-    value: Union[str, int, bool, None]
+    value: str | int | bool | None
     source: FactSource
     as_of: datetime
     status: FactStatus
@@ -56,16 +56,16 @@ class VendorState(_Model):
     plan_cost: int
     price_stale: bool = False  # a later quote or an expiry means the plan was priced differently; replan to re-price
     conversation: Conversation = "none"
-    last_activity_at: Optional[datetime] = None
-    quote: Optional[Fact] = None
+    last_activity_at: datetime | None = None
+    quote: Fact | None = None
 
 
 class OpenItem(_Model):
     kind: OpenKind
     ref: str
     label: str
-    since: Optional[datetime] = None
-    age_hours: Optional[int] = None
+    since: datetime | None = None
+    age_hours: int | None = None
     closes_when: str
 
 
@@ -79,27 +79,27 @@ class EventState(_Model):
     plan_id: str
     plan_version: int
     as_of: datetime
-    facts: Tuple[Fact, ...]
-    vendors: Tuple[VendorState, ...]
-    open_items: Tuple[OpenItem, ...]
-    changes: Tuple[Change, ...]
+    facts: tuple[Fact, ...]
+    vendors: tuple[VendorState, ...]
+    open_items: tuple[OpenItem, ...]
+    changes: tuple[Change, ...]
     notice: str = "A read-only view assembled from this plan's records. It approves, sends and spends nothing, and a vendor's quote stays unverified until you record it."
 
 
-def _aware(t: Optional[datetime]) -> Optional[datetime]:
-    return t if t is None or t.tzinfo else t.replace(tzinfo=timezone.utc)
+def _aware(t: datetime | None) -> datetime | None:
+    return t if t is None or t.tzinfo else t.replace(tzinfo=UTC)
 
 
-def _age_hours(since: Optional[datetime], now: datetime) -> Optional[int]:
+def _age_hours(since: datetime | None, now: datetime) -> int | None:
     return None if since is None else max(0, int((now - since).total_seconds() // 3600))
 
 
-def _item(kind: str, ref: str, label: str, since: Optional[datetime], now: datetime) -> OpenItem:
+def _item(kind: str, ref: str, label: str, since: datetime | None, now: datetime) -> OpenItem:
     since = _aware(since)
     return OpenItem(kind=kind, ref=ref, label=label, since=since, age_hours=_age_hours(since, now), closes_when=CLOSES_WHEN[kind])
 
 
-def _conversation(drafts: list, inbound: list) -> Tuple[Conversation, Optional[datetime]]:
+def _conversation(drafts: list, inbound: list) -> tuple[Conversation, datetime | None]:
     """Where the latest request to one vendor stands, from the vendor's own side of the thread."""
     requests = [d for d in drafts if d.kind == "request"]
     if not requests:
@@ -118,7 +118,7 @@ def _conversation(drafts: list, inbound: list) -> Tuple[Conversation, Optional[d
     return "problem", last_at  # approved or sending is in flight; failed, denied, expired, blocked or unknown outcome need a look
 
 
-def _quote_fact(vendor_id: str, category: VendorCategory, inbound: list, ledger: list, confirmed_claims: set, now: datetime) -> Optional[Fact]:
+def _quote_fact(vendor_id: str, category: VendorCategory, inbound: list, ledger: list, confirmed_claims: set, now: datetime) -> Fact | None:
     recorded = [e for e in ledger if e.kind == LedgerKind.QUOTE and e.category == category]
     if recorded:  # the user recorded a price: that is the one that counts
         e = max(recorded, key=lambda x: x.timestamp)
@@ -132,7 +132,7 @@ def _quote_fact(vendor_id: str, category: VendorCategory, inbound: list, ledger:
     return Fact(key=f"quote:{vendor_id}", label=f"{category.value} price the vendor wrote (INR, {a.unit}, as they wrote it)", value=a.low_inr, source="vendor_reply", as_of=_aware(m.received_at), status=status)
 
 
-def _facts(plan, as_of: datetime, listed=None) -> List[Fact]:
+def _facts(plan, as_of: datetime, listed=None) -> list[Fact]:
     """``listed`` is the totals of an imported guest list, if the user saved one: then the RSVP counts are the list's (people, by party size)."""
     r, g = plan.request, plan.guests
     at = _aware(plan.created_at)
@@ -158,20 +158,20 @@ def _facts(plan, as_of: datetime, listed=None) -> List[Fact]:
     return facts
 
 
-def build_state(em, plan_id: str, now: Optional[datetime] = None, changes_since: Optional[datetime] = None, today=None) -> EventState:
+def build_state(em, plan_id: str, now: datetime | None = None, changes_since: datetime | None = None, today=None) -> EventState:
     """Assemble the state of one plan. Raises FileNotFoundError for an unknown plan. Reads only; never calls a model or the network."""
-    now = _aware(now) or datetime.now(timezone.utc)
+    now = _aware(now) or datetime.now(UTC)
     plan = em.store.latest(plan_id)
     drafts, inbound, ledger = em.outreach(plan_id), em.outreach_store.inbound(plan_id), em.ledger_entries(plan_id)
     jobs = em._jobs_of(plan_id)
     saved = em.guest_lists.load(plan_id)
     listed = None if saved is None else totals_of(saved)
     confirmed_claims = {c.message_id for j in jobs for c in j.claims if c.status == "confirmed"}
-    stale: Dict[str, bool] = {}
+    stale: dict[str, bool] = {}
     with contextlib.suppress(Exception):  # a price check that cannot run must not hide the rest of the state
         stale = {q.vendor_id: q.price_stale for q in em.quote_status(plan_id, today)}
 
-    vendors: List[VendorState] = []
+    vendors: list[VendorState] = []
     for s in plan.selections:
         mine_d = [d for d in drafts if d.vendor_id == s.vendor_id]
         mine_i = [m for m in inbound if m.vendor_id == s.vendor_id]
@@ -181,7 +181,7 @@ def build_state(em, plan_id: str, now: Optional[datetime] = None, changes_since:
             conversation=conv, last_activity_at=last, quote=_quote_fact(s.vendor_id, s.category, inbound, ledger, confirmed_claims, now),
         ))
 
-    items: List[OpenItem] = []
+    items: list[OpenItem] = []
     pending = plan.guests.pending if listed is None else listed.pending
     if pending > 0:
         first = em.store.load(plan_id, 1).created_at if plan.version > 1 else plan.created_at
@@ -218,9 +218,9 @@ def build_state(em, plan_id: str, now: Optional[datetime] = None, changes_since:
     )
 
 
-def _changes(em, plan, plan_id: str, drafts: list, inbound: list, ledger: list, jobs: list, since: Optional[datetime]) -> List[Change]:
+def _changes(em, plan, plan_id: str, drafts: list, inbound: list, ledger: list, jobs: list, since: datetime | None) -> list[Change]:
     """What happened, newest first, from the stores' own timestamps (the decision logs are per run, not per plan, so they are not the source)."""
-    out: List[Change] = []
+    out: list[Change] = []
     for v in range(1, plan.version + 1):
         pv = plan if v == plan.version else em.store.load(plan_id, v)
         out.append(Change(at=_aware(pv.created_at), kind="plan_version", summary=f"Plan version {pv.version} saved: {pv.change_reason[:160]}"))

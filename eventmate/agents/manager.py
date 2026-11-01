@@ -15,7 +15,7 @@ import unicodedata
 import uuid
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Iterable, Sequence
 
 from pydantic import ValidationError
 
@@ -126,7 +126,7 @@ _INDOOR = re.compile(r"\bindoors?\b", re.I | re.A)
 _OUTDOOR = re.compile(r"\boutdoors?\b", re.I | re.A)
 
 
-def _mentioned(rx: "re.Pattern[str]", text: str) -> bool:
+def _mentioned(rx: re.Pattern[str], text: str) -> bool:
     """True if ``rx`` matches somewhere that is not negated ("no", "without", ...) in its clause."""
     for m in rx.finditer(text):
         clause = _CLAUSE_BREAK.split(text[max(0, m.start() - 40) : m.start()])[-1]
@@ -143,7 +143,7 @@ def _is_indic_digit(c: str) -> bool:
     return unicodedata.name(c, "").startswith(_INDIC_DIGITS)
 
 
-def _parse_organizers(text: str, problems: List[str]) -> int:
+def _parse_organizers(text: str, problems: list[str]) -> int:
     counts = {int(m.group(1)) for m in _ORGANIZERS.finditer(text)}
     if len(counts) > 1:
         problems.append("multiple different organizer counts found: " + ", ".join(str(n) for n in sorted(counts)))
@@ -155,11 +155,11 @@ def _parse_organizers(text: str, problems: List[str]) -> int:
     return n
 
 
-def _ascii_digits(text: str, problems: List[str], assumptions: List[str]) -> str:
+def _ascii_digits(text: str, problems: list[str], assumptions: list[str]) -> str:
     """Read Indic digits as numbers (locale pack). A single number mixing digit scripts is an error, never a guess."""
     changed = False
 
-    def convert(m: "re.Match[str]") -> str:
+    def convert(m: re.Match[str]) -> str:
         nonlocal changed
         run = m.group(0)
         if run.isascii() or not all(c.isascii() or _is_indic_digit(c) for c in run):
@@ -176,8 +176,8 @@ def _ascii_digits(text: str, problems: List[str], assumptions: List[str]) -> str
     return out
 
 
-def _parse_dates(text: str, today: date, problems: List[str], assumptions: List[str]) -> Optional[date]:
-    raw: List[Tuple[Optional[int], int, int]] = []
+def _parse_dates(text: str, today: date, problems: list[str], assumptions: list[str]) -> date | None:
+    raw: list[tuple[int | None, int, int]] = []
     for m in _DATE_NUMERIC.finditer(text):
         day, month = int(m.group(1)), int(m.group(3))
         if day <= 12 and month <= 12 and day != month:
@@ -233,7 +233,7 @@ def _valid(y: int, m: int, d: int) -> bool:
         return False
 
 
-def _parse_budget(text: str, problems: List[str]) -> Optional[int]:
+def _parse_budget(text: str, problems: list[str]) -> int | None:
     values = set()
     for m in _MONEY.finditer(text):
         marked = m.group("cur") or m.group("unit") or m.group("cur2") or _BUDGET_WORD.match(m.group(0))
@@ -263,7 +263,7 @@ def _parse_budget(text: str, problems: List[str]) -> Optional[int]:
     return value
 
 
-def _parse_guests(text: str, problems: List[str]) -> Optional[int]:
+def _parse_guests(text: str, problems: list[str]) -> int | None:
     values = {int(m.group(1)) for rx in _GUESTS for m in rx.finditer(text)}
     if not values:
         values = {int(m.group(1)) for m in _GUESTS_GROUP.finditer(text)}
@@ -280,7 +280,7 @@ def _parse_guests(text: str, problems: List[str]) -> Optional[int]:
     return value
 
 
-def _parse_city(text: str, known: Iterable[str], problems: List[str]) -> Optional[str]:
+def _parse_city(text: str, known: Iterable[str], problems: list[str]) -> str | None:
     cities = sorted({c for c in known if c}, key=lambda c: (-len(c), c))
     found = set()
     for city in cities:
@@ -304,9 +304,9 @@ def _parse_city(text: str, known: Iterable[str], problems: List[str]) -> Optiona
 
 def parse_request(
     text: str,
-    today: Optional[date] = None,
+    today: date | None = None,
     known_cities: Iterable[str] = (),
-    request_id: Optional[str] = None,
+    request_id: str | None = None,
 ) -> EventRequest:
     """Turn free text into a validated ``EventRequest`` or raise ``RequestParseError``."""
     today = today or date.today()
@@ -317,8 +317,8 @@ def parse_request(
 
     raw_text = text
     text = unicodedata.normalize("NFKC", text)  # match on a canonical form; raw_text is kept verbatim
-    problems: List[str] = []
-    assumptions: List[str] = []
+    problems: list[str] = []
+    assumptions: list[str] = []
     text = _ascii_digits(text, problems, assumptions)
     guests = _parse_guests(text, problems)
     city = _parse_city(text, known_cities, problems)
@@ -367,7 +367,7 @@ def parse_request(
         services.append(VendorCategory.CATERER)
         assumptions.append("dietary requirement given; caterer added to services")
 
-    reminders: List[ReminderKind] = []
+    reminders: list[ReminderKind] = []
     if _mentioned(_REMINDER, text):
         if _mentioned(_REM_INVITE, text):
             reminders.append(ReminderKind.INVITATION)
@@ -401,7 +401,7 @@ def parse_request(
 
 # ------------------------------------------------------------ decomposition
 
-AGENT_CAPABILITIES: Dict[AgentName, frozenset] = {
+AGENT_CAPABILITIES: dict[AgentName, frozenset] = {
     AgentName.BUDGET: frozenset({TaskKind.ALLOCATE_BUDGET}),
     AgentName.GUEST: frozenset({TaskKind.TRACK_GUESTS}),
     AgentName.VENDOR: frozenset({TaskKind.SOURCE_VENDOR}),
@@ -430,7 +430,7 @@ def decompose(request: EventRequest) -> TaskGraph:
     guests = _t(TaskKind.TRACK_GUESTS, "event", AgentName.GUEST, [], "Track headcount, RSVPs and dietary needs")
     tasks = [budget, guests]
 
-    vendor_ids: List[str] = []
+    vendor_ids: list[str] = []
     venue_id = "source_vendor:venue"
     for category in request.services:
         deps = [budget.id, guests.id] if category == VendorCategory.VENUE else [budget.id, guests.id, venue_id]
@@ -440,7 +440,7 @@ def decompose(request: EventRequest) -> TaskGraph:
 
     schedule = _t(TaskKind.BUILD_SCHEDULE, "event", AgentName.SCHEDULER, vendor_ids, "Create timeline, durations and resources")
     tasks.append(schedule)
-    reminder_ids: List[str] = []
+    reminder_ids: list[str] = []
     for kind in request.reminders:
         deps = [guests.id, schedule.id] if kind == ReminderKind.INVITATION else [*vendor_ids, schedule.id]
         task = _t(TaskKind.SCHEDULE_REMINDER, kind.value, AgentName.SCHEDULER, deps, f"Schedule {kind.value} reminder")
@@ -454,7 +454,7 @@ def decompose(request: EventRequest) -> TaskGraph:
     return TaskGraph(tasks=tuple(tasks))
 
 
-def verify_graph(request: EventRequest, graph: TaskGraph) -> List[ConstraintCheck]:
+def verify_graph(request: EventRequest, graph: TaskGraph) -> list[ConstraintCheck]:
     """AOP principles + necessity. Structure (cycles, dupes) is enforced by ``TaskGraph``."""
     unsolvable = [
         t.id for t in graph.tasks if t.kind not in AGENT_CAPABILITIES.get(t.agent, frozenset())
@@ -529,23 +529,23 @@ class ManagerAgent:
 
     # ------------------------------------------------------------- intake
 
-    def run_intake(self, text: str, today: Optional[date] = None, guest_list_id: Optional[str] = None) -> IntakeResult:
+    def run_intake(self, text: str, today: date | None = None, guest_list_id: str | None = None) -> IntakeResult:
         start = len(self.logger.entry_ids)
         request = self._parse_and_log(text, today)
         return self.intake_request(request, guest_list_id, start)
 
-    def parse(self, text: str, today: Optional[date] = None) -> EventRequest:
+    def parse(self, text: str, today: date | None = None) -> EventRequest:
         """Parse and log a request without running the pipeline."""
         return self._parse_and_log(text, today)
 
-    def intake_request(self, request: EventRequest, guest_list_id: Optional[str] = None, start: Optional[int] = None) -> IntakeResult:
+    def intake_request(self, request: EventRequest, guest_list_id: str | None = None, start: int | None = None) -> IntakeResult:
         """Intake for an already-parsed request (a trade-off option the user chose, or a dry run)."""
         start = len(self.logger.entry_ids) if start is None else start
         graph, request, guests, allocation, shortlists = self._execute_until_sourcing(request, guest_list_id)
         assessment = self.budget.assess(request, allocation, shortlists)
         reality = reality_check(request, self.repo, self.budget.policy)
         self._log_reality(request, reality)
-        violations: List[ConstraintViolation] = [v for s in shortlists.values() for v in s.violations]
+        violations: list[ConstraintViolation] = [v for s in shortlists.values() for v in s.violations]
         violations += [v for v in assessment.violations if v not in violations]
         violations += [ConstraintViolation(constraint=c.name, detail=c.detail, repair="raise the guest count or prune the guest list") for c in guests.checks if not c.passed]
         return IntakeResult(
@@ -573,7 +573,7 @@ class ManagerAgent:
             source=reality.source,
         )
 
-    def _parse_and_log(self, text: str, today: Optional[date]) -> EventRequest:
+    def _parse_and_log(self, text: str, today: date | None) -> EventRequest:
         _arcade_pulse.stage_started("parse")
         try:
             request = parse_request(text, today=today, known_cities=self.repo.cities())
@@ -607,7 +607,7 @@ class ManagerAgent:
         _arcade_pulse.stage_done("parse")
         return request
 
-    def _execute_until_sourcing(self, request: EventRequest, guest_list_id: Optional[str]):
+    def _execute_until_sourcing(self, request: EventRequest, guest_list_id: str | None):
         _arcade_pulse.stage_started("decompose")
         graph = decompose(request)
         checks = verify_graph(request, graph)
@@ -628,7 +628,7 @@ class ManagerAgent:
         _arcade_pulse.stage_done("decompose")
 
         allocation, guests = None, None
-        shortlists: Dict[VendorCategory, object] = {}
+        shortlists: dict[VendorCategory, object] = {}
         for task in graph.topological_order():
             if not all(graph.get(d).status == TaskStatus.DONE for d in task.depends_on):
                 continue
@@ -680,7 +680,7 @@ class ManagerAgent:
                                 summary=f"The explanation for plan {plan.plan_id} could not be written ({type(exc).__name__})",
                                 justification="the plan is saved and valid; the explanation is rebuilt when it is asked for", confidence=1.0, source="rule:manager")
 
-    def run(self, text: str, today: Optional[date] = None, guest_list_id: Optional[str] = None, plan_id: Optional[str] = None) -> PlanOutcome:
+    def run(self, text: str, today: date | None = None, guest_list_id: str | None = None, plan_id: str | None = None) -> PlanOutcome:
         """Parse -> decompose -> source -> plan -> validate -> store -> explain."""
         self._require_pipeline()
         start = len(self.logger.entry_ids)
@@ -691,9 +691,9 @@ class ManagerAgent:
     def run_request(
         self,
         request: EventRequest,
-        today: Optional[date] = None,
-        guest_list_id: Optional[str] = None,
-        plan_id: Optional[str] = None,
+        today: date | None = None,
+        guest_list_id: str | None = None,
+        plan_id: str | None = None,
         change_reason: str = "initial plan",
         persist: bool = True,
     ) -> PlanOutcome:

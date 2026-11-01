@@ -6,7 +6,6 @@ horizon is claimed, and advice never changes a plan.
 
 from __future__ import annotations
 
-from typing import List, Optional
 
 from eventmate.schemas import RAIN_POSSIBLE_AT, AdviceItem, WeatherDay
 
@@ -14,12 +13,12 @@ INDOOR_RAIN_NOTE_AT = 0.7  # indoors, rain only matters for guests arriving
 HEAT_C = 35.0
 
 
-def advise(day: WeatherDay, setting: Optional[str]) -> List[AdviceItem]:
+def advise(day: WeatherDay, setting: str | None) -> list[AdviceItem]:
     if not day.slots:
         return [AdviceItem(level="info", title="No forecast yet", detail=day.note or "There is no forecast for that day yet; check again within five days of the event.")]
     rain = day.max_rain_chance or 0.0
     pct = round(rain * 100)
-    items: List[AdviceItem] = []
+    items: list[AdviceItem] = []
     if setting != "indoor" and rain >= RAIN_POSSIBLE_AT:
         where = "an outdoor venue" if setting == "outdoor" else "a venue whose setting is not known"
         items.append(AdviceItem(

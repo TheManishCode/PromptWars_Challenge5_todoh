@@ -9,7 +9,6 @@ when unsure, for logs.
 from __future__ import annotations
 
 import re
-from typing import Dict, Tuple
 
 from eventmate.assistant.guard import _AADHAAR, _CARD, _EMAIL, _EMAIL_SPOKEN, _PAN, _PHONE, _luhn
 
@@ -21,9 +20,9 @@ WINDOW = 40  # characters of context checked around a number
 
 class Placeholders:
     def __init__(self):
-        self._by_value: Dict[Tuple[str, str], str] = {}
-        self._by_token: Dict[str, str] = {}
-        self._count: Dict[str, int] = {}
+        self._by_value: dict[tuple[str, str], str] = {}
+        self._by_token: dict[str, str] = {}
+        self._count: dict[str, int] = {}
 
     def _token(self, kind: str, value: str) -> str:
         key = (kind, re.sub(r"[\s-]", "", value).casefold())

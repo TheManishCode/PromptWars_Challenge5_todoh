@@ -23,6 +23,7 @@ from eventmate.schemas import (
     VenueSetting,
 )
 from tests.conftest import EXAMPLE, TODAY
+import contextlib
 
 
 def parse(text, **kw):
@@ -477,10 +478,8 @@ def test_numeric_date_does_not_swallow_money_or_versions():
 
 def test_hostile_unicode_digit_text_never_crashes():
     for t in ["१" * 400, "Plan " + "९" * 30 + " guests in Pune on December 12 under INR 5", "\u0967\u0968\u0969\u200d guests"]:
-        try:
+        with contextlib.suppress(RequestParseError):
             parse(t)
-        except RequestParseError:
-            pass
 
 
 # ---- audit: input limits of the free-text parser

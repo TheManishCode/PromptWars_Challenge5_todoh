@@ -11,7 +11,6 @@ from __future__ import annotations
 import re
 import threading
 from collections import deque
-from typing import Deque, Dict, List, Tuple
 
 from eventmate.assistant import guard
 
@@ -30,8 +29,8 @@ def depends_on_context(question: str) -> bool:
 
 class SessionStore:
     def __init__(self):
-        self._turns: Dict[Tuple[str, str], Deque[Tuple[str, str]]] = {}
-        self._facts: Dict[Tuple[str, str], List[Tuple[str, str]]] = {}
+        self._turns: dict[tuple[str, str], deque[tuple[str, str]]] = {}
+        self._facts: dict[tuple[str, str], list[tuple[str, str]]] = {}
         self._lock = threading.Lock()
 
     @staticmethod

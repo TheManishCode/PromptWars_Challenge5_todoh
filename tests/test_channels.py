@@ -2,7 +2,7 @@
 
 import json
 import smtplib
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from email.message import EmailMessage
 
 import pytest
@@ -11,7 +11,7 @@ from eventmate.messaging.channels import (
     ChannelError, EmailChannel, EmailConfig, KnownThread, OutcomeUnknown, ThreadRef, WahaConfig, WhatsAppChannel, clean_reply_text, channels_from_env,
 )
 
-NOW = datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 30, 9, 0, tzinfo=UTC)
 CFG = EmailConfig(smtp_host="smtp.x.test", imap_host="imap.x.test", user="me@x.test", password="s3cret-pass", from_addr="me@x.test")
 
 
@@ -295,7 +295,7 @@ def test_a_hostile_date_header_cannot_stop_the_poll_and_never_lands_in_the_futur
 
 def test_a_missing_date_means_now_and_a_past_date_is_kept():
     assert mail_channel(imap=FakeIMAP([_dated(None)])).poll(T)[0].received_at == NOW
-    assert mail_channel(imap=FakeIMAP([_dated("Thu, 29 Oct 2026 10:00:00 +0000")])).poll(T)[0].received_at == datetime(2026, 10, 29, 10, 0, tzinfo=timezone.utc)
+    assert mail_channel(imap=FakeIMAP([_dated("Thu, 29 Oct 2026 10:00:00 +0000")])).poll(T)[0].received_at == datetime(2026, 10, 29, 10, 0, tzinfo=UTC)
 
 
 @pytest.mark.parametrize("ts", [-1e18, 1e18, float("inf"), float("nan"), 4e9])

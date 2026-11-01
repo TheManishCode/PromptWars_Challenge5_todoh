@@ -8,7 +8,7 @@ in what is sent to a model, and stop an answer from stating facts that no tool o
 from __future__ import annotations
 
 import re
-from typing import Iterable, List, Optional
+from typing import Iterable
 
 from eventmate.llm import _MARKUP, _NUMBER, _NUMBER_WORDS, links_in
 
@@ -36,7 +36,7 @@ _FENCE = re.compile(r"<<<|>>>")
 _LEET = str.maketrans("013457@$", "oieastas")
 
 
-def scan(text: str) -> List[str]:
+def scan(text: str) -> list[str]:
     """Names of injection-like patterns found. A hit marks data as hostile; it never gates anything by itself. Also scans a copy with look-alike
     digits and symbols folded to letters ("1gn0re"), which can only add flags; the text itself is not changed."""
     folded = text.translate(_LEET)
@@ -56,7 +56,7 @@ def _luhn(digits: str) -> bool:
 def mask_pii(text: str) -> str:
     """Replace emails, phone numbers, PAN, Aadhaar and card numbers with labelled placeholders."""
 
-    def card(m: "re.Match[str]") -> str:
+    def card(m: re.Match[str]) -> str:
         digits = re.sub(r"\D", "", m.group(0))
         return "[card]" if 13 <= len(digits) <= 19 and _luhn(digits) else m.group(0)
 
@@ -72,7 +72,7 @@ def fence(label: str, text: str) -> str:
     return f"<<<{label}\n{_FENCE.sub('', text)}\n{label}>>>"
 
 
-def check_answer(answer: str, evidence: str, question: str = "", extra_ok: Iterable[str] = ()) -> Optional[str]:
+def check_answer(answer: str, evidence: str, question: str = "", extra_ok: Iterable[str] = ()) -> str | None:
     """Return None if the answer states nothing the evidence did not supply, else the reason it was refused."""
     if not answer.strip():
         return "empty answer"
@@ -100,7 +100,7 @@ _COMMON = frozenset(
 )
 
 
-def introduced_names(answer: str, evidence: str, question: str = "") -> List[str]:
+def introduced_names(answer: str, evidence: str, question: str = "") -> list[str]:
     """Capitalised words in the middle of a sentence that no tool, document or question supplied: a made-up or outside name."""
     known = {w.lower() for w in re.findall(r"[A-Za-z]+", evidence + " " + question)} | _COMMON
     return sorted({w for w in _CAPS.findall(answer) if w.lower() not in known})
@@ -143,7 +143,7 @@ def input_blocked(question: str, policy: dict) -> bool:
     return any(p.lower() in low for p in policy["blocked_input_phrases"])
 
 
-def policy_violation(answer: str, policy: dict) -> Optional[str]:
+def policy_violation(answer: str, policy: dict) -> str | None:
     """Deny-list check (the competitor and phrase validators): names an organisation never wants said."""
     low = answer.lower()
     for name in policy["blocked_names"]:

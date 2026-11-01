@@ -6,14 +6,14 @@ import random
 import sqlite3
 import uuid
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 from eventmate.service import EventMate
 from eventmate.wall.limits import WallLimits
 from eventmate.wall.store import WallConfig, WallStore
 from eventmate.web.app import create_app
 
-T0 = datetime(2026, 11, 1, 6, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 11, 1, 6, 0, tzinfo=UTC)
 WALL_CSRF = "X-EventMate-Wall-CSRF"
 
 

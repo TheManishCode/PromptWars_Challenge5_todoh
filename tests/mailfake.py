@@ -7,7 +7,6 @@ import email.utils
 import smtplib
 from datetime import datetime, timedelta
 from email.message import EmailMessage
-from typing import List, Optional
 
 from eventmate.messaging.channels import EmailChannel, EmailConfig
 
@@ -61,22 +60,22 @@ class FakeIMAP:
 class MailWorld:
     def __init__(self, clock):
         self.clock = clock
-        self.outbox: List[EmailMessage] = []
-        self.inbox: List[bytes] = []
-        self.send_error: Optional[Exception] = None
-        self.login_error: Optional[Exception] = None
+        self.outbox: list[EmailMessage] = []
+        self.inbox: list[bytes] = []
+        self.send_error: Exception | None = None
+        self.login_error: Exception | None = None
         self._n = 0
 
     def channel(self) -> EmailChannel:
         return EmailChannel(CFG, smtp_factory=lambda: FakeSMTP(self), imap_factory=lambda: FakeIMAP(self), now=self.clock)
 
-    def sent_to(self, address: str) -> List[EmailMessage]:
+    def sent_to(self, address: str) -> list[EmailMessage]:
         return [m for m in self.outbox if m["To"] == address]
 
     def last_to(self, address: str) -> EmailMessage:
         return self.sent_to(address)[-1]
 
-    def reply(self, address: str, body: str, *, sender: Optional[str] = None, minutes: int = 5, message_id: Optional[str] = None, thread: bool = True, extra: Optional[dict] = None) -> str:
+    def reply(self, address: str, body: str, *, sender: str | None = None, minutes: int = 5, message_id: str | None = None, thread: bool = True, extra: dict | None = None) -> str:
         """The vendor at ``address`` answers the newest message sent to them. Returns the new Message-ID."""
         sent = self.last_to(address)
         self._n += 1

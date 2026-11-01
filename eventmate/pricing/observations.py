@@ -10,7 +10,7 @@ import json
 import uuid
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable
 
 from eventmate.agents.vendor import DATA_DIR, VendorRepository
 from eventmate.jsonl import JsonlLog
@@ -28,14 +28,14 @@ def _norm(text: str) -> str:
     return " ".join(text.casefold().split())
 
 
-def _load_checklists() -> Dict[str, Tuple[str, ...]]:
+def _load_checklists() -> dict[str, tuple[str, ...]]:
     doc = json.loads((DATA_DIR / "quote_checklists.json").read_text(encoding="utf-8"))
     if doc.get("schema_version") != 1:
         raise ValueError("quote_checklists.json: unsupported schema_version")
     return {k: tuple(v) for k, v in doc["checklists"].items()}
 
 
-def _mentions(items: Tuple[str, ...], wanted: str) -> bool:
+def _mentions(items: tuple[str, ...], wanted: str) -> bool:
     w = _norm(wanted)
     return any(w in _norm(i) or _norm(i) in w for i in items)
 
@@ -45,7 +45,7 @@ class ObservationStore:
         self.root = Path(root) / "observations"
         self.repo = repo
         self.checklists = _load_checklists()
-        self.external_lookup: Callable[[str], Optional[object]] = lambda vendor_id: None  # set by to;doh-the event planner: finds a discovered or test business by its ext_ id
+        self.external_lookup: Callable[[str], object | None] = lambda vendor_id: None  # set by to;doh-the event planner: finds a discovered or test business by its ext_ id
 
     def _file(self) -> _ObservationFile:
         return _ObservationFile(self.root, run_id="all")
@@ -70,10 +70,10 @@ class ObservationStore:
         obs = QuoteObservation(observation_id=uuid.uuid4().hex, vendor_id=vendor_id, category=category, **fields)
         return self._file()._append(obs, obs.observation_id)
 
-    def quotes(self, vendor_id: str) -> List[QuoteObservation]:
+    def quotes(self, vendor_id: str) -> list[QuoteObservation]:
         return [o for o in self._file().read() if o.vendor_id == vendor_id]
 
-    def pricing_quote(self, vendor_id: str) -> Optional[QuoteObservation]:
+    def pricing_quote(self, vendor_id: str) -> QuoteObservation | None:
         """The latest quote that may set a price. A public listing never does (ADR-025/026)."""
         usable = [o for o in self.quotes(vendor_id) if o.source_type != ObservationSource.PUBLIC_LISTING]
         return usable[-1] if usable else None
@@ -82,20 +82,20 @@ class ObservationStore:
         """True if a vendor_confirmation observation (which always carries an evidence_ref) exists for this vendor."""
         return any(o.source_type == ObservationSource.VENDOR_CONFIRMATION for o in self.quotes(vendor_id))
 
-    def report(self, vendor_id: str, today: date) -> Optional[QuoteReport]:
+    def report(self, vendor_id: str, today: date) -> QuoteReport | None:
         quotes = self.quotes(vendor_id)
         return self._analyze(quotes[-1], today) if quotes else None  # file order is chronological
 
-    def latest_with_reports(self, category: VendorCategory, today: date) -> List[Tuple[QuoteObservation, QuoteReport]]:
+    def latest_with_reports(self, category: VendorCategory, today: date) -> list[tuple[QuoteObservation, QuoteReport]]:
         """The latest quote of every vendor in a category with its report, ordered by vendor id."""
-        latest: Dict[str, QuoteObservation] = {}
+        latest: dict[str, QuoteObservation] = {}
         for o in self._file().read():
             if o.category == category:
                 latest[o.vendor_id] = o
         return [(o, self._analyze(o, today)) for _, o in sorted(latest.items())]
 
     def compare(self, category: VendorCategory, today: date) -> QuoteComparison:
-        latest: Dict[str, QuoteObservation] = {}
+        latest: dict[str, QuoteObservation] = {}
         for o in self._file().read():
             if o.category == category:
                 latest[o.vendor_id] = o

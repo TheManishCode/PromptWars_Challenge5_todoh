@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.robotparser
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from typing import Callable, Dict, List, Tuple
+from typing import Callable
 
 from eventmate.netutil import read_capped
 
@@ -60,7 +60,7 @@ class RawPage:
     html: str
 
 
-def default_resolver(host: str) -> List[str]:
+def default_resolver(host: str) -> list[str]:
     try:
         infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
     except (socket.gaierror, UnicodeError, OSError):
@@ -105,7 +105,7 @@ def _split_checked(url: str) -> urllib.parse.SplitResult:
     return parts
 
 
-def _public_ips(host: str, resolver: Callable[[str], List[str]]) -> Tuple[str, List[str], bool]:
+def _public_ips(host: str, resolver: Callable[[str], list[str]]) -> tuple[str, list[str], bool]:
     """Return (host, public addresses, host_is_ip_literal); raise UnsafeURL for anything not public."""
     try:
         ipaddress.ip_address(host)
@@ -130,7 +130,7 @@ def _public_ips(host: str, resolver: Callable[[str], List[str]]) -> Tuple[str, L
     return host, ips, False
 
 
-def check_url(url: str, resolver: Callable[[str], List[str]] = default_resolver) -> Tuple[str, str, List[str]]:
+def check_url(url: str, resolver: Callable[[str], list[str]] = default_resolver) -> tuple[str, str, list[str]]:
     """Return (normalised url, host, public addresses) or raise UnsafeURL."""
     parts = _split_checked(url)
     host = (parts.hostname or "").lower().rstrip(".")
@@ -161,7 +161,7 @@ class _PinnedTLS(http.client.HTTPSConnection):
         self.sock = self._context.wrap_socket(sock, server_hostname=self.host)  # certificate is checked against the real host name
 
 
-def pinned_get(url: str, ip: str, headers: Dict[str, str], timeout: float, max_bytes: int, total_s: float = TOTAL_S) -> Tuple[int, Dict[str, str], bytes]:
+def pinned_get(url: str, ip: str, headers: dict[str, str], timeout: float, max_bytes: int, total_s: float = TOTAL_S) -> tuple[int, dict[str, str], bytes]:
     """GET ``url`` over a connection to ``ip`` (already checked). Reads at most ``max_bytes + 1`` bytes within ``total_s`` seconds in all
     (a server that dribbles bytes cannot hold the worker open). Does not follow redirects."""
     parts = urllib.parse.urlsplit(url)
@@ -181,8 +181,8 @@ class _Text(HTMLParser):
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.parts: List[str] = []
-        self.title: List[str] = []
+        self.parts: list[str] = []
+        self.title: list[str] = []
         self._skip = 0
         self._in_title = False
 
@@ -212,7 +212,7 @@ def _clean(text: str) -> str:
     return " ".join(text.split())
 
 
-def extract_text(html: str) -> Tuple[str, str]:
+def extract_text(html: str) -> tuple[str, str]:
     p = _Text()
     try:
         p.feed(html)
@@ -226,26 +226,26 @@ class SafeFetcher:
     def __init__(
         self,
         transport=pinned_get,
-        resolver: Callable[[str], List[str]] = default_resolver,
+        resolver: Callable[[str], list[str]] = default_resolver,
         max_bytes: int = MAX_BYTES,
         timeout: float = TIMEOUT_S,
         max_redirects: int = MAX_REDIRECTS,
     ):
         self.transport, self.resolver, self.max_bytes, self.timeout, self.max_redirects = transport, resolver, max_bytes, timeout, max_redirects
-        self._robots: Dict[str, object] = {}
+        self._robots: dict[str, object] = {}
 
     # ------------------------------------------------------------- internals
 
-    def _headers(self) -> Dict[str, str]:
+    def _headers(self) -> dict[str, str]:
         return {"User-Agent": USER_AGENT, "Accept": "text/html,text/plain;q=0.9", "Accept-Encoding": "identity", "Accept-Language": "en-IN,en;q=0.8"}
 
-    def _check(self, url: str) -> Tuple[str, str, List[str]]:
+    def _check(self, url: str) -> tuple[str, str, list[str]]:
         try:
             return check_url(url, self.resolver)
         except UnsafeURL as exc:
             raise FetchError(f"unsafe address refused: {exc}") from None
 
-    def _get(self, url: str, check_robots: bool, max_bytes: int) -> Tuple[str, int, Dict[str, str], bytes]:
+    def _get(self, url: str, check_robots: bool, max_bytes: int) -> tuple[str, int, dict[str, str], bytes]:
         """Follow redirects (re-checking each hop). Returns (final url, status, headers, body)."""
         for _ in range(self.max_redirects + 1):
             url, _host, ips = self._check(url)

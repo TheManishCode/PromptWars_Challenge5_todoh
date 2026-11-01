@@ -1,7 +1,7 @@
 """The outreach store's compare-and-set must hold across processes, not only threads (ADR-044): the web server and the worker can run side by side."""
 
 import multiprocessing as mp
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 
@@ -27,7 +27,7 @@ def _claim(root, plan_id, draft_id, q):
     OutreachStore.get = _slow_read(OutreachStore.get)
     store = OutreachStore(root, {})
     try:
-        store.transition(plan_id, draft_id, ("approved",), status="sending", decided_at=datetime.now(timezone.utc))
+        store.transition(plan_id, draft_id, ("approved",), status="sending", decided_at=datetime.now(UTC))
         q.put("won")
     except ValueError:
         q.put("lost")
@@ -46,7 +46,7 @@ def setup(tmp_path):
     em = EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="mp")
     pid = em.plan(EXAMPLE, today=TODAY).plan.plan_id
     d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Asha")
-    em.outreach_store.transition(pid, d.draft_id, ("prepared",), status="approved", decided_at=datetime.now(timezone.utc))
+    em.outreach_store.transition(pid, d.draft_id, ("prepared",), status="approved", decided_at=datetime.now(UTC))
     return em, pid, d
 
 
@@ -67,7 +67,7 @@ def test_the_same_reply_seen_by_many_processes_is_stored_once(setup):
 
     em, pid, d = setup
     msgs = [InboundMessage(message_id=f"m{i}", plan_id=pid, draft_id=d.draft_id, vendor_id=d.vendor_id, vendor_name=d.vendor_name, category=C.CATERER, channel="email",
-                           sender="sales@annapurna.in", received_at=datetime.now(timezone.utc), external_id="<same@v>", body="Rs 600") for i in range(10)]
+                           sender="sales@annapurna.in", received_at=datetime.now(UTC), external_id="<same@v>", body="Rs 600") for i in range(10)]
     ctx = mp.get_context("fork")
     q = ctx.Queue()
     procs = [ctx.Process(target=_store_reply, args=(em.outreach_store.base, pid, m.model_dump_json(), q)) for m in msgs]

@@ -22,7 +22,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import Sequence
 
 from eventmate.logs import ToolCallLog
 from eventmate.schemas import ScheduleSpec, SymbolicResult
@@ -32,7 +32,7 @@ MAX_TIMEOUT_S = 300.0
 _MAX_OUTPUT = 4000
 
 
-def build_pddl(spec: ScheduleSpec, already_done: Sequence[str] = ()) -> Tuple[str, str, List[str]]:
+def build_pddl(spec: ScheduleSpec, already_done: Sequence[str] = ()) -> tuple[str, str, list[str]]:
     ids = [t.id for t in spec.tasks]
     unknown = set(already_done) - set(ids)
     if unknown:
@@ -40,8 +40,8 @@ def build_pddl(spec: ScheduleSpec, already_done: Sequence[str] = ()) -> Tuple[st
     done0 = set(already_done)
     preds = " ".join(f"(done_{i})" for i in ids)
     deps = {i: sorted({d.before for d in spec.dependencies if d.after == i}) for i in ids}
-    actions: List[str] = []
-    blocks: List[str] = []
+    actions: list[str] = []
+    blocks: list[str] = []
     for i in ids:
         if i in done0:
             continue
@@ -80,7 +80,7 @@ def order_respects_dependencies(spec: ScheduleSpec, actions: Sequence[str], alre
     return seen == wanted
 
 
-def _locate(candidates: Sequence[Optional[Path]]) -> Optional[Path]:
+def _locate(candidates: Sequence[Path | None]) -> Path | None:
     for c in candidates:
         if c is not None and Path(c).is_file():
             return Path(c)
@@ -95,7 +95,7 @@ def _base_config() -> dict:
 
 
 class SymbolicChecker:
-    def __init__(self, fd_path: Optional[Path] = None, val_path: Optional[Path] = None, timeout_s: float = 60.0):
+    def __init__(self, fd_path: Path | None = None, val_path: Path | None = None, timeout_s: float = 60.0):
         if not 0 < timeout_s <= MAX_TIMEOUT_S:
             raise ValueError(f"timeout_s must be in (0, {MAX_TIMEOUT_S}]")
         cfg = _base_config()
@@ -125,7 +125,7 @@ class SymbolicChecker:
     def _env() -> dict:
         return {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LANG": "C"}
 
-    def plan_pddl(self, domain: str, problem: str) -> Tuple[str, Tuple[str, ...], str]:
+    def plan_pddl(self, domain: str, problem: str) -> tuple[str, tuple[str, ...], str]:
         """Run Fast Downward. Returns (status, actions, detail); status in ok/no_plan/error."""
         with tempfile.TemporaryDirectory(prefix="eventmate-fd-") as tmp:
             d, p, plan = Path(tmp, "domain.pddl"), Path(tmp, "problem.pddl"), Path(tmp, "plan.txt")
@@ -146,7 +146,7 @@ class SymbolicChecker:
                 return "no_plan", (), "planner proved the problem unsolvable"
             return "error", (), f"planner exit code {out.returncode}: {text[-300:]}"
 
-    def validate_plan(self, domain: str, problem: str, actions: Sequence[str]) -> Tuple[bool, str]:
+    def validate_plan(self, domain: str, problem: str, actions: Sequence[str]) -> tuple[bool, str]:
         with tempfile.TemporaryDirectory(prefix="eventmate-val-") as tmp:
             d, p, plan = Path(tmp, "domain.pddl"), Path(tmp, "problem.pddl"), Path(tmp, "plan.txt")
             d.write_text(domain)
@@ -166,7 +166,7 @@ class SymbolicChecker:
         self,
         spec: ScheduleSpec,
         already_done: Sequence[str] = (),
-        tool_log: Optional[ToolCallLog] = None,
+        tool_log: ToolCallLog | None = None,
         request_id: str = "unknown",
     ) -> SymbolicResult:
         started = time.perf_counter()

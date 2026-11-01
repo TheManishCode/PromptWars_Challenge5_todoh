@@ -4,7 +4,7 @@ The rule being tested is asymmetric on purpose: a WRONG price must never be prop
 acceptable because it goes to the user as "unclear". Recall is reported and guarded against regression, not oversold.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 
@@ -13,7 +13,7 @@ from eventmate.messaging.conversations import analyze_reply
 from eventmate.schemas import InboundMessage, VendorCategory as C
 
 CHECK = ("service staff", "crockery and cutlery", "serving counters", "taxes", "transport")
-NOW = datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 30, 9, 0, tzinfo=UTC)
 
 
 def msg(body):
@@ -81,7 +81,7 @@ def test_a_wrong_price_is_never_proposed_and_recall_does_not_regress():
 
 
 def test_every_claim_quotes_the_vendors_own_words_and_ties_to_the_message():
-    for body, expected in LABELLED:
+    for body, _expected in LABELLED:
         for c in extract_claims(msg(body))[0]:
             assert c.message_id == "m1" and c.snippet and c.status == "proposed" and c.extractor == "rule:reply_analysis"
             assert any(ch.isdigit() for ch in c.snippet)

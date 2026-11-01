@@ -8,9 +8,8 @@ records money; it never initiates any payment.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import List
 
 from eventmate.jsonl import JsonlLog
 from eventmate.schemas import LedgerEntry, LedgerKind, LedgerLine, LedgerSummary, PlanVersion, VendorCategory
@@ -28,7 +27,7 @@ class Ledger:
     def _file(self, plan_id: str) -> _LedgerFile:
         return _LedgerFile(self.root, run_id=plan_id)  # run_id pattern == plan id pattern, so path-safe
 
-    def entries(self, plan_id: str) -> List[LedgerEntry]:
+    def entries(self, plan_id: str) -> list[LedgerEntry]:
         return self._file(plan_id).read()
 
     def add(self, plan: PlanVersion, kind: str, category: VendorCategory, amount: int, note: str = "") -> LedgerEntry:
@@ -38,7 +37,7 @@ class Ledger:
         log = self._file(plan.plan_id)
         entry = LedgerEntry(
             entry_id=uuid.uuid4().hex,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             plan_id=plan.plan_id,
             kind=LedgerKind(kind),
             category=category,

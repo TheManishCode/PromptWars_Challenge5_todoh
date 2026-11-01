@@ -13,9 +13,9 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Callable, Sequence, Union
 
 from eventmate.followthrough.claims import extract_claims
 from eventmate.messaging.digests import digest_text
@@ -28,7 +28,7 @@ CONFIRM_CONFIDENCE = 0.7  # evidence weight for a vendor price the user confirme
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _item(kind: str, text: str, vendor_id: str = "", ref: str = "") -> UserItem:
@@ -39,25 +39,25 @@ def _item(kind: str, text: str, vendor_id: str = "", ref: str = "") -> UserItem:
 class _Tick:
     """The working copy of one job while a tick runs: each step reads and updates it, and _run writes the result back once."""
 
-    vendors: Dict[str, VendorProgress]
-    claims: List[QuoteClaim]
-    items: List[UserItem]
+    vendors: dict[str, VendorProgress]
+    claims: list[QuoteClaim]
+    items: list[UserItem]
     seen: set
-    awaiting: List[str]
-    events: List[str]
+    awaiting: list[str]
+    events: list[str]
 
     def has_item(self, kind: str, ref: str) -> bool:
         return any(i.kind == kind and i.ref == ref for i in self.items)
 
 
-VendorSpec = Union[Dict[str, Tuple[str, str]], Sequence[str]]
+VendorSpec = Union[dict[str, tuple[str, str]], Sequence[str]]
 
 
 class JobWorker:
     def __init__(self, em, store: JobStore, now: Callable[[], datetime] = _utcnow):
         self.em, self.store, self.now = em, store, now
 
-    def _persist(self, job: Job, actor: str, event: str, now: datetime, detail: Optional[dict] = None) -> Job:
+    def _persist(self, job: Job, actor: str, event: str, now: datetime, detail: dict | None = None) -> Job:
         """Save the job, and write a digest to the in-app inbox if what the owner should know has changed."""
         saved = self.store.save(job, actor, event, now, detail)
         self.em.digest_store.write(saved, digest_text(saved, self.em._vendor_names()))
@@ -65,9 +65,9 @@ class JobWorker:
 
     # ------------------------------------------------------------ creating and deciding (the user's side)
 
-    def _contacts_for(self, vendor_ids: Sequence[str]) -> Dict[str, Tuple[str, str]]:
+    def _contacts_for(self, vendor_ids: Sequence[str]) -> dict[str, tuple[str, str]]:
         contacts = self.em.outreach_store.contacts()
-        out: Dict[str, Tuple[str, str]] = {}
+        out: dict[str, tuple[str, str]] = {}
         for vid in vendor_ids:
             c = contacts.get(vid)
             if c is None:
@@ -79,7 +79,7 @@ class JobWorker:
 
     def start_job(
         self, plan_id: str, category: VendorCategory, vendors: VendorSpec, goal: str, deadline: datetime, sender_name: str,
-        min_quotes: int = 3, max_amount_inr: Optional[int] = None, max_nudges_per_vendor: int = 2, reply_window_hours: int = 24,
+        min_quotes: int = 3, max_amount_inr: int | None = None, max_nudges_per_vendor: int = 2, reply_window_hours: int = 24,
     ) -> Job:
         """Draft one quote request per vendor. Nothing is sent: the job waits for the user to approve the exact drafts.
         ``vendors`` is {vendor_id: (channel, recipient)} or a list of vendor ids with saved contacts."""
@@ -91,7 +91,7 @@ class JobWorker:
         if deadline <= self.now():
             raise ValueError("the deadline must be in the future")
         drafts = [(vid, ch, to) for vid, (ch, to) in spec.items()]
-        progress: Dict[str, VendorProgress] = {}
+        progress: dict[str, VendorProgress] = {}
         for vid, ch, to in drafts:
             d = self.em.draft_outreach(plan_id, category, ch, to, sender_name, vendor_id=vid)
             progress[vid] = VendorProgress(contact_channel=ch, recipient=d.recipient, draft_id=d.draft_id)
@@ -189,10 +189,10 @@ class JobWorker:
 
     # ------------------------------------------------------------ the loop
 
-    def tick(self) -> Dict[str, object]:
+    def tick(self) -> dict[str, object]:
         """One bounded pass. Safe to call any number of times, from any process."""
         now = self.now()
-        report: Dict[str, object] = {"ran": [], "errors": []}
+        report: dict[str, object] = {"ran": [], "errors": []}
         try:
             self.em.poll_conversations()  # sends what is approved and within limits, then reads replies; one failing channel is reported, not fatal
         except Exception as exc:  # the loop must survive a bad channel
@@ -215,9 +215,9 @@ class JobWorker:
             report["errors"].append(f"dispatch: {type(exc).__name__}")
         return report
 
-    def reevaluate(self, plan_id: str) -> List[str]:
+    def reevaluate(self, plan_id: str) -> list[str]:
         """Run the unfinished jobs of one plan now, instead of waiting for their next wake time (a replan made one of their drafts stale). Returns the job ids run."""
-        ran: List[str] = []
+        ran: list[str] = []
         for job in self.store.list(plan_id):
             if job.status in TERMINAL:
                 continue
@@ -335,10 +335,10 @@ class JobWorker:
                     st.vendors[vid] = p.model_copy(update={"pending_nudge_draft_id": follow.draft_id})
                     st.items.append(_item("approve_nudge", f"{vid} has not replied in {job.reply_window_hours}h. A short follow-up is drafted. Approve it? (not automatic: {why})", vid, follow.draft_id))
 
-    def _conclude(self, job: Job, st: _Tick, now: datetime) -> Tuple[str, str, Optional[datetime]]:
+    def _conclude(self, job: Job, st: _Tick, now: datetime) -> tuple[str, str, datetime | None]:
         """Finished, or impossible? Returns (status, next_action, wake_at)."""
         window = timedelta(hours=job.reply_window_hours)
-        best: Dict[str, QuoteClaim] = {c.vendor_id: c for c in st.claims if c.status == "confirmed"}
+        best: dict[str, QuoteClaim] = {c.vendor_id: c for c in st.claims if c.status == "confirmed"}
         within = [c for c in best.values() if job.max_amount_inr is None or self._total_for(job, c) <= job.max_amount_inr]
         status, next_action, wake = job.status, job.next_action, None
         if len(within) >= job.min_quotes:
@@ -384,7 +384,7 @@ def digest(job: Job) -> str:
     return "\n".join(lines)
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     import argparse
 
     from eventmate.service import EventMate

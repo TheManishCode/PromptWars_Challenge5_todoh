@@ -10,7 +10,7 @@ from __future__ import annotations
 import fcntl
 import os
 from pathlib import Path
-from typing import List, Mapping, Optional, Sequence
+from typing import Mapping, Sequence
 
 from eventmate.web import limits
 
@@ -28,9 +28,9 @@ def mode(environ: Mapping[str, str]) -> str:
     return raw
 
 
-def shared_mode_problems(environ: Mapping[str, str], allowed_hosts: Sequence[str], env_file: Optional[Path] = None, workspaces_implemented: Optional[bool] = None) -> List[str]:
+def shared_mode_problems(environ: Mapping[str, str], allowed_hosts: Sequence[str], env_file: Path | None = None, workspaces_implemented: bool | None = None) -> list[str]:
     """What stops shared mode from starting. An empty list means it may start."""
-    problems: List[str] = []
+    problems: list[str] = []
     if not (WORKSPACES_IMPLEMENTED if workspaces_implemented is None else workspaces_implemented):
         problems.append("shared mode needs a separate workspace for each visitor, and this build does not have them yet: visitors would see each other's plans")
     if not any(h.strip().lower() not in LOOPBACK_NAMES for h in allowed_hosts):
@@ -51,7 +51,7 @@ def shared_mode_problems(environ: Mapping[str, str], allowed_hosts: Sequence[str
     return problems
 
 
-def is_https(scheme: str, remote_addr: Optional[str], forwarded_proto: Optional[str], proxies) -> bool:
+def is_https(scheme: str, remote_addr: str | None, forwarded_proto: str | None, proxies) -> bool:
     """True when the request arrived over TLS: directly, or through a trusted proxy that says so. A forwarded header from anyone else is ignored."""
     if scheme == "https":
         return True

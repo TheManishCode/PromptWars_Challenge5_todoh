@@ -24,9 +24,9 @@ import os
 import re
 import secrets
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import Sequence
 
 from pydantic import ValidationError
 
@@ -61,7 +61,7 @@ def assemble_plan(
     draft: PlanDraft,
     report: ValidationReport,
     version: int,
-    parent_version: Optional[int],
+    parent_version: int | None,
     reason: str,
     decision_entry_ids: Sequence[str],
     newly_confirmed_vendor_ids: Sequence[str] = (),
@@ -74,7 +74,7 @@ def assemble_plan(
         plan_id=draft.plan_id,
         version=version,
         parent_version=parent_version,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         origin=draft.origin,
         change_reason=reason,
         request=draft.request,
@@ -131,7 +131,7 @@ class PlanStore:
     key, forging or editing a plan also requires the key, which never touches the disk.
     """
 
-    def __init__(self, root: Optional[Path] = None, signing_key: Optional[bytes] = None):
+    def __init__(self, root: Path | None = None, signing_key: bytes | None = None):
         self.root = Path(root) if root is not None else DEFAULT_PLAN_DIR
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self._lock = threading.Lock()
@@ -147,7 +147,7 @@ class PlanStore:
     def _path(self, plan_id: str, version: int) -> Path:
         return self.root / f"plan-{_check_id(plan_id)}-v{version:04d}.json"
 
-    def _version_numbers(self, plan_id: str) -> List[int]:
+    def _version_numbers(self, plan_id: str) -> list[int]:
         _check_id(plan_id)
         out = []
         for p in self.root.iterdir():
@@ -218,24 +218,24 @@ class PlanStore:
                 continue
         return out
 
-    def _raw(self, plan_id: str, version: int) -> Optional[dict]:
+    def _raw(self, plan_id: str, version: int) -> dict | None:
         try:
             return json.loads(self._path(plan_id, version).read_bytes())
         except (OSError, ValueError):
             return None
 
-    def check_chain(self, plan_id: str) -> List[str]:
+    def check_chain(self, plan_id: str) -> list[str]:
         """What is wrong with this plan's history, in words; an empty list means every version is present, hashes to what it says, links to its parent and
         ends where the head record says it should. Each version is also loaded (hash, schema and model) by ``load``; this adds the links between them."""
         _check_id(plan_id)
-        problems: List[str] = []
+        problems: list[str] = []
         numbers = self._version_numbers(plan_id)
         if not numbers:
             return [f"plan {plan_id}: no versions on disk"]
         if numbers != list(range(1, numbers[-1] + 1)):
             missing = sorted(set(range(1, numbers[-1] + 1)) - set(numbers))
             problems.append(f"plan {plan_id}: version(s) {missing} are missing from the middle of its history")
-        previous: Optional[dict] = None
+        previous: dict | None = None
         for n in numbers:
             doc = self._raw(plan_id, n)
             if doc is None:
@@ -256,7 +256,7 @@ class PlanStore:
                     problems.append(f"plan {plan_id} v{head[0]}: its hash is not the one recorded when it was saved")
         return problems
 
-    def list_plans(self) -> List[str]:
+    def list_plans(self) -> list[str]:
         return sorted({m.group(1) for p in self.root.iterdir() if (m := FILE_NAME.fullmatch(p.name))})
 
     def save(self, plan: PlanVersion) -> Path:
@@ -291,7 +291,7 @@ class PlanStore:
             self._record_head(plan, doc["sha256"])
             return final
 
-    def load(self, plan_id: str, version: Optional[int] = None) -> PlanVersion:
+    def load(self, plan_id: str, version: int | None = None) -> PlanVersion:
         numbers = self._version_numbers(plan_id)
         if not numbers:
             raise FileNotFoundError(f"no plan {plan_id!r}")
@@ -327,7 +327,7 @@ class PlanStore:
             raise PlanIntegrityError(f"{path.name} content does not match its file name")
         return plan
 
-    def versions(self, plan_id: str) -> List[PlanVersion]:
+    def versions(self, plan_id: str) -> list[PlanVersion]:
         return [self.load(plan_id, n) for n in self._version_numbers(plan_id)]
 
     def latest(self, plan_id: str) -> PlanVersion:

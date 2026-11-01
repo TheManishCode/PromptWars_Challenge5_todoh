@@ -15,9 +15,8 @@ import hashlib
 import json
 import shutil
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Dict, List, Optional
 
 SCHEMA = 1
 DB_FILES = ("workspaces.db", "wall_data/wall.sqlite3")
@@ -54,13 +53,13 @@ def _tree(root: Path):
         yield path
 
 
-def make_backup(data_dir: Path, destination: Path, now: Optional[datetime] = None) -> Path:
+def make_backup(data_dir: Path, destination: Path, now: datetime | None = None) -> Path:
     data_dir, destination = Path(data_dir).resolve(), Path(destination).resolve()
     if not data_dir.is_dir():
         raise BackupError("the data directory does not exist")
     if destination == data_dir or data_dir in destination.parents:
         raise BackupError("a backup must be written outside the data directory")
-    stamp = (now or datetime.now(timezone.utc)).strftime("%Y%m%dT%H%M%SZ")
+    stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
     out = destination / f"todoh-backup-{stamp}"
     out.mkdir(parents=True, exist_ok=False, mode=0o700)
     for rel in DB_FILES:
@@ -92,12 +91,12 @@ def make_backup(data_dir: Path, destination: Path, now: Optional[datetime] = Non
     return out
 
 
-def verify_backup(backup: Path) -> List[str]:
+def verify_backup(backup: Path) -> list[str]:
     """Problems found, or an empty list: every file named in the manifest exists with the recorded hash, and nothing else is in the backup."""
     backup = Path(backup)
     try:
         manifest = json.loads((backup / "MANIFEST.json").read_text())
-        listed: Dict[str, str] = {f["path"]: f["sha256"] for f in manifest["files"]}
+        listed: dict[str, str] = {f["path"]: f["sha256"] for f in manifest["files"]}
         if manifest["schema_version"] != SCHEMA:
             return [f"unsupported backup version {manifest['schema_version']}"]
     except (OSError, ValueError, KeyError, TypeError):
@@ -114,7 +113,7 @@ def verify_backup(backup: Path) -> List[str]:
     return problems
 
 
-def _read_tombstones(path: Optional[Path]) -> List[dict]:
+def _read_tombstones(path: Path | None) -> list[dict]:
     out = []
     if path and Path(path).is_file():
         for line in Path(path).read_text().splitlines():
@@ -127,7 +126,7 @@ def _read_tombstones(path: Optional[Path]) -> List[dict]:
     return out
 
 
-def restore_backup(backup: Path, into: Path, deletion_log: Optional[Path] = None) -> Dict[str, object]:
+def restore_backup(backup: Path, into: Path, deletion_log: Path | None = None) -> dict[str, object]:
     from eventmate.followthrough.jobs import JobStore
     from eventmate.plan_store import PlanStore
     from eventmate.retention import delete_plan_files, scrub_plan_from_logs, wipe, write_tombstone
@@ -149,7 +148,7 @@ def restore_backup(backup: Path, into: Path, deletion_log: Optional[Path] = None
         else:
             target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             shutil.copy2(path, target)
-    applied: List[dict] = []
+    applied: list[dict] = []
     seen = set()
     for doc in _read_tombstones(backup / "tombstones.jsonl") + _read_tombstones(deletion_log):
         key = (doc["kind"], doc["id"], doc.get("workspace"))

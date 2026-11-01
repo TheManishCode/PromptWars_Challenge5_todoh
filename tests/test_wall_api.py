@@ -217,14 +217,14 @@ def test_bootstrap_is_rate_limited_per_address_and_globally(tmp_path):
     app, store, _ = make_app(tmp_path, limits=limits)
     c = app.test_client()
     codes = []
-    for i in range(4):
+    for _i in range(4):
         c.delete_cookie("todoh_wall")
         codes.append(c.get("/api/wall/session").status_code)
     assert codes == [200, 200, 200, 429]
     assert store.stats()["unclaimed_sessions"] == 3  # the refused one created nothing
     other = app.test_client()
     other_codes = []
-    for i in range(3):  # another address has its own budget of 3, but the global hour allows 5 in all and 3 are spent
+    for _i in range(3):  # another address has its own budget of 3, but the global hour allows 5 in all and 3 are spent
         other.delete_cookie("todoh_wall")
         other_codes.append(other.get("/api/wall/session", environ_overrides={"REMOTE_ADDR": "10.1.1.1"}).status_code)
     assert other_codes == [200, 200, 429]

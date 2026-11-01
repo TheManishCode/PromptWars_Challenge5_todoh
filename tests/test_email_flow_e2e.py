@@ -4,7 +4,7 @@ brief -> plan -> job -> approved requests -> vendor replies (plain, Hinglish, am
 unchanged until the user presses the existing re-price action.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import pytest
 
@@ -17,7 +17,7 @@ from tests.test_conversations import Clock
 from tests.test_jobs_worker import NoWhatsApp
 from eventmate.followthrough.worker import digest
 
-T0 = datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc)  # 14:30 IST: inside the sending window
+T0 = datetime(2026, 10, 30, 9, 0, tzinfo=UTC)  # 14:30 IST: inside the sending window
 COLLEGE = "Plan a 150-person college fest in Pune on December 12 under INR 250,000. Venue and catering."
 ADDR = {"cat-pune-annapurna": "a@annapurna.test", "cat-pune-rasoi": "r@rasoi.test", "cat-pune-spice": "s@spice.test"}
 VENDORS = {vid: ("email", to) for vid, to in ADDR.items()}

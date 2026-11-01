@@ -15,8 +15,8 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from datetime import datetime, timedelta, timezone, UTC
+from typing import Callable, Sequence
 
 from eventmate.assistant.guard import scan as scan_instructions
 from eventmate.integrity import StoreDamaged
@@ -78,12 +78,12 @@ def analyze_reply(body: str, checklist: Sequence[str]) -> ReplyAnalysis:
     )
 
 
-def suggest_followups(thread_replies: Sequence[InboundMessage], checklist: Sequence[str]) -> List[str]:
+def suggest_followups(thread_replies: Sequence[InboundMessage], checklist: Sequence[str]) -> list[str]:
     """Fixed-template follow-ups for the user to pick from. They ask; they never offer a price or accept one."""
     if not thread_replies:
         return []
     last = thread_replies[-1].analysis
-    out: List[str] = []
+    out: list[str] = []
     if last.says_unavailable:
         return ["Thank you for letting me know. Do you have another date close to this one, or can you suggest someone who is free?"]
     if not last.amounts:
@@ -101,21 +101,21 @@ def suggest_followups(thread_replies: Sequence[InboundMessage], checklist: Seque
 
 class ConversationService:
     def __init__(
-        self, store: OutreachStore, channels: Dict[str, Channel], plan_lookup: Callable[[str], PlanVersion],
-        policy: SendPolicy = SendPolicy(), now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+        self, store: OutreachStore, channels: dict[str, Channel], plan_lookup: Callable[[str], PlanVersion],
+        policy: SendPolicy = SendPolicy(), now: Callable[[], datetime] = lambda: datetime.now(UTC),
     ):
         self.store, self.channels, self.plan_lookup, self.policy, self.now = store, channels, plan_lookup, policy, now
-        self._last_whatsapp: Optional[datetime] = None
-        self.suppressions: Optional[SuppressionStore] = None  # set by to;doh-the event planner: the do-not-contact list, checked at approval and again when a message is about to be sent
-        self.unmatched: Optional[UnmatchedStore] = None  # set by to;doh-the event planner: stop-like mail and bounces that are not tied to anything we sent, for the user to review
-        self.guards: List[Callable[[OutreachDraft], Optional[str]]] = []  # each may veto an automatic send at dispatch time (for example: its job was cancelled)
-        self.health: Optional[Callable[[], Optional[str]]] = None  # set by to;doh-the event planner: why nothing may be sent or approved right now (a damaged record file), or None
+        self._last_whatsapp: datetime | None = None
+        self.suppressions: SuppressionStore | None = None  # set by to;doh-the event planner: the do-not-contact list, checked at approval and again when a message is about to be sent
+        self.unmatched: UnmatchedStore | None = None  # set by to;doh-the event planner: stop-like mail and bounces that are not tied to anything we sent, for the user to review
+        self.guards: list[Callable[[OutreachDraft], str | None]] = []  # each may veto an automatic send at dispatch time (for example: its job was cancelled)
+        self.health: Callable[[], str | None] | None = None  # set by to;doh-the event planner: why nothing may be sent or approved right now (a damaged record file), or None
 
     # ------------------------------------------------------------ approval
 
     STALE_MESSAGE = "The plan changed after this was written. Draft it again."
 
-    def stale_reason(self, d: OutreachDraft) -> Optional[str]:
+    def stale_reason(self, d: OutreachDraft) -> str | None:
         """Why a not-yet-sent draft no longer matches the plan, or None. The hash proves the text is what the user saw; this checks it is still true.
         A draft written before the plan version was recorded cannot be checked, so it is stale too: it must be drafted again, even if it was already approved
         (it has not been sent). Sent history is never touched. If the plan cannot be read, that is a reason too: fail closed."""
@@ -133,9 +133,9 @@ class ConversationService:
             return "the event details in the text changed"
         return None
 
-    def supersede_stale(self, plan_id: str) -> List[str]:
+    def supersede_stale(self, plan_id: str) -> list[str]:
         """Call after a new plan version is saved: mark every waiting draft of the plan that no longer matches it ``stale``. Returns their ids. Nothing is rewritten or resent."""
-        done: List[str] = []
+        done: list[str] = []
         for d in self.store.list(plan_id):
             why = self.stale_reason(d)
             if why:
@@ -146,7 +146,7 @@ class ConversationService:
                     pass  # it was sent, denied or changed by someone else in the meantime
         return done
 
-    def supersede_all_stale(self) -> List[str]:
+    def supersede_all_stale(self) -> list[str]:
         """Sweep every plan once (at start-up): waiting drafts that predate version tracking, or that no longer match their plan, become stale."""
         return [i for pid in self.store.plan_ids() for i in self.supersede_stale(pid)]
 
@@ -190,7 +190,7 @@ class ConversationService:
 
     # ------------------------------------------------------------ sending
 
-    def _sent_since(self, since: datetime) -> List[OutreachDraft]:
+    def _sent_since(self, since: datetime) -> list[OutreachDraft]:
         """Messages that count against the limits: sent ones, ones another process is sending right now, and ones whose outcome is unknown (they may well have gone out)."""
         out = []
         for pid in self.store.plan_ids():
@@ -200,7 +200,7 @@ class ConversationService:
                     out.append(d)
         return out
 
-    def dispatch(self) -> Tuple[int, List[str]]:
+    def dispatch(self) -> tuple[int, list[str]]:
         """Send what the user approved, within the limits. Returns (sent, reasons something is still waiting)."""
         stopped = self.health() if self.health else None
         if stopped:
@@ -273,7 +273,7 @@ class ConversationService:
 
     # ------------------------------------------------------------ replies
 
-    def _threads(self) -> List[Tuple[str, OutreachDraft]]:
+    def _threads(self) -> list[tuple[str, OutreachDraft]]:
         since = self.now() - LOOKBACK
         return [(pid, d) for pid in self.store.plan_ids() for d in self.store.list(pid) if d.status == "sent" and d.sent_at is not None and d.sent_at >= since]
 
@@ -282,8 +282,8 @@ class ConversationService:
         sent, waiting = self.dispatch()
         sent_drafts = self._threads()
         new = ignored = 0
-        touched: List[Tuple[str, str]] = []
-        errors: List[str] = []
+        touched: list[tuple[str, str]] = []
+        errors: list[str] = []
         for name, channel in self.channels.items():
             known = {}
             for pid, d in sent_drafts:
@@ -322,7 +322,7 @@ class ConversationService:
         return PollResult(new_messages=new, ignored=ignored, sent=sent, waiting=tuple(waiting), errors=tuple(errors))
 
     @staticmethod
-    def _match(item: Inbound, candidates: List[Tuple[str, OutreachDraft]]) -> Optional[Tuple[str, OutreachDraft]]:
+    def _match(item: Inbound, candidates: list[tuple[str, OutreachDraft]]) -> tuple[str, OutreachDraft] | None:
         """Which sent message does this answer? An email's reply headers first, then the sender's address; strangers match nothing."""
         refs = set((item.in_reply_to + " " + item.references).split())
         if item.channel == "email":
@@ -332,7 +332,7 @@ class ConversationService:
         same = [(p, d) for p, d in candidates if d.recipient.lower() == item.sender.lower() and item.received_at >= d.sent_at - timedelta(seconds=60)]
         return max(same, key=lambda pd: pd[1].sent_at) if same else None
 
-    def _store(self, item: Inbound, pid: str, d: OutreachDraft) -> Optional[InboundMessage]:
+    def _store(self, item: Inbound, pid: str, d: OutreachDraft) -> InboundMessage | None:
         checklist = self.store.checklists.get(d.category.value, ())
         msg = InboundMessage(
             message_id=uuid.uuid4().hex, plan_id=pid, draft_id=d.parent_id or d.draft_id, vendor_id=d.vendor_id, vendor_name=d.vendor_name, vendor_origin=d.vendor_origin, category=d.category,
@@ -353,7 +353,7 @@ class ConversationService:
 
     # ------------------------------------------------------------ do not contact
 
-    def blocked_reason(self, d: OutreachDraft) -> Optional[str]:
+    def blocked_reason(self, d: OutreachDraft) -> str | None:
         if self.suppressions is None:
             return None
         s = self.suppressions.active_for(d.channel, d.recipient)
@@ -447,7 +447,7 @@ class ConversationService:
             return 0  # nothing left to ask
         return 1 if self.queue_automatic(pid, root, options[0], f"reply:{last.message_id}")[0] is not None else 0
 
-    def queue_automatic(self, pid: str, root: str, text: str, action_key: str) -> Tuple[Optional[OutreachDraft], str]:
+    def queue_automatic(self, pid: str, root: str, text: str, action_key: str) -> tuple[OutreachDraft | None, str]:
         """The one way anything is sent without a per-message approval (ADR-043, ADR-044): checks the standing permission and its caps, marks the
         draft as automatic with the disclosure line, and leaves the rest (window, kill switch, send limits) to dispatch. Returns (draft, reason)."""
         root_draft = self.store.get(pid, root)
@@ -490,14 +490,14 @@ class ConversationService:
             channels=tuple(c.status() for c in self.channels.values()),
         )
 
-    def suggestions(self, plan_id: str, draft_id: str) -> List[str]:
+    def suggestions(self, plan_id: str, draft_id: str) -> list[str]:
         req = self.store.get(plan_id, draft_id)
         if req is None or req.kind != "request":
             raise ValueError("unknown request")
         replies = [m for m in self.store.inbound(plan_id) if m.draft_id == draft_id]
         return suggest_followups(replies, self.store.checklists.get(req.category.value, ()))
 
-    def request_all(self, plan_id: str, sender_name: str) -> Tuple[List[OutreachDraft], List[str]]:
+    def request_all(self, plan_id: str, sender_name: str) -> tuple[list[OutreachDraft], list[str]]:
         """One proposal per vendor in the plan that has a saved contact and no live request. The user still approves each one."""
         plan = self.plan_lookup(plan_id)
         contacts, existing = self.store.contacts(), self.store.list(plan_id)

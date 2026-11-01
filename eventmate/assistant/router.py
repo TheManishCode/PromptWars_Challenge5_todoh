@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 _DIRECT = [
     (re.compile(r"\b(?:what|which)\s+(?:is\s+)?(?:the\s+)?(?:date|city)\b|\bwhen\s+is\b|\bwhere\s+is\s+(?:it|the\s+event)\b", re.I), "get_public_event_info"),
@@ -23,7 +22,7 @@ LONG_QUESTION = 240
 @dataclass(frozen=True)
 class Route:
     kind: str  # direct | small | large
-    tool: Optional[str] = None
+    tool: str | None = None
     reason: str = ""
 
 

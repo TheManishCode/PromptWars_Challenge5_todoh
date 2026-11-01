@@ -18,9 +18,9 @@ import os
 import sqlite3
 import threading
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Iterator
 
 from pydantic import Field
 
@@ -45,39 +45,39 @@ class Proposal(_Model):
     plan_version: int
     proposer: str
     tool: str
-    args: Dict[str, Any]
+    args: dict[str, Any]
     summary: str = Field(max_length=300)
     content_sha256: str
     created_at: datetime
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     status: str = "pending"  # pending | approving | approved | rejected | stale | expired | failed | outcome_unknown
-    decided_by: Optional[str] = None
-    result: Optional[str] = Field(default=None, max_length=500)
+    decided_by: str | None = None
+    result: str | None = Field(default=None, max_length=500)
 
 
-def content_hash(plan_id: str, plan_version: int, tool: str, args: Dict[str, Any]) -> str:
+def content_hash(plan_id: str, plan_version: int, tool: str, args: dict[str, Any]) -> str:
     return sha(json.dumps([plan_id, plan_version, tool, args], sort_keys=True, default=str))
 
 
 _COLUMNS = ("id", "plan_id", "plan_version", "proposer", "tool", "args", "summary", "content_sha256", "created_at", "expires_at", "status", "decided_by", "decided_at", "result")
 
 
-def _iso(t: Optional[datetime]) -> Optional[str]:
-    return None if t is None else t.astimezone(timezone.utc).isoformat()
+def _iso(t: datetime | None) -> str | None:
+    return None if t is None else t.astimezone(UTC).isoformat()
 
 
-def _aware(t: Optional[datetime]) -> Optional[datetime]:
-    return t if t is None or t.tzinfo else t.replace(tzinfo=timezone.utc)
+def _aware(t: datetime | None) -> datetime | None:
+    return t if t is None or t.tzinfo else t.replace(tzinfo=UTC)
 
 
 class ApprovalQueue:
     """``db`` is a file path (durable) or None (in memory: the voice turn's private staging queue, and tests that do not need a restart)."""
 
-    def __init__(self, log: ProposalLog, db: Optional[Union[str, Path]] = None, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+    def __init__(self, log: ProposalLog, db: str | Path | None = None, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
         self.log, self.now = log, now
         self._path = None if db is None else Path(db)
         self._lock = threading.RLock()
-        self._mem: Optional[sqlite3.Connection] = sqlite3.connect(":memory:", check_same_thread=False, isolation_level=None) if self._path is None else None
+        self._mem: sqlite3.Connection | None = sqlite3.connect(":memory:", check_same_thread=False, isolation_level=None) if self._path is None else None
         if self._path is not None:
             self._path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         with self._db() as c:
@@ -124,14 +124,14 @@ class ApprovalQueue:
         d["args"] = json.loads(d["args"])
         return Proposal.model_validate({k: v for k, v in d.items() if k != "decided_at"})
 
-    def _fetch(self, c: sqlite3.Connection, proposal_id: str) -> Optional[Proposal]:
+    def _fetch(self, c: sqlite3.Connection, proposal_id: str) -> Proposal | None:
         r = c.execute(f"SELECT {', '.join(_COLUMNS)} FROM proposals WHERE id = ?", (proposal_id,)).fetchone()  # nosec B608 - the column names are a module constant; every value is bound
         return None if r is None else self._row(r)
 
     def _recover(self) -> None:
         """A proposal left ``approving`` past its lease, or pending past its expiry, is settled now. Nothing is ever re-applied."""
         now = self.now()
-        settled: List[Proposal] = []
+        settled: list[Proposal] = []
         with self._tx() as c:
             for pid, in c.execute("SELECT id FROM proposals WHERE status = 'approving' AND decided_at < ?", (_iso(now - APPLY_LEASE),)).fetchall():
                 c.execute("UPDATE proposals SET status='outcome_unknown', result=? WHERE id=? AND status='approving'", (UNKNOWN[:500], pid))
@@ -151,7 +151,7 @@ class ApprovalQueue:
             (p.id, p.plan_id, p.plan_version, p.proposer, p.tool, json.dumps(p.args, sort_keys=True), p.summary, p.content_sha256, _iso(p.created_at), _iso(p.expires_at), "pending", SCHEMA_VERSION),
         )
 
-    def _file(self, p: Proposal, plan_id: str) -> Tuple[Proposal, bool]:
+    def _file(self, p: Proposal, plan_id: str) -> tuple[Proposal, bool]:
         """Insert unless the plan already has too many waiting, or an identical one is waiting (then that one is returned)."""
         with self._tx() as c:
             dup = c.execute(f"SELECT {', '.join(_COLUMNS)} FROM proposals WHERE status='pending' AND content_sha256=? AND plan_id=?", (p.content_sha256, plan_id)).fetchone()  # nosec B608 - same constant column list; values bound
@@ -163,7 +163,7 @@ class ApprovalQueue:
         self.log.write(request_id=p.id, event="proposed", plan_id=p.plan_id, tool=p.tool, actor=p.proposer, content_sha256=p.content_sha256, detail=p.summary)
         return p, True
 
-    def propose(self, *, plan_id: str, plan_version: int, proposer: str, tool: str, args: Dict[str, Any], summary: str) -> Proposal:
+    def propose(self, *, plan_id: str, plan_version: int, proposer: str, tool: str, args: dict[str, Any], summary: str) -> Proposal:
         self._recover()
         clean = json.loads(json.dumps(args, default=str))
         now = self.now()
@@ -171,14 +171,14 @@ class ApprovalQueue:
                      content_sha256=content_hash(plan_id, plan_version, tool, clean), created_at=now, expires_at=now + PROPOSAL_TTL)
         return self._file(p, plan_id)[0]
 
-    def adopt(self, proposal: Proposal) -> Tuple[Proposal, bool]:
+    def adopt(self, proposal: Proposal) -> tuple[Proposal, bool]:
         """Take a proposal staged during a voice turn into this queue, at the turn's commit barrier. Returns (proposal, created): an identical pending
         proposal that already exists (made in typed chat, say) is returned as is with created False. Nothing ever takes a proposal back out."""
         self._recover()
         fresh = proposal.model_copy(update={"expires_at": proposal.expires_at or self.now() + PROPOSAL_TTL, "status": "pending"})
         return self._file(fresh, proposal.plan_id)
 
-    def pending(self, plan_id: str) -> List[Proposal]:
+    def pending(self, plan_id: str) -> list[Proposal]:
         self._recover()
         with self._db() as c:
             rows = c.execute(f"SELECT {', '.join(_COLUMNS)} FROM proposals WHERE plan_id = ? AND status = 'pending' ORDER BY created_at", (plan_id,)).fetchall()  # nosec B608 - constant column list, bound values

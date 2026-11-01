@@ -11,7 +11,7 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import Field, ValidationError
 
@@ -74,13 +74,13 @@ MODELS = {"deals": DealQuery, "places": _Places, "trip": TripRequest, "flights":
 @dataclass(frozen=True)
 class Routed:
     action: str
-    params: Dict[str, Any]
-    result: Optional[Dict[str, Any]]
-    note: Optional[str]
+    params: dict[str, Any]
+    result: dict[str, Any] | None
+    note: str | None
     model: str
 
 
-def _parse(output: str) -> Dict[str, Any]:
+def _parse(output: str) -> dict[str, Any]:
     if not isinstance(output, str) or not output.strip() or len(output) > MAX_REPLY_CHARS:
         raise _Unusable("empty or oversized reply")
     text = re.sub(r"^```(?:json)?|```$", "", output.strip(), flags=re.M).strip()
@@ -96,7 +96,7 @@ def _parse(output: str) -> Dict[str, Any]:
     return obj
 
 
-def _validate(obj: Dict[str, Any], today: date):
+def _validate(obj: dict[str, Any], today: date):
     action = obj["action"]
     if action not in MODELS:
         raise _Unusable("unknown action")
@@ -132,7 +132,7 @@ def build_prompt(text: str, today: date):
     return render_template(head, {"today": today.isoformat()}), "Request:\n" + render_template(tail, {"request": _FENCE.sub(" ", text.strip())})
 
 
-def route(em, text: str, today: date, clients: List[Any]) -> Routed:
+def route(em, text: str, today: date, clients: list[Any]) -> Routed:
     if not isinstance(text, str) or not text.strip() or len(text) > MAX_TEXT:
         raise ExploreError(f"write between 1 and {MAX_TEXT} characters")
     if not clients:
@@ -142,7 +142,7 @@ def route(em, text: str, today: date, clients: List[Any]) -> Routed:
     except UntrustedTextRejected as exc:
         raise ExploreError(str(exc)) from None
     system, user = build_prompt(text, today)
-    problems: List[str] = []
+    problems: list[str] = []
     attempts = (list(clients) * MAX_MODEL_CALLS)[:MAX_MODEL_CALLS] if len(clients) == 1 else list(clients)[:MAX_MODEL_CALLS]  # a lone provider gets one retry
     for client in attempts:
         try:

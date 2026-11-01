@@ -12,7 +12,7 @@ It never decides that a plan is acceptable: the Validator Agent does that.
 from __future__ import annotations
 
 from itertools import product
-from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
+from typing import NamedTuple, Sequence
 
 from eventmate.arcade_pulse import pulse as _arcade_pulse
 from eventmate.agents.scheduler import SchedulingAgent
@@ -60,7 +60,7 @@ class _Opt(NamedTuple):
     score: float
     source: str
     status: BookingStatus
-    candidate: Optional[VendorCandidate]
+    candidate: VendorCandidate | None
 
 
 def _total(combo) -> int:
@@ -72,7 +72,7 @@ def _rank(combo) -> tuple:
     return (-round(sum(o.score for o in combo), 6), _total(combo), [o.vendor_id for o in combo])
 
 
-def _options_for(category, by_cat, forced) -> List[_Opt]:
+def _options_for(category, by_cat, forced) -> list[_Opt]:
     if category in forced:
         f = forced[category]
         return [_Opt(category, f.vendor_id, f.name, f.cost, f.score, f.source, f.booking_status, None)]
@@ -101,7 +101,7 @@ def _affordable(request, allocation, combos):
     return loose, [warning], None
 
 
-def _miss_distance(rejected) -> Tuple[int, str]:
+def _miss_distance(rejected) -> tuple[int, str]:
     return (sum(_FIX_COST.get(c.name, 5) for c in rejected.failed), rejected.vendor_id)
 
 
@@ -121,9 +121,9 @@ class PlannerAgent:
         shortlists: Sequence[VendorShortlist],
         origin: datetime,
         plan_id: str,
-        forced: Optional[Dict[VendorCategory, VendorSelection]] = None,
-        fixed_starts: Optional[Dict[str, int]] = None,
-        now_offset: Optional[int] = None,
+        forced: dict[VendorCategory, VendorSelection] | None = None,
+        fixed_starts: dict[str, int] | None = None,
+        now_offset: int | None = None,
         exclude_ids: Sequence[str] = (),
     ) -> PlanningResult:
         forced = forced or {}

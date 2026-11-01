@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from enum import Enum
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -180,7 +180,7 @@ class VolunteerSlot(_Model):
     phase: Phase
     needed: int = Field(default=1, ge=1, le=50)
     start_min: int = Field(default=0, ge=0)
-    end_min: Optional[int] = Field(default=None, ge=1)  # None = to the end of the phase
+    end_min: int | None = Field(default=None, ge=1)  # None = to the end of the phase
 
     @field_validator("role")
     @classmethod
@@ -188,7 +188,7 @@ class VolunteerSlot(_Model):
         return _name(v)
 
     @model_validator(mode="after")
-    def _ordered(self) -> "VolunteerSlot":
+    def _ordered(self) -> VolunteerSlot:
         if self.end_min is not None and self.end_min <= self.start_min:
             raise ValueError("a slot must end after it starts")
         return self
@@ -199,7 +199,7 @@ class VolunteerShift(_Model):
     role: str = Field(min_length=1, max_length=40)
     phase: Phase
     start_min: int = Field(default=0, ge=0)
-    end_min: Optional[int] = Field(default=None, ge=1)
+    end_min: int | None = Field(default=None, ge=1)
 
     @field_validator("volunteer", "role")
     @classmethod
@@ -207,7 +207,7 @@ class VolunteerShift(_Model):
         return _name(v)
 
     @model_validator(mode="after")
-    def _ordered(self) -> "VolunteerShift":
+    def _ordered(self) -> VolunteerShift:
         if self.end_min is not None and self.end_min <= self.start_min:
             raise ValueError("a shift must end after it starts")
         return self
@@ -220,7 +220,7 @@ class ProgramActivity(_Model):
     title: str = Field(min_length=1, max_length=80)
     minutes: int = Field(ge=5, le=720)
     resource: str = Field(pattern=r"^[a-z0-9_]{1,20}$")
-    after: Optional[str] = Field(default=None, pattern=_SLUG)  # an activity that must finish first
+    after: str | None = Field(default=None, pattern=_SLUG)  # an activity that must finish first
 
     @field_validator("title")
     @classmethod
@@ -244,18 +244,18 @@ class CommunityAnswers(_Model):
 
 class CommunityDetails(_Model):
     subtype: str = Field(default="other", pattern=r"^[a-z0-9_]{1,40}$")  # checked against the profile file, which is data
-    attendance_low: Optional[int] = Field(default=None, ge=1, le=MAX_GUESTS)
-    attendance_high: Optional[int] = Field(default=None, ge=1, le=MAX_GUESTS)
-    own_funds_inr: Optional[int] = Field(default=None, ge=0, le=MAX_BUDGET_INR)
+    attendance_low: int | None = Field(default=None, ge=1, le=MAX_GUESTS)
+    attendance_high: int | None = Field(default=None, ge=1, le=MAX_GUESTS)
+    own_funds_inr: int | None = Field(default=None, ge=0, le=MAX_BUDGET_INR)
     count_committed: bool = False  # opt in: count committed (not received) money toward what the plan may spend
-    funding: Tuple[FundingSource, ...] = Field(default=(), max_length=MAX_FUNDING_SOURCES)
-    volunteers: Tuple[str, ...] = Field(default=(), max_length=MAX_VOLUNTEERS)
-    slots: Tuple[VolunteerSlot, ...] = Field(default=(), max_length=MAX_SLOTS)
-    shifts: Tuple[VolunteerShift, ...] = Field(default=(), max_length=MAX_SHIFTS)
-    setup_owner: Optional[str] = Field(default=None, max_length=60)
-    cleanup_owner: Optional[str] = Field(default=None, max_length=60)
-    program: Tuple[ProgramActivity, ...] = Field(default=(), max_length=MAX_ACTIVITIES)
-    access_needs: Tuple[AccessFeature, ...] = ()
+    funding: tuple[FundingSource, ...] = Field(default=(), max_length=MAX_FUNDING_SOURCES)
+    volunteers: tuple[str, ...] = Field(default=(), max_length=MAX_VOLUNTEERS)
+    slots: tuple[VolunteerSlot, ...] = Field(default=(), max_length=MAX_SLOTS)
+    shifts: tuple[VolunteerShift, ...] = Field(default=(), max_length=MAX_SHIFTS)
+    setup_owner: str | None = Field(default=None, max_length=60)
+    cleanup_owner: str | None = Field(default=None, max_length=60)
+    program: tuple[ProgramActivity, ...] = Field(default=(), max_length=MAX_ACTIVITIES)
+    access_needs: tuple[AccessFeature, ...] = ()
     answers: CommunityAnswers = CommunityAnswers()
 
     @field_validator("volunteers", "setup_owner", "cleanup_owner")
@@ -266,7 +266,7 @@ class CommunityDetails(_Model):
         return tuple(_name(x) for x in v) if isinstance(v, tuple) else _name(v)
 
     @model_validator(mode="after")
-    def _consistent(self) -> "CommunityDetails":
+    def _consistent(self) -> CommunityDetails:
         lo, hi = self.attendance_low, self.attendance_high
         if lo is not None and hi is not None and lo > hi:
             raise ValueError("attendance_low is above attendance_high")
@@ -300,18 +300,18 @@ class EventRequest(_Model):
     event_date: date
     budget_total: int = Field(gt=0, le=MAX_BUDGET_INR)
     currency: Literal["INR"] = "INR"
-    dietary: Tuple[DietaryRequirement, ...] = ()
+    dietary: tuple[DietaryRequirement, ...] = ()
     venue_setting: VenueSetting = VenueSetting.ANY
-    services: Tuple[VendorCategory, ...] = (VendorCategory.VENUE,)
-    reminders: Tuple[ReminderKind, ...] = ()
-    assumptions: Tuple[str, ...] = ()
+    services: tuple[VendorCategory, ...] = (VendorCategory.VENUE,)
+    reminders: tuple[ReminderKind, ...] = ()
+    assumptions: tuple[str, ...] = ()
     parse_confidence: float = Field(ge=0.0, le=1.0)
     # empty = the BudgetPolicy default split; otherwise exactly one weight per requested service
-    cap_weights: Tuple[CapWeight, ...] = ()
+    cap_weights: tuple[CapWeight, ...] = ()
     # people who can make bookings in parallel; the capacity of the scheduler's organizer resource (ADR-020)
     organizers: int = Field(default=1, ge=1, le=MAX_ORGANIZERS)
     # only for community events (ADR-046); everything the community hard checks compute from
-    community: Optional[CommunityDetails] = None
+    community: CommunityDetails | None = None
 
     @property
     def planning_attendance(self) -> int:
@@ -319,12 +319,12 @@ class EventRequest(_Model):
         high = self.community.attendance_high if self.community else None
         return max(self.guest_count, high or 0)
 
-    def with_changes(self, **changes) -> "EventRequest":
+    def with_changes(self, **changes) -> EventRequest:
         """Copy with changes, re-running validation (``model_copy`` would skip it)."""
         return EventRequest.model_validate({**self.model_dump(), **changes})
 
     @model_validator(mode="after")
-    def _venue_always_required(self) -> "EventRequest":
+    def _venue_always_required(self) -> EventRequest:
         if VendorCategory.VENUE not in self.services:
             raise ValueError("services must include a venue")
         if len(set(self.services)) != len(self.services):
@@ -348,7 +348,7 @@ class Task(_Model):
     kind: TaskKind
     subject: str = Field(pattern=r"^[a-z_]+$")
     agent: AgentName
-    depends_on: Tuple[str, ...] = ()
+    depends_on: tuple[str, ...] = ()
     description: str
     status: TaskStatus = TaskStatus.PENDING
 
@@ -356,10 +356,10 @@ class Task(_Model):
 class TaskGraph(_Model):
     """A DAG of tasks. Structural validity is enforced at construction."""
 
-    tasks: Tuple[Task, ...]
+    tasks: tuple[Task, ...]
 
     @model_validator(mode="after")
-    def _structure(self) -> "TaskGraph":
+    def _structure(self) -> TaskGraph:
         ids = [t.id for t in self.tasks]
         if len(set(ids)) != len(ids):
             raise ValueError("duplicate task ids")
@@ -380,10 +380,10 @@ class TaskGraph(_Model):
         return self
 
     @staticmethod
-    def _topological(tasks: Tuple[Task, ...]) -> List[Task]:
+    def _topological(tasks: tuple[Task, ...]) -> list[Task]:
         remaining = {t.id: t for t in tasks}
         done: set = set()
-        ordered: List[Task] = []
+        ordered: list[Task] = []
         while remaining:
             ready = sorted(
                 (t for t in remaining.values() if set(t.depends_on) <= done),
@@ -397,7 +397,7 @@ class TaskGraph(_Model):
                 del remaining[t.id]
         return ordered
 
-    def topological_order(self) -> List[Task]:
+    def topological_order(self) -> list[Task]:
         return self._topological(self.tasks)
 
     def get(self, task_id: str) -> Task:
@@ -416,7 +416,7 @@ class TaskGraph(_Model):
                 stack.extend(self.get(current).depends_on)
         return seen
 
-    def with_status(self, task_id: str, status: TaskStatus) -> "TaskGraph":
+    def with_status(self, task_id: str, status: TaskStatus) -> TaskGraph:
         self.get(task_id)
         return TaskGraph(
             tasks=tuple(
@@ -438,11 +438,11 @@ class BudgetLine(_Model):
 class BudgetAllocation(_Model):
     total: int = Field(gt=0)
     currency: Literal["INR"] = "INR"
-    lines: Tuple[BudgetLine, ...]
+    lines: tuple[BudgetLine, ...]
     contingency: int = Field(ge=0)
 
     @model_validator(mode="after")
-    def _sums_exactly(self) -> "BudgetAllocation":
+    def _sums_exactly(self) -> BudgetAllocation:
         spent = sum(line.amount for line in self.lines) + self.contingency
         if spent != self.total:
             raise ValueError(f"allocation sums to {spent}, expected {self.total}")
@@ -457,9 +457,9 @@ class BudgetAllocation(_Model):
 
 class BudgetAssessment(_Model):
     status: Literal["within_budget", "contingency_breach", "overspend", "incomplete"]
-    cheapest_total: Optional[int] = None
-    headroom: Optional[int] = None
-    violations: Tuple[ConstraintViolation, ...] = ()
+    cheapest_total: int | None = None
+    headroom: int | None = None
+    violations: tuple[ConstraintViolation, ...] = ()
 
 
 # ----------------------------------------------------------------- vendors
@@ -469,7 +469,7 @@ class _Provider(_Model):
     id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     name: str = Field(min_length=1, max_length=120)
     city: str = Field(min_length=1, max_length=80)
-    available_dates: Tuple[date, ...] = ()
+    available_dates: tuple[date, ...] = ()
     booking_status: BookingStatus = BookingStatus.AVAILABLE
     rating: float = Field(ge=0.0, le=5.0)
     source: str
@@ -487,7 +487,7 @@ class Venue(_Provider):
     capacity: int = Field(ge=1, le=MAX_GUESTS)
     flat_fee: int = Field(ge=0, le=MAX_BUDGET_INR)
     # None = the record says nothing (unknown, not "none"); a tuple is what the venue declared (ADR-046)
-    accessibility: Optional[Tuple[AccessFeature, ...]] = None
+    accessibility: tuple[AccessFeature, ...] | None = None
 
     def cost_for(self, guest_count: int) -> int:
         return self.flat_fee
@@ -497,14 +497,14 @@ class Vendor(_Provider):
     """Caterer or photographer. Pricing fields depend on ``category``."""
 
     category: Literal[VendorCategory.CATERER, VendorCategory.PHOTOGRAPHER]
-    price_per_plate: Optional[int] = Field(default=None, ge=0, le=MAX_BUDGET_INR)
-    min_guests: Optional[int] = Field(default=None, ge=1, le=MAX_GUESTS)
-    max_guests: Optional[int] = Field(default=None, ge=1, le=MAX_GUESTS)
-    dietary_options: Tuple[DietaryRequirement, ...] = ()
-    flat_fee: Optional[int] = Field(default=None, ge=0, le=MAX_BUDGET_INR)
+    price_per_plate: int | None = Field(default=None, ge=0, le=MAX_BUDGET_INR)
+    min_guests: int | None = Field(default=None, ge=1, le=MAX_GUESTS)
+    max_guests: int | None = Field(default=None, ge=1, le=MAX_GUESTS)
+    dietary_options: tuple[DietaryRequirement, ...] = ()
+    flat_fee: int | None = Field(default=None, ge=0, le=MAX_BUDGET_INR)
 
     @model_validator(mode="after")
-    def _pricing_matches_category(self) -> "Vendor":
+    def _pricing_matches_category(self) -> Vendor:
         if self.category == VendorCategory.CATERER:
             if None in (self.price_per_plate, self.min_guests, self.max_guests):
                 raise ValueError("caterer needs price_per_plate, min_guests, max_guests")
@@ -531,7 +531,7 @@ class VendorCandidate(_Model):
     category: VendorCategory
     estimated_cost: int = Field(ge=0)
     score: float
-    checks: Tuple[ConstraintCheck, ...]
+    checks: tuple[ConstraintCheck, ...]
     source: str
 
 
@@ -540,15 +540,15 @@ class RejectedVendor(_Model):
     name: str
     category: VendorCategory
     estimated_cost: int = Field(ge=0)
-    failed: Tuple[ConstraintCheck, ...]
+    failed: tuple[ConstraintCheck, ...]
 
 
 class VendorShortlist(_Model):
     category: VendorCategory
     budget_cap: int
-    candidates: Tuple[VendorCandidate, ...]
-    rejected: Tuple[RejectedVendor, ...]
-    violations: Tuple[ConstraintViolation, ...] = ()
+    candidates: tuple[VendorCandidate, ...]
+    rejected: tuple[RejectedVendor, ...]
+    violations: tuple[ConstraintViolation, ...] = ()
 
 
 # -------------------------------------------------------------- decisions
@@ -577,9 +577,9 @@ class DecisionLogEntry(_Model):
     agent: AgentName
     decision_type: DecisionType
     summary: str = Field(min_length=1, max_length=500)
-    alternatives: Tuple[Alternative, ...] = ()
-    no_alternative_reason: Optional[str] = None
-    constraints_checked: Tuple[ConstraintCheck, ...] = ()
+    alternatives: tuple[Alternative, ...] = ()
+    no_alternative_reason: str | None = None
+    constraints_checked: tuple[ConstraintCheck, ...] = ()
     justification: str = Field(min_length=1)
     confidence: float = Field(ge=0.0, le=1.0)
     source: str
@@ -596,10 +596,10 @@ class DecisionLogEntry(_Model):
     def _utc(cls, v: datetime) -> datetime:
         if v.tzinfo is None:
             raise ValueError("timestamp must be timezone-aware")
-        return v.astimezone(timezone.utc)
+        return v.astimezone(UTC)
 
     @model_validator(mode="after")
-    def _recommendations_need_alternatives(self) -> "DecisionLogEntry":
+    def _recommendations_need_alternatives(self) -> DecisionLogEntry:
         if (
             self.decision_type == DecisionType.RECOMMENDATION
             and not self.alternatives
@@ -624,10 +624,10 @@ class RealityCheck(_Model):
 
     verdict: Literal["comfortable", "tight", "contingency_breach", "unrealistic", "unknown"]
     budget: int = Field(gt=0)
-    floor: Optional[int] = Field(default=None, ge=0)
-    per_category: Tuple[CategoryFloor, ...] = ()
-    suggested_minimum_budget: Optional[int] = Field(default=None, gt=0)  # the least total that covers the cheapest set and the contingency reserve, if money can move between services
-    minimum_budget_default_split: Optional[int] = Field(default=None, gt=0)  # the least total at which every service's own share (its cap) covers its cheapest eligible vendor
+    floor: int | None = Field(default=None, ge=0)
+    per_category: tuple[CategoryFloor, ...] = ()
+    suggested_minimum_budget: int | None = Field(default=None, gt=0)  # the least total that covers the cheapest set and the contingency reserve, if money can move between services
+    minimum_budget_default_split: int | None = Field(default=None, gt=0)  # the least total at which every service's own share (its cap) covers its cheapest eligible vendor
     message: str
     basis: str
     source: str = "tool:reality_check"
@@ -639,19 +639,19 @@ class IntakeResult(_Model):
     request: EventRequest
     task_graph: TaskGraph
     budget_allocation: BudgetAllocation
-    vendor_shortlists: Tuple[VendorShortlist, ...]
+    vendor_shortlists: tuple[VendorShortlist, ...]
     budget_assessment: BudgetAssessment
-    guests: Optional["GuestSummary"] = None
-    reality: Optional[RealityCheck] = None
+    guests: GuestSummary | None = None
+    reality: RealityCheck | None = None
     status: Literal["intake_complete", "needs_repair"]
-    violations: Tuple[ConstraintViolation, ...] = ()
-    decision_entry_ids: Tuple[str, ...] = ()
+    violations: tuple[ConstraintViolation, ...] = ()
+    decision_entry_ids: tuple[str, ...] = ()
     final_plan: None = None
 
 
 
 
-ShortlistMap = Dict[VendorCategory, VendorShortlist]
+ShortlistMap = dict[VendorCategory, VendorShortlist]
 
 # ------------------------------------------------------------------ guests
 
@@ -667,7 +667,7 @@ class Guest(_Model):
     name: str = Field(min_length=1, max_length=120)
     rsvp: RSVP = RSVP.PENDING
     party_size: int = Field(default=1, ge=1, le=20)
-    dietary: Tuple[DietaryRequirement, ...] = ()
+    dietary: tuple[DietaryRequirement, ...] = ()
 
 
 class GuestSummary(_Model):
@@ -677,10 +677,10 @@ class GuestSummary(_Model):
     confirmed: int = Field(ge=0)
     declined: int = Field(ge=0)
     pending: int = Field(ge=0)
-    dietary_counts: Dict[str, int] = {}
-    required_diets: Tuple[DietaryRequirement, ...] = ()
-    checks: Tuple[ConstraintCheck, ...] = ()
-    guest_list_id: Optional[str] = None
+    dietary_counts: dict[str, int] = {}
+    required_diets: tuple[DietaryRequirement, ...] = ()
+    checks: tuple[ConstraintCheck, ...] = ()
+    guest_list_id: str | None = None
     source: str
 
 
@@ -695,11 +695,11 @@ class ScheduleTask(_Model):
     id: str = Field(pattern=r"^[a-z0-9_]{1,64}$")
     name: str = Field(min_length=1, max_length=120)
     duration: int = Field(ge=1, le=525_600)
-    resource: Optional[str] = Field(default=None, pattern=r"^[a-z0-9_]{1,40}$")
+    resource: str | None = Field(default=None, pattern=r"^[a-z0-9_]{1,40}$")
     group: TaskGroup = "pre_event"
     earliest_start: int = Field(default=0, ge=0)
-    fixed_start: Optional[int] = Field(default=None, ge=0)
-    deadline_end: Optional[int] = Field(default=None, ge=0)
+    fixed_start: int | None = Field(default=None, ge=0)
+    deadline_end: int | None = Field(default=None, ge=0)
     prefer: Literal["early", "late", "none"] = "none"
     weight: int = Field(default=1, ge=1, le=1000)
 
@@ -710,7 +710,7 @@ class ScheduleDependency(_Model):
     min_lag: int = Field(default=0, ge=0)
 
 
-def _has_cycle(ids: List[str], edges: List[Tuple[str, str]]) -> bool:
+def _has_cycle(ids: list[str], edges: list[tuple[str, str]]) -> bool:
     indegree = {i: 0 for i in ids}
     for _, b in edges:
         indegree[b] += 1
@@ -728,14 +728,14 @@ def _has_cycle(ids: List[str], edges: List[Tuple[str, str]]) -> bool:
 
 
 class ScheduleSpec(_Model):
-    tasks: Tuple[ScheduleTask, ...]
-    dependencies: Tuple[ScheduleDependency, ...] = ()
-    resources: Dict[str, int] = {}
+    tasks: tuple[ScheduleTask, ...]
+    dependencies: tuple[ScheduleDependency, ...] = ()
+    resources: dict[str, int] = {}
     horizon: int = Field(gt=0, le=5_256_000)
-    anchor_task: Optional[str] = None
+    anchor_task: str | None = None
 
     @model_validator(mode="after")
-    def _consistent(self) -> "ScheduleSpec":
+    def _consistent(self) -> ScheduleSpec:
         ids = [t.id for t in self.tasks]
         if not ids or len(set(ids)) != len(ids):
             raise ValueError("schedule needs unique, non-empty task ids")
@@ -765,9 +765,9 @@ class ScheduledEntry(_Model):
 
 class ScheduleSolution(_Model):
     status: Literal["optimal", "feasible", "infeasible", "error"]
-    entries: Tuple[ScheduledEntry, ...] = ()
-    objective: Optional[int] = None
-    infeasibility_core: Tuple[str, ...] = ()
+    entries: tuple[ScheduledEntry, ...] = ()
+    objective: int | None = None
+    infeasibility_core: tuple[str, ...] = ()
     detail: str = ""
 
 
@@ -775,7 +775,7 @@ class SymbolicResult(_Model):
     """PDDL feasibility check. ``unavailable`` means the solver binaries are absent."""
 
     status: Literal["valid", "invalid", "no_plan", "unavailable", "error"]
-    plan_actions: Tuple[str, ...] = ()
+    plan_actions: tuple[str, ...] = ()
     detail: str = ""
 
 
@@ -790,12 +790,12 @@ class VendorSelection(_Model):
     booking_status: BookingStatus = BookingStatus.AVAILABLE
     score: float = 0.0
     justification: str
-    alternatives: Tuple[Alternative, ...] = ()
-    no_alternative_reason: Optional[str] = None
+    alternatives: tuple[Alternative, ...] = ()
+    no_alternative_reason: str | None = None
     source: str
 
     @model_validator(mode="after")
-    def _has_alternative_or_reason(self) -> "VendorSelection":
+    def _has_alternative_or_reason(self) -> VendorSelection:
         if not self.alternatives and not self.no_alternative_reason:
             raise ValueError("every recommendation needs an alternative or a no_alternative_reason")
         return self
@@ -806,7 +806,7 @@ class PlanItem(_Model):
 
     task_id: str
     name: str
-    resource: Optional[str] = None
+    resource: str | None = None
     group: TaskGroup
     start: datetime
     end: datetime
@@ -824,20 +824,20 @@ class UnverifiedItem(_Model):
 
 class ValidationReport(_Model):
     passed: bool
-    checks: Tuple[ConstraintCheck, ...]
-    violations: Tuple[ConstraintViolation, ...] = ()
-    warnings: Tuple[str, ...] = ()
-    unverified: Tuple[UnverifiedItem, ...] = ()
+    checks: tuple[ConstraintCheck, ...]
+    violations: tuple[ConstraintViolation, ...] = ()
+    warnings: tuple[str, ...] = ()
+    unverified: tuple[UnverifiedItem, ...] = ()
 
     @model_validator(mode="after")
-    def _passed_matches_checks(self) -> "ValidationReport":
+    def _passed_matches_checks(self) -> ValidationReport:
         if self.passed != all(c.passed for c in self.checks):
             raise ValueError("passed must equal all(check.passed)")
         if self.passed and self.violations:
             raise ValueError("a passing report cannot list violations")
         return self
 
-    def blocking_unverified(self) -> Tuple["UnverifiedItem", ...]:
+    def blocking_unverified(self) -> tuple[UnverifiedItem, ...]:
         return tuple(u for u in self.unverified if u.blocks_verified)
 
     @property
@@ -858,30 +858,30 @@ class PlanVersion(_Model):
 
     plan_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     version: int = Field(ge=1)
-    parent_version: Optional[int] = Field(default=None, ge=1)
+    parent_version: int | None = Field(default=None, ge=1)
     created_at: datetime
     origin: datetime
     change_reason: str = Field(min_length=1, max_length=500)
     request: EventRequest
     guests: GuestSummary
     allocation: BudgetAllocation
-    selections: Tuple[VendorSelection, ...]
+    selections: tuple[VendorSelection, ...]
     spec: ScheduleSpec
     solution: ScheduleSolution
-    items: Tuple[PlanItem, ...]
+    items: tuple[PlanItem, ...]
     total_cost: int = Field(ge=0)
     validation: ValidationReport
     symbolic: SymbolicResult
-    decision_entry_ids: Tuple[str, ...] = ()
-    warnings: Tuple[str, ...] = ()
-    excluded_vendor_ids: Tuple[str, ...] = ()
+    decision_entry_ids: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+    excluded_vendor_ids: tuple[str, ...] = ()
     # vendors the user confirmed *in this version* (the provenance of CONFIRMED status)
-    newly_confirmed_vendor_ids: Tuple[str, ...] = ()
+    newly_confirmed_vendor_ids: tuple[str, ...] = ()
     # confirmed vendors this version let go of (vendor cancelled, or the user explicitly overrode)
-    released_vendor_ids: Tuple[str, ...] = ()
+    released_vendor_ids: tuple[str, ...] = ()
 
     @model_validator(mode="after")
-    def _only_validated_plans_exist(self) -> "PlanVersion":
+    def _only_validated_plans_exist(self) -> PlanVersion:
         if not self.validation.passed:
             raise ValueError("a plan with failed hard constraints cannot be constructed")
         if self.parent_version is not None and self.parent_version >= self.version:
@@ -890,7 +890,7 @@ class PlanVersion(_Model):
             raise ValueError("total_cost must equal the sum of selection costs")
         return self
 
-    def selection_for(self, category: VendorCategory) -> Optional[VendorSelection]:
+    def selection_for(self, category: VendorCategory) -> VendorSelection | None:
         return next((s for s in self.selections if s.category == category), None)
 
 
@@ -900,18 +900,18 @@ DiffKind = Literal["request", "vendor", "task", "budget"]
 class DiffItem(_Model):
     kind: DiffKind
     key: str
-    before: Optional[str] = None
-    after: Optional[str] = None
+    before: str | None = None
+    after: str | None = None
     note: str = ""
 
 
 class PlanDiff(_Model):
     parent_version: int
     new_version: int
-    added: Tuple[DiffItem, ...] = ()
-    removed: Tuple[DiffItem, ...] = ()
-    changed: Tuple[DiffItem, ...] = ()
-    preserved: Tuple[DiffItem, ...] = ()
+    added: tuple[DiffItem, ...] = ()
+    removed: tuple[DiffItem, ...] = ()
+    changed: tuple[DiffItem, ...] = ()
+    preserved: tuple[DiffItem, ...] = ()
 
 
 class DisruptionKind(str, Enum):
@@ -926,16 +926,16 @@ class Disruption(_Model):
     """A user- or tool-reported change. Exactly one payload field matches ``kind``."""
 
     kind: DisruptionKind
-    vendor_id: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
-    new_budget: Optional[int] = Field(default=None, gt=0, le=MAX_BUDGET_INR)
-    new_guest_count: Optional[int] = Field(default=None, ge=1, le=MAX_GUESTS)
-    new_date: Optional[date] = None
-    new_community: Optional[CommunityDetails] = None
+    vendor_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    new_budget: int | None = Field(default=None, gt=0, le=MAX_BUDGET_INR)
+    new_guest_count: int | None = Field(default=None, ge=1, le=MAX_GUESTS)
+    new_date: date | None = None
+    new_community: CommunityDetails | None = None
     # Confirmed bookings are kept unless their vendor id is listed here.
-    override_confirmed: Tuple[str, ...] = ()
+    override_confirmed: tuple[str, ...] = ()
 
     @model_validator(mode="after")
-    def _payload_matches_kind(self) -> "Disruption":
+    def _payload_matches_kind(self) -> Disruption:
         payload = {
             DisruptionKind.VENDOR_CANCELLATION: ("vendor_id", self.vendor_id),
             DisruptionKind.BUDGET_CHANGE: ("new_budget", self.new_budget),
@@ -953,13 +953,13 @@ class Disruption(_Model):
 
 class ReplanOutcome(_Model):
     status: Literal["replanned", "needs_decision", "failed"]
-    plan: Optional[PlanVersion] = None
-    diff: Optional[PlanDiff] = None
-    violations: Tuple[ConstraintViolation, ...] = ()
-    decision_entry_ids: Tuple[str, ...] = ()
+    plan: PlanVersion | None = None
+    diff: PlanDiff | None = None
+    violations: tuple[ConstraintViolation, ...] = ()
+    decision_entry_ids: tuple[str, ...] = ()
 
     @model_validator(mode="after")
-    def _shape(self) -> "ReplanOutcome":
+    def _shape(self) -> ReplanOutcome:
         if self.status == "replanned" and (self.plan is None or self.diff is None):
             raise ValueError("replanned outcome needs plan and diff")
         if self.status != "replanned" and (self.plan is not None or self.diff is not None):
@@ -973,12 +973,12 @@ class PlanOutcome(_Model):
     status: Literal["planned", "needs_repair"]
     intake: IntakeResult
     task_graph: TaskGraph
-    plan: Optional[PlanVersion] = None
-    violations: Tuple[ConstraintViolation, ...] = ()
-    decision_entry_ids: Tuple[str, ...] = ()
+    plan: PlanVersion | None = None
+    violations: tuple[ConstraintViolation, ...] = ()
+    decision_entry_ids: tuple[str, ...] = ()
 
     @model_validator(mode="after")
-    def _shape(self) -> "PlanOutcome":
+    def _shape(self) -> PlanOutcome:
         if (self.status == "planned") != (self.plan is not None):
             raise ValueError("plan present iff status is planned")
         if self.status == "needs_repair" and not self.violations:
@@ -997,22 +997,22 @@ class PlanDraft(_Model):
     request: EventRequest
     guests: GuestSummary
     allocation: BudgetAllocation
-    selections: Tuple[VendorSelection, ...]
+    selections: tuple[VendorSelection, ...]
     spec: ScheduleSpec
     solution: ScheduleSolution
     symbolic: SymbolicResult
-    items: Tuple[PlanItem, ...]
-    already_done: Tuple[str, ...] = ()
-    warnings: Tuple[str, ...] = ()
-    excluded_vendor_ids: Tuple[str, ...] = ()
+    items: tuple[PlanItem, ...]
+    already_done: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+    excluded_vendor_ids: tuple[str, ...] = ()
 
 
 class PlanningResult(_Model):
-    draft: Optional[PlanDraft] = None
-    violations: Tuple[ConstraintViolation, ...] = ()
+    draft: PlanDraft | None = None
+    violations: tuple[ConstraintViolation, ...] = ()
 
     @model_validator(mode="after")
-    def _shape(self) -> "PlanningResult":
+    def _shape(self) -> PlanningResult:
         if (self.draft is None) == (not self.violations):
             raise ValueError("exactly one of draft or violations")
         return self
@@ -1041,19 +1041,19 @@ class TradeoffOption(_Model):
     utility: float
     estimated_total: int = Field(ge=0)
     verified: Literal[True] = True  # a full plan was built and every check that could be decided passed (dry run, nothing stored)
-    needs_verification: Tuple[str, ...] = ()  # what that plan would still leave undecided; empty means it would be fully verified
+    needs_verification: tuple[str, ...] = ()  # what that plan would still leave undecided; empty means it would be fully verified
     source: str = "tool:tradeoff"
 
 
 class TradeoffReport(_Model):
     status: Literal["not_needed", "options", "no_option"]
     request: EventRequest
-    options: Tuple[TradeoffOption, ...] = ()
-    violations: Tuple[ConstraintViolation, ...] = ()
-    decision_entry_ids: Tuple[str, ...] = ()
+    options: tuple[TradeoffOption, ...] = ()
+    violations: tuple[ConstraintViolation, ...] = ()
+    decision_entry_ids: tuple[str, ...] = ()
 
     @model_validator(mode="after")
-    def _shape(self) -> "TradeoffReport":
+    def _shape(self) -> TradeoffReport:
         if (self.status == "options") != bool(self.options):
             raise ValueError("options present iff status is options")
         if self.status == "no_option" and not self.violations:
@@ -1089,7 +1089,7 @@ class LedgerLine(_Model):
     category: VendorCategory
     vendor_name: str
     planned: int = Field(ge=0)
-    quoted: Optional[int] = Field(default=None, ge=0)
+    quoted: int | None = Field(default=None, ge=0)
     committed: int = Field(ge=0)  # the quote if there is one, else the planned cost
     paid: int = Field(ge=0)
     pending: int = Field(ge=0)
@@ -1101,7 +1101,7 @@ class LedgerSummary(_Model):
     plan_id: str
     plan_version: int = Field(ge=1)
     budget_total: int = Field(gt=0)
-    lines: Tuple[LedgerLine, ...]
+    lines: tuple[LedgerLine, ...]
     planned_total: int = Field(ge=0)
     quoted_total: int = Field(ge=0)
     committed_total: int = Field(ge=0)
@@ -1110,7 +1110,7 @@ class LedgerSummary(_Model):
     variance_total: int
     headroom: int  # budget_total - committed_total; negative = over budget
     # net paid to categories that are no longer in the latest plan (money is never silently dropped)
-    orphaned_paid: Dict[str, int] = {}
+    orphaned_paid: dict[str, int] = {}
 
 
 # ------------------------------------------------------------ observation ledger
@@ -1135,7 +1135,7 @@ class ObservationSource(str, Enum):
 
 class HiddenCost(_Model):
     label: str = Field(min_length=1, max_length=80)
-    amount_inr: Optional[int] = Field(default=None, gt=0, le=MAX_BUDGET_INR)  # None = the vendor named it but not the price
+    amount_inr: int | None = Field(default=None, gt=0, le=MAX_BUDGET_INR)  # None = the vendor named it but not the price
 
     _label_ok = field_validator("label")(lambda cls, v: _clean_text(v))
 
@@ -1152,10 +1152,10 @@ class QuoteObservation(_Model):
     evidence_ref: str = Field(default="", max_length=200)
     amount_inr: int = Field(gt=0, le=MAX_BUDGET_INR)
     basis: Literal["total", "per_plate"]
-    guest_count: Optional[int] = Field(default=None, ge=1, le=MAX_GUESTS)
-    inclusions: Tuple[str, ...] = Field(default=(), max_length=MAX_OBSERVATION_ITEMS)
-    exclusions: Tuple[str, ...] = Field(default=(), max_length=MAX_OBSERVATION_ITEMS)
-    hidden_costs: Tuple[HiddenCost, ...] = Field(default=(), max_length=MAX_HIDDEN_COSTS)
+    guest_count: int | None = Field(default=None, ge=1, le=MAX_GUESTS)
+    inclusions: tuple[str, ...] = Field(default=(), max_length=MAX_OBSERVATION_ITEMS)
+    exclusions: tuple[str, ...] = Field(default=(), max_length=MAX_OBSERVATION_ITEMS)
+    hidden_costs: tuple[HiddenCost, ...] = Field(default=(), max_length=MAX_HIDDEN_COSTS)
     note: str = Field(default="", max_length=200)
 
     @field_validator("entered_by", "evidence_ref", "note")
@@ -1165,7 +1165,7 @@ class QuoteObservation(_Model):
 
     @field_validator("inclusions", "exclusions")
     @classmethod
-    def _items_ok(cls, v: Tuple[str, ...]) -> Tuple[str, ...]:
+    def _items_ok(cls, v: tuple[str, ...]) -> tuple[str, ...]:
         for item in v:
             if not 1 <= len(item) <= 80:
                 raise ValueError("each item must be 1-80 characters")
@@ -1173,7 +1173,7 @@ class QuoteObservation(_Model):
         return v
 
     @model_validator(mode="after")
-    def _consistent(self) -> "QuoteObservation":
+    def _consistent(self) -> QuoteObservation:
         if self.source_type in (ObservationSource.VENDOR_QUOTE, ObservationSource.VENDOR_CONFIRMATION) and not self.evidence_ref.strip():
             raise ValueError("evidence_ref is required when the vendor is the source")
         if self.basis == "per_plate" and self.guest_count is None:
@@ -1196,22 +1196,22 @@ class QuoteReport(_Model):
     quoted_total: int = Field(ge=0)
     known_hidden_total: int = Field(ge=0)
     effective_total: int = Field(ge=0)
-    unquantified_hidden: Tuple[str, ...] = ()
-    missing_items: Tuple[str, ...] = ()
-    excluded_items: Tuple[str, ...] = ()
-    flags: Tuple[str, ...] = ()
+    unquantified_hidden: tuple[str, ...] = ()
+    missing_items: tuple[str, ...] = ()
+    excluded_items: tuple[str, ...] = ()
+    flags: tuple[str, ...] = ()
 
 
 class QuoteComparison(_Model):
     category: VendorCategory
-    ranked: Tuple[QuoteReport, ...] = ()
-    expired: Tuple[QuoteReport, ...] = ()
+    ranked: tuple[QuoteReport, ...] = ()
+    expired: tuple[QuoteReport, ...] = ()
 
 
 class ScoreComponent(_Model):
     name: Literal["price", "completeness", "evidence"]
     weight: float = Field(ge=0.0, le=1.0)
-    score: Optional[int] = Field(default=None, ge=0, le=100)  # None = not enough data; the component is left out, never guessed
+    score: int | None = Field(default=None, ge=0, le=100)  # None = not enough data; the component is left out, never guessed
     detail: str = Field(min_length=1, max_length=300)
 
 
@@ -1220,11 +1220,11 @@ class VendorScore(_Model):
     category: VendorCategory
     observation_id: str
     status: Literal["valid", "expiring"]
-    overall: Optional[int] = Field(default=None, ge=0, le=100)
+    overall: int | None = Field(default=None, ge=0, le=100)
     coverage: float = Field(ge=0.0, le=1.0)  # share of the formula's weight that had data
-    components: Tuple[ScoreComponent, ...]
-    not_scored: Tuple[str, ...] = ()
-    notes: Tuple[str, ...] = ()
+    components: tuple[ScoreComponent, ...]
+    not_scored: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
 
 
 class UnscoredVendor(_Model):
@@ -1234,8 +1234,8 @@ class UnscoredVendor(_Model):
 
 class VendorScoreboard(_Model):
     category: VendorCategory
-    scores: Tuple[VendorScore, ...] = ()
-    unscored: Tuple[UnscoredVendor, ...] = ()
+    scores: tuple[VendorScore, ...] = ()
+    unscored: tuple[UnscoredVendor, ...] = ()
 
 
 class SelectionQuoteStatus(_Model):
@@ -1248,8 +1248,8 @@ class SelectionQuoteStatus(_Model):
     plan_cost: int = Field(ge=0)
     current_price: int = Field(ge=0)
     price_stale: bool  # a later quote (or expiry) means the plan was priced differently; replan to re-price
-    confirmed_by: Optional[Literal["you", "vendor"]] = None
-    report: Optional[QuoteReport] = None
+    confirmed_by: Literal["you", "vendor"] | None = None
+    report: QuoteReport | None = None
 
 
 # ------------------------------------------------------------------ travel
@@ -1278,11 +1278,11 @@ class FlightSegmentInfo(_Model):
 
 
 class FlightOption(_Model):
-    price_inr: Optional[int] = Field(default=None, ge=0, le=MAX_BUDGET_INR)  # None = no INR price was published
+    price_inr: int | None = Field(default=None, ge=0, le=MAX_BUDGET_INR)  # None = no INR price was published
     duration_min: int = Field(gt=0, le=60 * 100)
     stops: int = Field(ge=0, le=5)
-    segments: Tuple[FlightSegmentInfo, ...] = Field(min_length=1, max_length=8)
-    booking_url: Optional[str] = Field(default=None, max_length=2000)
+    segments: tuple[FlightSegmentInfo, ...] = Field(min_length=1, max_length=8)
+    booking_url: str | None = Field(default=None, max_length=2000)
     source: str
 
     @field_validator("source")
@@ -1294,7 +1294,7 @@ class FlightOption(_Model):
 
     @field_validator("booking_url")
     @classmethod
-    def _url_ok(cls, v: Optional[str]) -> Optional[str]:
+    def _url_ok(cls, v: str | None) -> str | None:
         if v is None:
             return v
         if not v.startswith(GOOGLE_FLIGHTS_PREFIX) or any(ord(c) < 33 or ord(c) > 126 for c in v):
@@ -1306,19 +1306,19 @@ class FlightSearch(_Model):
     origin: str = Field(pattern=_IATA)
     destination: str = Field(pattern=_IATA)
     travel_date: date
-    options: Tuple[FlightOption, ...] = Field(default=(), max_length=MAX_FLIGHT_OPTIONS)
+    options: tuple[FlightOption, ...] = Field(default=(), max_length=MAX_FLIGHT_OPTIONS)
     fetched_at: datetime
     source: str
-    warnings: Tuple[str, ...] = ()
-    error: Optional[str] = Field(default=None, max_length=300)  # set when this leg could not be searched
+    warnings: tuple[str, ...] = ()
+    error: str | None = Field(default=None, max_length=300)  # set when this leg could not be searched
     notice: str = "Indicative fare and schedule from Google Flights through fli. Fares change; to;doh-the event planner does not book or pay."
 
 
 class MultiCityResult(_Model):
-    legs: Tuple[FlightSearch, ...] = Field(min_length=2, max_length=MAX_MULTI_CITY_LEGS)
+    legs: tuple[FlightSearch, ...] = Field(min_length=2, max_length=MAX_MULTI_CITY_LEGS)
     method: Literal["separate_one_way_searches"] = "separate_one_way_searches"
-    total_cheapest_inr: Optional[int] = Field(default=None, ge=0)  # None if any leg has no priced option
-    incomplete_legs: Tuple[int, ...] = ()
+    total_cheapest_inr: int | None = Field(default=None, ge=0)  # None if any leg has no priced option
+    incomplete_legs: tuple[int, ...] = ()
     note: str
 
 
@@ -1334,28 +1334,28 @@ class VenueCandidate(_Model):
     kind: Literal["venue", "hotel", "restaurant"]
     lat: float = Field(ge=-90.0, le=90.0)
     lon: float = Field(ge=-180.0, le=180.0)
-    street: Optional[str] = Field(default=None, max_length=120)
-    city: Optional[str] = Field(default=None, max_length=80)
-    website: Optional[str] = Field(default=None, max_length=300)
-    capacity_tagged: Optional[int] = Field(default=None, ge=1, le=MAX_GUESTS)  # as tagged by an OSM contributor, unverified
-    email: Optional[str] = Field(default=None, max_length=254)  # as tagged by an OSM contributor (the listing's own field); a candidate until the user confirms it
+    street: str | None = Field(default=None, max_length=120)
+    city: str | None = Field(default=None, max_length=80)
+    website: str | None = Field(default=None, max_length=300)
+    capacity_tagged: int | None = Field(default=None, ge=1, le=MAX_GUESTS)  # as tagged by an OSM contributor, unverified
+    email: str | None = Field(default=None, max_length=254)  # as tagged by an OSM contributor (the listing's own field); a candidate until the user confirms it
     source: Literal["tool:overpass"] = "tool:overpass"
 
     @field_validator("name", "street", "city")
     @classmethod
-    def _text_ok(cls, v: Optional[str]) -> Optional[str]:
+    def _text_ok(cls, v: str | None) -> str | None:
         return v if v is None else _clean_text(v)
 
     @field_validator("website")
     @classmethod
-    def _site_ok(cls, v: Optional[str]) -> Optional[str]:
+    def _site_ok(cls, v: str | None) -> str | None:
         if v is not None and (not re.fullmatch(r"https?://[^\s<>\"']+", v)):
             raise ValueError("website must be a plain http(s) URL")
         return v
 
     @field_validator("email")
     @classmethod
-    def _email_ok(cls, v: Optional[str]) -> Optional[str]:
+    def _email_ok(cls, v: str | None) -> str | None:
         if v is not None and not _EMAIL.fullmatch(v):
             raise ValueError("not a valid email address")
         return v
@@ -1364,11 +1364,11 @@ class VenueCandidate(_Model):
 class DiscoveryResult(_Model):
     city: str = Field(min_length=1, max_length=60)
     kind: Literal["venue", "hotel", "restaurant"]
-    candidates: Tuple[VenueCandidate, ...] = ()
+    candidates: tuple[VenueCandidate, ...] = ()
     fetched_at: datetime
     source: Literal["tool:overpass"] = "tool:overpass"
     attribution: str = OSM_ATTRIBUTION
-    warnings: Tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
     notice: str = "Places other people have mapped. No prices, availability or quality are implied; ask the venue before relying on anything here."
 
 
@@ -1382,14 +1382,14 @@ class WeatherSlot(_Model):
     local_time: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")  # local time at the place
     temp_c: float = Field(ge=-90.0, le=60.0)
     feels_like_c: float = Field(ge=-90.0, le=70.0)
-    humidity_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    humidity_pct: int | None = Field(default=None, ge=0, le=100)
     rain_chance: float = Field(ge=0.0, le=1.0)
-    wind_ms: Optional[float] = Field(default=None, ge=0.0, le=120.0)
-    description: Optional[str] = Field(default=None, max_length=80)
+    wind_ms: float | None = Field(default=None, ge=0.0, le=120.0)
+    description: str | None = Field(default=None, max_length=80)
 
     @field_validator("description")
     @classmethod
-    def _desc_ok(cls, v: Optional[str]) -> Optional[str]:
+    def _desc_ok(cls, v: str | None) -> str | None:
         return v if v is None else _clean_text(v)
 
 
@@ -1397,14 +1397,14 @@ class WeatherDay(_Model):
     city: str = Field(min_length=1, max_length=60)
     travel_date: date
     resolved_place: str = Field(max_length=200)
-    slots: Tuple[WeatherSlot, ...] = ()
-    temp_min: Optional[float] = None
-    temp_max: Optional[float] = None
-    max_rain_chance: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    rain_possible: Optional[bool] = None
-    conditions: Optional[str] = Field(default=None, max_length=80)
-    note: Optional[str] = Field(default=None, max_length=300)
-    warnings: Tuple[str, ...] = ()
+    slots: tuple[WeatherSlot, ...] = ()
+    temp_min: float | None = None
+    temp_max: float | None = None
+    max_rain_chance: float | None = Field(default=None, ge=0.0, le=1.0)
+    rain_possible: bool | None = None
+    conditions: str | None = Field(default=None, max_length=80)
+    note: str | None = Field(default=None, max_length=300)
+    warnings: tuple[str, ...] = ()
     fetched_at: datetime
     source: Literal["tool:openweathermap"] = "tool:openweathermap"
     attribution: str = "Weather data by OpenWeather (https://openweathermap.org)."
@@ -1424,19 +1424,19 @@ class TripStop(_Model):
 
 class TripRequest(_Model):
     origin: str = Field(pattern=_IATA)
-    stops: Tuple[TripStop, ...] = Field(min_length=1, max_length=MAX_TRIP_STOPS)
-    return_to: Optional[str] = Field(default=None, pattern=_IATA)  # default: back to the origin
+    stops: tuple[TripStop, ...] = Field(min_length=1, max_length=MAX_TRIP_STOPS)
+    return_to: str | None = Field(default=None, pattern=_IATA)  # default: back to the origin
     earliest_start: date
     flex_days: int = Field(default=0, ge=0, le=3)  # try starting up to this many days later
     adults: int = Field(default=1, ge=1, le=9)
     cabin: Literal["economy", "premium_economy", "business", "first"] = "economy"
-    max_stops: Optional[int] = Field(default=None, ge=0, le=2)
+    max_stops: int | None = Field(default=None, ge=0, le=2)
     fixed_order: bool = False  # True = visit the stops in the order given
     max_searches: int = Field(default=30, ge=1, le=MAX_TRIP_SEARCHES)
     value_per_hour_inr: int = Field(default=300, ge=0, le=5000)  # what an hour in the air is worth to the traveller; an assumption, not data
 
     @model_validator(mode="after")
-    def _consistent(self) -> "TripRequest":
+    def _consistent(self) -> TripRequest:
         codes = [s.code for s in self.stops]
         if len(set(codes)) != len(codes):
             raise ValueError("a stop appears twice")
@@ -1454,9 +1454,9 @@ class TripLeg(_Model):
 
 class TripPackage(_Model):
     label: Literal["cheapest", "fastest", "best_value", "alternative"]
-    order: Tuple[str, ...]
+    order: tuple[str, ...]
     start_date: date
-    legs: Tuple[TripLeg, ...] = Field(min_length=2)
+    legs: tuple[TripLeg, ...] = Field(min_length=2)
     total_price_inr: int = Field(ge=0)
     total_flight_minutes: int = Field(gt=0)
     value_score_inr: int = Field(ge=0)  # price plus the traveller's time valued at value_per_hour_inr; lower is better
@@ -1465,13 +1465,13 @@ class TripPackage(_Model):
 
 class TripSearchResult(_Model):
     request: TripRequest
-    packages: Tuple[TripPackage, ...] = ()
+    packages: tuple[TripPackage, ...] = ()
     searches_planned: int = Field(ge=0)
     searches_used: int = Field(ge=0)
     orderings_considered: int = Field(ge=0)
     dropped_orders: int = Field(default=0, ge=0)
-    insights: Tuple[str, ...] = ()
-    warnings: Tuple[str, ...] = ()
+    insights: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
     fetched_at: datetime
     source: Literal["tool:fli"] = "tool:fli"
     method: Literal["separate_one_way_searches"] = "separate_one_way_searches"
@@ -1488,9 +1488,9 @@ DEAL_KINDS = ("caterer", "venue", "photographer", "hotel")
 class DealQuery(_Model):
     kind: Literal["caterer", "venue", "photographer", "hotel"]
     city: str = Field(min_length=1, max_length=60)
-    guests: Optional[int] = Field(default=None, ge=1, le=MAX_GUESTS)
-    nights: Optional[int] = Field(default=None, ge=1, le=60)  # hotels: turns a nightly price into a total
-    budget_inr: Optional[int] = Field(default=None, gt=0, le=MAX_BUDGET_INR)
+    guests: int | None = Field(default=None, ge=1, le=MAX_GUESTS)
+    nights: int | None = Field(default=None, ge=1, le=60)  # hotels: turns a nightly price into a total
+    budget_inr: int | None = Field(default=None, gt=0, le=MAX_BUDGET_INR)
     limit: int = Field(default=10, ge=1, le=20)
 
     @field_validator("city")
@@ -1509,12 +1509,12 @@ class DealOffer(_Model):
     unit_assumed: bool = False  # the page gave no unit; the service's usual one was assumed
     low_inr: int = Field(gt=0, le=MAX_BUDGET_INR)
     high_inr: int = Field(gt=0, le=MAX_BUDGET_INR)
-    est_total_low_inr: Optional[int] = Field(default=None, ge=0)
-    est_total_high_inr: Optional[int] = Field(default=None, ge=0)
-    within_budget: Optional[bool] = None
+    est_total_low_inr: int | None = Field(default=None, ge=0)
+    est_total_high_inr: int | None = Field(default=None, ge=0)
+    within_budget: bool | None = None
     vs_market_pct: int  # advertised low against the median low found: negative = cheaper than typical
     corroborated_by: int = Field(ge=0)  # other sites advertising a similar entry price (within 25 percent)
-    flags: Tuple[str, ...] = ()  # cautions computed in code, e.g. unusually low or a wide range
+    flags: tuple[str, ...] = ()  # cautions computed in code, e.g. unusually low or a wide range
     snippet: str = Field(max_length=200)
     source: str
 
@@ -1541,13 +1541,13 @@ class SkippedPage(_Model):
 
 class DealReport(_Model):
     query: DealQuery
-    offers: Tuple[DealOffer, ...] = ()
-    market: Optional[MarketSummary] = None
+    offers: tuple[DealOffer, ...] = ()
+    market: MarketSummary | None = None
     pages_read: int = Field(ge=0)
-    skipped: Tuple[SkippedPage, ...] = ()
-    queries_run: Tuple[str, ...] = ()
+    skipped: tuple[SkippedPage, ...] = ()
+    queries_run: tuple[str, ...] = ()
     provider: str = Field(max_length=40)
-    warnings: Tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
     fetched_at: datetime
     notice: str = (
         "Advertised prices found on public web pages: often 'starting at' figures, not a quote, and not checked with the vendor. "
@@ -1562,31 +1562,31 @@ GOOGLE_MAPS_PREFIXES = ("https://maps.google.com/", "https://www.google.com/maps
 
 
 class PlaceReview(_Model):
-    rating: Optional[int] = Field(default=None, ge=1, le=5)
+    rating: int | None = Field(default=None, ge=1, le=5)
     text: str = Field(max_length=300)
-    when: Optional[str] = Field(default=None, max_length=60)
+    when: str | None = Field(default=None, max_length=60)
 
 
 class PlaceInfo(_Model):
     name: str = Field(min_length=1, max_length=120)
-    address: Optional[str] = Field(default=None, max_length=200)
-    rating: Optional[float] = Field(default=None, ge=0.0, le=5.0)
-    rating_count: Optional[int] = Field(default=None, ge=0)
-    weighted_rating: Optional[float] = Field(default=None, ge=0.0, le=5.0)  # rating pulled toward the average when there are few reviews
-    price_level: Optional[int] = Field(default=None, ge=1, le=4)  # 1 inexpensive ... 4 very expensive: a band, not a price
-    maps_uri: Optional[str] = Field(default=None, max_length=500)
-    place_id: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_-]{8,200}$")
-    website: Optional[str] = Field(default=None, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f<>\"']+$")  # the business's own site, when the listing publishes one
-    reviews: Tuple[PlaceReview, ...] = Field(default=(), max_length=10)
+    address: str | None = Field(default=None, max_length=200)
+    rating: float | None = Field(default=None, ge=0.0, le=5.0)
+    rating_count: int | None = Field(default=None, ge=0)
+    weighted_rating: float | None = Field(default=None, ge=0.0, le=5.0)  # rating pulled toward the average when there are few reviews
+    price_level: int | None = Field(default=None, ge=1, le=4)  # 1 inexpensive ... 4 very expensive: a band, not a price
+    maps_uri: str | None = Field(default=None, max_length=500)
+    place_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{8,200}$")
+    website: str | None = Field(default=None, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f<>\"']+$")  # the business's own site, when the listing publishes one
+    reviews: tuple[PlaceReview, ...] = Field(default=(), max_length=10)
 
     @field_validator("name", "address")
     @classmethod
-    def _text_ok(cls, v: Optional[str]) -> Optional[str]:
+    def _text_ok(cls, v: str | None) -> str | None:
         return v if v is None else _clean_text(v)
 
     @field_validator("maps_uri")
     @classmethod
-    def _uri_ok(cls, v: Optional[str]) -> Optional[str]:
+    def _uri_ok(cls, v: str | None) -> str | None:
         if v is not None and (not v.startswith(GOOGLE_MAPS_PREFIXES) or any(ord(c) <= 32 or ord(c) == 127 for c in v)):
             raise ValueError("maps_uri must be a Google Maps link")
         return v
@@ -1595,11 +1595,11 @@ class PlaceInfo(_Model):
 class PlaceSearch(_Model):
     kind: Literal["caterer", "venue", "photographer", "hotel"]
     city: str = Field(min_length=1, max_length=60)
-    places: Tuple[PlaceInfo, ...] = ()
+    places: tuple[PlaceInfo, ...] = ()
     fetched_at: datetime
     source: Literal["tool:google_places"] = "tool:google_places"
     attribution: str = "Ratings and reviews from Google Maps."
-    warnings: Tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
     notice: str = "Ratings and reviews are other people's opinions. A price level is a coarse band, not a price; ask the vendor for a quote."
 
 
@@ -1628,7 +1628,7 @@ class DealLead(_Model):
         return _clean_text(v)
 
     @model_validator(mode="after")
-    def _range_ok(self) -> "DealLead":
+    def _range_ok(self) -> DealLead:
         if self.low_inr > self.high_inr:
             raise ValueError("low_inr is above high_inr")
         return self
@@ -1646,8 +1646,8 @@ class AdviceItem(_Model):
 
 class WeatherAdvice(_Model):
     plan_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
-    venue_setting: Optional[Literal["indoor", "outdoor"]] = None
-    items: Tuple[AdviceItem, ...] = Field(min_length=1)
+    venue_setting: Literal["indoor", "outdoor"] | None = None
+    items: tuple[AdviceItem, ...] = Field(min_length=1)
     forecast: WeatherDay
     source: Literal["rule:weather_advice"] = "rule:weather_advice"
 
@@ -1663,7 +1663,7 @@ OUTREACH_FINAL = frozenset({"sent", "failed", "outcome_unknown", "denied", "expi
 VendorOrigin = Literal["seed", "discovered", "test"]  # where a business came from; shown wherever it appears
 
 
-def draft_content_hash(d: Dict) -> str:
+def draft_content_hash(d: dict) -> str:
     """What an approval is bound to: where it goes, what it says, and which thread it belongs to."""
     import hashlib
     import json as _json
@@ -1686,17 +1686,17 @@ class OutreachDraft(_Model):
     body: str = Field(min_length=1, max_length=2000)
     link: str = Field(max_length=4000)  # manual fallback: open in your own app
     kind: Literal["request", "followup"] = "request"
-    parent_id: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")  # the request a follow-up continues
+    parent_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")  # the request a follow-up continues
     content_hash: str = Field(default="", max_length=64)
-    expires_at: Optional[datetime] = None  # a proposal nobody approved by then is dead
+    expires_at: datetime | None = None  # a proposal nobody approved by then is dead
     status: OutreachStatus = "prepared"
-    marked_at: Optional[datetime] = None
-    decided_at: Optional[datetime] = None
-    sent_at: Optional[datetime] = None
+    marked_at: datetime | None = None
+    decided_at: datetime | None = None
+    sent_at: datetime | None = None
     external_id: str = Field(default="", max_length=400)  # Message-ID or WhatsApp message id of what was sent
     error: str = Field(default="", max_length=300)
     action_key: str = Field(default="", max_length=200)  # who claimed this outbound action, e.g. "reply:<message_id>" or "nudge:<job>:<vendor>:<n>"; one live draft per key
-    plan_version: Optional[int] = Field(default=None, ge=1)  # the plan version the text was written against (None on drafts made before this was recorded)
+    plan_version: int | None = Field(default=None, ge=1)  # the plan version the text was written against (None on drafts made before this was recorded)
     basis_sha256: str = Field(default="", max_length=64)  # a hash of the plan facts the text states: event, city, date, guests, diets for a caterer
     for_plan_pick: bool = False  # written to the vendor the plan itself chose, so a plan without that vendor makes it out of date
     approved_by: Literal["user", "mandate"] = "user"  # "mandate": sent under the user's standing permission (ADR-043), not a per-message approval
@@ -1727,7 +1727,7 @@ class OutreachDraft(_Model):
         return v
 
     @model_validator(mode="after")
-    def _consistent(self) -> "OutreachDraft":
+    def _consistent(self) -> OutreachDraft:
         if not _LINK.fullmatch(self.link):
             raise ValueError("link must be a mailto: or https://wa.me/ link")
         if self.channel == "email":
@@ -1748,18 +1748,18 @@ class VendorContact(_Model):
     """Where to reach a vendor. For a seed vendor the user typed it. For an external business it is only ever created when the user confirmed it, and it keeps where it came from."""
 
     vendor_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
-    email: Optional[str] = Field(default=None, max_length=254)
-    whatsapp: Optional[str] = Field(default=None, pattern=r"^[1-9][0-9]{7,14}$")
+    email: str | None = Field(default=None, max_length=254)
+    whatsapp: str | None = Field(default=None, pattern=r"^[1-9][0-9]{7,14}$")
     preferred: Literal["email", "whatsapp"] = "whatsapp"
     updated_at: datetime
     origin: VendorOrigin = "seed"
-    source_url: Optional[str] = Field(default=None, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f]+$")  # the public page or listing the address was read from
-    confirmed_by: Optional[str] = Field(default=None, min_length=1, max_length=60)
-    confirmed_at: Optional[datetime] = None
+    source_url: str | None = Field(default=None, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f]+$")  # the public page or listing the address was read from
+    confirmed_by: str | None = Field(default=None, min_length=1, max_length=60)
+    confirmed_at: datetime | None = None
     edited_by_user: bool = False  # the user typed a different address than the one that was found
 
     @model_validator(mode="after")
-    def _ok(self) -> "VendorContact":
+    def _ok(self) -> VendorContact:
         if self.email is None and self.whatsapp is None:
             raise ValueError("give an email address or a WhatsApp number")
         if self.email is not None and not _EMAIL.fullmatch(self.email):
@@ -1779,12 +1779,12 @@ class AmountMention(_Model):
 class ReplyAnalysis(_Model):
     """Rule-based reading of a reply. Every item is a quotation of the vendor's own words; nothing here is a recorded quote."""
 
-    amounts: Tuple[AmountMention, ...] = Field(default=(), max_length=5)
+    amounts: tuple[AmountMention, ...] = Field(default=(), max_length=5)
     says_unavailable: bool = False
     says_available: bool = False
-    questions: Tuple[str, ...] = Field(default=(), max_length=5)  # sentences the vendor asked you
+    questions: tuple[str, ...] = Field(default=(), max_length=5)  # sentences the vendor asked you
     asks_to_stop: bool = False  # "stop", "do not contact me", "wrong number": nothing automatic is ever sent after this
-    checklist_mentioned: Tuple[str, ...] = ()
+    checklist_mentioned: tuple[str, ...] = ()
     source: Literal["rule:reply_analysis"] = "rule:reply_analysis"
 
 
@@ -1831,26 +1831,26 @@ class ConversationThread(_Model):
     """One request to one vendor, everything sent on it, and everything the vendor answered."""
 
     request: OutreachDraft
-    drafts: Tuple[OutreachDraft, ...]  # the request first, then follow-ups, oldest first
-    replies: Tuple[InboundMessage, ...] = ()
+    drafts: tuple[OutreachDraft, ...]  # the request first, then follow-ups, oldest first
+    replies: tuple[InboundMessage, ...] = ()
     unread: int = Field(default=0, ge=0)
     awaiting_approval: int = Field(default=0, ge=0)
 
 
 class Inbox(_Model):
     plan_id: str
-    threads: Tuple[ConversationThread, ...] = ()
+    threads: tuple[ConversationThread, ...] = ()
     unread_total: int = Field(default=0, ge=0)
     approvals_total: int = Field(default=0, ge=0)
-    channels: Tuple[ChannelStatus, ...] = ()
+    channels: tuple[ChannelStatus, ...] = ()
 
 
 class PollResult(_Model):
     new_messages: int = Field(ge=0)
     ignored: int = Field(ge=0)  # mail from strangers or replies already stored
     sent: int = Field(default=0, ge=0)  # approved drafts dispatched in this round
-    waiting: Tuple[str, ...] = ()  # why approved drafts have not gone out yet
-    errors: Tuple[str, ...] = ()
+    waiting: tuple[str, ...] = ()  # why approved drafts have not gone out yet
+    errors: tuple[str, ...] = ()
 
 
 MANDATE_MAX_HOURS = 168
@@ -1870,7 +1870,7 @@ class Mandate(_Model):
     max_total: int = Field(default=10, ge=1, le=30)
     window_start: int = Field(default=9, ge=0, le=23)  # hours in IST; automatic messages wait outside [start, end)
     window_end: int = Field(default=20, ge=1, le=24)
-    revoked_at: Optional[datetime] = None
+    revoked_at: datetime | None = None
 
     @field_validator("sender_name")
     @classmethod
@@ -1878,7 +1878,7 @@ class Mandate(_Model):
         return _clean_text(v)
 
     @model_validator(mode="after")
-    def _bounds(self) -> "Mandate":
+    def _bounds(self) -> Mandate:
         if not self.granted_at < self.expires_at <= self.granted_at + timedelta(hours=MANDATE_MAX_HOURS):
             raise ValueError(f"the permission must end after it starts and within {MANDATE_MAX_HOURS} hours")
         if self.window_start >= self.window_end:
@@ -1893,7 +1893,7 @@ class AutoreplyStatus(_Model):
     plan_id: str
     active: bool  # a permission exists, is not revoked or expired, and the global kill switch is off
     killed: bool  # the global kill switch is on
-    mandate: Optional[Mandate] = None
+    mandate: Mandate | None = None
     sent_total: int = Field(default=0, ge=0)  # automatic messages queued or sent under this plan's permission
 
 
@@ -1922,7 +1922,7 @@ class Idea(_Model):
     title: str = Field(min_length=1, max_length=120)
     why: str = Field(min_length=1, max_length=300)  # which brief fields it used, in words
     est_cost_note: str = Field(default="", max_length=200)  # text only; never a number
-    fields_used: Tuple[IdeaField, ...] = Field(min_length=1, max_length=8)
+    fields_used: tuple[IdeaField, ...] = Field(min_length=1, max_length=8)
     status: Literal["suggestion"] = "suggestion"
     source: str = Field(pattern=r"^(llm:[A-Za-z0-9_.-]{1,60}|rule:idea_templates)$")
     review_note: str = Field(default="", max_length=240)  # "Organiser to check ...": shown with the idea; the idea is kept, not dropped
@@ -1957,11 +1957,11 @@ class IdeaSet(_Model):
     plan_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     generated_at: datetime
     source: str = Field(pattern=r"^(llm:[A-Za-z0-9_.-]{1,60}|rule:idea_templates)$")  # llm when any idea came from a model
-    ideas: Tuple[Idea, ...] = Field(default=(), max_length=12)
-    dropped: Tuple[DroppedIdea, ...] = Field(default=(), max_length=40)
-    facts_used: Tuple[IdeaField, ...] = ()
-    template_version: Optional[int] = None
-    prompt_version: Optional[int] = None
+    ideas: tuple[Idea, ...] = Field(default=(), max_length=12)
+    dropped: tuple[DroppedIdea, ...] = Field(default=(), max_length=40)
+    facts_used: tuple[IdeaField, ...] = ()
+    template_version: int | None = None
+    prompt_version: int | None = None
     notice: str = "Suggestions, not verified offers"
 
 
@@ -1970,7 +1970,7 @@ class IdeaDecision(_Model):
     idea_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     decision: Literal["pinned", "dismissed", "restored"]
     decided_at: datetime
-    note_id: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    note_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
 
 class PlanNote(_Model):
@@ -1992,13 +1992,13 @@ class PlanNote(_Model):
 
 class IdeaView(_Model):
     plan_id: str
-    visible: Tuple[Idea, ...] = ()
-    dismissed: Tuple[str, ...] = ()
-    pinned: Tuple[str, ...] = ()
-    notes: Tuple[PlanNote, ...] = ()
-    generated_at: Optional[datetime] = None
-    source: Optional[str] = None
-    facts_used: Tuple[IdeaField, ...] = ()
+    visible: tuple[Idea, ...] = ()
+    dismissed: tuple[str, ...] = ()
+    pinned: tuple[str, ...] = ()
+    notes: tuple[PlanNote, ...] = ()
+    generated_at: datetime | None = None
+    source: str | None = None
+    facts_used: tuple[IdeaField, ...] = ()
     notice: str = "Suggestions, not verified offers"
 
 
@@ -2006,7 +2006,7 @@ class AccessRecord(_Model):
     """What a venue told the user about its accessibility, recorded with evidence. An empty ``features`` means the venue said it has none of them."""
 
     venue_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
-    features: Tuple[AccessFeature, ...] = ()
+    features: tuple[AccessFeature, ...] = ()
     evidence_ref: str = Field(min_length=1, max_length=200)
     entered_by: str = Field(min_length=1, max_length=80)
     recorded_at: datetime
@@ -2045,10 +2045,10 @@ class ConditionalItem(_Model):
     title: str
     check_with: str
     instruction: str  # "Check with <who>"
-    triggered_by: Tuple[str, ...]
+    triggered_by: tuple[str, ...]
     status: ItemStatus = "not_verified"
-    recorded_by: Optional[str] = None
-    recorded_on: Optional[date] = None
+    recorded_by: str | None = None
+    recorded_on: date | None = None
     note: str = ""
     source: Literal["rule:community_profile"] = "rule:community_profile"
 
@@ -2060,13 +2060,13 @@ class CommunityStatus(_Model):
     profile_label: str
     profile_version: int
     profile_reviewed: bool
-    items: Tuple[ConditionalItem, ...] = ()
+    items: tuple[ConditionalItem, ...] = ()
     not_verified: int = Field(ge=0)
     summary: str  # "N conditional items not verified"; never says safe or compliant
     summary_detail: str
-    unverified: Tuple[UnverifiedItem, ...] = ()
-    checks: Tuple[ConstraintCheck, ...] = ()  # the community hard checks of the plan version
-    suggested_roles: Tuple[Tuple[str, str], ...] = ()  # prompts for the user to confirm, never requirements
+    unverified: tuple[UnverifiedItem, ...] = ()
+    checks: tuple[ConstraintCheck, ...] = ()  # the community hard checks of the plan version
+    suggested_roles: tuple[tuple[str, str], ...] = ()  # prompts for the user to confirm, never requirements
 
 
 # ------------------------------------------------------------- digests
@@ -2082,7 +2082,7 @@ class DigestRecord(_Model):
     text: str = Field(min_length=1, max_length=4000)
     content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     read: bool = False
-    emailed_at: Optional[datetime] = None  # set when the optional owner email went out, or may have (an unknown outcome is never resent)
+    emailed_at: datetime | None = None  # set when the optional owner email went out, or may have (an unknown outcome is never resent)
     email_result: str = Field(default="", max_length=20)
 
 
@@ -2102,12 +2102,12 @@ class NotifySetting(_Model):
     status: Literal["pending", "active", "disabled"]
     code: str = Field(pattern=r"^[0-9a-f]{64}$")  # binds a confirmation to this exact destination and scope
     proposed_at: datetime
-    confirmed_at: Optional[datetime] = None
+    confirmed_at: datetime | None = None
 
 
 class NotifyStatus(_Model):
     state: Literal["off", "pending", "on"]
-    destination: Optional[str] = None
+    destination: str | None = None
     include_vendor_names: bool = False
     include_amounts: bool = False
     include_raw_text: bool = False
@@ -2131,7 +2131,7 @@ class NotifyLogEntry(_Model):
     destination_hash: str = Field(pattern=r"^[0-9a-f]{16}$")
     digest_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     job_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
-    scope: Dict[str, bool] = {}
+    scope: dict[str, bool] = {}
 
 
 # ------------------------------------------------- external businesses (ADR-049)
@@ -2157,13 +2157,13 @@ class VendorRef(_Model):
     id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
     @model_validator(mode="after")
-    def _kind_matches_id(self) -> "VendorRef":
+    def _kind_matches_id(self) -> VendorRef:
         if (self.kind == "external") != self.id.startswith(EXTERNAL_PREFIX):
             raise ValueError("external ids start with 'ext_' and seed ids never do")
         return self
 
     @classmethod
-    def of(cls, vendor_id: str) -> "VendorRef":
+    def of(cls, vendor_id: str) -> VendorRef:
         return cls(kind="external" if vendor_id.startswith(EXTERNAL_PREFIX) else "seed", id=vendor_id)
 
 
@@ -2174,22 +2174,22 @@ class ExternalBusiness(_Model):
     city: str = Field(min_length=1, max_length=80)
     category: VendorCategory
     source: Literal["osm", "gplaces", "test"]
-    source_url: Optional[str] = Field(default=None, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f]+$")
-    website: Optional[str] = Field(default=None, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f<>\"']+$")
+    source_url: str | None = Field(default=None, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f]+$")
+    website: str | None = Field(default=None, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f<>\"']+$")
     website_source: Literal["listing", "user_input"] = "listing"
-    rating: Optional[float] = Field(default=None, ge=0.0, le=5.0)  # only when a source published it
+    rating: float | None = Field(default=None, ge=0.0, le=5.0)  # only when a source published it
     is_test: bool = False
     origin: Literal["discovered", "test"] = "discovered"  # shown wherever the business appears; derived from the source, never chosen by a caller
-    owner_confirmed_by: Optional[str] = Field(default=None, min_length=1, max_length=60)  # a test vendor's address must be owned by this person
+    owner_confirmed_by: str | None = Field(default=None, min_length=1, max_length=60)  # a test vendor's address must be owned by this person
     created_at: datetime
 
     @field_validator("name", "city", "owner_confirmed_by")
     @classmethod
-    def _text_ok(cls, v: Optional[str]) -> Optional[str]:
+    def _text_ok(cls, v: str | None) -> str | None:
         return v if v is None else _clean_text(v.strip())
 
     @model_validator(mode="after")
-    def _consistent(self) -> "ExternalBusiness":
+    def _consistent(self) -> ExternalBusiness:
         if self.vendor_id != external_vendor_id(self.external_id):
             raise ValueError("vendor_id does not match external_id")
         if self.is_test != (self.source == "test") or self.is_test != self.external_id.startswith("test:") or self.origin != ("test" if self.is_test else "discovered"):
@@ -2208,15 +2208,15 @@ class ContactCandidate(_Model):
     value: str = Field(min_length=3, max_length=254)
     source_url: str = Field(min_length=8, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f]+$")
     source_kind: Literal["listing_field", "page_mailto", "page_text"]
-    flags: Tuple[str, ...] = Field(default=(), max_length=6)
+    flags: tuple[str, ...] = Field(default=(), max_length=6)
     found_at: datetime
     status: Literal["found", "confirmed", "rejected"] = "found"
-    confirmed_by: Optional[str] = Field(default=None, min_length=1, max_length=60)
-    confirmed_at: Optional[datetime] = None
-    confirmed_value: Optional[str] = Field(default=None, max_length=254)  # what the user confirmed, if they edited the found address
+    confirmed_by: str | None = Field(default=None, min_length=1, max_length=60)
+    confirmed_at: datetime | None = None
+    confirmed_value: str | None = Field(default=None, max_length=254)  # what the user confirmed, if they edited the found address
 
     @model_validator(mode="after")
-    def _ok(self) -> "ContactCandidate":
+    def _ok(self) -> ContactCandidate:
         if self.channel == "email" and not _EMAIL.fullmatch(self.value):
             raise ValueError("not a valid email address")
         if self.channel == "whatsapp" and not re.fullmatch(r"[1-9][0-9]{7,14}", self.value):
@@ -2244,12 +2244,12 @@ class Suppression(_Model):
     detail: str = Field(default="", max_length=300)  # for a bad address: the failure status and the remote server's own words (untrusted, shown as such)
     created_at: datetime
     created_by: str = Field(min_length=1, max_length=80)
-    lifted_at: Optional[datetime] = None
-    lifted_by: Optional[str] = Field(default=None, max_length=80)
+    lifted_at: datetime | None = None
+    lifted_by: str | None = Field(default=None, max_length=80)
     lift_reason: str = Field(default="", max_length=200)
 
     @model_validator(mode="after")
-    def _lift_is_recorded(self) -> "Suppression":
+    def _lift_is_recorded(self) -> Suppression:
         if (self.lifted_at is None) != (self.lifted_by is None) or (self.lifted_at is not None and not self.lift_reason.strip()):
             raise ValueError("lifting a suppression records who, when and why")
         return self
@@ -2282,9 +2282,9 @@ class ShortlistItem(_Model):
 
     category: VendorCategory
     business: ExternalBusiness
-    candidates: Tuple[ContactCandidate, ...] = ()
-    contact: Optional[VendorContact] = None  # present only after the user confirmed an address
-    blocked: Optional[str] = None  # why it cannot be contacted: "do not contact" or a bad address
+    candidates: tuple[ContactCandidate, ...] = ()
+    contact: VendorContact | None = None  # present only after the user confirmed an address
+    blocked: str | None = None  # why it cannot be contacted: "do not contact" or a bad address
 
 
 class SearchOutcome(_Model):
@@ -2293,12 +2293,12 @@ class SearchOutcome(_Model):
     city: str
     added: int = Field(ge=0)
     total: int = Field(ge=0)
-    warnings: Tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
 
 
 class ContactFindResult(_Model):
     vendor_id: str
-    added: Tuple[ContactCandidate, ...] = ()
-    pages: Tuple[str, ...] = ()
-    notes: Tuple[str, ...] = ()
+    added: tuple[ContactCandidate, ...] = ()
+    pages: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
 

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 import uuid
-from typing import List, Optional, Tuple
 
 from eventmate.followthrough.jobs import QuoteClaim
 from eventmate.schemas import InboundMessage
@@ -36,7 +35,7 @@ def amount_is_in_text(amount: int, text: str) -> bool:
     return False
 
 
-def stated_validity_days(text: str) -> Optional[int]:
+def stated_validity_days(text: str) -> int | None:
     """How long the vendor said the price holds, in days, only if they wrote it ("valid for 10 days", "valid for two weeks"). Otherwise None: unknown."""
     m = _VALID_FOR.search(text)
     if not m:
@@ -46,7 +45,7 @@ def stated_validity_days(text: str) -> Optional[int]:
     return days if 1 <= days <= 365 else None
 
 
-def extract_claims(msg: InboundMessage) -> Tuple[List[QuoteClaim], Optional[str]]:
+def extract_claims(msg: InboundMessage) -> tuple[list[QuoteClaim], str | None]:
     """Returns (claims, problem). ``problem`` is a plain sentence for the user when the price is not clear enough to propose."""
     amounts = msg.analysis.amounts
     if not amounts:

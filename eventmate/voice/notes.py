@@ -12,10 +12,11 @@ import re
 import secrets
 import time
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
+from typing import Callable
 
 from eventmate.retention import PLAN_ID, wipe
 from eventmate.voice import audio
+import contextlib
 
 NOTE_ID = re.compile(r"[0-9a-f]{32}")
 CONTENT_TYPE = {".webm": "audio/webm", ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".wav": "audio/wav"}
@@ -26,7 +27,7 @@ class NotesDisabled(RuntimeError):
 
 
 class VoiceNoteStore:
-    def __init__(self, root: Path, enabled: Optional[bool] = None, retention_days: Optional[int] = None, clock: Callable[[], float] = time.time):
+    def __init__(self, root: Path, enabled: bool | None = None, retention_days: int | None = None, clock: Callable[[], float] = time.time):
         self.dir = Path(root) / "voicenotes"
         self._enabled, self._days, self._clock = enabled, retention_days, clock
 
@@ -69,7 +70,7 @@ class VoiceNoteStore:
         seconds = audio.probe_seconds(data, kind)
         return {"note_id": note_id, "duration_s": None if seconds is None else round(seconds, 2), "bytes": len(data)}
 
-    def _find(self, plan_id: str, note_id: str) -> Optional[Path]:
+    def _find(self, plan_id: str, note_id: str) -> Path | None:
         if not isinstance(note_id, str) or not NOTE_ID.fullmatch(note_id):
             return None
         d = self._plan_dir(plan_id)
@@ -79,7 +80,7 @@ class VoiceNoteStore:
                 return None if self._expired(p) else p
         return None
 
-    def read(self, plan_id: str, note_id: str) -> Optional[Tuple[bytes, str]]:
+    def read(self, plan_id: str, note_id: str) -> tuple[bytes, str] | None:
         p = self._find(plan_id, note_id)
         return None if p is None else (p.read_bytes(), CONTENT_TYPE[p.suffix])
 
@@ -93,15 +94,13 @@ class VoiceNoteStore:
         if not d.is_dir():
             return 0
         gone = sum(wipe(p) for p in d.iterdir() if p.is_file() or p.is_symlink())
-        try:
+        with contextlib.suppress(OSError):
             d.rmdir()
-        except OSError:
-            pass
         return gone
 
-    def purge_expired(self) -> List[str]:
+    def purge_expired(self) -> list[str]:
         """Remove notes older than the retention period. Returns the note ids removed."""
-        removed: List[str] = []
+        removed: list[str] = []
         if not self.dir.is_dir():
             return removed
         for plan in self.dir.iterdir():
@@ -110,8 +109,6 @@ class VoiceNoteStore:
             for p in plan.iterdir():
                 if p.is_file() and not p.is_symlink() and NOTE_ID.fullmatch(p.stem) and self._expired(p) and wipe(p):
                     removed.append(p.stem)
-            try:
+            with contextlib.suppress(OSError):
                 plan.rmdir()
-            except OSError:
-                pass
         return removed

@@ -8,6 +8,7 @@ from eventmate.schemas import VendorCategory as C
 from eventmate.service import EventMate
 from tests.conftest import EXAMPLE, TODAY
 from eventmate.web.app import create_app
+from datetime import UTC
 
 
 @pytest.fixture
@@ -142,7 +143,7 @@ def test_api_rejects_bad_ledger_input_with_4xx(client, pid):
 
 def test_money_paid_to_a_category_no_longer_in_the_plan_is_still_reported(em):
     """Simulates a replan that dropped the photographer after a payment was recorded."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from eventmate.schemas import LedgerEntry
 
@@ -150,7 +151,7 @@ def test_money_paid_to_a_category_no_longer_in_the_plan_is_still_reported(em):
     plan = em.plan(text, today=TODAY).plan
     assert plan.selection_for(C.PHOTOGRAPHER) is None
     for kind, amount in (("payment", 4_000), ("payment", 1_000), ("refund", 500)):
-        e = LedgerEntry(entry_id=kind + str(amount), timestamp=datetime.now(timezone.utc), plan_id=plan.plan_id, kind=kind, category=C.PHOTOGRAPHER, amount=amount)
+        e = LedgerEntry(entry_id=kind + str(amount), timestamp=datetime.now(UTC), plan_id=plan.plan_id, kind=kind, category=C.PHOTOGRAPHER, amount=amount)
         em.ledger._file(plan.plan_id)._append(e, e.entry_id)
     s = em.ledger_summary(plan.plan_id)
     assert s.orphaned_paid == {"photographer": 4_500} and s.paid_total == 0

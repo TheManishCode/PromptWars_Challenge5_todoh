@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Type
+from typing import Any, Callable
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -58,7 +58,7 @@ class ToolContext:
     principal: Principal
     plan_id: str  # fixed by the session; never taken from the model
     kb: KnowledgeBase
-    queue: Optional[ApprovalQueue] = None
+    queue: ApprovalQueue | None = None
 
 
 @dataclass
@@ -66,19 +66,19 @@ class Tool:
     name: str
     description: str
     perm: Perm
-    args: Type[BaseModel]
-    run: Callable[[ToolContext, Any], Dict[str, Any]]
+    args: type[BaseModel]
+    run: Callable[[ToolContext, Any], dict[str, Any]]
     mutating: bool = False
-    apply: Optional[Callable[[ToolContext, Dict[str, Any]], str]] = None  # runs only after a human approves
-    summarize: Optional[Callable[[Any], str]] = None
+    apply: Callable[[ToolContext, dict[str, Any]], str] | None = None  # runs only after a human approves
+    summarize: Callable[[Any], str] | None = None
 
 
 @dataclass
 class ToolResult:
     ok: bool
-    data: Dict[str, Any]
+    data: dict[str, Any]
     error: str = ""
-    proposal: Optional[Proposal] = None
+    proposal: Proposal | None = None
 
     def text(self) -> str:
         return json.dumps(self.data if self.ok else {"error": self.error}, sort_keys=True, default=str)
@@ -117,7 +117,7 @@ def _summary(ctx: ToolContext, _):
 def _event_state(ctx: ToolContext, _):
     """A bounded slice of EventState: counts, vendor names with statuses, dates. No guest names, contact details, prices or message text."""
     s = build_state(ctx.em, ctx.plan_id)
-    kinds: Dict[str, int] = {}
+    kinds: dict[str, int] = {}
     for i in s.open_items:
         kinds[i.kind] = kinds.get(i.kind, 0) + 1
     oldest = max((i.age_hours or 0 for i in s.open_items), default=0)
@@ -181,8 +181,8 @@ def _reality(ctx: ToolContext, _):
 # ------------------------------------------------------------ mutating tools
 
 
-def _propose(tool: "Tool"):
-    def run(ctx: ToolContext, a: Any) -> Dict[str, Any]:
+def _propose(tool: Tool):
+    def run(ctx: ToolContext, a: Any) -> dict[str, Any]:
         if ctx.queue is None:
             raise ApprovalError("proposals are not available here")
         plan = ctx.em.store.latest(ctx.plan_id)
@@ -193,28 +193,28 @@ def _propose(tool: "Tool"):
     return run
 
 
-def _apply_ledger(ctx: ToolContext, args: Dict[str, Any]) -> str:
+def _apply_ledger(ctx: ToolContext, args: dict[str, Any]) -> str:
     a = LedgerArgs.model_validate(args)
     e = ctx.em.ledger_add(ctx.plan_id, a.kind.value, a.category, a.amount, a.note)
     return f"recorded {a.kind.value} of {a.amount} for {a.category.value} (entry {e.entry_id[:8]})"
 
 
-def _apply_confirm(ctx: ToolContext, args: Dict[str, Any]) -> str:
+def _apply_confirm(ctx: ToolContext, args: dict[str, Any]) -> str:
     out = ctx.em.confirm(ctx.plan_id, CategoryArgs.model_validate(args).category)
     if out.status != "replanned":
         raise ValueError("; ".join(v.detail for v in out.violations)[:300])
     return f"booking confirmed by you; plan is now version {out.plan.version}"
 
 
-def _apply_replan(ctx: ToolContext, args: Dict[str, Any]) -> str:
+def _apply_replan(ctx: ToolContext, args: dict[str, Any]) -> str:
     out = ctx.em.replan(ctx.plan_id, Disruption.model_validate(args))
     if out.status != "replanned":
         raise ValueError(f"{out.status}: " + "; ".join(v.detail for v in out.violations)[:300])
     return f"replanned; plan is now version {out.plan.version}"
 
 
-def build_tools() -> Dict[str, Tool]:
-    t: List[Tool] = [
+def build_tools() -> dict[str, Tool]:
+    t: list[Tool] = [
         Tool("search_knowledge", "Search to;doh-the event planner's own policy and help documents. Use for how to;doh-the event planner works, budget rules and dietary checklists.", Perm.KB_READ, SearchArgs, _search),
         Tool("get_public_event_info", "Event type, city, date and venue name. Safe to share with guests.", Perm.PLAN_PUBLIC, NoArgs, _public),
         Tool("get_plan_summary", "The current plan without money: guests, dietary needs, chosen vendors and their booking status.", Perm.PLAN_READ, NoArgs, _summary),
@@ -237,12 +237,12 @@ def build_tools() -> Dict[str, Tool]:
     return {x.name: x for x in t + m}
 
 
-def visible_tools(tools: Dict[str, Tool], principal: Principal) -> List[Tool]:
+def visible_tools(tools: dict[str, Tool], principal: Principal) -> list[Tool]:
     """Tools the asker may use; the model is never even told about the others."""
     return [x for x in tools.values() if principal.can(x.perm)]
 
 
-def execute(ctx: ToolContext, tools: Dict[str, Tool], name: Any, raw_args: Any) -> ToolResult:
+def execute(ctx: ToolContext, tools: dict[str, Tool], name: Any, raw_args: Any) -> ToolResult:
     tool = tools.get(name) if isinstance(name, str) else None
     if tool is None or not ctx.principal.can(tool.perm):
         return ToolResult(False, {}, "that tool is not available")  # same answer for unknown and forbidden: no probing

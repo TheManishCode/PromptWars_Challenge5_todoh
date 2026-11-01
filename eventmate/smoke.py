@@ -13,7 +13,7 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Callable, List, Optional
+from typing import Callable
 
 from eventmate.integrations.discovery import DiscoveryError
 from eventmate.env import load_env
@@ -48,7 +48,7 @@ def _check(name: str, fn: Callable[[], str], warn_on: tuple = (), skip_on: tuple
         return Row(name, "FAIL", f"{type(exc).__name__}: {str(exc)[:160]}", time.monotonic() - t0)
 
 
-def run_smoke(em: EventMate, today: date, llm: bool = False) -> List[Row]:
+def run_smoke(em: EventMate, today: date, llm: bool = False) -> list[Row]:
     soon, later = today + timedelta(days=2), today + timedelta(days=45)
 
     def flights() -> str:
@@ -127,7 +127,7 @@ def build_em() -> EventMate:
     return EventMate(run_id="smoke", llm=client_from_env())
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m eventmate.smoke", description=__doc__.split("\n\n")[0])
     ap.add_argument("--llm", action="store_true", help="also ping the model providers (spends a few credits)")
     ap.add_argument("--today", type=date.fromisoformat, default=None)

@@ -14,8 +14,8 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
-from typing import Callable, Dict, List, Optional, Tuple
+from datetime import datetime, UTC
+from typing import Callable
 
 from eventmate.integrations.discovery import clean_city
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
@@ -54,16 +54,16 @@ def _text(v, cap: int) -> str:
     return " ".join("".join(c for c in v if c.isprintable() or c == " ").split())[:cap]
 
 
-def weighted(rating: Optional[float], count: Optional[int]) -> Optional[float]:
+def weighted(rating: float | None, count: int | None) -> float | None:
     if rating is None or not count:
         return None
     return round((count / (count + PRIOR_REVIEWS)) * rating + (PRIOR_REVIEWS / (count + PRIOR_REVIEWS)) * PRIOR_MEAN, 2)
 
 
 class PlacesSource:
-    def __init__(self, api_key: Optional[str] = None, transport: Callable[[str, dict, bytes, float], bytes] = _post, clock: Callable[[], float] = time.monotonic):
+    def __init__(self, api_key: str | None = None, transport: Callable[[str, dict, bytes, float], bytes] = _post, clock: Callable[[], float] = time.monotonic):
         self._key, self._transport, self._clock = api_key, transport, clock
-        self._cache: Dict[Tuple[str, str, bool, bool], Tuple[float, PlaceSearch]] = {}
+        self._cache: dict[tuple[str, str, bool, bool], tuple[float, PlaceSearch]] = {}
         self._lock = threading.Lock()
 
     def __repr__(self) -> str:
@@ -115,7 +115,7 @@ class PlacesSource:
             items = None
         if not isinstance(items, list):
             raise PlacesError("Google Places returned something unreadable")
-        places: List[PlaceInfo] = []
+        places: list[PlaceInfo] = []
         skipped = 0
         for it in items:
             try:
@@ -124,7 +124,7 @@ class PlacesSource:
                 skipped += 1
         places.sort(key=lambda p: (p.weighted_rating is None, -(p.weighted_rating or 0), p.name))
         result = PlaceSearch(
-            kind=kind, city=city, places=tuple(places), fetched_at=datetime.now(timezone.utc),
+            kind=kind, city=city, places=tuple(places), fetched_at=datetime.now(UTC),
             warnings=(f"{skipped} place(s) could not be read and were skipped",) if skipped else (),
         )
         with self._lock:

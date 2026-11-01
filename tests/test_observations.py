@@ -3,7 +3,7 @@
 import json
 import os
 import stat
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 
 import pytest
 from pydantic import ValidationError
@@ -17,7 +17,7 @@ from eventmate.web.app import create_app
 
 CATERER = "cat-pune-annapurna"
 VENUE = next(p.id for p in VendorRepository().providers(C.VENUE) if p.city == "Pune")
-NOW = datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 30, 9, 0, tzinfo=UTC)
 
 
 @pytest.fixture

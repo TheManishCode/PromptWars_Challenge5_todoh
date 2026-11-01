@@ -1,6 +1,6 @@
 """The vendor-conversation agent (ADR-042): approval bound to content, claimed sends, limits, reply matching and untrusted replies."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import pytest
 from pydantic import ValidationError
@@ -12,7 +12,7 @@ from eventmate.schemas import ChannelStatus, OutreachDraft, VendorCategory as C
 from eventmate.service import EventMate
 from tests.conftest import EXAMPLE, TODAY
 
-T0 = datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 30, 9, 0, tzinfo=UTC)
 CHECK = ("service staff", "crockery and cutlery", "serving counters", "taxes", "transport")
 
 

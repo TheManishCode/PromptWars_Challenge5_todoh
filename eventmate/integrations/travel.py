@@ -8,8 +8,8 @@ composed from separate one-way searches and labelled as such.
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timedelta, timezone
-from typing import Callable, List, Optional, Sequence, Tuple
+from datetime import date, datetime, timedelta, UTC
+from typing import Callable, Sequence
 
 from eventmate.schemas import (
     MAX_FLIGHT_OPTIONS,
@@ -47,7 +47,7 @@ class TravelError(Exception):
 
 class FlightProvider:
     def search_one_way(
-        self, origin: str, destination: str, day: date, adults: int = 1, cabin: str = "economy", max_stops: Optional[int] = None, limit: int = 10
+        self, origin: str, destination: str, day: date, adults: int = 1, cabin: str = "economy", max_stops: int | None = None, limit: int = 10
     ) -> FlightSearch:
         raise NotImplementedError
 
@@ -69,7 +69,7 @@ def check_search(origin: str, destination: str, adults: int, cabin: str, limit: 
 class FliProvider(FlightProvider):
     """Wraps ``fli.search.SearchFlights``. fli is an optional dependency and is imported on first use."""
 
-    def __init__(self, search_factory: Optional[Callable[[], object]] = None, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+    def __init__(self, search_factory: Callable[[], object] | None = None, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
         self._factory, self._now = search_factory, now
 
     def search_one_way(self, origin, destination, day, adults=1, cabin="economy", max_stops=None, limit=10) -> FlightSearch:
@@ -101,8 +101,8 @@ class FliProvider(FlightProvider):
             raise TravelError(f"Google Flights could not be searched ({type(exc).__name__}); try again shortly") from exc
         except Exception as exc:  # fli or the network misbehaved; never leak internals to the caller
             raise TravelError("the flight search failed unexpectedly") from exc
-        warnings: List[str] = []
-        options: List[FlightOption] = []
+        warnings: list[str] = []
+        options: list[FlightOption] = []
         for r in results:
             try:
                 options.append(self._option(search, r, cabin, warnings))
@@ -115,7 +115,7 @@ class FliProvider(FlightProvider):
         )
 
     @staticmethod
-    def _option(search, r, cabin: str, warnings: List[str]) -> FlightOption:
+    def _option(search, r, cabin: str, warnings: list[str]) -> FlightOption:
         price = None
         if r.price is not None:
             if (r.currency or "").upper() == "INR":
@@ -143,7 +143,7 @@ class FliProvider(FlightProvider):
 
 
 def search_multi_city(
-    provider: FlightProvider, legs: Sequence[Tuple[str, str, date]], adults: int = 1, cabin: str = "economy", max_stops: Optional[int] = None, limit: int = 5
+    provider: FlightProvider, legs: Sequence[tuple[str, str, date]], adults: int = 1, cabin: str = "economy", max_stops: int | None = None, limit: int = 5
 ) -> MultiCityResult:
     """One search per leg, in order. A failed leg is reported on that leg and removes the total; it is never guessed."""
     legs = list(legs)
@@ -155,13 +155,13 @@ def search_multi_city(
         check_search(o, d, adults, cabin, limit)
         if i and day < legs[i - 1][2]:
             raise ValueError(f"leg {i + 1} departs on {day.isoformat()}, not before leg {i} ({legs[i - 1][2].isoformat()})")
-    results: List[FlightSearch] = []
+    results: list[FlightSearch] = []
     for o, d, day in legs:
         try:
             results.append(provider.search_one_way(o, d, day, adults=adults, cabin=cabin, max_stops=max_stops, limit=limit))
         except TravelError as exc:
-            results.append(FlightSearch(origin=o, destination=d, travel_date=day, fetched_at=datetime.now(timezone.utc), source=SOURCE, error=str(exc)[:300]))
-    cheapest: List[Optional[int]] = []
+            results.append(FlightSearch(origin=o, destination=d, travel_date=day, fetched_at=datetime.now(UTC), source=SOURCE, error=str(exc)[:300]))
+    cheapest: list[int | None] = []
     for r in results:
         prices = [x.price_inr for x in r.options if x.price_inr is not None]
         cheapest.append(min(prices) if prices else None)

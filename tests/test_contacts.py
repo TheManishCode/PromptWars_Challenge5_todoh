@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from eventmate.integrations.web_access import FetchError, RawPage, SafeFetcher
 from eventmate.schemas import ContactCandidate
 from eventmate.sourcing.contacts import find_contacts
+from datetime import UTC
 
 SITE = "https://sharma-caterers.example/"
 
@@ -208,11 +209,11 @@ def test_a_private_address_is_refused_by_the_safe_fetcher():
 @pytest.mark.parametrize("bad", [{"source_url": ""}, {"source_url": "javascript:alert(1)"}, {"source_url": "ftp://x.example/a"}, {"value": "not-an-address"}, {"value": "a@b.example,c@d.example"},
                                   {"status": "confirmed"}, {"surprise": 1}, {"vendor_id": "cat-pune-rasoi"}, {"source_kind": "guessed"}, {"channel": "sms"}])
 def test_a_contact_candidate_needs_a_source_a_valid_address_and_a_real_state(bad):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from eventmate.schemas import external_vendor_id
 
-    base = dict(candidate_id="c1", vendor_id=external_vendor_id("osm:node/1"), channel="email", value="a@b.example", source_url="https://b.example/", source_kind="page_mailto", found_at=datetime.now(timezone.utc))
+    base = dict(candidate_id="c1", vendor_id=external_vendor_id("osm:node/1"), channel="email", value="a@b.example", source_url="https://b.example/", source_kind="page_mailto", found_at=datetime.now(UTC))
     ContactCandidate(**base)
     with pytest.raises(ValidationError):
         ContactCandidate(**{**base, **bad})

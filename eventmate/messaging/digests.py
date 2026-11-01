@@ -10,13 +10,14 @@ import hashlib
 import re
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, Dict, List, Mapping, Optional
+from typing import Callable, Mapping
 
 from eventmate.jsonl import JsonlLog
 from eventmate.followthrough.jobs import Job
 from eventmate.schemas import DigestRecord
+import builtins
 
 _NEXT_CHECK = re.compile(r";\s*next check\s+\S+")
 _MONEY = re.compile(r"\d{4,}|₹|\b(?:inr|rs|rupees?)\b|lakh", re.I)
@@ -33,7 +34,7 @@ def _names(text: str, names: Mapping[str, str]) -> str:
     return text
 
 
-def digest_text(job: Job, names: Optional[Mapping[str, str]] = None) -> str:
+def digest_text(job: Job, names: Mapping[str, str] | None = None) -> str:
     """Plain text for the owner in the app. Free of anything that changes only with the clock (the next-check time), so it changes only when something real does."""
     names = names or {}
     lines = [f"{job.goal} - {job.status.replace('_', ' ')}", _NEXT_CHECK.sub("", job.next_action)]
@@ -75,7 +76,7 @@ class _DigestFile(JsonlLog[DigestRecord]):
 
 
 class DigestStore:
-    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
         self.root = Path(root) / "digests"
         self.now = now
         self._lock = threading.RLock()
@@ -83,17 +84,17 @@ class DigestStore:
     def _file(self, plan_id: str) -> _DigestFile:
         return _DigestFile(self.root, run_id=plan_id)
 
-    def plan_ids(self) -> List[str]:
+    def plan_ids(self) -> builtins.list[str]:
         return sorted(p.name[len("digest-"):-len(".jsonl")] for p in self.root.glob("digest-*.jsonl")) if self.root.exists() else []
 
-    def list(self, plan_id: str) -> List[DigestRecord]:
+    def list(self, plan_id: str) -> builtins.list[DigestRecord]:
         """Newest first (by when each was first written), latest state of each digest."""
-        latest: Dict[str, DigestRecord] = {}
+        latest: dict[str, DigestRecord] = {}
         for d in self._file(plan_id).read():
             latest[d.digest_id] = d  # a dict keeps the order of first appearance, so equal timestamps still sort correctly
         return list(reversed(list(latest.values())))
 
-    def write(self, job: Job, text: str) -> Optional[DigestRecord]:
+    def write(self, job: Job, text: str) -> DigestRecord | None:
         """Append a digest if it differs from the job's latest one; otherwise nothing."""
         digest_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
         with self._lock:
