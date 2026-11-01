@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 dependencies = ["pydantic>=2.11", "ortools>=9.12", "flask>=3.1"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-cov", "pyflakes", "ruff", "bandit", "playwright", "pip-audit"]
+dev = ["pytest>=8", "pytest-cov", "hypothesis", "pyflakes", "ruff", "bandit", "playwright", "pip-audit"]
 flights = ["flights"]  # fli: Google Flights fares; optional
 serve = ["waitress>=3.0"]  # production server (ZPL-2.1): idle timeouts, connection limit, body limit; required for any non-loopback bind
 

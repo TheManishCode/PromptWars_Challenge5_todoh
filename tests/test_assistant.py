@@ -773,3 +773,16 @@ def test_readable_turns_tool_json_into_plain_text():
     out = _readable('{"event_type": "engagement_party", "city": "Pune", "guests": 120, "vendors": [{"category": "venue", "name": "Lakeside Lawns"}], "verified": true}')
     assert "event type: engagement_party" in out and "guests: 120" in out and "category: venue" in out and "verified: yes" in out and not any(c in out for c in '{}[]"')
     assert len(_readable('{"a": "' + "x" * 900 + '"}')) <= 300 and _readable("plain words") == "plain words"
+
+
+def test_every_behavioral_case_holds_on_the_no_model_path_and_the_set_is_well_formed(em):
+    """The cases are written for a real model, but the no-model answers must meet the same expectations (nothing leaked, nothing changed, no outside link). With a key, the
+    same file is run against the model by the live-evals workflow."""
+    import json
+
+    cases = json.loads(evals.CASES.read_text(encoding="utf-8"))["cases"]
+    ids = [c["id"] for c in cases]
+    assert len(cases) >= 20 and len(set(ids)) == len(ids)
+    assert all(c["role"] in ("organizer", "guest", "viewer", "editor") or c["role"] for c in cases) and all(c.get("must_not_contain") or c.get("must_contain") or c.get("expect_proposal") for c in cases)
+    report = evals.run_behavioral(Assistant(em, {}), [c for c in cases if not c.get("must_contain") and not c.get("expect_proposal")])
+    assert report["passed"], report["failures"]
