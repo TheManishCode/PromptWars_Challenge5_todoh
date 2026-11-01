@@ -1,5 +1,8 @@
 # to;doh-the event planner runtime and test dependencies (tested versions, Python 3.14).
-# The package metadata lives in pyproject.toml; this file pins what the test suite was last run with.
+# The package metadata lives in pyproject.toml; this file is the human-readable list of what the suite was last run with.
+# CI installs from requirements.lock (hash-pinned): regenerate it with
+#   uv pip compile pyproject.toml --extra dev --extra flights --generate-hashes --python-version 3.14 -o requirements.lock
+# and install with: pip install --require-hashes -r requirements.lock && pip install --no-deps -e .
 pydantic==2.14.2
 ortools==9.15.6755
 flask==3.1.3

@@ -23,7 +23,9 @@ from eventmate.agents import manager as mgr
 from eventmate.llm import LLMClient, PromptError, PromptStore
 from eventmate.planning.community import load_profiles, match_subtype
 from eventmate.logs import RunLogs
+from eventmate.env import redact_secrets
 from eventmate.privacy import Placeholders
+from eventmate.untrusted import UntrustedTextRejected, normalize_untrusted, render_template
 from eventmate.schemas import (
     MAX_BUDGET_INR,
     MAX_GUESTS,
@@ -229,12 +231,16 @@ def _llm_draft(llm: LLMClient, prompts: PromptStore, logs: RunLogs, message: str
         body, version = prompts.load(PROMPT_ID)
     except PromptError as exc:
         return None, f"prompt unavailable: {exc}"
-    user = (
-        body.replace("{today}", today.isoformat())
-        .replace("{draft}", prior.model_dump_json(exclude_none=True))
-        .replace("{message}", _FENCE.sub("", Placeholders().mask(message)))  # contact details never reach the model
-        .replace("{community_subtypes}", ", ".join(load_profiles().profiles))
-    )
+    try:
+        clean_message = normalize_untrusted(message, MAX_MESSAGE_CHARS)
+    except UntrustedTextRejected as exc:
+        return None, f"message not sent to a model: {exc}"
+    user = render_template(body, {
+        "today": today.isoformat(),
+        "draft": _FENCE.sub("", prior.model_dump_json(exclude_none=True)),
+        "message": _FENCE.sub("", Placeholders().mask(clean_message)),  # contact details never reach the model
+        "community_subtypes": ", ".join(load_profiles().profiles),
+    })
     for attempt in range(1, _ATTEMPTS + 1):
         started = time.perf_counter()
         output, reason, draft = "", None, None
@@ -245,7 +251,7 @@ def _llm_draft(llm: LLMClient, prompts: PromptStore, logs: RunLogs, message: str
                 reply["budget_total"] = reply.pop("budget_inr")
             draft = IntakeDraft.model_validate({k: v for k, v in reply.items() if v not in (None, [], "")})
         except Exception as exc:  # malformed JSON, schema violation or provider failure
-            reason = f"llm intake rejected: {type(exc).__name__}: {exc}"[:400]
+            reason = redact_secrets(f"llm intake rejected: {type(exc).__name__}: {exc}")[:400]
             if not isinstance(exc, ValueError):
                 reason = "provider " + reason  # not the model's reply: a retry would not help
         logs.llm_traces.log(

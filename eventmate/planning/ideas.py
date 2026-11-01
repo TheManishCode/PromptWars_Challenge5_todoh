@@ -25,7 +25,9 @@ from eventmate.llm import LLMClient, PromptError, PromptStore
 from eventmate.logs import RunLogs
 from eventmate.netutil import loads
 from eventmate.assistant.guard import scan as _scan_instruction
+from eventmate.env import redact_secrets
 from eventmate.privacy import Placeholders
+from eventmate.untrusted import render_template, sanitize_label
 from eventmate.schemas import (
     IDEA_FIELDS, AgentName, ConstraintCheck, DecisionType, DroppedIdea, Idea, IdeaDecision, IdeaSet, IdeaView, PlanNote, PlanVersion, VendorCategory,
     mentions_price,
@@ -265,7 +267,7 @@ def clean_preferences(prefs: Sequence[str]) -> Tuple[str, ...]:
     for p in prefs:
         if not isinstance(p, str) or not 1 <= len(p.strip()) <= MAX_PREFERENCE_CHARS or any(ord(c) < 32 or ord(c) == 127 for c in p):
             raise ValueError(f"each preference must be 1-{MAX_PREFERENCE_CHARS} characters without control characters")
-        out.append(_FENCE.sub(" ", Placeholders().mask(p)).strip())  # the marker that closes the facts block can never come from a user; contact details become placeholders
+        out.append(_FENCE.sub(" ", Placeholders().mask(sanitize_label(p, MAX_PREFERENCE_CHARS))).strip())  # the marker that closes the facts block can never come from a user; contact details become placeholders
     return tuple(out)
 
 
@@ -353,7 +355,7 @@ class IdeaService:
         except PromptError:
             return [], None, ""
         model = re.sub(r"[^A-Za-z0-9_.-]", "-", getattr(self.llm, "name", "model"))[:60] or "model"
-        user = body.replace("{facts}", _FENCE.sub(" ", json.dumps(facts, ensure_ascii=False, sort_keys=True)))
+        user = render_template(body, {"facts": _FENCE.sub(" ", json.dumps(facts, ensure_ascii=False, sort_keys=True))})
         started = time.perf_counter()
         output, reason, accepted = "", None, []
         try:
@@ -380,7 +382,7 @@ class IdeaService:
                 if problem is not None:
                     dropped.append(DroppedIdea(reason=problem[:160], title=_words(title)[:120] if title and not re.search(r"[\x00-\x1f]", title) else ""))
         except Exception as exc:  # malformed output or a provider failure degrades to templates
-            reason = f"{type(exc).__name__}: {exc}"[:400]
+            reason = redact_secrets(f"{type(exc).__name__}: {exc}")[:400]
             accepted = []
         self.logs.llm_traces.log(
             request_id=plan.request.request_id, prompt_id=PROMPT_ID, prompt_version=version, model=model, input_text=user, output_text=output,

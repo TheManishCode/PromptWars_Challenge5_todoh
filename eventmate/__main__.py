@@ -40,6 +40,7 @@ from eventmate.llm import client_from_env
 from eventmate.plan_store import PlanIntegrityError
 from eventmate.schemas import Disruption, DisruptionKind, VendorCategory
 from eventmate.service import EventMate
+from eventmate.untrusted import strip_terminal
 from eventmate.integrations.discovery import DiscoveryError
 from eventmate.integrations.travel import TravelError, check_date
 from eventmate.integrations.weather import WeatherError
@@ -401,11 +402,11 @@ def _deals(em: EventMate, a) -> int:
         est = f"  est total INR {o.est_total_low_inr:,} to {o.est_total_high_inr:,}" if o.est_total_low_inr is not None else ""
         fit = {True: "  [fits budget]", False: "  [over budget]", None: ""}[o.within_budget]
         print(f"#{o.rank} {o.domain}  INR {o.low_inr:,} to {o.high_inr:,} {o.unit}{est}{fit}  ({o.vs_market_pct:+d}% vs market, {o.corroborated_by} other site(s) agree)")
-        print(f"     {o.label}  {o.url}")
+        print(f"     {strip_terminal(o.label)}  {strip_terminal(o.url)}")
         for f in o.flags:
             print(f"     ! {f}")
     for sk in rep.skipped:
-        print(f"skipped {sk.url}: {sk.reason}", file=sys.stderr)
+        print(f"skipped {strip_terminal(sk.url)}: {strip_terminal(sk.reason)}", file=sys.stderr)
     for w in rep.warnings:
         print(f"note: {w}", file=sys.stderr)
     if not rep.offers:
@@ -424,7 +425,7 @@ def _weather(em: EventMate, a) -> int:
         print(w.model_dump_json(indent=2))
         return 0
     if not w.slots:
-        print(f"{w.resolved_place}: {w.note}")
+        print(f"{strip_terminal(w.resolved_place)}: {strip_terminal(w.note)}")
     else:
         print(f"{w.resolved_place} on {w.travel_date.isoformat()}: {w.temp_min}C to {w.temp_max}C, {w.conditions or 'no description'}; rain chance up to {round(w.max_rain_chance * 100)}%")
         for x in w.slots:
@@ -445,7 +446,7 @@ def _discover(em: EventMate, a) -> int:
     for c in res.candidates:
         where = ", ".join(x for x in (c.street, c.city) if x)
         cap = f", capacity {c.capacity_tagged} (tagged, unverified)" if c.capacity_tagged else ""
-        print(f"{c.name} [{c.osm_ref}] {where}{cap} {c.website or ''}".rstrip())
+        print(strip_terminal(f"{c.name} [{c.osm_ref}] {where}{cap} {c.website or ''}").rstrip())
     for w in res.warnings:
         print(f"note: {w}", file=sys.stderr)
     print(f"{len(res.candidates)} place(s). {res.notice}\n{res.attribution}")
@@ -524,7 +525,7 @@ def _inbox(em: EventMate, a) -> int:
 
         while True:
             res = em.poll_conversations()
-            print(f"sent {res.sent}, new replies {res.new_messages}" + "".join(f"; waiting: {w}" for w in res.waiting) + "".join(f"; ERROR {e}" for e in res.errors))
+            print(f"sent {res.sent}, new replies {res.new_messages}" + "".join(f"; waiting: {strip_terminal(w)}" for w in res.waiting) + "".join(f"; ERROR {strip_terminal(e)}" for e in res.errors))
             if not a.watch:
                 return 1 if res.errors else 0
             time.sleep(max(5, a.watch))
@@ -554,7 +555,7 @@ def _inbox(em: EventMate, a) -> int:
             print("approve needs DRAFT_ID and --hash (see `inbox show`)", file=sys.stderr)
             return 2
         d = em.approve_outreach(a.plan_id, a.draft_id, a.hash) if a.what == "approve" else em.deny_outreach(a.plan_id, a.draft_id)
-        print(f"{d.vendor_name}: {d.status}" + (f" ({d.error})" if d.error else ""))
+        print(f"{strip_terminal(d.vendor_name)}: {d.status}" + (f" ({strip_terminal(d.error)})" if d.error else ""))
         return 0
     box = em.inbox(a.plan_id)
     if a.json:
@@ -563,11 +564,11 @@ def _inbox(em: EventMate, a) -> int:
     print("Channels: " + "; ".join(f"{c.channel} {'ready' if c.can_send else c.detail}" for c in box.channels))
     print(f"{box.unread_total} unread, {box.approvals_total} waiting for your approval")
     for t in box.threads:
-        print(f"\n{t.request.vendor_name} ({t.request.channel}, {t.request.status})")
+        print(f"\n{strip_terminal(t.request.vendor_name)} ({t.request.channel}, {t.request.status})")
         for d in t.drafts:
             print(f"  -> [{d.status}] {d.draft_id} hash {d.content_hash[:12]}…: {d.body.splitlines()[0][:70]}")
         for m in t.replies:
-            print(f"  <- {'' if m.read else '(new) '}{m.received_at:%Y-%m-%d %H:%M}: {m.body[:100].replace(chr(10), ' ')}")
+            print(f"  <- {'' if m.read else '(new) '}{m.received_at:%Y-%m-%d %H:%M}: {strip_terminal(m.body[:100])}")
             for x in m.analysis.amounts:
                 print(f"       they wrote: INR {x.low_inr:,}" + (f" to {x.high_inr:,}" if x.high_inr != x.low_inr else "") + f" ({x.unit}); not recorded as a quote")
     return 0

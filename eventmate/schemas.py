@@ -1906,7 +1906,7 @@ IDEA_FIELDS = ("event_type", "guest_count", "budget_band", "dietary", "city", "v
 IdeaField = Literal["event_type", "guest_count", "budget_band", "dietary", "city", "venue_setting", "preferences", "community_subtype"]
 
 _PRICE_WORDS = re.compile(
-    r"₹|\b(?:rs|inr|usd|eur|gbp|rupees?|dollars?|euros?)\b|\$\s?\d|\d[\d,.]*\s?(?:k|lakhs?|lacs?|crores?|cr|thousand|million)\b|\b(?:lakhs?|lacs?|crores?)\b", re.I,
+    r"₹|\b(?:rs|inr|usd|eur|gbp|rupees?|dollars?|euros?)\b|\$\s?\d|\d[\d,.]{0,14}\s?(?:k|lakhs?|lacs?|crores?|cr|thousand|million)\b|\b(?:lakhs?|lacs?|crores?)\b", re.I,
 )
 _NUMBER_WORDS_IN_NOTE = re.compile(r"\b(?:hundred|thousand|million)\b", re.I)
 

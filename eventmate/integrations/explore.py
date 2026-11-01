@@ -19,6 +19,7 @@ from eventmate.integrations.discovery import clean_city
 from eventmate.llm import LLMError, PromptStore
 from eventmate.integrations.travel import check_date
 from eventmate.schemas import DealQuery, TripRequest, _Model
+from eventmate.untrusted import UntrustedTextRejected, normalize_untrusted, render_template
 
 MAX_TEXT = 600
 MAX_REPLY_CHARS = 4000
@@ -128,7 +129,7 @@ def _run(em, action: str, model, today: date):
 def build_prompt(text: str, today: date):
     body, _ = PromptStore().load("explore.route")
     head, tail = body.split("\nRequest:\n", 1)
-    return head.replace("{today}", today.isoformat()), "Request:\n" + tail.replace("{request}", _FENCE.sub(" ", text.strip()))
+    return render_template(head, {"today": today.isoformat()}), "Request:\n" + render_template(tail, {"request": _FENCE.sub(" ", text.strip())})
 
 
 def route(em, text: str, today: date, clients: List[Any]) -> Routed:
@@ -136,6 +137,10 @@ def route(em, text: str, today: date, clients: List[Any]) -> Routed:
         raise ExploreError(f"write between 1 and {MAX_TEXT} characters")
     if not clients:
         raise ExploreNotConfigured("language search is not configured: add NVIDIA_API_KEY or OPENROUTER_API_KEY to the .env file, or use the forms")
+    try:
+        text = normalize_untrusted(text, MAX_TEXT)
+    except UntrustedTextRejected as exc:
+        raise ExploreError(str(exc)) from None
     system, user = build_prompt(text, today)
     problems: List[str] = []
     attempts = (list(clients) * MAX_MODEL_CALLS)[:MAX_MODEL_CALLS] if len(clients) == 1 else list(clients)[:MAX_MODEL_CALLS]  # a lone provider gets one retry

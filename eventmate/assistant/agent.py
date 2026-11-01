@@ -12,7 +12,7 @@ import re
 import time
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from typing import Any, Deque, Dict, List, Optional, Sequence, Tuple
 
 from pydantic import Field
 
@@ -24,11 +24,14 @@ from eventmate.assistant.identity import Perm, Principal
 from eventmate.assistant.knowledge import KnowledgeBase, build_default
 from eventmate.assistant.langfuse import LangfuseExporter
 from eventmate.assistant.router import Route, route
+from eventmate import consumption
 from eventmate.privacy import Placeholders
 from eventmate.assistant.session import SessionStore, depends_on_context
 from eventmate.assistant.tools import Tool, ToolContext, build_tools, execute, visible_tools
 from eventmate.assistant.trace import FeedbackLog, ProposalLog, TraceBuilder, TraceLog, sha, tokens
+from eventmate.env import redact_secrets
 from eventmate.netutil import loads
+from eventmate.untrusted import UntrustedTextRejected, normalize_untrusted, render_template
 from eventmate.llm import LLMClient, PromptError, PromptStore, client_from_env
 from eventmate.schemas import _Model
 from eventmate.service import EventMate
@@ -38,6 +41,7 @@ MAX_QUESTION = 1000
 MAX_STEPS = 4
 _MAX_TOKENS = 700
 _JSON_OBJECT = re.compile(r"\{.*\}", re.S)
+_ACTION_CLAIM = re.compile(r"\b(?:done|recorded|applied|saved|paid|confirmed|booked|replanned|updated|cancell?ed|completed|sent|refunded|approved|processed)\b", re.I)
 NO_EVIDENCE = "I could not find that in this plan or in to;doh-the event planner's documents, so I won't guess."
 
 
@@ -106,6 +110,10 @@ class Assistant:
             raise AssistantError("ask a question")
         if len(question) > MAX_QUESTION:
             raise AssistantError(f"questions are limited to {MAX_QUESTION} characters")
+        try:
+            question = normalize_untrusted(question, MAX_QUESTION)  # screened, masked, cached, traced and sent on in this one normalised form
+        except UntrustedTextRejected as exc:
+            raise AssistantError(str(exc)) from None
         plan = self.em.store.latest(plan_id)  # unknown or hostile ids fail here
         roles = tuple(r.value for r in principal.roles)
         tb = TraceBuilder(plan_id, principal.user_id, roles, question)
@@ -218,6 +226,8 @@ class Assistant:
                     reply = client.complete("You are a careful assistant. Reply with one JSON object only.", prompt, _MAX_TOKENS)
                     self._spend[user_id].append((time.monotonic(), tokens(prompt) + tokens(reply)))
                     return reply, getattr(client, "name", "unknown"), tier
+                except consumption.ConsumptionError:
+                    raise  # a limit is not a provider fault: no retry, no other tier
                 except Exception as exc:  # provider error, timeout or rate limit
                     last = exc
                     tb.step("llm", getattr(client, "name", "unknown"), ok=False, detail=f"attempt {attempt + 1} failed: {type(exc).__name__}")
@@ -299,7 +309,7 @@ class Assistant:
         for step in range(MAX_STEPS):
             if turn is not None and turn.cancelled():  # checked again after each blocking step (a model call cannot be aborted; its result is dropped here)
                 return done("", (), "cancelled")
-            prompt = body.replace("{tools}", catalogue).replace("{transcript}", transcript)
+            prompt = render_template(body, {"tools": catalogue, "transcript": transcript})  # one pass: a value containing "{tools}" stays literal
             started = time.perf_counter()
             try:
                 reply, model, tier = self._complete(tier, prompt, principal.user_id, tb)  # stay on the tier that last worked
@@ -309,8 +319,13 @@ class Assistant:
                 msg = loads(found.group(0)) if found else None
                 if not isinstance(msg, dict):
                     raise ValueError("reply was not a JSON object")
+            except consumption.ConsumptionError as exc:
+                if exc.code == "workspace_busy":
+                    raise  # the web layer answers 429 with the code; nothing was spent
+                tb.step("llm", "allowance", ok=False, detail=f"{exc.code}: {exc}"[:300])
+                return fallback(f"the AI usage allowance is reached ({exc.code})")
             except Exception as exc:
-                tb.step("llm", "unusable_reply", ok=False, detail=f"{type(exc).__name__}: {exc}"[:300])
+                tb.step("llm", "unusable_reply", ok=False, detail=redact_secrets(f"{type(exc).__name__}: {exc}")[:300])
                 return fallback(f"model reply unusable: {type(exc).__name__}"[:300])
             if "tool" in msg and "answer" not in msg:
                 obs = call(msg.get("tool"), msg.get("args"))
@@ -318,9 +333,9 @@ class Assistant:
                 continue
             if set(msg) - {"answer", "citations"} or not isinstance(msg.get("answer"), str):
                 return fallback("reply had unexpected fields")
-            problem, valid = self._verify(msg, question, evidence, cited)
+            problem, valid = self._verify(msg, question, evidence, cited, proposals)
             if problem is None:
-                return done(msg["answer"].strip(), valid, "answered")
+                return done(_with_pending_notice(msg["answer"].strip(), proposals), valid, "answered")
             if not reasked and step + 1 < MAX_STEPS:  # one re-ask with the reason (guardrails "reask"), then give up safely
                 reasked = True
                 tb.step("policy", "reask", ok=False, detail=problem)
@@ -329,9 +344,11 @@ class Assistant:
             return fallback(problem, "degraded" if evidence else "refused")
         return fallback("no final answer within the step limit")
 
-    def _verify(self, msg: Dict[str, Any], question: str, evidence: List[str], cited: Dict[str, str]) -> Tuple[Optional[str], Tuple[str, ...]]:
+    def _verify(self, msg: Dict[str, Any], question: str, evidence: List[str], cited: Dict[str, str], proposals: Sequence[Proposal] = ()) -> Tuple[Optional[str], Tuple[str, ...]]:
         """The output guard: None if the answer may be shown, else why not."""
         answer = msg["answer"].strip()
+        if proposals and _ACTION_CLAIM.search(answer):  # a proposal changes nothing until a human approves it, so no answer may say it was done
+            return "this turn only filed a proposal for approval; do not say anything was done, recorded or confirmed", ()
         citations = tuple(c for c in msg.get("citations", []) if isinstance(c, str))
         if not evidence:
             return "you answered without using any tool or document", ()
@@ -342,6 +359,13 @@ class Assistant:
         names = guard.introduced_names(answer, joined, question)
         problem = guard.check_answer(answer, joined, question) or guard.policy_violation(answer, self.policy) or (f"names not in the evidence: {names[:5]}" if names else None)
         return problem, valid
+
+
+def _with_pending_notice(answer: str, proposals: Sequence[Proposal]) -> str:
+    """Code-written line after an answer that filed proposals, so the state is stated by code and not only by model prose."""
+    if not proposals:
+        return answer
+    return answer + "\n" + " ".join(f"Waiting for your approval (nothing has changed yet): {p.summary}." for p in proposals)
 
 
 def _inr(n: Any) -> str:

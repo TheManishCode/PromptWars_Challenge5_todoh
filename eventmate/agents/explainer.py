@@ -14,6 +14,8 @@ from typing import List, Optional
 
 from eventmate.llm import LLMClient, PromptError, PromptStore, guard_rewrite
 from eventmate.logs import RunLogs
+from eventmate.env import redact_secrets
+from eventmate.untrusted import render_template, strip_fence
 from eventmate.schemas import (
     AgentName,
     BookingStatus,
@@ -88,14 +90,14 @@ class ExplainerAgent:
             body, version = self.prompts.load(_PROMPT_ID)
         except PromptError as exc:
             return None, f"prompt unavailable: {exc}"
-        user = body.replace("{plan_markdown}", markdown)
+        user = render_template(body, {"plan_markdown": strip_fence(markdown)})  # a vendor or venue name cannot close the fence or fill another placeholder
         started = time.perf_counter()
         output, reason = "", None
         try:
             output = self.llm.complete("You edit verified event plans without changing facts.", user, _MAX_TOKENS)
             reason = guard_rewrite(output, markdown, [s.name for s in plan.selections])
         except Exception as exc:  # any provider failure must degrade to deterministic text
-            reason = f"llm call failed: {type(exc).__name__}: {exc}"[:400]
+            reason = redact_secrets(f"llm call failed: {type(exc).__name__}: {exc}")[:400]
         self.logs.llm_traces.log(
             request_id=plan.request.request_id,
             prompt_id=_PROMPT_ID,

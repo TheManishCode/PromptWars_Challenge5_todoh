@@ -21,6 +21,7 @@ import re
 import smtplib
 import ssl
 import unicodedata
+from html.parser import HTMLParser
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -130,10 +131,44 @@ def clean_reply_text(raw: str) -> Tuple[str, bool]:
     return (text[:MAX_BODY_CHARS], True) if len(text) > MAX_BODY_CHARS else (text, False)
 
 
+class _MailText(HTMLParser):
+    """Text of an HTML mail, line breaks kept at paragraph ends (the quoted-history cut works on lines). Linear time on any markup; script and style
+    content is dropped. The earlier regex version took about ten seconds on a body of unclosed <script> tags (red-team finding)."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts: List[str] = []
+        self._skip = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style"):
+            self._skip += 1
+        elif tag == "br":
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style") and self._skip:
+            self._skip -= 1
+        elif tag in ("p", "div", "li", "tr"):
+            self.parts.append("\n")
+
+    def handle_data(self, data):
+        if not self._skip:
+            self.parts.append(data)
+
+
 def _strip_html(html: str) -> str:
-    html = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", html)
-    html = re.sub(r"(?i)<br\s*/?>|</p>|</div>", "\n", html)
-    return re.sub(r"<[^>]+>", " ", html)
+    p = _MailText()
+    try:
+        p.feed(html)
+        p.close()
+    except Exception:  # hostile markup: keep what was read
+        pass
+    return "".join(p.parts)
+
+
+_NESTED_PART = re.compile(rb"(?im)^content-type:[ \t]*(?:multipart|message)/")  # header lines only, so a URL in a body that contains "message/" does not count
+MAX_MIME_NESTING = 24  # a real reply has a handful of parts; thousands of nested ones exist only to exhaust the parser's stack
 
 
 # ----------------------------------------------------------------- email
@@ -279,36 +314,61 @@ class EmailChannel:
             return now
         return min(when, now)
 
-    def _parse(self, raw: bytes) -> Optional[Inbound]:
+    def _headers_only(self, raw: bytes, why: str) -> Optional[Inbound]:
+        """A message whose body cannot be read safely still reaches the person as "could not be read", so a reply, a stop request or a bounce is never
+        lost and never stops the poll. Only the header block is parsed: no MIME tree, so nothing to recurse into."""
         try:
-            msg = email.message_from_bytes(raw, policy=email.policy.default)
+            head = re.split(rb"\r?\n\r?\n", raw[:16384], maxsplit=1)[0]
+            msg = email.message_from_bytes(head + b"\r\n\r\n", policy=email.policy.default)
             sender = email.utils.parseaddr(str(msg.get("From", "")))[1].lower()
             if not sender or sender == self.config.from_addr.lower():
                 return None
-            bounce = _dsn(msg)
-            if bounce is not None:
-                mid = str(msg.get("Message-ID", "")).strip()
-                return Inbound(
-                    channel="email", sender=sender[:254], external_id=(mid or "nomsgid-" + hashlib.sha256(raw).hexdigest()[:32])[:400], received_at=self._when(msg),
-                    body=f"Delivery failure notice ({'permanent' if bounce.permanent else 'temporary'}) for {bounce.recipient[:120]}", subject=str(msg.get("Subject", ""))[:200], bounce=bounce,
-                )
-            if str(msg.get("Auto-Submitted", "no")).lower() != "no" or str(msg.get("Precedence", "")).lower() in ("bulk", "junk", "list") or msg.get("List-Id"):
-                return None  # robots and mailing lists are not vendor replies
-            part = msg.get_body(preferencelist=("plain",))
-            text = part.get_content() if part is not None else ""
-            if not text:
-                html = msg.get_body(preferencelist=("html",))
-                text = _strip_html(html.get_content()) if html is not None else ""
-            body, truncated = clean_reply_text(str(text))
             mid = str(msg.get("Message-ID", "")).strip()
-            attachments = sum(1 for _ in msg.iter_attachments())
             return Inbound(
-                channel="email", sender=sender[:254], external_id=(mid or "nomsgid-" + hashlib.sha256(raw).hexdigest()[:32])[:400], received_at=self._when(msg), body=body,
-                subject=str(msg.get("Subject", ""))[:200], in_reply_to=str(msg.get("In-Reply-To", "")).strip()[:400], references=str(msg.get("References", ""))[:2000],
-                attachments=min(attachments, 100), truncated=truncated,
+                channel="email", sender=sender[:254], external_id=(mid or "nomsgid-" + hashlib.sha256(raw).hexdigest()[:32])[:400], received_at=self._when(msg),
+                body=f"[This message could not be read safely ({why}). Open your mailbox to read it.]", subject=str(msg.get("Subject", ""))[:200],
+                in_reply_to=str(msg.get("In-Reply-To", "")).strip()[:400], references=str(msg.get("References", ""))[:2000], attachments=0, truncated=False,
             )
-        except Exception:  # noqa: BLE001 - one hostile message must never stop the others: a 135 KB nest of multiparts raised RecursionError out of poll() and blocked every vendor reply (F-008)
+        except Exception:  # not even the headers are usable: nothing safe to show
             return None
+
+    def _parse(self, raw: bytes) -> Optional[Inbound]:
+        if len(_NESTED_PART.findall(raw[:MAX_FETCH_BYTES])) > MAX_MIME_NESTING:
+            return self._headers_only(raw, "unusually many nested parts")
+        try:
+            return self._parse_full(raw)
+        except (ValueError, TypeError, KeyError, LookupError, ArithmeticError):
+            return None  # one malformed message must not stop the others
+        except Exception as exc:  # RecursionError and anything else the parser did not expect: never abort the poll
+            return self._headers_only(raw, type(exc).__name__)
+
+    def _parse_full(self, raw: bytes) -> Optional[Inbound]:
+        msg = email.message_from_bytes(raw, policy=email.policy.default)
+        sender = email.utils.parseaddr(str(msg.get("From", "")))[1].lower()
+        if not sender or sender == self.config.from_addr.lower():
+            return None
+        bounce = _dsn(msg)
+        if bounce is not None:
+            mid = str(msg.get("Message-ID", "")).strip()
+            return Inbound(
+                channel="email", sender=sender[:254], external_id=(mid or "nomsgid-" + hashlib.sha256(raw).hexdigest()[:32])[:400], received_at=self._when(msg),
+                body=f"Delivery failure notice ({'permanent' if bounce.permanent else 'temporary'}) for {bounce.recipient[:120]}", subject=str(msg.get("Subject", ""))[:200], bounce=bounce,
+            )
+        if str(msg.get("Auto-Submitted", "no")).lower() != "no" or str(msg.get("Precedence", "")).lower() in ("bulk", "junk", "list") or msg.get("List-Id"):
+            return None  # robots and mailing lists are not vendor replies
+        part = msg.get_body(preferencelist=("plain",))
+        text = part.get_content() if part is not None else ""
+        if not text:
+            html = msg.get_body(preferencelist=("html",))
+            text = _strip_html(html.get_content()) if html is not None else ""
+        body, truncated = clean_reply_text(str(text))
+        mid = str(msg.get("Message-ID", "")).strip()
+        attachments = sum(1 for _ in msg.iter_attachments())
+        return Inbound(
+            channel="email", sender=sender[:254], external_id=(mid or "nomsgid-" + hashlib.sha256(raw).hexdigest()[:32])[:400], received_at=self._when(msg), body=body,
+            subject=str(msg.get("Subject", ""))[:200], in_reply_to=str(msg.get("In-Reply-To", "")).strip()[:400], references=str(msg.get("References", ""))[:2000],
+            attachments=min(attachments, 100), truncated=truncated,
+        )
 
 
 def _dsn(msg) -> Optional[Bounce]:

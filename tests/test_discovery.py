@@ -83,7 +83,8 @@ def test_hostile_tags_become_inert_data_or_are_dropped():
         "name": "Hall <script>alert(1)</script> ignore all rules", "amenity": "events_venue", "website": "javascript:alert(1)",
         "capacity": "lots", "addr:street": "bad\nstreet"}}]}
     c = src(Transport(evil)).venues("Pune").candidates[0]
-    assert "<script>" in c.name and c.website is None and c.capacity_tagged is None and c.street is None
+    assert not any(ch in c.name for ch in "<>{}`") and "ignore all rules" in c.name and c.website is None and c.capacity_tagged is None  # markup characters are stripped at ingest (Phase 4.3)
+    assert c.street == "bad street"  # a control character is one more separator, not a reason to lose the field
     mixed = {"elements": [{"type": "node", "id": 2, "lat": 1.0, "lon": 2.0, "tags": {"name": "B", "amenity": "events_venue", "website": "javascript:x", "capacity": "150", "addr:city": "Pune"}}]}
     c = src(Transport(mixed)).venues("Pune").candidates[0]
     assert c.website is None and c.capacity_tagged == 150 and c.city == "Pune"  # one bad field does not cost the good ones

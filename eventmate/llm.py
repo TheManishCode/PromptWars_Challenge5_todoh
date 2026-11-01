@@ -23,6 +23,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from eventmate import consumption
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
 from typing import Iterable, Optional, Protocol, Tuple
 
@@ -41,8 +42,8 @@ _LINK = re.compile(r"https?://|www\.|\b[\w.-]+@[\w.-]+\.\w+", re.I)
 # The whole of each link, address and bare domain, for comparing against evidence. _LINK above only finds that one exists; matching on it alone treats
 # "https://other.example" as present whenever the evidence holds any "https://".
 _LINK_FULL = re.compile(
-    r"https?://[^\s<>\"')\]]+|www\.[^\s<>\"')\]]+|\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+"
-    r"|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|in|org|net|io|co|app|xyz|info|biz|shop|online|site|store|dev|ai|edu|gov)(?![\w-])(?:/[^\s<>\"')\]]*)?", re.I,
+    r"https?://[^\s<>\"')\]]+|www\.[^\s<>\"')\]]+|(?<![\w.+-])[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}"
+    r"|(?<![\w.-])[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63}){0,6}\.(?:com|in|org|net|io|co|app|xyz|info|biz|shop|online|site|store|dev|ai|edu|gov)(?![\w-])(?:/[^\s<>\"')\]]*)?", re.I,
 )
 
 
@@ -120,6 +121,10 @@ class LLMError(Exception):
     """A model call failed. The message names the provider, never contains a key, and is safe to show."""
 
 
+class BudgetExceeded(consumption.ConsumptionError, LLMError):
+    """The owner's call ceiling is reached. Not retried and not passed to another provider."""
+
+
 def _int_env(name: str, default: int, lo: int, hi: int) -> int:
     try:
         return max(lo, min(hi, int(os.environ.get(name, default))))
@@ -143,7 +148,7 @@ class UsageMeter:
         with self._lock:
             limit = self._max if self._max is not None else _int_env("EVENTMATE_LLM_MAX_CALLS", 300, 1, 100000)
             if self.calls >= limit:
-                raise LLMError(f"the model call budget ({limit}) for this run is used up; restart to reset it or raise EVENTMATE_LLM_MAX_CALLS")
+                raise BudgetExceeded(f"the model call budget ({limit}) for this run is used up; restart to reset it or raise EVENTMATE_LLM_MAX_CALLS", "owner_ceiling")
             self.calls += 1
             self.by_provider[provider] = self.by_provider.get(provider, 0) + 1
 
@@ -175,7 +180,14 @@ class OpenAICompatClient:
         if not isinstance(max_tokens, int) or max_tokens < 1:
             raise LLMError(f"{self.name}: max_tokens must be a positive whole number")
         body = {"model": self.model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}], "max_tokens": min(max_tokens, cap), "temperature": 0, **self._extra}
-        self._meter.charge(self.name)
+        ws = consumption.current_workspace()
+        with consumption.BUDGETS.slot(ws, (len(system) + len(user)) // 4):  # the workspace's own allowance, before the owner's ceiling
+            self._meter.charge(self.name)
+            out = self._call(body)
+            consumption.BUDGETS.add_tokens(ws, len(out) // 4)
+            return out
+
+    def _call(self, body: dict) -> str:
         try:
             raw = self._transport(self._url, {"Authorization": f"Bearer {self._key}", "Content-Type": "application/json", "Accept": "application/json", "X-Title": "to;doh-the event planner"}, json.dumps(body).encode(), self._timeout)
         except urllib.error.HTTPError as exc:
@@ -214,6 +226,8 @@ class FallbackClient:
                 out = c.complete(system, user, max_tokens)
                 self.last_used = c.name
                 return out
+            except consumption.ConsumptionError:
+                raise  # a limit is not a provider fault: another provider would be charged against the same limit
             except LLMError as exc:
                 errors.append(str(exc))
         raise LLMError("no model answered: " + "; ".join(errors))

@@ -18,6 +18,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
 from eventmate.schemas import DiscoveryResult, VenueCandidate
+from eventmate.untrusted import sanitize_label
 
 DEFAULT_URL = "https://overpass-api.de/api/interpreter"
 MAX_REPLY_BYTES = 2_000_000
@@ -145,8 +146,8 @@ class OverpassSource:
             cap = tags.get("capacity")
             try:
                 out.append(_opt(
-                    VenueCandidate, osm_ref=ref, name=name.strip()[:120], kind=kind, lat=at["lat"], lon=at["lon"],
-                    street=tags.get("addr:street"), city=tags.get("addr:city"), website=tags.get("website") or tags.get("contact:website"),
+                    VenueCandidate, osm_ref=ref, name=sanitize_label(name), kind=kind, lat=at["lat"], lon=at["lon"],
+                    street=sanitize_label(tags.get("addr:street")) or None, city=sanitize_label(tags.get("addr:city"), 80) or None, website=tags.get("website") or tags.get("contact:website"),
                     email=tags.get("contact:email") or tags.get("email"),
                     capacity_tagged=int(cap) if isinstance(cap, str) and cap.isdigit() else None,
                 ))

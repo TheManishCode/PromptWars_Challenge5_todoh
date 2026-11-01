@@ -13,25 +13,34 @@ from typing import Iterable, List, Optional
 from eventmate.llm import _MARKUP, _NUMBER, _NUMBER_WORDS, links_in
 
 _INJECTION = {
-    "override_instructions": re.compile(r"\b(?:ignore|disregard|forget|override)\b[^.\n]{0,40}\b(?:instructions?|rules?|prompt|guidelines?)\b", re.I),
-    "role_change": re.compile(r"\b(?:you are now|act as|pretend to be|new persona|developer mode|jailbreak)\b", re.I),
+    "override_instructions": re.compile(r"\b(?:ignore|disregard|forget|override|bypass)\b[\s\S]{0,40}?\b(?:instructions?|rules?|prompt|guidelines?|above|previous|prior|earlier|everything)\b", re.I),
+    # Other languages and chat-template tokens: cheap signals, and incomplete (a translation or paraphrase can still pass; this is not the defence).
+    "override_other_language": re.compile(r"ignora\w*\s[^.\n]{0,30}instrucciones|ignor\w*\s[^.\n]{0,30}instructions|ignorier\w*\s[^.\n]{0,30}anweisungen|अनदेखा|निर्देशों को भूल|निर्देश.{0,20}अनदेखा", re.I),
+    "chat_template_token": re.compile(r"<\|(?:im_start|im_end|system|user|assistant|endoftext)\|>|\[/?INST\]|<<SYS>>", re.I),
+    "role_change": re.compile(r"\b(?:you are now|from now on,? you|act as|pretend to be|new persona|developer mode|jailbreak|system override|new instructions\s*:)", re.I),
     "prompt_exfiltration": re.compile(r"\b(?:reveal|print|show|repeat|leak)\b[^.\n]{0,30}\b(?:system prompt|hidden instructions?|your instructions)\b", re.I),
-    "fake_authority": re.compile(r"(?:^|\n)\s*(?:system|assistant|developer)\s*:", re.I),
+    "fake_authority": re.compile(r"(?:^|\n)[^\S\n]*(?:#{1,6}[^\S\n]*|\*\*|\[)?(?:system|assistant|developer)\b(?:[^\S\n]*:|\s?\]|\*\*|[^\S\n]*\n)", re.I),  # [^\S\n] not \s: a run of blank lines must not be re-scanned from every line start
     "mass_action": re.compile(r"\b(?:refund|cancel|delete|send|pay|transfer)\b[^.\n]{0,25}\b(?:every|all)\b", re.I),
     "fence_forgery": re.compile(r"<<<|>>>"),
-    "tool_forgery": re.compile(r'"tool"\s*:\s*"', re.I),
+    "tool_forgery": re.compile(r"""["']tool["']\s*:\s*["']""", re.I),
 }
-_EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b")
+_EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}\b")  # bounded and anchored at a token start: linear time on any input
+_EMAIL_SPOKEN = re.compile(r"(?<![\w.+-])[\w.+-]{2,64}\s{0,3}[\[(]?\s{0,3}at\s{0,3}[\])]?\s{0,3}[\w-]{2,63}(?:\s{0,3}[\[(]?\s{0,3}dot\s{0,3}[\])]?\s{0,3}[a-z]{2,}){1,3}\b", re.I)  # "name at gmail dot com" 
 _PAN = re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b")
 _AADHAAR = re.compile(r"\b\d{4}[ -]?\d{4}[ -]?\d{4}\b")
-_PHONE = re.compile(r"(?<![\w.])(?:\+?91[ -]?)?[6-9]\d{4}[ -]?\d{5}(?!\w)")
+_PHONE = re.compile(r"(?<![\w.])(?:\+?91[ -]?)?[6-9](?:[ -]?\d){9}(?!\w)")  # separators allowed between any two digits: "98 76 54 32 10", "9-8-7-..."
 _CARD = re.compile(r"\b\d(?:[ -]?\d){12,18}\b")
 _FENCE = re.compile(r"<<<|>>>")
 
 
+_LEET = str.maketrans("013457@$", "oieastas")
+
+
 def scan(text: str) -> List[str]:
-    """Names of injection-like patterns found. A hit marks data as hostile; it never gates anything by itself."""
-    return [name for name, rx in _INJECTION.items() if rx.search(text)]
+    """Names of injection-like patterns found. A hit marks data as hostile; it never gates anything by itself. Also scans a copy with look-alike
+    digits and symbols folded to letters ("1gn0re"), which can only add flags; the text itself is not changed."""
+    folded = text.translate(_LEET)
+    return [name for name, rx in _INJECTION.items() if rx.search(text) or (folded != text and rx.search(folded))]
 
 
 def _luhn(digits: str) -> bool:
@@ -51,7 +60,7 @@ def mask_pii(text: str) -> str:
         digits = re.sub(r"\D", "", m.group(0))
         return "[card]" if 13 <= len(digits) <= 19 and _luhn(digits) else m.group(0)
 
-    text = _EMAIL.sub("[email]", text)
+    text = _EMAIL_SPOKEN.sub("[email]", _EMAIL.sub("[email]", text))
     text = _PAN.sub("[pan]", text)
     text = _CARD.sub(card, text)
     text = _AADHAAR.sub("[aadhaar]", text)

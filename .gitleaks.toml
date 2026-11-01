@@ -1,0 +1,11 @@
+# Secret scan configuration (CI runs gitleaks over the whole history).
+title = "to;doh-the event planner"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fake keys used as test fixtures (they all contain the word SECRET and are never valid for any service)"
+targetRules = ["generic-api-key"]
+regexTarget = "secret"
+regexes = ['''^[A-Za-z0-9_-]{0,12}SECRET[A-Za-z0-9]{0,24}$''']

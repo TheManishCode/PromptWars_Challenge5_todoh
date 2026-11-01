@@ -1,6 +1,7 @@
 """Serving the app (docs/HOSTING.md). Flask's built-in server is for one person on this machine; anything reachable from another machine needs waitress.
 
-The built-in server has no idle timeout (1,500 half-open connections were held open indefinitely in the pentest, F-002), no connection cap and no body
+The plain built-in server has no idle timeout (1,500 half-open connections were held open indefinitely in the pentest, F-002) and no connection cap; the
+bounded variant in ``web/server.py`` adds both for loopback use. It still cannot stop a client that trickles bytes just inside the timeout, and it has no body
 limit before the app sees it. waitress (ZPL-2.1, pure Python, optional: ``pip install eventmate[serve]``) adds all three. This module only chooses and
 configures; nothing here is on by default for a loopback bind.
 """
@@ -48,5 +49,7 @@ def run(app, host: str, port: int, requested: str = "auto", remote: bool = False
     if kind == "waitress":
         make_waitress(app, host, port, **overrides).run()
     else:
-        app.run(host=host, port=port, threaded=True, debug=False, use_reloader=False)
+        from eventmate.web.server import make_bounded_server  # the built-in server with an idle timeout and a connection cap (thread B's R-6)
+
+        make_bounded_server(app, host, port).serve_forever()
     return kind
