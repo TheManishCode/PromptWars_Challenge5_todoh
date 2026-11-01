@@ -311,6 +311,9 @@ def test_the_wall_gate_round_and_sections_work_by_keyboard(world):
         target = page.query_selector(f'#wall-cells button:nth-child({to_slot + 1})')
         assert f"spot {to_slot}:" in target.inner_text() and "Asha Test" in target.inner_text(), target.inner_text()
         target.focus()
+        chip = target.bounding_box()  # WCAG 2.4.7: the focused spot must be visible to a sighted keyboard user, not a 1 px clipped box
+        assert chip and chip["width"] > 60 and chip["height"] >= 40, chip
+        assert 0 <= chip["x"] and chip["x"] + chip["width"] <= page.evaluate("innerWidth") and 0 <= chip["y"] and chip["y"] + chip["height"] <= page.evaluate("innerHeight"), chip
         page.keyboard.press("Enter")
         page.wait_for_selector("#wall-resultrow:not([hidden])", timeout=10000)
         assert "FOUND" in page.inner_text("#wall-result")

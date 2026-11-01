@@ -58,6 +58,10 @@ body.no-gl #gl-fallback {
 #room-nav button { background: transparent; color: var(--ink); border: 1px solid #2e5a7a; border-radius: 8px; padding: 10px 14px; min-height: 44px; font: inherit; font-size: 13px; cursor: pointer; }
 #room-nav button:disabled { opacity: .55; cursor: default; }
 #room-nav button[hidden] { display: none; }
+/* the round's spots are hidden from a pointer (the canvas is the board), but a keyboard user must SEE where focus is: the focused spot's name shows as a chip above the panel */
+#wall-cells.sr-only:focus-within { position: fixed; left: 50%; bottom: 190px; transform: translateX(-50%); width: auto; height: auto; margin: 0; overflow: visible; clip: auto; z-index: 46; }
+#wall-cells button:not(:focus) { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
+#wall-cells button:focus { display: block; min-height: 44px; padding: 10px 18px; background: rgba(4, 8, 14, .96); color: var(--ink); border: 2px solid var(--blue); border-radius: 10px; font: inherit; }
 #wall-pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 6px 0; }
 #wall-pager[hidden] { display: none; }
 #wall-pager button { min-width: 44px; min-height: 44px; }
