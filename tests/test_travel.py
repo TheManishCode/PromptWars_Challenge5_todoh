@@ -159,9 +159,9 @@ def test_adapter_no_results_is_an_empty_search_not_an_error():
 
 
 def test_adapter_maps_failures_to_travel_error_and_never_leaks_internals():
-    from fli.search.exceptions import SearchRejectedError, SearchTimeoutError
+    from fli.search.exceptions import SearchConnectionError, SearchTimeoutError
 
-    for exc in (SearchTimeoutError("timed out"), SearchRejectedError("blocked"), RuntimeError("boom")):
+    for exc in (SearchTimeoutError("timed out"), SearchConnectionError("blocked"), RuntimeError("boom")):
         with pytest.raises(TravelError):
             adapter(FakeSearch(exc=exc)).search_one_way("DEL", "BOM", date(2026, 12, 12))
 

@@ -35,7 +35,6 @@ from eventmate.wall.routes import Wall
 from eventmate.wall.store import WallConfig, WallStore
 from eventmate.web.base import (
     AUDIO_UPLOAD_LIMIT,
-    CSP,
     asset_base,
     csp_for,
     EmptyBody,
