@@ -15,7 +15,7 @@ MAX_WORDS = 55  # about twenty seconds at a normal speaking pace
 MORE = "Want details? The full answer is on screen."
 _ABBREVIATIONS = frozenset({"rs", "mr", "mrs", "ms", "dr", "st", "vs", "no", "approx", "e.g", "i.e", "etc", "inr", "min", "max"})
 
-_LINK = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")  # links and images: the text stays, the address goes
+_LINK = re.compile(r"!?\[([^\]]{0,300})\]\([^)]{0,2000}\)")  # links and images: the text stays, the address goes
 _URL = re.compile(r"(?:https?://|www\.)\S+")
 _EMPHASIS = re.compile(r"(\*\*|__|\*|`)")
 _HEADING_OR_BULLET = re.compile(r"(?m)^\s*(?:#{1,6}\s+|[-*+]\s+|\d{1,2}[.)]\s+|>\s+)")

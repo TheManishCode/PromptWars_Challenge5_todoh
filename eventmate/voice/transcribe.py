@@ -82,6 +82,7 @@ class Transcriber:
         self._running = threading.Lock()  # one transcription at a time: the engine is heavy
         self._count = threading.Lock()
         self._waiting = 0
+        self._stuck = None  # the future of a transcription that outlived its timeout: it cannot be killed, so nothing new starts until it ends (F-006)
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="transcribe")
 
     def capabilities(self) -> dict:
@@ -101,6 +102,9 @@ class Transcriber:
         if length is not None and length > self.max_seconds:
             raise TranscribeError(413, f"the recording is longer than {self.max_seconds} seconds")
         with self._count:
+            if self._stuck is not None and not self._stuck.done():
+                raise TranscribeError(503, "voice transcription is still finishing an earlier recording; try again later or type your message")
+            self._stuck = None
             if self._waiting >= self.queue_limit:
                 raise TranscribeError(429, "voice transcription is busy; try again in a moment")
             self._waiting += 1
@@ -123,6 +127,7 @@ class Transcriber:
             try:
                 result = future.result(timeout=limit)
             except FutureTimeout:
+                self._stuck = future  # a thread cannot be stopped: do not pile more work behind it
                 raise TranscribeError(504, "transcription took too long; try a shorter note or type your message") from None
             except TranscribeError:
                 raise

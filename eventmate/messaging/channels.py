@@ -307,8 +307,8 @@ class EmailChannel:
                 subject=str(msg.get("Subject", ""))[:200], in_reply_to=str(msg.get("In-Reply-To", "")).strip()[:400], references=str(msg.get("References", ""))[:2000],
                 attachments=min(attachments, 100), truncated=truncated,
             )
-        except (ValueError, TypeError, KeyError, LookupError, ArithmeticError):
-            return None  # one malformed message must not stop the others
+        except Exception:  # noqa: BLE001 - one hostile message must never stop the others: a 135 KB nest of multiparts raised RecursionError out of poll() and blocked every vendor reply (F-008)
+            return None
 
 
 def _dsn(msg) -> Optional[Bounce]:
@@ -332,7 +332,7 @@ def _dsn(msg) -> Optional[Bounce]:
         action, status = str(per_recipient.get("Action", "")).strip().lower(), str(per_recipient.get("Status", "")).strip()
         diagnostic = " ".join("".join(c for c in str(per_recipient.get("Diagnostic-Code", "")) if c.isprintable() or c == " ").split())[:200]
         return Bounce(permanent=action == "failed" and status.startswith("5."), recipient=recipient, original_message_id=original, status=status[:12] if re.fullmatch(r"[245]\.\d{1,3}\.\d{1,3}", status) else "", diagnostic=diagnostic)
-    except (ValueError, TypeError, KeyError, LookupError, AttributeError):
+    except Exception:  # noqa: BLE001 - a status report that cannot be read is not a bounce; deep nesting must not escape (F-008)
         return None
 
 

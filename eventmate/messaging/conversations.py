@@ -228,20 +228,21 @@ class ConversationService:
                     if not st.mandate.window_start <= local < st.mandate.window_end:
                         waiting.append(f"{d.vendor_name}: automatic messages wait for the sending window ({st.mandate.window_start:02d}:00-{st.mandate.window_end:02d}:00 IST)")
                         continue
-                recent = self._sent_since(day)
-                if len(recent) >= self.policy.per_day:
-                    waiting.append(f"daily limit of {self.policy.per_day} messages reached")
-                    return sent, waiting
-                if sum(1 for r in recent if r.vendor_id == d.vendor_id) >= self.policy.per_vendor_per_day:
-                    waiting.append(f"{d.vendor_name}: {self.policy.per_vendor_per_day} messages in 24 hours is the limit")
-                    continue
-                if d.channel == "whatsapp" and self._last_whatsapp is not None and (now - self._last_whatsapp).total_seconds() < self.policy.whatsapp_gap_s:
-                    waiting.append(f"{d.vendor_name}: WhatsApp messages are spaced {self.policy.whatsapp_gap_s} seconds apart")
-                    continue
-                try:
-                    self.store.transition(pid, d.draft_id, ("approved",), status="sending", decided_at=now)  # the claim: only one dispatcher gets past this
-                except ValueError:
-                    continue
+                with self.store._locked():  # count and claim as one step across processes: two dispatchers must not both see room for one more (F-003)
+                    recent = self._sent_since(day)
+                    if len(recent) >= self.policy.per_day:
+                        waiting.append(f"daily limit of {self.policy.per_day} messages reached")
+                        return sent, waiting
+                    if sum(1 for r in recent if r.vendor_id == d.vendor_id) >= self.policy.per_vendor_per_day:
+                        waiting.append(f"{d.vendor_name}: {self.policy.per_vendor_per_day} messages in 24 hours is the limit")
+                        continue
+                    if d.channel == "whatsapp" and self._last_whatsapp is not None and (now - self._last_whatsapp).total_seconds() < self.policy.whatsapp_gap_s:
+                        waiting.append(f"{d.vendor_name}: WhatsApp messages are spaced {self.policy.whatsapp_gap_s} seconds apart")
+                        continue
+                    try:
+                        self.store.transition(pid, d.draft_id, ("approved",), status="sending", decided_at=now)  # the claim: only one dispatcher gets past this
+                    except ValueError:
+                        continue
                 sent += self._send_one(pid, d, now)
         return sent, waiting
 

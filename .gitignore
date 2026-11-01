@@ -12,3 +12,6 @@ plans/
 logs/
 *.jsonl
 .coverage
+eventmate/wall_data/
+*.sqlite3-wal
+*.sqlite3-shm

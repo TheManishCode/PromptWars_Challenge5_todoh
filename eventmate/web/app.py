@@ -64,6 +64,9 @@ from eventmate.sourcing.search import SourceNotSupported
 from eventmate.sourcing.suppression import NeedsAcknowledgement
 from eventmate.integrations.websearch import SearchError
 from eventmate.integrations.travel import CABINS, TravelError, check_date
+from eventmate.wall.limits import WallLimits
+from eventmate.wall.routes import Wall
+from eventmate.wall.store import WallConfig, WallStore
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_FILES = {
@@ -397,6 +400,8 @@ def create_app(
     poll_seconds: Optional[float] = None,
     voice: Optional[VoiceService] = None,
     transcriber: Optional[Transcriber] = None,
+    wall_store: Optional[WallStore] = None,
+    wall_limits: Optional[WallLimits] = None,
 ) -> Flask:
     app = Flask(__name__, static_folder=None)
     app.config["MAX_CONTENT_LENGTH"] = 64 * 1024
@@ -412,6 +417,14 @@ def create_app(
     hosts = set(allowed_hosts) if allowed_hosts else set(LOOPBACK)
     writes: Dict[str, Deque[float]] = defaultdict(deque)
 
+    # The wall: its own SQLite file next to (not inside) the plan directory, so deleting a plan can never touch it. EVENTMATE_WALL=off removes the routes.
+    wall: Optional[Wall] = None
+    if os.environ.get("EVENTMATE_WALL", "on").lower() != "off":
+        wall_db = Path(os.environ.get("EVENTMATE_WALL_DB") or em.store.root.parent / "wall_data" / "wall.sqlite3")
+        bearer_on_wall = bool(api_token) and os.environ.get("EVENTMATE_WALL_BEARER") == "1"  # off by default: a public wall is exempt from the bearer token
+        wall = Wall(app, wall_store or WallStore(wall_db, WallConfig()), wall_limits,
+                    bearer_check=(lambda req: hmac.compare_digest(req.headers.get("Authorization", ""), f"Bearer {api_token}")) if bearer_on_wall else None)
+
     # ------------------------------------------------------------ guards
 
     # GET routes that spend a paid or rate-limited quota also need the CSRF header: a page on another site can fire a plain GET at a local
@@ -426,10 +439,15 @@ def create_app(
         hostname = request.host.rsplit(":", 1)[0] if not request.host.startswith("[") else request.host.split("]")[0] + "]"
         if hostname not in hosts:
             abort(Response(json.dumps({"error": "host not allowed"}), 400, mimetype="application/json"))
+        wall_path = wall is not None and request.path.startswith("/api/wall/")
+        if wall_path and wall.owns(request):
+            return wall.guard(request)  # the wall authenticates on its own (docs/WALL.md 8.2): exact allow-list, no private token or CSRF, no prefix exemption
         if request.path.startswith("/api/") and api_token:
             supplied = request.headers.get("Authorization", "")
             if not hmac.compare_digest(supplied, f"Bearer {api_token}"):
                 return _err(401, "authentication required")
+        if wall_path:
+            return wall.unknown()  # an unlisted wall path gets no exemption: the bearer check above applied, and the answer is a plain 404
         if request.method in ("GET", "HEAD") and spends_quota(request.path):
             if not hmac.compare_digest(request.headers.get("X-EventMate-CSRF", ""), csrf_token):
                 return _err(403, "missing or invalid CSRF token")
@@ -475,7 +493,7 @@ def create_app(
         resp.headers["X-Content-Type-Options"] = "nosniff"
         resp.headers["Referrer-Policy"] = "no-referrer"
         resp.headers["X-Frame-Options"] = "DENY"
-        if request.path.startswith("/api/"):
+        if request.path.startswith("/api/") and not request.path.startswith("/api/wall/"):  # the wall sets its own: public reads are cacheable, private ones no-store
             resp.headers["Cache-Control"] = "no-store"
         return resp
 

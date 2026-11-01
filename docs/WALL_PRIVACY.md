@@ -1,0 +1,15 @@
+# The wall: what is stored, shown and removed
+
+Written for the owner to adapt. **The exact wording of the public notice shown to visitors and the removal and backup promise are the owner's decision**; this page states what the code does.
+
+- **Names are public.** A name (real or a nickname, the visitor's choice) is shown to everyone on the wall once approved. Nothing is shown before approval (pre-moderation, the default).
+- **What is stored in the wall file:** the name (normalized), when it was submitted and approved, its position, whether it was found in a return round (`found_at`), whether the visitor opted into the Hall, the best ranked time per period for opted-in or not-yet-opted-in marks (shown only for opted-in, visible marks), a hash of the browser credential, a hash of the recovery code if one was made, short-lived idempotency keys (24 hours), round records (30 days). Counts only: accepted marks. No visitor counters, analytics or fingerprinting.
+- **What is not stored with a mark:** no IP address, user agent or visitor id. Rate limits keep addresses in memory only and forget them on restart; an address stays personal data even when hashed, so none is written to disk.
+- **The credential is per browser.** It identifies a browser profile, not a person or device. Clearing cookies or switching browser gives a fresh visitor. Getting the old one back needs the recovery code. If the cookie and the code are both lost, the link to the mark is gone (the mark stays on the wall until the owner removes it). No email or other recovery channel exists.
+- **Removal blanks the name at once** in the live database and every public read, and clears the Hall flag and the person's times. The record (id, position, timestamps, status `removed`) stays as an empty tombstone so positions never shift; the credential stays linked, so a removed visitor cannot sign again from the same browser (reversible default).
+- **Backups keep a copy of a removed name until the backup ages out.** Default retention for the owner to state and keep: 30 days. A restore from an older backup brings removed names back until they are removed again; keep your own removal record.
+- **Cached copies:** responses may sit in browsers or a CDN for up to 60 seconds (30 for the Hall). Copies already held cannot be recalled. A file written by `export-public` and published cannot be recalled.
+- **The Hall:** opt-in, default off. The consent text must say the name and the time are shown publicly, that times reset every period (monthly by default), and that the visitor can withdraw at any time. A time includes network and render time and is not a pure reaction time.
+- **The recovery code** is shown once and only its hash is stored; a lost response means making a new code.
+- **Separation:** the wall has its own file and imports no plan, guest, draft or workspace data. Wall names never go to a model, a trace, a log line or a private export (a test sweeps logs and files for a marker name).
+- **Plaintext:** the wall file is not encrypted by the application. Disk encryption of the host is not verified by the code.

@@ -14,6 +14,7 @@ import os
 import secrets
 import threading
 import time
+import unicodedata
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -93,9 +94,22 @@ class ParseResult(_Model):
     totals: GuestListTotals
 
 
+_INVISIBLE = frozenset({"Cc", "Cf", "Cs", "Co", "Cn"})  # control, format (zero-width, bidi, tag characters), surrogate, private use, unassigned
+_SKIPPED_AT_START = _INVISIBLE | {"Zs", "Zl", "Zp", "Mn", "Me"}  # what a spreadsheet may ignore before it decides a cell is a formula
+
+
 def _clean(cell: str) -> str:
-    """Control characters out (a leading tab or NUL must not hide a formula), then trimmed."""
-    return "".join(c for c in cell if c >= " " and c != "\x7f").strip()
+    """Control, zero-width and bidi characters out (a leading tab, NUL or U+200B must not hide a formula), then trimmed (F-005)."""
+    return "".join(c for c in cell if unicodedata.category(c) not in _INVISIBLE).strip()
+
+
+def _starts_like_formula(value: str) -> bool:
+    """Does the cell begin with = + - or @ once anything invisible or blank in front of it is looked past (a combining mark, a space of any width)."""
+    for c in value:
+        if unicodedata.category(c) in _SKIPPED_AT_START:
+            continue
+        return c in FORMULA_START or unicodedata.normalize("NFKC", c) in FORMULA_START  # a full-width "＝" folds to "="
+    return False
 
 
 def totals_of(guests: Tuple[Guest, ...]) -> GuestListTotals:
@@ -182,7 +196,7 @@ def _row(line: int, cells: List[str], names: List[str], index: int):
     for column, value in row.items():
         if len(value) > MAX_CELL:
             bad(column, f"longer than {MAX_CELL} characters")
-        elif value.startswith(FORMULA_START):
+        elif _starts_like_formula(value):
             bad(column, "starts with = + - or @, which a spreadsheet would run as a formula; remove that character")
     if errors:
         return errors

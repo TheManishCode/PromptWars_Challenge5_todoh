@@ -68,13 +68,22 @@ def default_resolver(host: str) -> List[str]:
     return sorted({i[4][0] for i in infos})
 
 
+_IPV4_COMPATIBLE = ipaddress.ip_network("::/96")
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
 def _public(ip: str) -> bool:
     try:
         addr = ipaddress.ip_address(ip)
     except ValueError:
         return False
-    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
-        addr = addr.ipv4_mapped
+    if isinstance(addr, ipaddress.IPv6Address):
+        if addr.ipv4_mapped:
+            addr = addr.ipv4_mapped
+        elif addr in _IPV4_COMPATIBLE:
+            return False  # ::/96 is deprecated; ::127.0.0.1 and friends have no business in a fetch (F-007)
+        elif addr in _NAT64:
+            return _public(str(ipaddress.IPv4Address(int(addr) & 0xFFFFFFFF)))  # 64:ff9b::a9fe:a9fe is 169.254.169.254 on a network with a NAT64 gateway
     return addr.is_global and not addr.is_multicast
 
 

@@ -69,13 +69,20 @@ def probe_seconds(data: bytes, kind: str) -> Optional[float]:
 
 
 def _wav(data: bytes) -> Optional[float]:
-    pos, byte_rate = 12, 0
+    """Length from a PCM WAV's headers. A byte rate that is not rate x channels x bits would make a long recording look short, so it is not believed: the length
+    is then unknown and the transcriber's own timeout, not this number, bounds the work (F-006). A data size that is too large only makes the note look longer."""
+    pos, byte_rate, fmt = 12, 0, None
     while pos + 8 <= len(data):
         cid, size = data[pos:pos + 4], struct.unpack("<I", data[pos + 4:pos + 8])[0]
-        if cid == b"fmt " and size >= 12:
-            byte_rate = struct.unpack("<I", data[pos + 16:pos + 20])[0]
+        if cid == b"fmt " and size >= 16:
+            tag, channels, rate, byte_rate, _align, bits = struct.unpack("<HHIIHH", data[pos + 8:pos + 24])
+            fmt = (tag, channels, rate, bits)
         if cid == b"data":
-            return size / byte_rate if byte_rate else None
+            if not byte_rate:
+                return None
+            if fmt and fmt[0] == 1 and byte_rate != fmt[1] * fmt[2] * fmt[3] // 8:
+                return None
+            return size / byte_rate
         pos += 8 + size + (size & 1)
     return None
 

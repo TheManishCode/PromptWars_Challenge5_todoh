@@ -1,0 +1,35 @@
+# Wall name blocklist, one entry per line, matched after case, accent and look-alike digit folding.
+#   word   : blocks a name that has this as a whole word ("sex" blocks "Sex" but not "Essex")
+#   ~frag  : blocks a name that contains this fragment anywhere (for long terms that are never part of a real name)
+# This reduces abuse. It is not complete and must never be described as complete. Pre-moderation is the real control.
+~fuck
+~cunt
+~nigg
+~faggot
+~bitch
+~asshole
+~whore
+~madarchod
+~behenchod
+~bhenchod
+~chutiya
+~hitler
+shit
+slut
+dick
+cock
+pussy
+penis
+vagina
+bastard
+retard
+rape
+rapist
+nazi
+kkk
+isis
+porn
+sex
+randi
+gaand
+lund
