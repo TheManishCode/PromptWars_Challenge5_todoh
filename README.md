@@ -17,10 +17,6 @@ Language models are used where wording helps (reading your brief, suggesting ide
 
 > **Status: early.** Vendor data is synthetic seed data. Email is tested with fake SMTP/IMAP only and has not been validated against a real mailbox. Treat this as a working prototype, not a production service.
 
-<p align="center">
-  <img src="docs/assets/download.png" alt="to;doh UI Preview" width="800">
-</p>
-
 ## What it does
 
 | Area | Capability |
