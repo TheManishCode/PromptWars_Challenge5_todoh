@@ -1,4 +1,4 @@
-"""Channels (ADR-042): email over SMTP/IMAP and WhatsApp through WAHA, with fake transports. No test touches the network."""
+"""Channels: email over SMTP/IMAP and WhatsApp through WAHA, with fake transports. No test touches the network."""
 
 import json
 import smtplib

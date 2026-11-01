@@ -12,7 +12,7 @@ from pydantic import Field, field_validator, model_validator
 from eventmate.schemas.core import AccessFeature, ConstraintCheck, MAX_BUDGET_INR, MAX_GUESTS, SOURCE_PATTERN, UnverifiedItem, VendorCategory, _Model, _clean_text
 
 # ------------------------------------------------------------------ travel
-# Flight fares and schedules from an external tool (ADR-028). Indicative only; to;doh-the event planner never books or pays.
+# Flight fares and schedules from an external tool. Indicative only; to;doh-the event planner never books or pays.
 
 _IATA = r"^[A-Z]{3}$"
 GOOGLE_FLIGHTS_PREFIX = "https://www.google.com/travel/flights"
@@ -82,7 +82,7 @@ class MultiCityResult(_Model):
 
 
 # ------------------------------------------------------------ venue discovery
-# Candidates from OpenStreetMap (ADR-028). They carry no price or availability and never enter the vendor database.
+# Candidates from OpenStreetMap. They carry no price or availability and never enter the vendor database.
 
 OSM_ATTRIBUTION = "Data (c) OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright)."
 
@@ -132,7 +132,7 @@ class DiscoveryResult(_Model):
 
 
 # ---------------------------------------------------------------------- weather
-# Forecast from OpenWeather (ADR-029). Only what the service returned; nothing is estimated beyond its horizon.
+# Forecast from OpenWeather. Only what the service returned; nothing is estimated beyond its horizon.
 
 RAIN_POSSIBLE_AT = 0.3
 
@@ -170,7 +170,7 @@ class WeatherDay(_Model):
 
 
 # ------------------------------------------------------------- multi-city trip search
-# The system orders the stops, picks dates and searches each distinct leg (ADR-030). Prices come only from the flight tool.
+# The system orders the stops, picks dates and searches each distinct leg. Prices come only from the flight tool.
 
 MAX_TRIP_STOPS = 4
 MAX_TRIP_SEARCHES = 60
@@ -239,7 +239,7 @@ class TripSearchResult(_Model):
 
 
 # ------------------------------------------------------------------------- deals
-# Advertised prices found on public web pages (ADR-031). They are leads, never quotes, and never set a plan's price.
+# Advertised prices found on public web pages. They are leads, never quotes, and never set a plan's price.
 
 DEAL_KINDS = ("caterer", "venue", "photographer", "hotel")
 
@@ -315,7 +315,7 @@ class DealReport(_Model):
 
 
 # ------------------------------------------------------------------- places
-# Ratings and reviews from Google Places (ADR-033). A price level is a coarse band, never a price.
+# Ratings and reviews from Google Places. A price level is a coarse band, never a price.
 
 GOOGLE_MAPS_PREFIXES = ("https://maps.google.com/", "https://www.google.com/maps", "https://maps.app.goo.gl/", "https://goo.gl/maps/")
 
@@ -363,7 +363,7 @@ class PlaceSearch(_Model):
 
 
 # ------------------------------------------------------------------- saved leads
-# A bookmark of an advertised price the user found (ADR-038). Never a quote: it does not price a plan or enter the ledger.
+# A bookmark of an advertised price the user found. Never a quote: it does not price a plan or enter the ledger.
 
 
 class DealLead(_Model):
@@ -394,7 +394,7 @@ class DealLead(_Model):
 
 
 # ----------------------------------------------------------------- weather advice
-# Plain-code suggestions from a forecast and the chosen venue's setting (ADR-039). Advice only: it never changes a plan.
+# Plain-code suggestions from a forecast and the chosen venue's setting. Advice only: it never changes a plan.
 
 
 class AdviceItem(_Model):
@@ -412,7 +412,7 @@ class WeatherAdvice(_Model):
 
 
 # ----------------------------------------------------------------- outreach and conversations
-# A quote request to;doh-the event planner drafts, the user approves, and the agent sends and follows (ADR-041, ADR-042). Content is bound to a hash
+# A quote request to;doh-the event planner drafts, the user approves, and the agent sends and follows. Content is bound to a hash
 # at proposal time; approval is for that exact content. Replies are stored as untrusted text with a rule-based analysis, never as facts.
 
 _EMAIL = re.compile(r"^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,24}$")
@@ -458,7 +458,7 @@ class OutreachDraft(_Model):
     plan_version: int | None = Field(default=None, ge=1)  # the plan version the text was written against (None on drafts made before this was recorded)
     basis_sha256: str = Field(default="", max_length=64)  # a hash of the plan facts the text states: event, city, date, guests, diets for a caterer
     for_plan_pick: bool = False  # written to the vendor the plan itself chose, so a plan without that vendor makes it out of date
-    approved_by: Literal["user", "mandate"] = "user"  # "mandate": sent under the user's standing permission (ADR-043), not a per-message approval
+    approved_by: Literal["user", "mandate"] = "user"  # "mandate": sent under the user's standing permission, not a per-message approval
     source: Literal["user_input"] = "user_input"
     notice: str = "Not sent until you approve it. After that to;doh-the event planner sends it through the channel you configured and reads the vendor's reply."
 
@@ -616,7 +616,7 @@ MANDATE_MAX_HOURS = 168
 
 
 class Mandate(_Model):
-    """The user's standing permission for the agent to ask routine follow-up questions in a plan's vendor threads without approving each one (ADR-043).
+    """The user's standing permission for the agent to ask routine follow-up questions in a plan's vendor threads without approving each one.
 
     Narrow by design: fixed questions about missing information only. Bounded in time, count and hours of the day, and revocable at any moment.
     """
@@ -657,7 +657,7 @@ class AutoreplyStatus(_Model):
 
 
 # ----------------------------------------------------------------- ideas
-# Personalized suggestions (ADR-045). They are never facts: no price, no availability, no capacity, no cultural claim, and they never
+# Personalized suggestions. They are never facts: no price, no availability, no capacity, no cultural claim, and they never
 # change a validated plan. A model may propose and phrase them; templates work with the model off.
 
 IdeaKind = Literal["theme", "decor", "activity", "menu_note", "checklist_item"]
@@ -893,8 +893,8 @@ class NotifyLogEntry(_Model):
     scope: dict[str, bool] = {}
 
 
-# ------------------------------------------------- external businesses (ADR-049)
-# A business found by discovery is NOT a vendor record (ADR-028). It has its own identity, is never merged with or renamed to a seed vendor,
+# ------------------------------------------------- external businesses
+# A business found by discovery is NOT a vendor record. It has its own identity, is never merged with or renamed to a seed vendor,
 # and carries where it came from. Ids never collide: external vendor ids start with "ext_", seed ids never do.
 
 EXTERNAL_PREFIX = "ext_"

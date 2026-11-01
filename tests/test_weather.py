@@ -1,4 +1,4 @@
-"""Weather from OpenWeather (ADR-029): key from the environment only, never leaked, never invented."""
+"""Weather from OpenWeather: key from the environment only, never leaked, never invented."""
 
 import json
 import os

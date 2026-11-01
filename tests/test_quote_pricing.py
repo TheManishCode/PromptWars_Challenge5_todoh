@@ -1,4 +1,4 @@
-"""F9 part 2: recorded quotes drive prices everywhere; an expired quote fails closed (ADR-026)."""
+"""F9 part 2: recorded quotes drive prices everywhere; an expired quote fails closed."""
 
 from datetime import date, datetime, UTC
 

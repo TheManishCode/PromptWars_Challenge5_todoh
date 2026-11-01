@@ -1,7 +1,7 @@
 """Observation ledger: real vendor quotes with provenance, validity and deterministic quote intelligence.
 
 An append-only JSONL file holds what the user records. Nothing here asks an LLM for a fact; the report is
-computed from the latest unedited quote. Observations do not yet feed planning (ADR-025).
+computed from the latest unedited quote. Observations do not yet feed planning.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ class ObservationStore:
         return [o for o in self._file().read() if o.vendor_id == vendor_id]
 
     def pricing_quote(self, vendor_id: str) -> QuoteObservation | None:
-        """The latest quote that may set a price. A public listing never does (ADR-025/026)."""
+        """The latest quote that may set a price. A public listing never does."""
         usable = [o for o in self.quotes(vendor_id) if o.source_type != ObservationSource.PUBLIC_LISTING]
         return usable[-1] if usable else None
 

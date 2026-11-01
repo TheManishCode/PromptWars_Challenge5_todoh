@@ -14,7 +14,6 @@ Planning tests need Fast Downward and VAL (`EVENTMATE_FD`, `EVENTMATE_VAL`; see 
 - Tests first. Each new input surface gets at least one adversarial test (malformed input, boundary, hostile text).
 - Cross-boundary structures are frozen Pydantic models with `extra="forbid"`. Money is whole INR integers.
 - Prompts live in `prompts/` as versioned Markdown (wording and output format only). Add `vN+1`; never edit a used prompt.
-- Record a decision in `docs/DECISIONS.md` (new ADR), update `docs/ROADMAP.md`, and update `docs/HANDOFF.md` in the same change. A test enforces this.
 - Keep `make check` (pyflakes, ruff, JS syntax, bandit, tests) green; CI runs the same steps on Python 3.12 to 3.14, plus a coverage gate, a soak test and a container job. Run `python tools/loadtest/soak.py --seconds 60` after anything that touches the server.
 - New functions stay small: complexity above 15 (`radon cc -n D`) means split it. Third-party front-end code goes in `eventmate/web/static/vendor/` with its licence and a SHA-256 in `docs/ATTRIBUTIONS.md`.
 

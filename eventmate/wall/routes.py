@@ -1,4 +1,4 @@
-"""The wall's HTTP surface (docs/WALL.md, 8.6): exactly 14 routes, authenticated by the wall's own cookie and CSRF value.
+"""The wall's HTTP surface: exactly 14 routes, authenticated by the wall's own cookie and CSRF value.
 
 The wall does not use the private session. The allow-list below is matched on the registered route rule, never on a path prefix, so an unknown or future
 ``/api/wall/...`` path is a plain 404 and gets no exemption from the bearer token. No wall response contains the private CSRF value, and the wall's CSRF

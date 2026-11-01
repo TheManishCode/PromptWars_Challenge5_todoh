@@ -83,8 +83,8 @@ class VendorRepository:
             raise DataIntegrityError(f"duplicate record ids: {dupes}")
         self._venues = venues
         self._vendors = vendors
-        self.quotes = None  # ObservationStore, attached by to;doh-the event planner (ADR-026)
-        self.access = None  # AccessibilityStore, attached by to;doh-the event planner (ADR-046)
+        self.quotes = None  # ObservationStore, attached by to;doh-the event planner
+        self.access = None  # AccessibilityStore, attached by to;doh-the event planner
         self.clock: Callable[[], date] = date.today
 
     def venue_access(self, venue_id: str):

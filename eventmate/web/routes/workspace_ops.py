@@ -54,7 +54,7 @@ def register(app, k):
 
     @app.get("/api/workspace/export")
     def workspace_export():
-        """Everything in this workspace as one zip (docs/WORKSPACES.md). Needs the CSRF header; spends no quota."""
+        """Everything in this workspace as one zip. Needs the CSRF header; spends no quota."""
         with lock:
             data = transfer.export_workspace(em)
         return Response(data, mimetype="application/zip", headers={"Content-Disposition": 'attachment; filename="todoh-export.zip"'})

@@ -1,4 +1,4 @@
-"""Google Places: ratings, review counts, price level and optional reviews (ADR-033). Fakes only: no test spends quota."""
+"""Google Places: ratings, review counts, price level and optional reviews. Fakes only: no test spends quota."""
 
 import json
 import urllib.error

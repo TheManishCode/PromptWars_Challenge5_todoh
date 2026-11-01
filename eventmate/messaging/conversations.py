@@ -1,4 +1,4 @@
-"""The vendor-conversation agent (ADR-042): it sends approved messages, reads replies and tells the user what came back.
+"""The vendor-conversation agent: it sends approved messages, reads replies and tells the user what came back.
 
 Patterns taken from OpenMuse (MIT, read 2026-10-30; no code copied): a proposal is bound to a content hash, expires, and is approved or
 denied once; execution is claimed before it happens so it cannot run twice; an outcome that cannot be known is recorded as unknown and
@@ -6,7 +6,7 @@ never retried; a worker loop does the slow part; the user sees an inbox of what 
 
 * nothing leaves without an approval of exactly that text (the hash), and never past its expiry;
 * the agent writes only fixed templates or the user's own words, never a price, a promise or the budget;
-* a vendor's reply is untrusted text. The analysis quotes it; it does not record a quote or change a plan (ADR-025);
+* a vendor's reply is untrusted text. The analysis quotes it; it does not record a quote or change a plan;
 * limits are code: sends per vendor and per day, a gap between WhatsApp messages, follow-ups per thread.
 """
 
@@ -400,7 +400,7 @@ class ConversationService:
         self.suppressions.add("email", hit[1].recipient, "bad_address", b.original_message_id or item.external_id, "system: delivery failure notice", detail)
         self.apply_block("email", hit[1].recipient)
 
-    # ------------------------------------------------------------ standing permission (ADR-043)
+    # ------------------------------------------------------------ standing permission
 
     def _require_healthy(self) -> None:
         reason = self.health() if self.health else None
@@ -456,7 +456,7 @@ class ConversationService:
         return 1 if self.queue_automatic(pid, root, options[0], f"reply:{last.message_id}")[0] is not None else 0
 
     def queue_automatic(self, pid: str, root: str, text: str, action_key: str) -> tuple[OutreachDraft | None, str]:
-        """The one way anything is sent without a per-message approval (ADR-043, ADR-044): checks the standing permission and its caps, marks the
+        """The one way anything is sent without a per-message approval: checks the standing permission and its caps, marks the
         draft as automatic with the disclosure line, and leaves the rest (window, kill switch, send limits) to dispatch. Returns (draft, reason)."""
         root_draft = self.store.get(pid, root)
         if root_draft is not None and self.blocked_reason(root_draft):

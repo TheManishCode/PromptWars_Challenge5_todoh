@@ -1,4 +1,4 @@
-"""Personalized ideas (ADR-045): suggestions, never facts.
+"""Personalized ideas: suggestions, never facts.
 
 An LLM may propose and phrase ideas. It never sources a price, an availability, a capacity or a cultural claim, and it never decides
 whether a plan is valid. A deterministic template path works with the model switched off.

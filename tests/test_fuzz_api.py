@@ -1,4 +1,4 @@
-"""Fuzz every route of the web API (ADR-037): no input may cause a 5xx other than the deliberate 502/503, or leak a traceback or a secret."""
+"""Fuzz every route of the web API: no input may cause a 5xx other than the deliberate 502/503, or leak a traceback or a secret."""
 
 import json
 import random

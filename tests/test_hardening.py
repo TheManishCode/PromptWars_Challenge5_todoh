@@ -1,4 +1,4 @@
-"""Adversarial regressions found by deliberately breaking each integration (ADR-037). Every case here crashed or misbehaved before its fix."""
+"""Adversarial regressions found by deliberately breaking each integration. Every case here crashed or misbehaved before its fix."""
 
 import http.client
 import http.server
@@ -306,7 +306,7 @@ def test_no_safety_check_in_the_package_relies_on_assert():
 
 
 def test_modules_that_read_the_open_web_never_import_a_model_or_a_shell():
-    """Architecture invariant (ADR-037): web text can never reach a model, and nothing here can run a command."""
+    """Architecture invariant: web text can never reach a model, and nothing here can run a command."""
     import ast
     from pathlib import Path
 

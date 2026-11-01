@@ -1,4 +1,4 @@
-"""Public contact addresses from a business's own pages (ADR-049).
+"""Public contact addresses from a business's own pages.
 
 Reads the business's website and at most one same-domain contact or about page, through the safe fetcher (SSRF checks, robots.txt, size and time caps).
 It extracts only what a visitor can see: ``mailto:`` links and addresses printed in the page text. Text a visitor cannot see (scripts, styles, comments,

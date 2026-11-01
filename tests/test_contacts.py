@@ -1,4 +1,4 @@
-"""Contact extraction from a business's own pages (ADR-049): mailto links and visible addresses only, same domain only, robots honoured, nothing guessed."""
+"""Contact extraction from a business's own pages: mailto links and visible addresses only, same domain only, robots honoured, nothing guessed."""
 
 import pytest
 from pydantic import ValidationError

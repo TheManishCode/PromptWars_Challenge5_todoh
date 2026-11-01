@@ -1,4 +1,4 @@
-"""Test vendors (ADR-049): honest, labelled, and only ever an address the user owns. A discovered business can never be one, and one can never pass as discovered."""
+"""Test vendors: honest, labelled, and only ever an address the user owns. A discovered business can never be one, and one can never pass as discovered."""
 
 import json
 from datetime import timedelta

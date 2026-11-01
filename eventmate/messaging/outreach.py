@@ -1,4 +1,4 @@
-"""Quote-request proposals: to;doh-the event planner drafts, the user approves, the agent sends and follows (ADR-041, ADR-042).
+"""Quote-request proposals: to;doh-the event planner drafts, the user approves, the agent sends and follows.
 
 A proposal is bound to a content hash. Approval is for exactly that text and recipient; any change needs a new proposal.
 The text is built only from the plan's validated facts and a fixed checklist, never from a model, and never contains the
@@ -299,7 +299,7 @@ class OutreachStore:
             if cur is not None and not cur.auto_handled:
                 self._inbound(plan_id)._append(cur.model_copy(update={"auto_handled": True}), message_id)
 
-    # ------------------------------------------------------------ standing permission (ADR-043)
+    # ------------------------------------------------------------ standing permission
 
     def _mandates(self, plan_id: str) -> _MandateFile:
         return _MandateFile(self.base / "mandates", run_id=plan_id)

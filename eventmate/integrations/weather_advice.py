@@ -1,4 +1,4 @@
-"""Weather advice: compare a forecast with the venue's setting and suggest a backup (ADR-039).
+"""Weather advice: compare a forecast with the venue's setting and suggest a backup.
 
 Every threshold is a constant here, every sentence is built from forecast numbers, and no model is involved. Nothing beyond the provider's
 horizon is claimed, and advice never changes a plan.

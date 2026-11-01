@@ -1,4 +1,4 @@
-"""Follow-through jobs (ADR-044): state machine, worker, claims and the standing permission, driven by a scripted fake vendor channel.
+"""Follow-through jobs: state machine, worker, claims and the standing permission, driven by a scripted fake vendor channel.
 """
 
 import multiprocessing as mp

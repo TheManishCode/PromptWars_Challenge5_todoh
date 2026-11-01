@@ -1,4 +1,4 @@
-"""Multi-city trip search: order the stops, choose dates, search each distinct leg once, rank complete itineraries (ADR-030).
+"""Multi-city trip search: order the stops, choose dates, search each distinct leg once, rank complete itineraries.
 
 All prices come from the flight tool. The ranking is plain code, so every figure can be re-derived from the legs. Nothing is booked.
 """

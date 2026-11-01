@@ -1,6 +1,6 @@
 """Front-end performance of the real /arcade page, as invariants that can fail, not timings that depend on the machine.
 
-This sandbox renders WebGL in software, so frame times here say nothing about a phone's GPU (docs/ARCADE_UI.md says so too). What can be proved anywhere:
+This sandbox renders WebGL in software, so frame times here say nothing about a phone's GPU. What can be proved anywhere:
 - the chat is wired before the room is built, so a message typed in the first moments is not lost;
 - the page measures its own frames and reports p50/p95;
 - a device that is over budget is always taken down to the light path (never left slow with quality still to shed);
@@ -115,7 +115,7 @@ def test_the_55mb_cat_machine_is_the_visitors_choice_on_a_phone(base):
         browser.close()
 
 
-# Ratchets: today's numbers, measured on 2026-11-01 (docs/ARCADE_UI.md). A change that makes the first load heavier must lower something else or raise these on purpose.
+# Ratchets: today's numbers, measured on 2026-11-01. A change that makes the first load heavier must lower something else or raise these on purpose.
 CODE_BUDGET_BYTES = 330_000  # html + css + js on the wire, gzip (measured 273 KB)
 PHONE_MODEL_BUDGET_BYTES = int(8.0 * 1024 * 1024)  # models fetched by a phone in the first 25 s (measured 7.7 MB)
 

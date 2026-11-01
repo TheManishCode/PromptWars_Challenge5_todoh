@@ -1,4 +1,4 @@
-"""Validation of a wall name (docs/WALL.md, 8.4). Server side only. The blocklist and the look-alike check reduce abuse; they are not complete."""
+"""Validation of a wall name. Server side only. The blocklist and the look-alike check reduce abuse; they are not complete."""
 
 from __future__ import annotations
 

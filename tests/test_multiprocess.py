@@ -1,4 +1,4 @@
-"""The outreach store's compare-and-set must hold across processes, not only threads (ADR-044): the web server and the worker can run side by side."""
+"""The outreach store's compare-and-set must hold across processes, not only threads: the web server and the worker can run side by side."""
 
 import multiprocessing as mp
 from datetime import datetime, UTC

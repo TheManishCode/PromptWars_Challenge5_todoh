@@ -1,4 +1,4 @@
-"""Durable jobs: the goal, its state, and what happens next (ADR-044; design: docs/JOBS_DESIGN.md).
+"""Durable jobs: the goal, its state, and what happens next.
 
 A Job is "get N comparable quotes from these vendors by a deadline". The state machine owns the goal; no model does.
 State lives in SQLite so a worker and the web process can both use it, and a crash loses nothing.

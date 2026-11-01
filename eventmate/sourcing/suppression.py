@@ -1,4 +1,4 @@
-"""The do-not-contact list (ADR-049).
+"""The do-not-contact list.
 
 A suppression is about an address on a channel, not about a vendor, a job or a plan: one entry covers every job, every plan and every business record
 that resolves to the same address, and it is checked when a message is about to be sent, so a draft that was queued or approved earlier is stopped too.

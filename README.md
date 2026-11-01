@@ -7,7 +7,7 @@
 
 <h1 align="center">to;doh <sub>the event planner</sub></h1>
 
-<p align="center"><b>A GenAI-powered planning assistant that helps users organise weddings, birthdays and community events with budgets, timelines, vendor checklists and personalised ideas, with every plan checked by solvers rather than trusted to a model.</b><br><a href="docs/PROBLEM_STATEMENT.md">Where each part of that sentence is implemented and tested</a></p>
+<p align="center"><b>A GenAI-powered planning assistant that helps users organise weddings, birthdays and community events with budgets, timelines, vendor checklists and personalised ideas, with every plan checked by solvers rather than trusted to a model.</b><br><a href="#problem-statement-coverage">Where each part of that sentence is implemented and tested</a></p>
 
 <p align="center">
 <a href="https://github.com/TheManishCode/to_doh_the_event_planner/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheManishCode/to_doh_the_event_planner/actions/workflows/ci.yml/badge.svg"></a>
@@ -23,6 +23,20 @@ to;doh-the event planner turns a plain-language brief into a plan with a budget,
 Language models are used where wording helps (reading your brief, suggesting ideas, answering questions, rewording explanations) and deliberately **not** where facts matter: plan validity, prices, availability, capacity and legal or cultural claims come from code, data, or you.
 
 > **Status: early.** Vendor data is synthetic seed data. Email is tested with fake SMTP/IMAP only and has not been validated against a real mailbox. Treat this as a working prototype, not a production service.
+
+## Problem statement coverage
+
+*Create a GenAI-powered planning assistant that helps users organize weddings, birthdays, and community events with budgets, timelines, vendor checklists, and personalized ideas.*
+
+| Requirement | Implementation | Tests |
+|---|---|---|
+| GenAI-powered assistant | `eventmate/assistant/`, `eventmate/agents/manager.py`, versioned `prompts/`; models phrase, code and data decide facts | `tests/test_assistant.py`, `tests/test_idea_guard.py` |
+| Weddings, birthdays, community events | `EventType` in `eventmate/schemas.py`; `eventmate/planning/community.py` with `eventmate/data/community_profiles.json`; event-neutral vendor and deal queries | `tests/test_community.py`, `tests/test_intake_community.py`, `tests/test_deals.py` |
+| Budgets | `eventmate/agents/budget.py`, `eventmate/pricing/reality.py`, `eventmate/pricing/ledger.py` | `tests/test_budget.py` |
+| Timelines | `eventmate/agents/scheduler.py` (CP-SAT) and `eventmate/agents/planner.py` (PDDL cross-check) | `tests/test_scheduler.py`, `tests/test_planner.py` |
+| Vendor checklists | `eventmate/agents/vendor.py`, `eventmate/agents/validator.py`, `eventmate/messaging/` | `tests/test_vendor.py`, `tests/test_validator.py`, `tests/test_conversations.py` |
+| Personalized ideas | `eventmate/planning/ideas.py`: templates need no model; model ideas pass a guard | `tests/test_ideas.py`, `tests/test_idea_guard.py` |
+| Organize over time | `eventmate/agents/replanner.py`, `eventmate/plan_store.py`, `eventmate/followthrough/` | `tests/test_replanning.py`, `tests/test_plan_store.py` |
 
 ## What it does
 
@@ -90,8 +104,8 @@ eventmate/
   web/                            Flask API and single-page UI
   data/                           seed vendors, profiles, idea templates, knowledge base
 prompts/                          versioned prompt files (wording and output format only)
-tests/                            the test suite (count: docs/HANDOFF.md)
-docs/                             decisions, roadmap, setup guides, design notes
+tests/                            the test suite
+docs/                             setup, hosting and architecture guides
 ```
 
 ## Guarantees (each is enforced and tested)
@@ -112,25 +126,18 @@ docs/                             decisions, roadmap, setup guides, design notes
 python -m pytest                  # whole suite
 ```
 
-The current pass count, date and environment are recorded in [docs/HANDOFF.md](docs/HANDOFF.md) (the single source for that number); it was last run with Fast Downward, VAL and Chromium available. Without the solvers most planning tests fail by design; without Chromium the browser tests skip. Tests use fake SMTP/IMAP and fake channels and never call a keyed or external service.
+The suite was last run with Fast Downward, VAL and Chromium available. Without the solvers most planning tests fail by design; without Chromium the browser tests skip. Tests use fake SMTP/IMAP and fake channels and never call a keyed or external service.
 
 ## Documentation
 
-| Start here | |
+| | |
 |---|---|
 | [docs/DEMO.md](docs/DEMO.md) | a five-minute walkthrough |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | environment variables, API keys, optional integrations |
-| [docs/HOSTING.md](docs/HOSTING.md) · [docs/RUNBOOK.md](docs/RUNBOOK.md) · [deploy/](deploy/) | run it for other people: container, compose stack, alerts, backups |
 | [docs/EMAIL_SETUP.md](docs/EMAIL_SETUP.md) | mailbox setup, limits, how to stop everything |
-
-| Understand it | |
-|---|---|
-| [docs/eventmate_architecture.md](docs/eventmate_architecture.md) · [docs/DECISIONS.md](docs/DECISIONS.md) | architecture and every decision record |
-| [docs/GENAI.md](docs/GENAI.md) · [docs/MODEL_INPUTS.md](docs/MODEL_INPUTS.md) | where a model is used and what it may see |
-| [docs/PRIVACY.md](docs/PRIVACY.md) · [SECURITY.md](SECURITY.md) · [docs/SECURITY_FINDINGS.md](docs/SECURITY_FINDINGS.md) | privacy, reporting a vulnerability, what was attacked and fixed |
-| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | measured server and asset numbers |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | built, deferred and rejected |
-| [docs/RELEASE.md](docs/RELEASE.md) | release notes and decisions before going public |
+| [docs/HOSTING.md](docs/HOSTING.md) · [docs/RUNBOOK.md](docs/RUNBOOK.md) · [deploy/](deploy/) | run it for other people: container, compose stack, alerts, backups |
+| [docs/eventmate_architecture.md](docs/eventmate_architecture.md) | architecture |
+| [docs/PRIVACY.md](docs/PRIVACY.md) · [SECURITY.md](SECURITY.md) | privacy and reporting a vulnerability |
 | [docs/ATTRIBUTIONS.md](docs/ATTRIBUTIONS.md) | licences of the 3D models and libraries |
 
 ## Contributing

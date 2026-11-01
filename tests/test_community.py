@@ -1,4 +1,4 @@
-"""Community events (ADR-046): profiles as data, an honest split between hard checks, conditional items and suggestions.
+"""Community events: profiles as data, an honest split between hard checks, conditional items and suggestions.
 
 Class A are computed from user input and the database and fail closed with a repair. Class B are conditional requirements that only the user can mark.
 Class C are suggestions. A plan is never called safe or compliant.

@@ -1,4 +1,4 @@
-"""Safe, read-only fetching of public web pages (ADR-031).
+"""Safe, read-only fetching of public web pages.
 
 The open web is hostile input. Every URL is checked before and after each redirect: http(s) only, default ports, no credentials, and
 every address the host resolves to must be public (no loopback, private, link-local or metadata ranges). The connection is pinned to

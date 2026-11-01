@@ -1,4 +1,4 @@
-"""The wall's database (docs/WALL.md, 8.3 to 8.9): one SQLite file, WAL mode, every state change inside one ``BEGIN IMMEDIATE`` transaction.
+"""The wall's database: one SQLite file, WAL mode, every state change inside one ``BEGIN IMMEDIATE`` transaction.
 
 Rules the code enforces (and ``tests/test_wall_*.py`` checks): a slot is assigned once, at first approval, and never reused or moved; one credential holds
 one mark; a round is decided by the server's clock in the same transaction that records it; removal blanks the name at once; nothing here knows about plans,
@@ -120,7 +120,7 @@ class WallConfig:
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str]) -> WallConfig:
-        """Settings the owner may change without code (docs/WALL.md). An unset name keeps the default; a bad value stops the app at start, not at the first visitor."""
+        """Settings the owner may change without code. An unset name keeps the default; a bad value stops the app at start, not at the first visitor."""
         ints = {"EVENTMATE_WALL_CAPACITY": "section_capacity", "EVENTMATE_WALL_DAILY_CAP": "daily_submission_cap", "EVENTMATE_WALL_TOTAL_CAP": "total_cap",
                 "EVENTMATE_WALL_PENDING_CAP": "pending_cap", "EVENTMATE_WALL_WINDOW_MS": "window_ms", "EVENTMATE_WALL_ALLOWANCE_MS": "allowance_ms",
                 "EVENTMATE_WALL_ROUNDS_PER_DAY": "rounds_per_day", "EVENTMATE_WALL_SPEED_FLOOR_MS": "speed_floor_ms"}
@@ -229,7 +229,7 @@ class WallStore:
     def _now_ms(self) -> int:
         return int(self.clock().timestamp() * MS)
 
-    # ------------------------------------------------------------ periods (docs/WALL.md, 8.8)
+    # ------------------------------------------------------------ periods
 
     def period_at(self, now_ms: int) -> dict[str, Any]:
         """The ranking period the server clock says it is: id plus absolute UTC bounds, so a visitor in any zone sees the real reset time."""

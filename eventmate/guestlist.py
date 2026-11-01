@@ -1,4 +1,4 @@
-"""Guest-list import: a CSV the user uploads for one plan (ADR-055).
+"""Guest-list import: a CSV the user uploads for one plan.
 
 The list is personal data, so it is handled narrowly: parsed strictly with every problem reported by line, previewed before anything is saved,
 saved only through a single-use token, kept in one private file per plan, and deleted with the plan. Models, logs and the assistant see counts and

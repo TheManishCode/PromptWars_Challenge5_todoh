@@ -1,4 +1,4 @@
-"""Weather forecast from OpenWeather (free 5-day / 3-hour forecast API) (ADR-029).
+"""Weather forecast from OpenWeather (free 5-day / 3-hour forecast API).
 
 The key comes from OPENWEATHER_API_KEY and is only ever placed in the request URL: it is never logged and never appears in a result
 or an error message. Beyond the forecast horizon (about five days) the answer says so; nothing is estimated.

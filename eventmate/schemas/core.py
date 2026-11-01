@@ -132,7 +132,7 @@ class CapWeight(_Model):
 
 
 # ------------------------------------------------------------- community
-# Community events (ADR-046). Three kinds of requirement are kept apart on purpose:
+# Community events. Three kinds of requirement are kept apart on purpose:
 #   A. hard checks the validator computes from what the user entered and from the database (these live in ``CommunityDetails``);
 #   B. conditional requirements, shown when the user's answers trigger them and only ever marked by the user (see ``community.py``);
 #   C. suggestions (ideas), which are not constraints at all.
@@ -308,9 +308,9 @@ class EventRequest(_Model):
     parse_confidence: float = Field(ge=0.0, le=1.0)
     # empty = the BudgetPolicy default split; otherwise exactly one weight per requested service
     cap_weights: tuple[CapWeight, ...] = ()
-    # people who can make bookings in parallel; the capacity of the scheduler's organizer resource (ADR-020)
+    # people who can make bookings in parallel; the capacity of the scheduler's organizer resource
     organizers: int = Field(default=1, ge=1, le=MAX_ORGANIZERS)
-    # only for community events (ADR-046); everything the community hard checks compute from
+    # only for community events; everything the community hard checks compute from
     community: CommunityDetails | None = None
 
     @property
@@ -486,7 +486,7 @@ class Venue(_Provider):
     setting: Literal["indoor", "outdoor"]
     capacity: int = Field(ge=1, le=MAX_GUESTS)
     flat_fee: int = Field(ge=0, le=MAX_BUDGET_INR)
-    # None = the record says nothing (unknown, not "none"); a tuple is what the venue declared (ADR-046)
+    # None = the record says nothing (unknown, not "none"); a tuple is what the venue declared
     accessibility: tuple[AccessFeature, ...] | None = None
 
     def cost_for(self, guest_count: int) -> int:
@@ -1118,7 +1118,7 @@ class LedgerSummary(_Model):
 
 
 # ------------------------------------------------------------ observation ledger
-# Real vendor data with provenance (ADR-006, ADR-025). Text is data: control characters are refused.
+# Real vendor data with provenance. Text is data: control characters are refused.
 
 MAX_OBSERVATION_ITEMS = 30
 MAX_HIDDEN_COSTS = 20

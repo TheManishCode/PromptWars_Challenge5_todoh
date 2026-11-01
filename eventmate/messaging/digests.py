@@ -1,4 +1,4 @@
-"""The job digest: what changed and what needs the owner, always written to the in-app inbox (ADR-047).
+"""The job digest: what changed and what needs the owner, always written to the in-app inbox.
 
 A digest is written only when its content changes, so a job that is merely waiting does not fill the inbox. The text names vendors by name, never
 by id, and never contains the budget. An optional email copy is handled separately by ``notify.py`` and is off by default.

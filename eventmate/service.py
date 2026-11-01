@@ -127,7 +127,7 @@ class EventMate:
         self._job_store: JobStore | None = None
         self.digest_store = DigestStore(self.store.root)
         self.conversations = ConversationService(self.outreach_store, channels or channels_from_env(os.environ), self.store.latest)
-        self.integrity = Guard(self.store.root)  # while an authoritative record file is damaged, nothing is sent or approved (docs/DURABILITY.md)
+        self.integrity = Guard(self.store.root)  # while an authoritative record file is damaged, nothing is sent or approved
         self.conversations.health = self.integrity.blocker
         self.conversations.guards.append(self._job_guard)
         self.conversations.suppressions, self.conversations.unmatched = self.suppressions, self.unmatched
@@ -214,7 +214,7 @@ class EventMate:
         """Advisory checklists for the plan's dietary requirements. Never constraints."""
         return advisories_for(self.store.latest(plan_id).request)
 
-    # ---- imported guest lists (ADR-055): names stay in one private file per plan; everything else sees counts
+    # ---- imported guest lists: names stay in one private file per plan; everything else sees counts
 
     def guest_preview(self, plan_id: str, raw) -> GuestPreview:
         """Parse an uploaded CSV without saving it. The token is single use and only issued for a file with no row problems."""
@@ -254,7 +254,7 @@ class EventMate:
         )
 
     def delete_plan(self, plan_id: str) -> dict:
-        """Forget a plan: its versions, ledger, vendor messages, standing permission, jobs, ideas, digests, shortlist and checklist (docs/RETENTION.md).
+        """Forget a plan: its versions, ledger, vendor messages, standing permission, jobs, ideas, digests, shortlist and checklist.
         Refused while a message for it is being sent. The do-not-contact lists and vendor price observations are not per plan and are kept."""
         self.store.latest(plan_id)  # unknown or hostile ids fail here, before anything is touched
         if any(d.status == "sending" for d in self.outreach_store.list(plan_id)):
@@ -290,15 +290,15 @@ class EventMate:
         return self.ledger.summarize(self.store.latest(plan_id))
 
     def observe_quote(self, vendor_id: str, category: VendorCategory, **fields):
-        """Record a vendor quote you were given (ADR-025). Later plans and validation price from it (ADR-026)."""
+        """Record a vendor quote you were given. Later plans and validation price from it."""
         return self.observations.add_quote(vendor_id, category, **fields)
 
     def vendor_scores(self, category: VendorCategory, today: date | None = None):
-        """Transparent score of every vendor with a current quote in a category (ADR-040). Reads only; changes no price."""
+        """Transparent score of every vendor with a current quote in a category. Reads only; changes no price."""
         return score_category(self.observations, category, today or date.today())
 
     def quote_status(self, plan_id: str, today: date | None = None) -> list[SelectionQuoteStatus]:
-        """Quote report, staleness and confirmation source for each selection of the latest plan (ADR-006, ADR-027)."""
+        """Quote report, staleness and confirmation source for each selection of the latest plan."""
         today = today or date.today()
         self._clock(today)
         plan = self.store.latest(plan_id)
@@ -318,15 +318,15 @@ class EventMate:
         return rows
 
     def discover_venues(self, city: str, kind: str = "venue", limit: int = 20):
-        """Places mapped on OpenStreetMap: candidates to ask about, never vendor-database facts (ADR-028)."""
+        """Places mapped on OpenStreetMap: candidates to ask about, never vendor-database facts."""
         return self.discovery.venues(city, kind, limit)
 
     def weather_forecast(self, city: str, day: date):
-        """Forecast from OpenWeather. Past its horizon the answer says so; nothing is estimated (ADR-029)."""
+        """Forecast from OpenWeather. Past its horizon the answer says so; nothing is estimated."""
         return self.weather.forecast(city, day)
 
     def weather_advice(self, plan_id: str):
-        """Forecast for the event day plus code-built advice for the chosen venue's setting (ADR-039). Changes nothing."""
+        """Forecast for the event day plus code-built advice for the chosen venue's setting. Changes nothing."""
         plan = self.store.latest(plan_id)
         venue = plan.selection_for(VendorCategory.VENUE)
         rec = self.repo.get(VendorCategory.VENUE, venue.vendor_id) if venue else None
@@ -339,7 +339,7 @@ class EventMate:
         return self.weather.forecast(plan.request.city, plan.request.event_date)
 
     def save_lead(self, plan_id: str, **fields):
-        """Bookmark an advertised price against a plan. It is not a quote and changes no price (ADR-038)."""
+        """Bookmark an advertised price against a plan. It is not a quote and changes no price."""
         self.store.latest(plan_id)  # unknown or hostile ids fail here
         return self.lead_store.add(plan_id, **fields)
 
@@ -349,7 +349,7 @@ class EventMate:
 
     @property
     def jobs(self) -> JobWorker:
-        """The follow-through worker (ADR-044). The job database is created on first use."""
+        """The follow-through worker. The job database is created on first use."""
         if self._jobs is None:
             self._jobs = JobWorker(self, JobStore(self.store.root), self.jobs_clock) if self.jobs_clock else JobWorker(self, JobStore(self.store.root))
         return self._jobs
@@ -393,7 +393,7 @@ class EventMate:
 
     def draft_outreach(self, plan_id: str, category: VendorCategory, channel: str, recipient: str, sender_name: str, vendor_id: str | None = None):
         """Write a quote request for a vendor in the plan, or for another vendor of the category when ``vendor_id`` is given (to compare quotes).
-        It is a proposal: nothing leaves until it is approved (ADR-041, ADR-042)."""
+        It is a proposal: nothing leaves until it is approved."""
         vendor = None
         if vendor_id is not None:
             rv = self.resolve_vendor(vendor_id, category)
@@ -415,7 +415,7 @@ class EventMate:
         return self.outreach_store.mark_sent(plan_id, draft_id)
 
     def approve_outreach(self, plan_id: str, draft_id: str, content_hash: str):
-        """Approve exactly this text; the agent sends it through the configured channel (ADR-042)."""
+        """Approve exactly this text; the agent sends it through the configured channel."""
         self.store.latest(plan_id)
         return self.conversations.approve(plan_id, draft_id, content_hash)
 
@@ -438,7 +438,7 @@ class EventMate:
         return self.conversations.poll()
 
     def grant_autoreply(self, plan_id: str, sender_name: str, hours: int = 72, max_per_thread: int = 3, max_total: int = 10):
-        """Standing permission for fixed follow-up questions, bounded and revocable (ADR-043)."""
+        """Standing permission for fixed follow-up questions, bounded and revocable."""
         return self.conversations.grant_autoreply(plan_id, sender_name, hours, max_per_thread, max_total)
 
     def revoke_autoreply(self, plan_id: str):
@@ -500,7 +500,7 @@ class EventMate:
 
     def add_discovered(self, external_id: str, name: str, city: str, category: VendorCategory, source: str, source_url: str | None = None,
                        website: str | None = None, rating: float | None = None) -> ExternalBusiness:
-        """Record a business that discovery found. It is not a vendor record and is never promoted to one (ADR-028, ADR-049)."""
+        """Record a business that discovery found. It is not a vendor record and is never promoted to one."""
         if source not in ("osm", "gplaces"):
             raise ValueError("a discovered business comes from OpenStreetMap or Google Places")
         return self.externals.add(external_id, name, city, category, source, source_url, website, rating)
@@ -656,11 +656,11 @@ class EventMate:
         return list(self.outreach_store.contacts().values())
 
     def find_places(self, kind: str, city: str, reviews: bool = False, limit: int = 10):
-        """Google ratings, review counts and price level for a service in a city (ADR-033)."""
+        """Google ratings, review counts and price level for a service in a city."""
         return self.places.search(kind, city, reviews, limit)
 
     def find_deals(self, query):
-        """Search the web for advertised prices and rank the best of the best. Leads only; every search and fetch is logged (ADR-031)."""
+        """Search the web for advertised prices and rank the best of the best. Leads only; every search and fetch is logged."""
         rid = "deals-" + uuid.uuid4().hex[:16]
 
         def log(tool, args, ok, text, ms):
@@ -670,12 +670,12 @@ class EventMate:
         return self.deals_factory(log).run(query)
 
     def search_flights(self, origin: str, destination: str, day: date, **kw):
-        """Indicative fares and schedules for one direction. Nothing is booked (ADR-028)."""
+        """Indicative fares and schedules for one direction. Nothing is booked."""
         check_search(origin, destination, kw.get("adults", 1), kw.get("cabin", "economy"), kw.get("limit", 10))  # whatever the provider is
         return self.flights.search_one_way(origin, destination, day, **kw)
 
     def plan_trip(self, request, today: date | None = None, **kw):
-        """Order the stops, choose dates, search every distinct leg and rank complete itineraries (ADR-030). Every search is logged."""
+        """Order the stops, choose dates, search every distinct leg and rank complete itineraries. Every search is logged."""
         rid = "trip-" + uuid.uuid4().hex[:16]
 
         def log(leg, ok, text, ms):

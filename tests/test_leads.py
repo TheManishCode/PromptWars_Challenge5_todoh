@@ -1,4 +1,4 @@
-"""Saved deal leads (ADR-038): a user bookmarks an advertised price against a plan. A lead is never a quote and never prices anything."""
+"""Saved deal leads: a user bookmarks an advertised price against a plan. A lead is never a quote and never prices anything."""
 
 import json
 

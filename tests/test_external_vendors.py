@@ -1,4 +1,4 @@
-"""External businesses (ADR-049): a discovered business has its own identity, is never a seed vendor, and is contactable only through a confirmed address."""
+"""External businesses: a discovered business has its own identity, is never a seed vendor, and is contactable only through a confirmed address."""
 
 from datetime import datetime, timedelta, UTC
 

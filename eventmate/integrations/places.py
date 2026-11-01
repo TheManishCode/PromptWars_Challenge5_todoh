@@ -1,4 +1,4 @@
-"""Ratings, review counts, price level and (optionally) reviews from the Google Places API (New) (ADR-033).
+"""Ratings, review counts, price level and (optionally) reviews from the Google Places API (New).
 
 The key is sent in a header and never appears in a result, an error or a log. Reviews are requested only on demand because they bill at a
 higher tier. Places are ranked by a confidence-weighted rating so a few perfect reviews do not beat hundreds of good ones.
@@ -33,7 +33,7 @@ PRIOR_MEAN = 4.0
 _KEY_OK = re.compile(r"[A-Za-z0-9_-]{20,80}")
 _PRICE = {"PRICE_LEVEL_INEXPENSIVE": 1, "PRICE_LEVEL_MODERATE": 2, "PRICE_LEVEL_EXPENSIVE": 3, "PRICE_LEVEL_VERY_EXPENSIVE": 4}
 _TAGS = re.compile(r"<[^>]+>")
-QUERIES = {"caterer": "wedding caterers", "venue": "banquet halls and wedding venues", "photographer": "wedding photographers", "hotel": "hotels"}
+QUERIES = {"caterer": "caterers", "venue": "banquet halls and event venues", "photographer": "event photographers", "hotel": "hotels"}
 
 
 class PlacesError(Exception):

@@ -1,4 +1,4 @@
-"""F10 vendor score: a transparent formula over recorded quotes. No quote, no score; nothing is invented (ADR-040)."""
+"""F10 vendor score: a transparent formula over recorded quotes. No quote, no score; nothing is invented."""
 
 import json
 from datetime import date, datetime, UTC

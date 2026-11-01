@@ -1,4 +1,4 @@
-"""The do-not-contact list, stop requests and bounces (ADR-049).
+"""The do-not-contact list, stop requests and bounces.
 
 A suppression is about an address on a channel. It is added only by a matched stop request, a correlated permanent bounce, or the user; it stops drafts that
 were already queued; and only the user lifts it.

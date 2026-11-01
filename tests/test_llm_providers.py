@@ -1,4 +1,4 @@
-"""NVIDIA and OpenRouter clients, fallback and credit guard (ADR-032). No test here may reach a real provider or spend a credit."""
+"""NVIDIA and OpenRouter clients, fallback and credit guard. No test here may reach a real provider or spend a credit."""
 
 import json
 import urllib.error

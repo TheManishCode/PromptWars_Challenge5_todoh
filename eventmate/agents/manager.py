@@ -135,7 +135,7 @@ def _mentioned(rx: re.Pattern[str], text: str) -> bool:
     return False
 
 
-# Digit scripts of Indian languages (ADR-005/019). Anything else non-ASCII (e.g. Arabic-Indic) stays unread and fails closed.
+# Digit scripts of Indian languages. Anything else non-ASCII (e.g. Arabic-Indic) stays unread and fails closed.
 _INDIC_DIGITS = ("DEVANAGARI", "BENGALI", "GURMUKHI", "GUJARATI", "ORIYA", "TAMIL", "TELUGU", "KANNADA", "MALAYALAM")
 
 

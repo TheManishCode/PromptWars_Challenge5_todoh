@@ -1,4 +1,4 @@
-"""Deals agent: search the web, read pages safely, pull out advertised prices in code, rank the best of the best (ADR-031).
+"""Deals agent: search the web, read pages safely, pull out advertised prices in code, rank the best of the best.
 
 An agent with tools, not a chatbot: the plan is fixed code (queries from templates, a page budget, a deadline), page text is only ever
 parsed by regular expressions, and an offer exists only if the price was found in the page text. Nothing here asks an LLM for a fact.

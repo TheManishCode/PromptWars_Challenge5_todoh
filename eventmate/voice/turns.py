@@ -1,4 +1,4 @@
-"""Voice sessions and turns: the server side of a spoken conversation (docs/VOICE.md, ADR-056).
+"""Voice sessions and turns: the server side of a spoken conversation.
 
 A turn is one transcript sent to the same assistant pipeline as typed chat. It differs in three ways, all about not committing too early: proposals the turn
 makes are staged and filed only if the turn still stands, the answer cache is read but never written, and the turn is checked for cancellation after every

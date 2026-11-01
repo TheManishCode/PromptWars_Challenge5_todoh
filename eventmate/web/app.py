@@ -208,7 +208,7 @@ def create_app(
             abort(Response(json.dumps({"error": "host not allowed"}), 400, mimetype="application/json"))
         wall_path = wall is not None and request.path.startswith("/api/wall/")
         if wall_path and wall.owns(request):
-            return wall.guard(request)  # the wall authenticates on its own (docs/WALL.md 8.2): exact allow-list, no private token or CSRF, no prefix exemption
+            return wall.guard(request)  # the wall authenticates on its own: exact allow-list, no private token or CSRF, no prefix exemption
         if request.path.startswith("/api/") and api_token:
             supplied = request.headers.get("Authorization", "")
             if not hmac.compare_digest(supplied, f"Bearer {api_token}"):

@@ -1,4 +1,4 @@
-"""Venue discovery from OpenStreetMap through the Overpass API (ADR-028).
+"""Venue discovery from OpenStreetMap through the Overpass API.
 
 Results are candidates, not facts about price or availability, and are never written into the vendor database. The only user
 text that reaches a query is the city name, and it is checked against a strict allow-list first.

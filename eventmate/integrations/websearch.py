@@ -1,4 +1,4 @@
-"""Web search providers for the deals agent (ADR-031).
+"""Web search providers for the deals agent.
 
 Brave Search (official API, needs BRAVE_SEARCH_API_KEY) is used when a key exists. Otherwise DuckDuckGo's HTML endpoint is read: it is
 unofficial, may be rate-limited or change without notice, and its terms are the user's to check. Results are untrusted data; only

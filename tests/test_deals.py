@@ -1,4 +1,4 @@
-"""Deals agent (ADR-031): search the web, read pages safely, extract advertised prices in code, rank the best of the best."""
+"""Deals agent: search the web, read pages safely, extract advertised prices in code, rank the best of the best."""
 
 import json
 import urllib.error
@@ -353,7 +353,7 @@ def test_api_rejects_bad_requests_and_reports_search_outage_cleanly(em):
     assert r.status_code == 502 and "Traceback" not in r.get_data(as_text=True)
 
 
-# ------------------------------------------------------------------ hotels (ADR-036)
+# ------------------------------------------------------------------ hotels
 
 
 def test_per_night_prices_are_extracted_in_several_spellings():

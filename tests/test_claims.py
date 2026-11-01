@@ -1,4 +1,4 @@
-"""Claim extraction (ADR-044): a labelled set of vendor replies, English and Hinglish.
+"""Claim extraction: a labelled set of vendor replies, English and Hinglish.
 
 The rule being tested is asymmetric on purpose: a WRONG price must never be proposed (precision 100 percent), while missing a price is
 acceptable because it goes to the user as "unclear". Recall is reported and guarded against regression, not oversold.

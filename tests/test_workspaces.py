@@ -78,7 +78,7 @@ def test_creation_is_limited_per_address_and_globally_and_capped(tmp_path):
 
 
 def test_storage_growth_per_new_workspace_is_small_and_measured(tmp_path):
-    """Measured: an empty workspace is one database row, three empty directories (its home, plans and logs) and, since assistant approvals became durable (ADR-074), one
+    """Measured: an empty workspace is one database row, three empty directories (its home, plans and logs) and, since assistant approvals became durable, one
     16 KB SQLite file for them. No other file exists until it saves something."""
     r = WorkspaceRegistry(tmp_path / "d", SECRET, create_per_address_per_hour=10_000, create_per_hour=10_000)
     r.create("a")

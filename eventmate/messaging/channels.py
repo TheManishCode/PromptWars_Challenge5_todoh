@@ -1,4 +1,4 @@
-"""Channels the agent talks to vendors through (ADR-042): email over SMTP/IMAP and WhatsApp through a self-hosted WAHA gateway.
+"""Channels the agent talks to vendors through: email over SMTP/IMAP and WhatsApp through a self-hosted WAHA gateway.
 
 A channel only moves text. It decides nothing: what is sent, to whom and when is decided by the approval flow in
 `conversations.py`. Secrets come from the environment and never appear in a repr, a status or an error message.
@@ -6,7 +6,7 @@ Everything a vendor sends back is untrusted text: it is cleaned, size-capped and
 
 WhatsApp note: WAHA drives a WhatsApp Web session. That is not the official Business API and WhatsApp's terms do not
 allow unofficial clients, so the account can be restricted. to;doh-the event planner therefore sends slowly, only after approval, and
-only to numbers WhatsApp reports as registered (ADR-042).
+only to numbers WhatsApp reports as registered.
 """
 
 from __future__ import annotations

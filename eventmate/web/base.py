@@ -33,7 +33,7 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_FILES = {
     "favicon.svg": "image/svg+xml",
     "avatar.glb": "model/gltf-binary",  # the attendant in the room (docs/ATTRIBUTIONS.md)
-    # the /arcade page: a 3D cabinet scene (docs/ARCADE_UI.md)
+    # the /arcade page: a 3D cabinet scene
     "cabinet.glb": "model/gltf-binary", "arcade.css": "text/css; charset=utf-8", "arcade.js": "text/javascript; charset=utf-8",
     "arcade3d.js": "text/javascript; charset=utf-8", "three.min.js": "text/javascript; charset=utf-8", "CopyShader.js": "text/javascript; charset=utf-8",
     "LuminosityHighPassShader.js": "text/javascript; charset=utf-8", "EffectComposer.js": "text/javascript; charset=utf-8", "RenderPass.js": "text/javascript; charset=utf-8",

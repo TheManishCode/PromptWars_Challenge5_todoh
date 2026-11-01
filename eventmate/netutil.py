@@ -1,4 +1,4 @@
-"""Small helpers shared by every client that reads data from outside the process (ADR-037).
+"""Small helpers shared by every client that reads data from outside the process.
 
 * ``loads``: json.loads that reports absurd nesting as a ValueError instead of crashing with RecursionError.
 * ``NETWORK_ERRORS``: everything a flaky or hostile server can make an HTTP call raise (http.client's errors are not OSErrors).

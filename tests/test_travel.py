@@ -1,4 +1,4 @@
-"""Flight fares and schedules (ADR-028): provider adapter, multi-city built from separate searches, hostile data."""
+"""Flight fares and schedules: provider adapter, multi-city built from separate searches, hostile data."""
 
 import json
 from datetime import date, datetime

@@ -19,4 +19,4 @@ This is the plain statement for a person using the planner. It describes this ap
 
 **What deletion cannot reach.** Backups and exported archives you or the host's operator made, a copy in your browser, anything an outside service already received (search, maps, weather and model providers see the text sent to them: a masked question, a city, a date), and any mailbox. Deletion removes this application's files only. If you keep backups, write down how long, because a restore brings deleted data back unless the tombstones are applied to it.
 
-**What models see.** Optional language models receive only what `docs/MODEL_INPUTS.md` lists: contact details are replaced by placeholders first, guest names and contact details are never sent, vendor reply text is never sent.
+**What models see.** Optional language models receive only the following: contact details are replaced by placeholders first, guest names and contact details are never sent, vendor reply text is never sent.

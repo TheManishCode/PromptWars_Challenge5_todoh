@@ -1,6 +1,6 @@
 # Email setup (vendor messages and the optional owner copy)
 
-Email works through a mailbox you own, over SMTP (sending) and IMAP (reading replies). **Status: tested with fake SMTP/IMAP only; not yet validated against a real mailbox** (see `EMAIL_VALIDATION.md`).
+Email works through a mailbox you own, over SMTP (sending) and IMAP (reading replies). **Status: tested with fake SMTP/IMAP only; not yet validated against a real mailbox**.
 
 ## 1. Use a dedicated mailbox
 Create a mailbox just for this, not your main one. Vendors will see its address, and the app password sits on this machine.

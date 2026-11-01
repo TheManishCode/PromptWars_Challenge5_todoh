@@ -1326,7 +1326,7 @@ async function paperChats(host, plan) {
   });
   host.appendChild(pollBtn); host.appendChild(pmsg);
 
-  /* Standing permission (ADR-043), parity with the classic UI: fixed follow-up
+  /* Standing permission, parity with the classic UI: fixed follow-up
      questions only, bounded, revocable; the stop button is always visible. */
   const ar = await api(pvBase(plan) + "/autoreply");
   const ard = ar.ok ? ar.data : null;
@@ -2271,7 +2271,7 @@ async function wallReady() {
     return;
   }
   if (r.status !== 200 || !r.data) { wallLine("the wall did not answer"); return; }
-  // the backend sends ISO 8601 strings (docs/WALL.md); the first frontend build read them as epoch seconds and showed NaN
+  // the backend sends ISO 8601 strings; the first frontend build read them as epoch seconds and showed NaN
   const wallTs = function (v) { return typeof v === "number" ? v * 1000 : Date.parse(v); };
   wallui.skewMs = Date.now() - wallTs(r.data.server_now);
   wallui.phase = "go";

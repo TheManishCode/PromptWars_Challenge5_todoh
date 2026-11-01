@@ -1,4 +1,4 @@
-"""Discovered vendor -> source-backed contact -> reviewed quote job, end to end (ADR-049).
+"""Discovered vendor -> source-backed contact -> reviewed quote job, end to end.
 
 Fake search, fake page fetcher and the real EmailChannel against a fake SMTP server and fake IMAP mailbox. No live send, no live fetch.
 """

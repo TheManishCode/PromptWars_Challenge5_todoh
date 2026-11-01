@@ -30,7 +30,7 @@ def register(app, k):
 
     @app.get("/api/plans/<plan_id>/state")
     def plan_state(plan_id):
-        """Where the plan stands: facts with their source and status, vendors, what is still open, and what changed (docs/EVENT_STATE.md). Read-only."""
+        """Where the plan stands: facts with their source and status, vendors, what is still open, and what changed. Read-only."""
         plan_id = pid(plan_id)
         since = None
         if request.args.get("changes_since"):

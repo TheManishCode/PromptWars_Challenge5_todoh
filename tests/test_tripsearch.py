@@ -1,4 +1,4 @@
-"""Multi-city trip search (ADR-030): the system orders the stops, picks dates, searches each distinct leg once, and ranks packages."""
+"""Multi-city trip search: the system orders the stops, picks dates, searches each distinct leg once, and ranks packages."""
 
 import json
 from datetime import date, datetime

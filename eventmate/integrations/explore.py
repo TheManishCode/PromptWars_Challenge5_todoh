@@ -1,4 +1,4 @@
-"""Free-text front door: one model call picks one read-only search; code validates it and runs it (ADR-034).
+"""Free-text front door: one model call picks one read-only search; code validates it and runs it.
 
 The model only chooses among a fixed set of searches and fills their parameters. Its output is untrusted data: it is parsed strictly,
 validated by the same models the forms use, and refused if anything is off. Nothing it says is shown as a fact, and no search it can

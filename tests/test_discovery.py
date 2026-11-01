@@ -1,4 +1,4 @@
-"""Venue discovery from OpenStreetMap through Overpass (ADR-028): candidates only, never facts about price or availability."""
+"""Venue discovery from OpenStreetMap through Overpass: candidates only, never facts about price or availability."""
 
 import json
 

@@ -1,4 +1,4 @@
-"""HTTP API and CLI for follow-through jobs (ADR-044)."""
+"""HTTP API and CLI for follow-through jobs."""
 
 import json
 from datetime import timedelta

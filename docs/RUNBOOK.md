@@ -1,6 +1,6 @@
 # Runbook: running the planner for other people
 
-For the person who operates the server. Local single-user use needs none of this. Everything here was exercised with fakes and local servers, not on a real host; read `docs/HOSTING.md` for what the application expects and `docs/WORKSPACES.md` for how visitors are separated.
+For the person who operates the server. Local single-user use needs none of this. Everything here was exercised with fakes and local servers, not on a real host; read `docs/HOSTING.md` for what the application expects.
 
 ## Start and stop
 - Start: `EVENTMATE_MODE=shared EVENTMATE_DATA_DIR=/srv/todoh EVENTMATE_SECRET=... EVENTMATE_TRUSTED_PROXY=... EVENTMATE_PUBLIC_URL=https://... EVENTMATE_OWNER_TOKEN=... python -m eventmate.web --host 127.0.0.1 --port 8765 --allow-remote --allowed-host your.host`. It refuses to start and names every missing setting (`docs/HOSTING.md`). Run it under a supervisor (systemd or similar) that restarts it and sends `SIGTERM` to stop it.
@@ -21,7 +21,7 @@ For the person who operates the server. Local single-user use needs none of this
 
 ## Routine
 - Empty throwaway workspaces are removed automatically after 6 hours idle (`EVENTMATE_WS_EMPTY_IDLE_HOURS`). A workspace with anything saved is never removed automatically. `python -m eventmate.workspaces_admin list` shows each workspace's age and whether it holds data; `delete ID --confirm ID` removes one; `sweep --idle-days N` removes empty ones by hand.
-- Capacity: at most `EVENTMATE_MAX_WORKSPACES` (default 1,000) workspaces, 50 MB each (`EVENTMATE_WS_MAX_BYTES`), 20 new plans a day each; 5 new workspaces an hour per address and 60 in all. Watch `workspaces_total` on the status route. If it climbs steadily with no matching traffic, someone is filling it (docs/REDTEAM.md, R-10): look at the access log for a burst on `GET /api/session`, tighten the proxy's rate limit for that route, and raise or lower the cap as you judge.
+- Capacity: at most `EVENTMATE_MAX_WORKSPACES` (default 1,000) workspaces, 50 MB each (`EVENTMATE_WS_MAX_BYTES`), 20 new plans a day each; 5 new workspaces an hour per address and 60 in all. Watch `workspaces_total` on the status route. If it climbs steadily with no matching traffic, someone is filling it: look at the access log for a burst on `GET /api/session`, tighten the proxy's rate limit for that route, and raise or lower the cap as you judge.
 - Model use is capped per workspace (200 calls, 300,000 estimated tokens an hour, 2 at once) under your overall ceiling `EVENTMATE_LLM_MAX_CALLS`. Outside lookups (maps, search, weather) are capped at 60 an hour per workspace; their free tiers can still run out.
 
 ## When something is wrong
@@ -32,7 +32,7 @@ For the person who operates the server. Local single-user use needs none of this
 | Visitors get `507 storage_full` | the data disk is full | free space; nothing was lost |
 | Visitors get `workspace_limit` (503) | the cap is reached | see Capacity above |
 | Many `429` | a burst from one address or a proxy not trusted | check `EVENTMATE_TRUSTED_PROXY` is the proxy's address, or all visitors share one budget |
-| A person's workspace "disappeared" | they cleared their browser, or an empty one was swept | nothing can bring it back without their export; there is no recovery route yet (`docs/WORKSPACES.md`) |
+| A person's workspace "disappeared" | they cleared their browser, or an empty one was swept | nothing can bring it back without their export; there is no recovery route yet |
 | 500 with a `request_id` | a bug | find that id in the log; the traceback is next to it; report it with the id |
 | A model or outside service failing | provider outage or limit | the application degrades to its no-model answers and says so; nothing to do but wait |
 
@@ -41,7 +41,7 @@ For the person who operates the server. Local single-user use needs none of this
 Before a release: `python tools/loadtest/soak.py --seconds 1800 --visitors 20` (needs the solvers); it fails on any 5xx, a slow p95 or growth in memory, files or threads.
 
 ## Langfuse tracing (optional)
-Set `LANGFUSE_HOST` (or `LANGFUSE_BASE_URL`), `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` in `deploy/.env`: all three or none, and the host must be https or loopback. The assistant then exports masked questions and answers (emails, phone numbers and card-like numbers are masked and vendor reply text is never sent, but a guest's name that someone types into a question is not masked; see `docs/MODEL_INPUTS.md`) to that host; a failing export never slows or breaks an answer. In shared mode this sends visitors' masked questions off the machine, so say so in your privacy notice.
+Set `LANGFUSE_HOST` (or `LANGFUSE_BASE_URL`), `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` in `deploy/.env`: all three or none, and the host must be https or loopback. The assistant then exports masked questions and answers (emails, phone numbers and card-like numbers are masked and vendor reply text is never sent, but a guest's name that someone types into a question is not masked) to that host; a failing export never slows or breaks an answer. In shared mode this sends visitors' masked questions off the machine, so say so in your privacy notice.
 
 ## Not covered
 Zero-downtime upgrades, more than one server process on the same data, high availability, and a bundled pager: alert rules exist (above) but nothing is wired to a person. The app is one process on one disk; plan for a short restart and for the backup as the recovery path.

@@ -1,4 +1,4 @@
-"""Personalized ideas (ADR-045): suggestions from the verified brief, never facts.
+"""Personalized ideas: suggestions from the verified brief, never facts.
 
 Two sources. Templates (`data/idea_templates.json`, versioned data) work with the model off and are deterministic. A model may add tailoring,
 but every idea it writes passes the same guards: no price, no vendor that is not in the database, no availability or capacity claim, no cultural

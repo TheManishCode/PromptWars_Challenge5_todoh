@@ -1,4 +1,4 @@
-"""The all-at-once smoke run (ADR-035). Here it runs against fakes, so the suite itself stays free and offline."""
+"""The all-at-once smoke run. Here it runs against fakes, so the suite itself stays free and offline."""
 
 import json
 from datetime import date

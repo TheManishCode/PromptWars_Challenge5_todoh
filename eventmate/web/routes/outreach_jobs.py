@@ -116,7 +116,7 @@ def register(app, k):
 
     @app.delete("/api/plans/<plan_id>")
     def delete_plan(plan_id):
-        """Forget a plan and everything it owns (docs/RETENTION.md). The body must repeat the plan id: a stray call cannot delete anything."""
+        """Forget a plan and everything it owns. The body must repeat the plan id: a stray call cannot delete anything."""
         plan_id, b = pid(plan_id), body(DeletePlanBody)
         if b.confirm != plan_id:
             raise ValueError("confirm must repeat the plan id")

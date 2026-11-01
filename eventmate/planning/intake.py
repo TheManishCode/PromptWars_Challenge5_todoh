@@ -1,4 +1,4 @@
-"""Conversational intake: the organiser talks, software proposes a draft, a human confirms (ADR-005, ADR-022).
+"""Conversational intake: the organiser talks, software proposes a draft, a human confirms.
 
 An LLM (when enabled) or the deterministic parser turns what the organiser wrote into an ``IntakeDraft``.
 The draft is only ever a proposal. Nothing is planned until the user confirms it on the review card, where

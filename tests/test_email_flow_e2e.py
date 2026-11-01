@@ -1,4 +1,4 @@
-"""Email flow, local first (ADR-047): the real EmailChannel against a fake SMTP server and a fake IMAP mailbox. No network, no credentials.
+"""Email flow, local first: the real EmailChannel against a fake SMTP server and a fake IMAP mailbox. No network, no credentials.
 
 brief -> plan -> job -> approved requests -> vendor replies (plain, Hinglish, ambiguous) -> claims -> user confirms -> digest -> the plan is
 unchanged until the user presses the existing re-price action.

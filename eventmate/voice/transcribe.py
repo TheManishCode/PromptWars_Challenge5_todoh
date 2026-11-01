@@ -1,4 +1,4 @@
-"""Turning a recorded voice note into text on this machine (docs/VOICE.md).
+"""Turning a recorded voice note into text on this machine.
 
 No engine is enabled by default: until the owner installs one and sets ``EVENTMATE_VOICE_ENGINE`` the capability says ``none`` and transcription
 answers with a clear error. A transcript is never invented, and the audio never leaves this machine or outlives the call. The transcript is untrusted
@@ -47,7 +47,7 @@ class Engine(Protocol):
 
 class FasterWhisperEngine:
     """faster-whisper (MIT) on this machine, loaded from a local model folder and never downloading anything. Optional: it is not a dependency of this
-    project and this class has not been run by the author of this change (see docs/VOICE.md for how to measure it)."""
+    project and this class has not been run by the author of this change."""
 
     name = "faster-whisper"
     languages = ("en", "hi", "mr")

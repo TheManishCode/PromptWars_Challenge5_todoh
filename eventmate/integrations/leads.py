@@ -1,4 +1,4 @@
-"""Saved deal leads: bookmarks of advertised prices, per plan, in an append-only JSONL file (ADR-038). A lead never prices anything."""
+"""Saved deal leads: bookmarks of advertised prices, per plan, in an append-only JSONL file. A lead never prices anything."""
 
 from __future__ import annotations
 

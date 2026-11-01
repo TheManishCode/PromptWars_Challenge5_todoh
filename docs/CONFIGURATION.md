@@ -5,8 +5,8 @@
 | Variable | Purpose |
 |---|---|
 | `EVENTMATE_SIGNING_KEY` | HMAC key (>=16 bytes) that makes stored plans tamper-evident even against someone who can write files |
-| `EVENTMATE_LOG_RETENTION_DAYS` | How old a run log must be before `purge-logs` removes it (default 90; see RETENTION.md) |
-| `EVENTMATE_VOICE_ENGINE`, `EVENTMATE_VOICE_MODEL`, `EVENTMATE_VOICE_DEVICE`, `EVENTMATE_VOICE_COMPUTE` | Local voice-note transcriber (off unless `faster-whisper` is installed and a model folder is named; see VOICE.md). Set in the shell, not `.env` |
+| `EVENTMATE_LOG_RETENTION_DAYS` | How old a run log must be before `purge-logs` removes it (default 90) |
+| `EVENTMATE_VOICE_ENGINE`, `EVENTMATE_VOICE_MODEL`, `EVENTMATE_VOICE_DEVICE`, `EVENTMATE_VOICE_COMPUTE` | Local voice-note transcriber (off unless `faster-whisper` is installed and a model folder is named). Set in the shell, not `.env` |
 | `EVENTMATE_VOICE_KEEP_ORIGINAL`, `EVENTMATE_VOICE_NOTE_DAYS` | Opt-in keeping of original voice notes (default off) and how long they are kept (default 30 days). Set in the shell, not `.env` |
 | `EVENTMATE_WEB_TOKEN` | Bearer token required for the API (mandatory for non-loopback binds) |
 | `EVENTMATE_OWNER_EMAILS` | Comma-separated list of the only addresses the owner digest may be sent to (unset: any address the caller proposes). **Set it on any installation that someone other than you can reach**: the confirmation code is returned to whoever proposes the address, so it does not prove who owns it (F-009) |

@@ -432,7 +432,7 @@ def test_events_more_than_three_years_away_are_rejected_not_scheduled():
     assert parse("Plan a 80 guests party in Pune on December 12 2028 under INR 90,000.").event_date == date(2028, 12, 12)
 
 
-# ------------------------------------------------------------ locale layer (ADR-005)
+# ------------------------------------------------------------ locale layer
 
 LOC_BASE = "Plan a 80 guests party in Pune on December 12 under {b}."
 

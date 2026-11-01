@@ -5,10 +5,10 @@ reword it, and its output is accepted only if it adds or changes no number,
 keeps every vendor name, and contains no markup or links. Anything else falls
 back to the deterministic text. Prompts are versioned Markdown under /prompts.
 
-Clients come from NVIDIA and/or OpenRouter (ADR-032): none is created unless a key is present in the
+Clients come from NVIDIA and/or OpenRouter: none is created unless a key is present in the
 environment (never in files) and EVENTMATE_ENABLE_LLM is not 0.
 
-What each model stage is sent (see docs/MODEL_INPUTS.md): the explanation stage gets only the already-verified plan summary (no raw request,
+What each model stage is sent: the explanation stage gets only the already-verified plan summary (no raw request,
 no guest names). Intake gets the user's message and the reviewed draft, with contact details replaced by placeholders. The assistant gets the question
 (placeholders for contact details), a short fenced conversation, and tool results. Ideas get eight fact fields. See each stage's masking there.
 """
@@ -109,7 +109,7 @@ def guard_rewrite(output: str, source: str, names: Iterable[str]) -> str | None:
 
 
 # ------------------------------------------------------------------ providers
-# NVIDIA's hosted API and OpenRouter both speak the OpenAI chat-completions protocol (ADR-032). Keys come from the environment only.
+# NVIDIA's hosted API and OpenRouter both speak the OpenAI chat-completions protocol. Keys come from the environment only.
 
 MODELS_PATH = Path(__file__).resolve().parent / "data" / "llm_models.json"
 MAX_REPLY_BYTES = 2_000_000

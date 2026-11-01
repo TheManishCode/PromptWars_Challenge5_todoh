@@ -1,4 +1,4 @@
-"""Check the mailbox settings without sending anything: ``python -m eventmate.messaging.smoke_email`` (ADR-047).
+"""Check the mailbox settings without sending anything: ``python -m eventmate.messaging.smoke_email``.
 
 Default is a dry run: log in to SMTP and to IMAP (read-only select of the inbox) and say PASS or FAIL with the host. It prints no user name, no
 password and no raw server message, only a short category. A real one-message test send is possible only to an address you name, with

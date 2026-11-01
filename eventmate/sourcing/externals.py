@@ -1,4 +1,4 @@
-"""Businesses found by discovery, kept apart from the vendor database (ADR-028, ADR-049).
+"""Businesses found by discovery, kept apart from the vendor database.
 
 An external business has its own identity (``ext_...``). It is never merged with, renamed to, or bound to a seed vendor, and it never appears in the
 vendor repository. Where it came from (discovered, or a test vendor whose address the user owns) travels with it.

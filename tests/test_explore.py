@@ -1,4 +1,4 @@
-"""Free-text front door (ADR-034): one model call picks one read-only search; code validates it and runs it. No test spends a credit."""
+"""Free-text front door: one model call picks one read-only search; code validates it and runs it. No test spends a credit."""
 
 import json
 
@@ -179,7 +179,7 @@ def test_api_routes_text_and_reports_missing_models_as_503(em):
     assert c.get("/api/explore/status").get_json() == {"configured": True}
 
 
-# ------------------------------------------------ found by running the router against the real model (ADR-037)
+# ------------------------------------------------ found by running the router against the real model
 
 
 def test_null_for_an_optional_field_means_not_provided(em):
@@ -220,3 +220,11 @@ def test_the_same_problem_is_not_repeated_in_the_message(em):
     with pytest.raises(ExploreError) as e:
         go(em, "x", out, out)
     assert str(e.value).count("too far ahead") == 1
+
+
+def test_place_queries_are_event_type_neutral():
+    # Regression: the venue, caterer and photographer queries said "wedding", so a birthday or community event searched for wedding vendors.
+    from eventmate.integrations.places import QUERIES
+
+    for kind, query in QUERIES.items():
+        assert "wedding" not in query.lower(), f"{kind}: {query!r} assumes the event is a wedding"

@@ -154,10 +154,10 @@ def _parser() -> argparse.ArgumentParser:
     g.add_argument("--date", type=date.fromisoformat)
     p.add_argument("--override-confirmed", nargs="*", default=[])
     p.add_argument("--json", action="store_true")
-    p = sub.add_parser("delete-plan", help="forget a plan and everything it owns (versions, ledger, messages, jobs, ideas); see docs/RETENTION.md")
+    p = sub.add_parser("delete-plan", help="forget a plan and everything it owns (versions, ledger, messages, jobs, ideas)")
     p.add_argument("plan_id")
     p.add_argument("--confirm", required=True, metavar="PLAN_ID", help="repeat the plan id to confirm")
-    p = sub.add_parser("verify", help="read every store and report what is unreadable, altered, missing or orphaned; changes nothing; exits 1 on damage (docs/DURABILITY.md)")
+    p = sub.add_parser("verify", help="read every store and report what is unreadable, altered, missing or orphaned; changes nothing; exits 1 on damage")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("repair", help="never in place: --quarantine copies a damaged file aside and writes a candidate; --apply swaps a candidate in after you type the number of dropped lines")
     g = p.add_mutually_exclusive_group(required=True)
@@ -248,7 +248,7 @@ def _verify(em: EventMate, a) -> int:
     else:
         print("\n".join(report.lines()))
         if report.authoritative_damage:
-            print("Sending and approving are stopped while a money or send-state file is damaged. See docs/DURABILITY.md.", file=sys.stderr)
+            print("Sending and approving are stopped while a money or send-state file is damaged.", file=sys.stderr)
     return 0 if report.ok else 1
 
 

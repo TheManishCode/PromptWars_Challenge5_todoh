@@ -1,4 +1,4 @@
-"""Discovery to shortlist (ADR-049): find businesses with sources, find public contacts on their own pages, and let the user confirm or reject each address.
+"""Discovery to shortlist: find businesses with sources, find public contacts on their own pages, and let the user confirm or reject each address.
 
 Only fakes: no live search, no live fetch, no live send.
 """

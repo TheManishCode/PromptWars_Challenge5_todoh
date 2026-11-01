@@ -2,7 +2,7 @@
 
 None of this is the security boundary: the model has no authority, tools are permission checked and a human approves every consequential action.
 These functions make hidden text visible, keep untrusted values from breaking out of their fence or substituting into a template, and give outside
-names one safe shape. A regex cannot recognise a paraphrased, translated or encoded injection; docs/MODEL_INPUTS.md says so.
+names one safe shape. A regex cannot recognise a paraphrased, translated or encoded injection (the injection patterns are visibility, not protection).
 """
 
 from __future__ import annotations

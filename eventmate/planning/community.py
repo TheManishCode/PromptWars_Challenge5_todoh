@@ -1,4 +1,4 @@
-"""Community events (ADR-046): profiles as data, the checks that can be computed, and the conditional checklist that only the user can mark.
+"""Community events: profiles as data, the checks that can be computed, and the conditional checklist that only the user can mark.
 
 Everything that differs between kinds of community event (keywords that identify it, budget shares, the usual event window, suggested volunteer
 roles, which conditional items always apply) is read from `data/community_profiles.json`, never hard-coded. Pick the demo subtype, or add one, by

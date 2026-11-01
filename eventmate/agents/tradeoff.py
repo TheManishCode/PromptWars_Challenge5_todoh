@@ -3,7 +3,7 @@
 Proposes, never applies. Every option is a changed ``EventRequest`` priced from
 database records and then verified by a full dry run of the real pipeline
 (``verify``), so anything shown is something the Validator accepts. Harm
-weights are data in ``TradeoffPolicy``, not hidden constants (ADR-003/015).
+weights are data in ``TradeoffPolicy``, not hidden constants.
 
 Moves: rebalance category caps, drop an optional service, shift the date to
 one the database has availability for, raise the budget by the minimum that

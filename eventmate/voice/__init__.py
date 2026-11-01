@@ -1,1 +1,1 @@
-"""Voice: another way to produce and hear text. Every guard that applies to typed chat applies unchanged (docs/VOICE.md, ADR-056)."""
+"""Voice: another way to produce and hear text. Every guard that applies to typed chat applies unchanged."""

@@ -1,4 +1,4 @@
-"""F10 vendor score: a published formula over recorded quotes (ADR-040).
+"""F10 vendor score: a published formula over recorded quotes.
 
 Three components, each 0-100, weights below. A component with too little data is left out and the overall is
 re-weighted over what exists; `coverage` says how much of the formula that was. Response time, terms and ratings

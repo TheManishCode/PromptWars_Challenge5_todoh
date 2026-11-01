@@ -7,7 +7,7 @@ not in this workspace's store, and every lookup ends in the same generic "not fo
 
 The visitor holds a random credential (192 bits, from ``secrets``) in an HttpOnly cookie. Only its SHA-256 is stored; the credential is never stored or
 logged. A new workspace is made only by ``GET /api/session`` and is rate limited and capped, so anonymous traffic cannot fill the disk. Recovery of a lost
-credential is an owner decision (docs/WORKSPACES.md) and is not built; ``rotate`` and ``revoke`` are.
+credential is an owner decision and is not built; ``rotate`` and ``revoke`` are.
 """
 
 from __future__ import annotations

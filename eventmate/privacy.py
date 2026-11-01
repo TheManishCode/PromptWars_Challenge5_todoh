@@ -1,4 +1,4 @@
-"""Contact details never reach a model (ADR-050).
+"""Contact details never reach a model.
 
 Before a prompt is built, emails, phone numbers and (with the right context) PAN, Aadhaar and card numbers are replaced by numbered typed placeholders such
 as ``<EMAIL_1>`` and ``<PHONE_1>``. The map lives only for one request, in memory, and is never logged or sent. A real value comes back only when text is

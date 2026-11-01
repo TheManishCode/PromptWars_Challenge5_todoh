@@ -1,4 +1,4 @@
-"""Chat intake maps community-style briefs to a community event, and asks the user to check the reading when it is only inferred (ADR-046)."""
+"""Chat intake maps community-style briefs to a community event, and asks the user to check the reading when it is only inferred."""
 
 import json
 

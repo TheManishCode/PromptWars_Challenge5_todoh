@@ -1,4 +1,4 @@
-"""F5 (part): the number of organizers is the capacity of the organizer resource (ADR-004, ADR-020)."""
+"""F5 (part): the number of organizers is the capacity of the organizer resource."""
 
 import json
 

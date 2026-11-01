@@ -1,4 +1,4 @@
-"""Keeping the original voice note with a plan: opt-in, off by default (docs/VOICE.md).
+"""Keeping the original voice note with a plan: opt-in, off by default.
 
 By default a recording is deleted the moment it has been transcribed. If the owner turns this on and the user chooses to keep a note, it is stored
 under a random name in a private folder for that plan, never put in a log, a trace or a prompt, never sent to a model, and removed when the note, the

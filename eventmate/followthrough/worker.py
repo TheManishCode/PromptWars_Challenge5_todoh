@@ -1,4 +1,4 @@
-"""The follow-through worker: wakes due jobs, reads what changed, takes only allowed actions, and always ends in a named state (ADR-044).
+"""The follow-through worker: wakes due jobs, reads what changed, takes only allowed actions, and always ends in a named state.
 
 It sends nothing by itself except what an existing per-message approval or the standing permission of ADR-043 covers, and it never books,
 pays or states a price. Rules decide everything; no model is involved. Run once: ``python -m eventmate.followthrough.worker --once``. Loop: ``--every 60``.
@@ -315,7 +315,7 @@ class JobWorker:
                     st.items.append(_item("unclear_price", f"{vid} replied without a price and {why}. Please read the reply.", vid, mid))
 
     def _nudge_silent_vendors(self, job: Job, st: _Tick, now: datetime) -> None:
-        """Silence: an automatic nudge only through the standing permission (ADR-043), otherwise a draft for the user to approve."""
+        """Silence: an automatic nudge only through the standing permission, otherwise a draft for the user to approve."""
         plan_id = job.plan_id
         window = timedelta(hours=job.reply_window_hours)
         for vid, p in list(st.vendors.items()):

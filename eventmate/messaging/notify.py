@@ -1,4 +1,4 @@
-"""The optional email copy of a job digest, to the owner only (ADR-047).
+"""The optional email copy of a job digest, to the owner only.
 
 Off by default. Turning it on is two steps by the owner: propose an exact address and what the email may contain, read the summary, then confirm
 with the code that binds the confirmation to exactly that. Changing the address or the scope puts it back to pending. It is a separate

@@ -1,4 +1,4 @@
-"""Flight fares and schedules from fli (Google Flights), behind a small provider interface (ADR-028).
+"""Flight fares and schedules from fli (Google Flights), behind a small provider interface.
 
 Facts here come only from the tool and are tagged ``tool:fli``. Fares are indicative: nothing is booked or paid. Google serves
 multi-city results through a gated RPC, which fli refuses (``SearchUnsupportedError``, upstream issue #223), so multi-city is

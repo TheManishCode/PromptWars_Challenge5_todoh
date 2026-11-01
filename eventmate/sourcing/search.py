@@ -1,4 +1,4 @@
-"""Find businesses for a plan and category and put them on its shortlist (ADR-049).
+"""Find businesses for a plan and category and put them on its shortlist.
 
 Sources are explicit about what they cover. OpenStreetMap is queried for venues only: there is no verified OSM tag mapping here for caterers or
 photographers, so asking for them says "not supported by this source" instead of returning an empty list that looks like "none exist". Google Places

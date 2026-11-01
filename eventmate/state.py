@@ -1,8 +1,8 @@
-"""EventState: one read-only view of where a plan stands, built on demand from the existing stores (ADR-054).
+"""EventState: one read-only view of where a plan stands, built on demand from the existing stores.
 
 It reads the plan version, ledger, vendor messages, jobs and guest counts and calls nothing else: no model, no network, no new database. Every fact
 says where it came from (``source``), when (``as_of``) and how far it can be trusted (``status``). A price a vendor wrote is ``quoted_unverified``
-and never reprices the plan (ADR-049). The view holds no guest names and no contact details, and it authorises nothing: seeing that something is
+and never reprices the plan. The view holds no guest names and no contact details, and it authorises nothing: seeing that something is
 waiting does not approve, send or spend anything.
 """
 

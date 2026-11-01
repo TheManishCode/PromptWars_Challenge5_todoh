@@ -1,4 +1,4 @@
-"""The job digest and the optional email copy to the owner (ADR-047).
+"""The job digest and the optional email copy to the owner.
 
 The digest always lands in the in-app inbox. The email copy is off by default; turning it on needs the owner to confirm the exact destination and what
 it may contain. It is a separate owner-notification path, yet it passes the same gates as dispatch: kill switch, stop file, IST window, caps, logging.

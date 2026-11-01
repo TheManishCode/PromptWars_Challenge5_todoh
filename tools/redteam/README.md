@@ -1,6 +1,6 @@
 # Red-team probes (re-runnable)
 
-Exploits that must never work again are regression tests in `tests/pentest/` (`make redteam` runs them). These are the throw-away probes behind `docs/SECURITY_FINDINGS.md`, kept so the
+Exploits that must never work again are regression tests in `tests/pentest/` (`make redteam` runs them). These are the throw-away probes behind the red-team passes, kept so the
 evidence can be reproduced. Run from the repository root with the project's Python (and `EVENTMATE_FD`/`EVENTMATE_VAL` set if the solvers are not in the default place).
 
 | Script | What it does | Expect |

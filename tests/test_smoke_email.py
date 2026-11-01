@@ -1,4 +1,4 @@
-"""`python -m eventmate.messaging.smoke_email`: checks the mailbox logins without sending anything, and prints only pass or fail and the host (ADR-047)."""
+"""`python -m eventmate.messaging.smoke_email`: checks the mailbox logins without sending anything, and prints only pass or fail and the host."""
 
 import imaplib
 import smtplib

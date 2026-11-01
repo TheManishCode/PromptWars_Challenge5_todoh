@@ -1,4 +1,4 @@
-"""In-memory sliding-window limits for the wall. Nothing here is written to disk: an address stays personal data even when hashed (docs/WALL_PRIVACY.md),
+"""In-memory sliding-window limits for the wall. Nothing here is written to disk: an address stays personal data even when hashed,
 so the limiter forgets it on restart and never stores it with a mark."""
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ class Window:
 
 
 class WallLimits:
-    """The wall's limits, one object so tests can swap the clock and the numbers (defaults from docs/WALL.md)."""
+    """The wall's limits, one object so tests can swap the clock and the numbers."""
 
     def __init__(self, clock: Callable[[], float] = time.monotonic, bootstrap_per_ip_hour: int = 30, bootstrap_global_hour: int = 2000, submit_per_ip_hour: int = 5,
                  recover_fail_per_ip_hour: int = 10, recover_fail_global_hour: int = 100, writes_per_ip_minute: int = 60):

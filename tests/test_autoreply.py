@@ -1,4 +1,4 @@
-"""Standing permission for the agent to ask routine follow-up questions without a per-message approval (ADR-043).
+"""Standing permission for the agent to ask routine follow-up questions without a per-message approval.
 
 Scope is narrow on purpose: fixed questions about missing information only; never a price, an acceptance, or an answer to the vendor's questions.
 """

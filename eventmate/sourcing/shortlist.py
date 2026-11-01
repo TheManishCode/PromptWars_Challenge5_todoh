@@ -1,4 +1,4 @@
-"""Shortlists and contact candidates (ADR-049). Append-only; the latest record of a candidate wins.
+"""Shortlists and contact candidates. Append-only; the latest record of a candidate wins.
 
 A shortlist entry says "this business is worth a look for this plan and category". A contact candidate is an address software found, with the page or
 listing it came from. Nothing here writes to the vendor database, and nothing here sends: an address is used only after the user confirms it.

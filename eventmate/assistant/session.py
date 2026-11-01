@@ -1,4 +1,4 @@
-"""Short, scoped conversation memory for the assistant (ADR-050).
+"""Short, scoped conversation memory for the assistant.
 
 Per (user, plan): the last few question/answer pairs and a few user-stated preferences with their source. It is shown to the model as fenced, untrusted
 text "for resolving references only". It never supplies a fact (the answer check runs against this turn's tool results only), never grants permission

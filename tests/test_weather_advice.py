@@ -1,4 +1,4 @@
-"""Weather advice (ADR-039): code compares the forecast with the chosen venue and suggests a backup. Advice never changes a plan."""
+"""Weather advice: code compares the forecast with the chosen venue and suggests a backup. Advice never changes a plan."""
 
 from datetime import date
 

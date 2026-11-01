@@ -1,4 +1,4 @@
-"""Safe read-only web fetching (ADR-031): the open web is hostile input. Nothing here runs page code or reaches private networks."""
+"""Safe read-only web fetching: the open web is hostile input. Nothing here runs page code or reaches private networks."""
 
 import http.server
 import threading

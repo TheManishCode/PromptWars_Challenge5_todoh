@@ -1,4 +1,4 @@
-"""The vendor-conversation agent (ADR-042): approval bound to content, claimed sends, limits, reply matching and untrusted replies."""
+"""The vendor-conversation agent: approval bound to content, claimed sends, limits, reply matching and untrusted replies."""
 
 from datetime import datetime, timedelta, UTC
 

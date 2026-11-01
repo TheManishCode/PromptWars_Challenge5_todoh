@@ -1,4 +1,4 @@
-"""HTTP API, CLI and background loop for the vendor-conversation agent (ADR-042)."""
+"""HTTP API, CLI and background loop for the vendor-conversation agent."""
 
 import json
 from datetime import timedelta

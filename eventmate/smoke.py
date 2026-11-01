@@ -1,4 +1,4 @@
-"""Run every integration once, live, and say what works (ADR-035).
+"""Run every integration once, live, and say what works.
 
     python -m eventmate.smoke            free sources only: flights, trip, deals, venue discovery, weather and places (if keyed)
     python -m eventmate.smoke --llm      also pings each model provider with a few tokens and routes one sentence (spends a few credits)

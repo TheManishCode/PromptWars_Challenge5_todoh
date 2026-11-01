@@ -1,4 +1,4 @@
-"""Deleting a plan, and expiring old logs (docs/RETENTION.md).
+"""Deleting a plan, and expiring old logs.
 
 Deleting a plan removes everything the plan owns: its versions, ledger, vendor messages, standing permission, jobs, ideas, digests, shortlist
 and checklist. Each file is addressed by its exact path (``<store>/<channel>-<plan_id>.jsonl``), never by a pattern, so plan "b" can never touch
