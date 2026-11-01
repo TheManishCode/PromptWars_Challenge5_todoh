@@ -26,10 +26,9 @@ import secrets
 import sys
 import threading
 import time
-from collections import defaultdict, deque
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Deque, Dict, List, Literal, Optional
+from typing import Callable, Dict, List, Literal, Optional
 
 from flask import Flask, Response, abort, g, jsonify, request
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
@@ -52,7 +51,8 @@ from eventmate.agents.vendor import DataIntegrityError
 from eventmate.env import load_env
 from eventmate.integrations.explore import ExploreError, ExploreNotConfigured, route as explore_route
 from eventmate import consumption
-from eventmate.llm import LLMError, client_from_env
+from eventmate.web import hosting, limits
+from eventmate.llm import METER, LLMError, client_from_env
 from eventmate.plan_store import PlanIntegrityError
 from eventmate.schemas import MAX_BUDGET_INR, CommunityDetails, DealQuery, TripRequest, MAX_MULTI_CITY_LEGS, Disruption, HiddenCost, LedgerKind, ObservationSource, TradeoffOption, VendorCategory
 from eventmate.integrations.discovery import DiscoveryError
@@ -411,7 +411,15 @@ def create_app(
     stream_slots = threading.BoundedSemaphore(VOICE_STREAMS_MAX)
     csrf_token = secrets.token_urlsafe(32)
     hosts = set(allowed_hosts) if allowed_hosts else set(LOOPBACK)
-    writes: Dict[str, Deque[float]] = defaultdict(deque)
+    proxies = limits.trusted_proxies()  # forwarded headers are read only from these (EVENTMATE_TRUSTED_PROXY); otherwise they are ignored
+    address_limit = limits.WindowLimiter(rate_limit_per_minute)  # writes per minute per caller address
+    workspace_limit = limits.WindowLimiter(rate_limit_per_minute * 2)  # and per workspace, so many addresses cannot add up to more than one visitor's share
+    heavy = limits.FairShare(HEAVY_MAX, HEAVY_MAX if hosting.mode(os.environ) == "local" else max(1, HEAVY_MAX // 2))  # shared mode: one workspace holds at most half of the slow-search slots; the lone local user may use them all
+    started_at = time.time()
+    poll_state: Dict[str, object] = {"last": None, "failures": 0}  # for the owner status route: when the last background round finished, and how many failed
+
+    def caller() -> str:
+        return limits.client_address(request.remote_addr, request.headers.get("X-Forwarded-For"), proxies)
 
     # ------------------------------------------------------------ guards
 
@@ -453,32 +461,33 @@ def create_app(
             upload = next((limit for rx, limit in UPLOAD_ROUTES if request.method == "POST" and rx.fullmatch(request.path)), None)
             if upload:
                 request.max_content_length = upload
+                g.upload_limit = upload
+                if request.content_length is None:  # an upload must say how big it is, so the cap is checked before a byte is read (a chunked body is refused)
+                    return _err(411, "uploads must send a Content-Length", code="length_required")
             bodyless_delete = request.method == "DELETE" and not request.content_length  # a DELETE that carries nothing has nothing to type-check
             if request.mimetype != "application/json" and not bodyless_delete and not (upload and request.mimetype == "multipart/form-data"):
-                return _err(415, "JSON body required")
-            now, q = time.monotonic(), writes[request.remote_addr or "?"]
-            while q and now - q[0] > 60:
-                q.popleft()
-            if len(q) >= rate_limit_per_minute:
-                return _err(429, "too many requests")
-            q.append(now)
+                return _err(415, "JSON body required", **({"code": "unsupported_type"} if upload else {}))
+            if not address_limit.allow(caller()) or not workspace_limit.allow(consumption.current_workspace()):
+                return _err(429, "too many requests", code="rate_limited")
         return None
 
-    # Routes that wait on the network are limited to a few at a time, so a burst cannot pin every worker thread (ADR-037).
-    heavy = threading.BoundedSemaphore(HEAVY_MAX)
-
+    # Routes that wait on the network are limited to a few at a time, so a burst cannot pin every worker thread (ADR-037), and one workspace holds only part of them.
     @app.before_request
     def limit_heavy():
         if spends_quota(request.path):
-            if not heavy.acquire(blocking=False):
-                return _err(429, "the server is busy with other searches; try again in a moment")
-            g.heavy_permit = True
+            workspace = consumption.current_workspace()
+            why = heavy.acquire(workspace)
+            if why:
+                return _err(429, "the server is busy with other searches; try again in a moment" if why == "busy" else "this workspace already has its share of searches running; wait for one to finish",
+                            code="busy" if why == "busy" else "workspace_share")
+            g.heavy_permit = workspace
         return None
 
     @app.teardown_request
     def release_heavy(_exc):
-        if g.pop("heavy_permit", False):
-            heavy.release()
+        workspace = g.pop("heavy_permit", None)
+        if workspace is not None:
+            heavy.release(workspace)
 
     @app.after_request
     def headers(resp: Response) -> Response:
@@ -488,6 +497,8 @@ def create_app(
         resp.headers["X-Frame-Options"] = "DENY"
         if request.path.startswith("/api/"):
             resp.headers["Cache-Control"] = "no-store"
+        if hosting.is_https(request.scheme, request.remote_addr, request.headers.get("X-Forwarded-Proto"), proxies):
+            resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"  # only over TLS, and only believed from a trusted proxy
         return resp
 
     def _err(status: int, message: str, **extra):
@@ -499,11 +510,11 @@ def create_app(
 
     @app.errorhandler(TranscribeError)
     def _transcribe_error(exc):
-        return _err(exc.status, str(exc)[:300])
+        return _err(exc.status, str(exc)[:300], code=exc.code)
 
     @app.errorhandler(voice_audio.AudioRejected)
     def _audio_rejected(exc):
-        return _err(exc.status, str(exc)[:300])
+        return _err(exc.status, str(exc)[:300], code={413: "audio_too_large", 415: "bad_audio_type"}.get(exc.status, "bad_audio"))
 
     @app.errorhandler(NotesDisabled)
     def _notes_disabled(exc):
@@ -511,7 +522,7 @@ def create_app(
 
     @app.errorhandler(GuestListTooLarge)
     def _guests_too_large(exc):
-        return _err(413, str(exc)[:200])
+        return _err(413, str(exc)[:200], code="too_large", limit_bytes=MAX_GUEST_BYTES, scope="payload")
 
     @app.errorhandler(StalePreview)
     def _stale_preview(exc):
@@ -593,7 +604,8 @@ def create_app(
 
     @app.errorhandler(413)
     def _too_big(exc):
-        return _err(413, "request too large")
+        limit = g.get("upload_limit") or 64 * 1024
+        return _err(413, "request too large", code="too_large", limit_bytes=limit, scope="envelope")  # the whole body, as opposed to the file inside it
 
     @app.errorhandler(405)
     def _method(exc):
@@ -601,7 +613,7 @@ def create_app(
 
     @app.errorhandler(404)
     def _404(exc):
-        return _err(404, "not found")
+        return _err(404, "not found", code="not_found")  # the one body every miss gets, so a hidden route cannot be told from an unknown one
 
     @app.errorhandler(NeedsAcknowledgement)
     def _needs_ack(exc):
@@ -674,6 +686,25 @@ def create_app(
     @app.get("/api/session")
     def session():
         return jsonify({"csrf": csrf_token, "today": today_fn().isoformat(), "roles": [r.value for r in principal.roles], "guest_lists": list(em.manager.guest.repo.list_ids())})
+
+    @app.get("/healthz")
+    def healthz():
+        return jsonify({"ok": True})  # nothing else: no counts, no names, no version
+
+    @app.get("/api/owner/status")
+    def owner_status():
+        """Counts only, for the person who runs the server. Needs ``EVENTMATE_OWNER_TOKEN`` (at least 16 characters) in the ``X-EventMate-Owner`` header; a
+        workspace cookie or the API token is not enough. With no token set, or a wrong one, the answer is the same 404 as any unknown route."""
+        token = os.environ.get("EVENTMATE_OWNER_TOKEN", "")
+        if len(token) < 16 or not hmac.compare_digest(request.headers.get("X-EventMate-Owner", ""), token):
+            return _err(404, "not found", code="not_found")
+        pending = sum(1 for j in (em.jobs.store.list() if (em.store.root / "jobs.db").exists() else []) if j.status not in ("done", "expired", "cancelled"))
+        used, total = heavy.status()
+        return jsonify({
+            "uptime_s": int(time.time() - started_at), "workspaces_active_last_minute": workspace_limit.tracked(), "pending_jobs": pending,
+            "searches_in_flight": used, "searches_capacity": total, "last_poll": poll_state["last"], "poll_failures": poll_state["failures"],
+            "model_calls": {**METER.status(), **consumption.BUDGETS.status()},
+        })
 
     # --------------------------------------------------------------- api
 
@@ -1721,7 +1752,9 @@ def create_app(
             try:
                 with lock:
                     em.background_round()
+                poll_state["last"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
             except Exception as exc:  # one failed round must not end the agent; the next round retries
+                poll_state["failures"] += 1
                 print(f"conversation poll failed: {type(exc).__name__}", file=sys.stderr)
 
         def loop():

@@ -24,9 +24,10 @@ MAX_TRANSCRIPT_CHARS = 5000
 class TranscribeError(Exception):
     """Transcription cannot be done. ``status`` is the HTTP status; the message is safe to show and names what to do instead."""
 
-    def __init__(self, status: int, message: str):
+    def __init__(self, status: int, message: str, code: str = "transcribe_failed"):
         super().__init__(message)
         self.status = status
+        self.code = code  # machine readable, for the {"error", "code"} body
 
 
 class Transcript(NamedTuple):
@@ -92,17 +93,17 @@ class Transcriber:
     def transcribe(self, data: bytes, declared_type: str, language: Optional[str] = None) -> Transcript:
         """Check the upload, run the engine, delete the audio. Raises TranscribeError with the HTTP status to report."""
         if self.engine is None:
-            raise TranscribeError(503, "voice transcription is not set up here; type your message instead")
+            raise TranscribeError(503, "voice transcription is not set up here; type your message instead", "transcriber_unavailable")
         try:
             kind = audio.check(data, declared_type, self.max_bytes)
         except audio.AudioRejected as exc:
-            raise TranscribeError(exc.status, str(exc)) from None
+            raise TranscribeError(exc.status, str(exc), {413: "audio_too_large", 415: "bad_audio_type"}.get(exc.status, "bad_audio")) from None
         length = audio.probe_seconds(data, kind)
         if length is not None and length > self.max_seconds:
-            raise TranscribeError(413, f"the recording is longer than {self.max_seconds} seconds")
+            raise TranscribeError(413, f"the recording is longer than {self.max_seconds} seconds", "audio_too_long")
         with self._count:
             if self._waiting >= self.queue_limit:
-                raise TranscribeError(429, "voice transcription is busy; try again in a moment")
+                raise TranscribeError(429, "voice transcription is busy; try again in a moment", "busy")
             self._waiting += 1
         try:
             with self._running:
@@ -123,7 +124,7 @@ class Transcriber:
             try:
                 result = future.result(timeout=limit)
             except FutureTimeout:
-                raise TranscribeError(504, "transcription took too long; try a shorter note or type your message") from None
+                raise TranscribeError(504, "transcription took too long; try a shorter note or type your message", "transcribe_timeout") from None
             except TranscribeError:
                 raise
             except Exception:
@@ -132,8 +133,8 @@ class Transcriber:
             with contextlib.suppress(FileNotFoundError):
                 path.unlink()  # gone as soon as the engine is done with it, on every path
         if result.duration_s > self.max_seconds:
-            raise TranscribeError(413, f"the recording is longer than {self.max_seconds} seconds")
+            raise TranscribeError(413, f"the recording is longer than {self.max_seconds} seconds", "audio_too_long")
         text = " ".join(result.text.split())[:MAX_TRANSCRIPT_CHARS]
         if not text:
-            raise TranscribeError(422, "no speech was recognised; record again or type your message")
+            raise TranscribeError(422, "no speech was recognised; record again or type your message", "no_speech")
         return Transcript(text, result.language, round(result.duration_s, 2))
