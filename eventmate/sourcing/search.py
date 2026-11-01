@@ -37,7 +37,7 @@ class VendorSearch:
     def default_source(self, category: VendorCategory) -> str:
         return "osm" if category in OSM_KINDS else "places"
 
-    def search(self, plan: PlanVersion, category: VendorCategory, source: str = None, limit: int = 10) -> SearchOutcome:
+    def search(self, plan: PlanVersion, category: VendorCategory, source: str | None = None, limit: int = 10) -> SearchOutcome:
         source = source or self.default_source(category)
         if source not in SOURCES:
             raise ValueError(f"source must be one of {', '.join(SOURCES)}")

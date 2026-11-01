@@ -138,6 +138,7 @@ class UsageMeter:
     def __init__(self, max_calls: int | None = None):
         self._max = max_calls
         self._lock = threading.Lock()
+        self.by_provider: dict[str, int] = {}
         self.reset()
 
     def reset(self) -> None:

@@ -112,7 +112,7 @@ def _starts_like_formula(value: str) -> bool:
 
 
 def totals_of(guests: tuple[Guest, ...]) -> GuestListTotals:
-    heads = Counter()
+    heads: Counter[str] = Counter()
     diets: Counter = Counter()
     for g in guests:
         heads[g.rsvp.value] += g.party_size

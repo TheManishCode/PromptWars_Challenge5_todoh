@@ -73,7 +73,7 @@ class Ledger:
                 )
             )
         planned = {s.category for s in plan.selections}
-        orphaned = {}
+        orphaned: dict[str, int] = {}
         for e in entries:
             if e.category not in planned and e.kind != LedgerKind.QUOTE:
                 orphaned[e.category.value] = orphaned.get(e.category.value, 0) + (e.amount if e.kind == LedgerKind.PAYMENT else -e.amount)

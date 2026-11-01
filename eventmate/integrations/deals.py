@@ -156,7 +156,8 @@ class _Row(NamedTuple):
 
 def _cap_per_domain(cands: list[_Candidate]) -> list[_Candidate]:
     """Cheapest first, at most MAX_OFFERS_PER_DOMAIN from any one site."""
-    kept, per_domain = [], Counter()
+    kept: list[_Candidate] = []
+    per_domain: Counter[str] = Counter()
     for c in sorted(cands, key=lambda c: (c.low, c.high, c.domain, c.label)):
         if per_domain[c.domain] < MAX_OFFERS_PER_DOMAIN:
             per_domain[c.domain] += 1
@@ -236,7 +237,9 @@ class DealAgent:
         if failures == len(queries):
             raise SearchError(warnings[-1].removeprefix("a search failed: ") if warnings else "the web search failed")
 
-        urls, per_domain, seen = [], Counter(), set()
+        urls: list[str] = []
+        per_domain: Counter[str] = Counter()
+        seen: set[str] = set()
         for url, _title in hits:
             clean = clean_hit_url(url)
             dom = _domain(clean) if clean else ""

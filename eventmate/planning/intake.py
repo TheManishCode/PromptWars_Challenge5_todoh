@@ -311,7 +311,8 @@ def propose(
     notes: list[str] = []
     choices: list[IntakeChoice] = []
     rules = _rule_draft(latest, today, notes, choices)
-    source, flags = "rule:parser", ()
+    source = "rule:parser"
+    flags: tuple[str, ...] = ()
     new = rules
     if llm is not None:
         ai, reason = _llm_draft(llm, prompts or PromptStore(), logs, latest, prior, today, "intake")

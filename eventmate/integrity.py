@@ -118,12 +118,17 @@ def jsonl_files(root: Path, log_dir: Path | None = None) -> list[Path]:
     return files
 
 
+def _jsonl_part(name: str, group: int) -> str:
+    """One part of a store file's name (its channel, or its plan id); empty for a name that is not a store file, which the callers' lookups then miss."""
+    m = JSONL_NAME.fullmatch(name)
+    return m.group(group) if m else ""
+
+
 def scan(root: Path, log_dir: Path | None = None) -> Report:
     """Read every store under ``root`` (and the logs in ``log_dir``). Changes nothing."""
     root, report, models = Path(root), Report(), _models()
     for path in jsonl_files(root, log_dir):
-        m = JSONL_NAME.fullmatch(path.name)
-        channel = m.group(1)
+        channel = _jsonl_part(path.name, 1)
         model = models.get(channel)
         if model is None:
             continue  # a file this application does not write (a quarantined copy, a candidate): not a store
@@ -163,9 +168,8 @@ def scan(root: Path, log_dir: Path | None = None) -> Report:
         report.plan_problems += store.check_chain(plan_id)
     known = set(plans)
     for path in jsonl_files(root):
-        m = JSONL_NAME.fullmatch(path.name)
-        if m.group(1) in PLAN_KEYED and m.group(2) not in known:
-            report.orphans.append(f"{path.relative_to(root)} belongs to plan {m.group(2)}, which has no versions")
+        if _jsonl_part(path.name, 1) in PLAN_KEYED and _jsonl_part(path.name, 2) not in known:
+            report.orphans.append(f"{path.relative_to(root)} belongs to plan {_jsonl_part(path.name, 2)}, which has no versions")
     guests = root / "guests"
     if guests.is_dir():
         for path in sorted(guests.glob("guests-*.json")):
@@ -196,7 +200,7 @@ class Guard:
         self._lock = threading.Lock()
 
     def _files(self) -> list[Path]:
-        return [p for p in jsonl_files(self.root) if JSONL_NAME.fullmatch(p.name).group(1) in AUTHORITATIVE] + ([self.root / "jobs.db"] if (self.root / "jobs.db").exists() else [])
+        return [p for p in jsonl_files(self.root) if _jsonl_part(p.name, 1) in AUTHORITATIVE] + ([self.root / "jobs.db"] if (self.root / "jobs.db").exists() else [])
 
     def damage(self) -> list[Damage]:
         with self._lock:
@@ -209,7 +213,7 @@ class Guard:
                         r = scan_jobs_only(self.root)
                         found += r
                         continue
-                    channel = JSONL_NAME.fullmatch(p.name).group(1)
+                    channel = _jsonl_part(p.name, 1)
                     found += [Damage(str(p.relative_to(self.root)), "authoritative", n, why) for n, why in check_jsonl(p, channel, models[channel])] if channel in models else []
                 self._damage, self._signature = found, signature
             return list(self._damage)

@@ -48,10 +48,9 @@ class AnswerCache:
             if val is not None:
                 self.hits += 1
                 return val, "hit"
-            event = self._inflight.get(key)
-            leader = event is None
-            if leader:
-                event = self._inflight[key] = threading.Event()
+            existing = self._inflight.get(key)
+            leader = existing is None
+            event = existing if existing is not None else self._inflight.setdefault(key, threading.Event())
         if not leader:
             event.wait(self.wait)
             with self._lock:
