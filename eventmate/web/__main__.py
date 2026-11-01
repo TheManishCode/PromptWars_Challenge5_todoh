@@ -51,13 +51,14 @@ def main(argv=None) -> int:
         from eventmate.workspaces import WorkspaceRegistry
 
         try:
-            server_lock = hosting.acquire_server_lock(Path(os.environ["EVENTMATE_DATA_DIR"]))  # noqa: F841  (held until the process ends)
+            server_lock = hosting.acquire_server_lock(Path(os.environ["EVENTMATE_DATA_DIR"]))
         except hosting.AlreadyRunning as exc:
             print(f"refusing to start: {exc}", file=sys.stderr)
             return 2
         registry = WorkspaceRegistry(Path(os.environ["EVENTMATE_DATA_DIR"]), os.environ["EVENTMATE_SECRET"],
                                      max_workspaces=int(os.environ.get("EVENTMATE_MAX_WORKSPACES", "1000")))
         app = create_app(registry=registry, allowed_hosts=hosts)
+        app.config["SERVER_LOCK"] = server_lock  # the lock lives as long as the app does
     else:
         app = create_app(api_token=token, allowed_hosts=hosts)
     print(f"to;doh-the event planner UI on http://{a.host}:{a.port}/  ({run_mode} mode; API token {'required' if token else 'not set' if run_mode == 'local' else 'not used: each visitor holds a workspace credential'}; server: {kind})")

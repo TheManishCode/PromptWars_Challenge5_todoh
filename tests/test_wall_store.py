@@ -10,7 +10,7 @@ import pytest
 
 from eventmate.wall import layout
 from eventmate.wall.store import SCHEMA_VERSION, WallConfig, WallError, WallSchemaError, WallStore
-from tests.wall_helpers import make_wall
+from tests.wall_helpers import make_wall, wall_db
 
 
 def h(n):
@@ -30,7 +30,7 @@ def visitor(store, n, name=None, approve=True):
 
 def test_the_schema_contains_the_required_constraints(tmp_path):
     store, _ = make_wall(tmp_path)
-    with sqlite3.connect(store.path) as c:
+    with wall_db(store.path) as c:
         sql = " ".join(r[0] for r in c.execute("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL")).replace("\n", " ")
     assert "mark_id INTEGER UNIQUE REFERENCES marks(mark_id)" in sql
     assert "CHECK (capacity BETWEEN 1 AND 300)" in sql
@@ -41,12 +41,12 @@ def test_the_schema_contains_the_required_constraints(tmp_path):
 def test_the_file_is_private_and_a_newer_schema_is_refused(tmp_path):
     store, _ = make_wall(tmp_path)
     assert oct(store.path.stat().st_mode & 0o777) == "0o600"
-    with sqlite3.connect(store.path) as c:
+    with wall_db(store.path) as c:
         c.execute("UPDATE meta SET schema_version = ?", (SCHEMA_VERSION + 1,))
     with pytest.raises(WallSchemaError, match="schema version"):
         WallStore(store.path)
     other = tmp_path / "x.db"
-    with sqlite3.connect(other) as c:
+    with wall_db(other) as c:
         c.execute("CREATE TABLE t (a)")
     with pytest.raises(WallSchemaError, match="not a wall database"):
         WallStore(other)
@@ -58,7 +58,7 @@ def test_the_capacity_is_bounded_by_config_and_by_the_database(tmp_path):
     with pytest.raises(ValueError):
         WallConfig(section_capacity=0)
     store, _ = make_wall(tmp_path)
-    with sqlite3.connect(store.path) as c, pytest.raises(sqlite3.IntegrityError):
+    with wall_db(store.path) as c, pytest.raises(sqlite3.IntegrityError):
         c.execute("INSERT INTO sections(section_id, layout_version, capacity) VALUES (0, 1, 301)")
 
 
@@ -143,7 +143,7 @@ def test_removal_blanks_the_name_at_once_everywhere(tmp_path):
     m = visitor(store, 1, "Visible One")
     store.remove(m)
     assert "Visible One" not in str(store.section(0)) and store.me(h(1))["mark"] == {"mark_id": m, "status": "removed", "name": None, "section_id": None, "slot": None}
-    with sqlite3.connect(store.path) as c:
+    with wall_db(store.path) as c:
         assert c.execute("SELECT display_name FROM marks").fetchone()[0] == ""
 
 
@@ -372,7 +372,7 @@ def test_never_a_hidden_marks_slot_and_removed_tombstones_are_valid_targets(tmp_
         assert r["available"], r
         seen.add(r["to_slot"])
         store.cancel_round(h(30), r["round_id"])
-        with sqlite3.connect(store.path) as c:
+        with wall_db(store.path) as c:
             c.execute("DELETE FROM rounds")  # keep the daily limit out of this loop
     assert 3 not in seen and seen <= {2, 4}  # 3 is hidden; 1 is the neighbour of slot 0; 2 and 4 (a tombstone) remain
 
@@ -611,7 +611,7 @@ def test_the_owner_being_hidden_before_ready_is_stale_and_hidden_before_tap_cann
     store.restore(mine)
     r2 = store.issue_round(h(1), "timed")
     store.ready_round(h(1), r2["round_id"])
-    with sqlite3.connect(store.path) as c:
+    with wall_db(store.path) as c:
         c.execute("UPDATE marks SET status = 'hidden' WHERE mark_id = ?", (mine,))  # hidden behind the store's back after ready
     assert store.tap_round(h(1), r2["round_id"], r2["to_slot"], None)["result"] == "expired"
     assert store.meta()["hall_unlocked"] is False
@@ -720,7 +720,7 @@ def test_the_period_resets_ranked_times_only_and_on_first_use_in_the_new_month(t
     clock.advance(minutes=3)
     assert store.meta()["hall_period"] == {"id": "2026-12", "kind": "month", "starts_at": "2026-11-30T18:30:00Z", "ends_at": "2026-12-31T18:30:00Z"}
     assert store.hall("fastest")["entries"] == []  # a new period starts empty ...
-    with sqlite3.connect(store.path) as c:
+    with wall_db(store.path) as c:
         assert c.execute("SELECT COUNT(*) FROM hall_results").fetchone()[0] == 0  # ... and the old row is gone
     assert store.meta()["hall_unlocked"] is True  # never relocks
     assert store.me(h(1))["hall"] is True and store.me(h(1))["hall_eligible"] is True and store.me(h(1))["mark"]["name"] == "Keeper"  # opt-in, found_at and the name persist
@@ -762,11 +762,11 @@ def test_opting_out_deletes_the_time_and_removing_deletes_all_of_them(tmp_path):
     played(store, clock, 1)
     store.set_hall(h(1), True)
     store.set_hall(h(1), False)
-    with sqlite3.connect(store.path) as c:
+    with wall_db(store.path) as c:
         assert c.execute("SELECT COUNT(*) FROM hall_results").fetchone()[0] == 0
     played(store, clock, 1)
     store.remove(mid)
-    with sqlite3.connect(store.path) as c:
+    with wall_db(store.path) as c:
         assert c.execute("SELECT COUNT(*) FROM hall_results").fetchone()[0] == 0
 
 
@@ -831,7 +831,7 @@ def test_an_older_schema_fixture_would_be_upgraded_in_order(tmp_path, monkeypatc
     monkeypatch.setitem(ws.UPGRADERS, 1, step1)
     WallStore(store.path)
     assert ran == [1]
-    with sqlite3.connect(store.path) as c:
+    with wall_db(store.path) as c:
         assert c.execute("SELECT schema_version FROM meta").fetchone()[0] == 2
 
 

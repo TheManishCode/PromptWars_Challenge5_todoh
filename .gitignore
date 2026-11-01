@@ -15,3 +15,10 @@ logs/
 eventmate/wall_data/
 *.sqlite3-wal
 *.sqlite3-shm
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+.server.lock
+eventmate/workspaces/
+todoh-backup-*/

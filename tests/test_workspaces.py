@@ -1,5 +1,7 @@
 """Phase 2: the workspace directory (credentials, rotate, revoke, limits, sweep) and the cookie and session behaviour of the app."""
 
+import contextlib
+
 import sqlite3
 
 import pytest
@@ -23,7 +25,8 @@ def test_a_new_workspace_gets_a_strong_credential_and_only_its_hash_is_stored(re
     for path in (tmp_path / "data").rglob("*"):
         if path.is_file():
             assert credential.encode() not in path.read_bytes(), path  # the credential is nowhere on disk
-    stored = sqlite3.connect(tmp_path / "data" / "workspaces.db").execute("SELECT cred_hash FROM workspaces").fetchone()[0]
+    with contextlib.closing(sqlite3.connect(tmp_path / "data" / "workspaces.db")) as db:
+        stored = db.execute("SELECT cred_hash FROM workspaces").fetchone()[0]
     assert len(stored) == 64 and stored != credential
 
 

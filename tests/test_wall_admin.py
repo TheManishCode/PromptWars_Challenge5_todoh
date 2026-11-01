@@ -2,13 +2,12 @@
 
 import json
 import multiprocessing as mp
-import sqlite3
 from dataclasses import replace
 
 from eventmate.wall.store import WallConfig, WallStore
 from eventmate.wall_admin import main
 from tests.test_wall_store import h, visitor
-from tests.wall_helpers import make_wall
+from tests.wall_helpers import make_wall, wall_db
 
 
 def run(db, *args):
@@ -87,7 +86,7 @@ def test_many_processes_share_one_wall_file_without_losing_or_duplicating_slots(
     [p.start() for p in procs]
     [p.join(90) for p in procs]
     assert sorted(q.get(timeout=5)[1] for _ in procs) == [201] * 24
-    with sqlite3.connect(store.path) as c:
+    with wall_db(store.path) as c:
         placed = c.execute("SELECT section_id, slot FROM marks WHERE status='visible'").fetchall()
         assert len(placed) == 24 and len(set(placed)) == 24
         assert c.execute("SELECT visible_count FROM meta").fetchone()[0] == 24

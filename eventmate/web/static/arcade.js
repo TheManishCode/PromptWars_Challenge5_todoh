@@ -34,7 +34,26 @@ async function api(path, opts = {}) {
   const res = await fetch(path, { ...opts, body, headers });
   let data = null;
   try { data = await res.json(); } catch (e) { /* non-JSON body */ }
+  if (res.status === 404 && data && data.code === "not_found" && opts.method && opts.method !== "GET" && !path.startsWith("/api/wall/")) await sessionLost(path);
   return { ok: res.ok, status: res.status, data };
+}
+
+/* In shared mode the workspace cookie is HttpOnly, so the page cannot know it was lost: the only sign is the generic 404 a write gets. Ask the server once who
+   we are now. A different workspace id means the old session is gone (cookies cleared or expired) and everything made in it is out of reach; say so, take the
+   new CSRF value, and never resend the write. */
+let sessionChecking = false;
+async function sessionLost(path) {
+  if (sessionChecking || !state.wsId) return; // local mode (no workspace id) and re-entry: nothing to check
+  sessionChecking = true;
+  try {
+    const r = await fetch("/api/session", { headers: { "Accept": "application/json" } });
+    const d = r.ok ? await r.json() : null;
+    if (d && d.workspace && d.workspace.id !== state.wsId) {
+      state.wsId = d.workspace.id; state.csrf = d.csrf; state.messages = []; state.draft = null;
+      bubble("err", "Your session was lost (the browser's cookie was cleared or expired), so your earlier plans are out of reach and this was not saved. A fresh session has started: describe your event again.");
+    }
+  } catch (e) { /* offline: the caller's own error message stands */ }
+  sessionChecking = false;
 }
 
 /* ---------------------------------------------------------------- chat */
@@ -2114,12 +2133,18 @@ async function wallRefresh() {
   else wallLine("");
 }
 
+// crypto.randomUUID() exists only in a secure context (HTTPS or localhost); getRandomValues works everywhere, so SIGN never throws on plain HTTP
+function wallIdemKey() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return "k" + Array.from(crypto.getRandomValues(new Uint8Array(16))).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+}
+
 async function wallSign() {
   const inp = $("#wall-name");
   const name = (inp && inp.value || "").trim();
   if (name.length < 2) { wallLine("name needs at least 2 characters"); return; }
   wallLine("scratching it in...");
-  const r = await wallPost("/api/wall/marks", { name: name }, crypto.randomUUID());
+  const r = await wallPost("/api/wall/marks", { name: name }, wallIdemKey());
   if (r.status === 201) {
     wallLine("permanent now. Come back for the challenge.");
     if (inp) inp.value = "";
@@ -3230,6 +3255,7 @@ function onAttachFile() {
     try {
       const s = await api("/api/session");
       state.csrf = s.data.csrf;
+      state.wsId = s.data.workspace && s.data.workspace.mode === "shared" ? s.data.workspace.id : "";
       $("#conn").className = "ok";
       $("#conn").title = "online · " + s.data.today;
     } catch (e) {

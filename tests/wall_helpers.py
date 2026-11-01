@@ -1,7 +1,9 @@
 """Shared pieces for the wall tests: a controllable clock, an app on temporary files, and a ``Visitor`` that behaves like one browser (its own cookie jar)."""
 
+import contextlib
 import json
 import random
+import sqlite3
 import uuid
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -80,3 +82,14 @@ def visible_visitor(app, store, name):
     assert r.status_code == 201, r.get_json()
     store.approve(r.get_json()["mark_id"])
     return v, r.get_json()["mark_id"]
+
+
+@contextlib.contextmanager
+def wall_db(path):
+    """sqlite3's own ``with`` commits but never closes; an unclosed connection is a ResourceWarning and, in a long run, a leaked descriptor."""
+    conn = sqlite3.connect(path)
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()

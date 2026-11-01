@@ -126,7 +126,11 @@ def _backup_command(a) -> int:
 def _ids(reg: WorkspaceRegistry):
     import sqlite3
 
-    return sqlite3.connect(reg.directory.path).execute("SELECT id FROM workspaces ORDER BY created").fetchall()
+    conn = sqlite3.connect(reg.directory.path)
+    try:
+        return conn.execute("SELECT id FROM workspaces ORDER BY created").fetchall()
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

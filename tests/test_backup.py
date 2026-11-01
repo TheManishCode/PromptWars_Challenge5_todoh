@@ -1,5 +1,6 @@
 """Backup and restore: a consistent copy while the server runs, verification, restore only into an empty directory, and deletions that stay deleted."""
 
+import contextlib
 import json
 import sqlite3
 from pathlib import Path
@@ -35,7 +36,8 @@ def test_a_backup_verifies_and_contains_the_databases_the_workspaces_and_the_del
     assert backup.verify_backup(out) == [] and out.parent == (tmp_path / "backups").resolve()
     names = {str(p.relative_to(out)) for p in out.rglob("*") if p.is_file()}
     assert "workspaces.db" in names and "MANIFEST.json" in names and any(n.endswith(f"plan-{plan}-v0001.json") for n in names)
-    assert sqlite3.connect(out / "workspaces.db").execute("SELECT COUNT(*) FROM workspaces").fetchone()[0] == 2
+    with contextlib.closing(sqlite3.connect(out / "workspaces.db")) as db:
+        assert db.execute("SELECT COUNT(*) FROM workspaces").fetchone()[0] == 2
     assert oct(out.stat().st_mode & 0o777) == "0o700" and oct((out / "workspaces.db").stat().st_mode & 0o777) == "0o600"
 
 
