@@ -162,6 +162,62 @@ def _facts(plan, as_of: datetime, listed=None) -> list[Fact]:
     return facts
 
 
+def _vendor_states(plan, drafts: list, inbound: list, ledger: list, confirmed_claims: set, stale: dict[str, bool], now: datetime) -> list[VendorState]:
+    """One row per selected vendor: booking status, conversation, and the latest quote with its provenance."""
+    vendors: list[VendorState] = []
+    for s in plan.selections:
+        mine_d = [d for d in drafts if d.vendor_id == s.vendor_id]
+        mine_i = [m for m in inbound if m.vendor_id == s.vendor_id]
+        conv, last = _conversation(mine_d, mine_i)
+        vendors.append(VendorState(
+            category=s.category, vendor_id=s.vendor_id, name=s.name, booking_status=s.booking_status.value, plan_cost=s.cost, price_stale=stale.get(s.vendor_id, False),
+            conversation=conv, last_activity_at=last, quote=_quote_fact(s.vendor_id, s.category, inbound, ledger, confirmed_claims, now),
+        ))
+    return vendors
+
+
+def _rsvp_items(em, plan, plan_id: str, listed, now: datetime) -> list[OpenItem]:
+    pending = plan.guests.pending if listed is None else listed.pending
+    if pending <= 0:
+        return []
+    first = em.store.load(plan_id, 1).created_at if plan.version > 1 else plan.created_at
+    if listed is not None:
+        label = f"{pending} guest(s) on your list have not answered"
+    else:
+        no_list = "" if plan.guests.guest_list_id is not None else " (no guest list is loaded, so replies are not being tracked)"
+        label = f"{pending} guest(s) have not answered{no_list}"
+    return [_item("pending_rsvps", "guests", label, first, now)]
+
+
+def _message_items(drafts: list, inbound: list, confirmed_claims: set, now: datetime) -> list[OpenItem]:
+    items: list[OpenItem] = []
+    replied_drafts = {m.draft_id for m in inbound}
+    for d in drafts:
+        if d.status == "prepared" and (d.expires_at is None or _aware(d.expires_at) > now):
+            items.append(_item("approval_waiting", d.draft_id, f"A message to {d.vendor_name} waits for your approval", d.created_at, now))
+        elif d.kind == "request" and d.status in ("sent", "marked_sent") and d.draft_id not in replied_drafts:
+            items.append(_item("unanswered_vendor", d.draft_id, f"{d.vendor_name} has not replied", d.sent_at or d.marked_at or d.created_at, now))
+    for m in inbound:
+        if m.analysis.amounts and not m.read and m.message_id not in confirmed_claims:
+            items.append(_item("unconfirmed_quote", m.message_id, f"{m.vendor_name} mentioned a price that is not recorded", m.received_at, now))
+    return items
+
+
+def _job_items(jobs: list, now: datetime) -> list[OpenItem]:
+    items: list[OpenItem] = []
+    for j in jobs:
+        if j.status in ("done", "expired", "cancelled"):
+            continue
+        window = timedelta(hours=j.reply_window_hours)
+        for vid, p in j.vendors.items():
+            if p.state == "asked" and p.asked_at is not None and now >= _aware(p.asked_at) + window and p.nudges < j.max_nudges_per_vendor and not p.pending_nudge_draft_id:
+                items.append(_item("follow_up_due", f"{j.job_id}:{vid}", f"A follow-up to {vid} is due in the quote job", _aware(p.asked_at) + window, now))
+        for it in j.items:
+            if not it.resolved:
+                items.append(_item("job_item", f"{j.job_id}:{it.item_id}", JOB_ITEM_LABELS.get(it.kind, "A quote job item needs you"), j.created_at, now))
+    return items
+
+
 def build_state(em, plan_id: str, now: datetime | None = None, changes_since: datetime | None = None, today=None) -> EventState:
     """Assemble the state of one plan. Raises FileNotFoundError for an unknown plan. Reads only; never calls a model or the network."""
     now = _aware(now) or datetime.now(UTC)
@@ -175,45 +231,8 @@ def build_state(em, plan_id: str, now: datetime | None = None, changes_since: da
     with contextlib.suppress(Exception):  # a price check that cannot run must not hide the rest of the state
         stale = {q.vendor_id: q.price_stale for q in em.quote_status(plan_id, today)}
 
-    vendors: list[VendorState] = []
-    for s in plan.selections:
-        mine_d = [d for d in drafts if d.vendor_id == s.vendor_id]
-        mine_i = [m for m in inbound if m.vendor_id == s.vendor_id]
-        conv, last = _conversation(mine_d, mine_i)
-        vendors.append(VendorState(
-            category=s.category, vendor_id=s.vendor_id, name=s.name, booking_status=s.booking_status.value, plan_cost=s.cost, price_stale=stale.get(s.vendor_id, False),
-            conversation=conv, last_activity_at=last, quote=_quote_fact(s.vendor_id, s.category, inbound, ledger, confirmed_claims, now),
-        ))
-
-    items: list[OpenItem] = []
-    pending = plan.guests.pending if listed is None else listed.pending
-    if pending > 0:
-        first = em.store.load(plan_id, 1).created_at if plan.version > 1 else plan.created_at
-        if listed is not None:
-            label = f"{pending} guest(s) on your list have not answered"
-        else:
-            no_list = "" if plan.guests.guest_list_id is not None else " (no guest list is loaded, so replies are not being tracked)"
-            label = f"{pending} guest(s) have not answered{no_list}"
-        items.append(_item("pending_rsvps", "guests", label, first, now))
-    replied_drafts = {m.draft_id for m in inbound}
-    for d in drafts:
-        if d.status == "prepared" and (d.expires_at is None or _aware(d.expires_at) > now):
-            items.append(_item("approval_waiting", d.draft_id, f"A message to {d.vendor_name} waits for your approval", d.created_at, now))
-        elif d.kind == "request" and d.status in ("sent", "marked_sent") and d.draft_id not in replied_drafts:
-            items.append(_item("unanswered_vendor", d.draft_id, f"{d.vendor_name} has not replied", d.sent_at or d.marked_at or d.created_at, now))
-    for m in inbound:
-        if m.analysis.amounts and not m.read and m.message_id not in confirmed_claims:
-            items.append(_item("unconfirmed_quote", m.message_id, f"{m.vendor_name} mentioned a price that is not recorded", m.received_at, now))
-    for j in jobs:
-        if j.status in ("done", "expired", "cancelled"):
-            continue
-        window = timedelta(hours=j.reply_window_hours)
-        for vid, p in j.vendors.items():
-            if p.state == "asked" and p.asked_at is not None and now >= _aware(p.asked_at) + window and p.nudges < j.max_nudges_per_vendor and not p.pending_nudge_draft_id:
-                items.append(_item("follow_up_due", f"{j.job_id}:{vid}", f"A follow-up to {vid} is due in the quote job", _aware(p.asked_at) + window, now))
-        for it in j.items:
-            if not it.resolved:
-                items.append(_item("job_item", f"{j.job_id}:{it.item_id}", JOB_ITEM_LABELS.get(it.kind, "A quote job item needs you"), j.created_at, now))
+    vendors = _vendor_states(plan, drafts, inbound, ledger, confirmed_claims, stale, now)
+    items = _rsvp_items(em, plan, plan_id, listed, now) + _message_items(drafts, inbound, confirmed_claims, now) + _job_items(jobs, now)
     items.sort(key=lambda i: (i.since or now, i.kind, i.ref))
 
     return EventState(

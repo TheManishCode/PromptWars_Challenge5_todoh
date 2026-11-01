@@ -59,8 +59,8 @@ def _folded(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", base)
 
 
-def validate(raw: object, blocklist: tuple[tuple[str, ...], tuple[str, ...]] | None = None) -> str:
-    """The stored form of a name, or ``InvalidName``."""
+def _normalized(raw: object) -> str:
+    """The cleaned name, or ``InvalidName`` for the wrong type, the wrong length or hidden characters."""
     if not isinstance(raw, str):
         raise InvalidName("a name is text")
     if len(raw) > NAME_MAX * 8:  # before any work on it
@@ -71,12 +71,19 @@ def validate(raw: object, blocklist: tuple[tuple[str, ...], tuple[str, ...]] | N
     name = normalize(raw)
     if not NAME_MIN <= len(name) <= NAME_MAX:
         raise InvalidName(f"names are {NAME_MIN} to {NAME_MAX} characters")
+    return name
+
+
+def _check_characters(name: str) -> None:
     for c in name:
         cat = unicodedata.category(c)
         if not (cat[0] in "LM" or cat == "Nd" or c in _ALLOWED_PUNCT):
             raise InvalidName("names can use letters, numbers, spaces, hyphens, apostrophes and full stops")
     if sum(1 for c in name if c.isalnum()) < 2 or not any(c.isalpha() for c in name):
         raise InvalidName("a name needs at least two letters or numbers, and one letter")
+
+
+def _check_lookalikes_and_links(name: str) -> None:
     if any(0x0250 <= ord(c) <= 0x02FF for c in name):
         raise InvalidName("that name uses letters that look like others")  # IPA and modifier letters: look-alikes for plain Latin, rare in real names
     if _URLISH.search(name):
@@ -86,9 +93,20 @@ def validate(raw: object, blocklist: tuple[tuple[str, ...], tuple[str, ...]] | N
     for token in name.split(" "):
         if len({s for s in map(_script, token) if s}) > 1:
             raise InvalidName("each word must use one alphabet")  # Latin 'a' and Cyrillic 'а' in one word is a look-alike trick
+
+
+def _check_blocklist(name: str, blocklist: tuple[tuple[str, ...], tuple[str, ...]] | None) -> None:
     words, fragments = (_WORDS, _FRAGMENTS) if blocklist is None else blocklist
     folded_words = [_folded(t) for t in name.split(" ")]
     whole = _folded(name)
     if any(re.fullmatch(_stretchy(w), t) for w in words for t in folded_words) or any(re.search(_stretchy(f), whole) for f in fragments):
         raise InvalidName("that name is not allowed")
+
+
+def validate(raw: object, blocklist: tuple[tuple[str, ...], tuple[str, ...]] | None = None) -> str:
+    """The stored form of a name, or ``InvalidName``."""
+    name = _normalized(raw)
+    _check_characters(name)
+    _check_lookalikes_and_links(name)
+    _check_blocklist(name, blocklist)
     return name

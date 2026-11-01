@@ -282,93 +282,92 @@ def _repair(em: EventMate, a) -> int:
     return 0
 
 
-def _run(em: EventMate, a) -> int:
-    if a.command == "intake":
-        res = em.manager.run_intake(a.request, today=a.today, guest_list_id=a.guest_list)
-        print(res.model_dump_json(indent=2))
-        return 0 if res.status == "intake_complete" else 3
-    if a.command == "plan":
-        out = em.plan(a.request, today=a.today, guest_list_id=a.guest_list)
-        _print_reality(out.intake.reality)
-        if out.plan is None:
-            print("No plan: hard constraints cannot be met.", file=sys.stderr)
-            _print_violations(out.violations)
-            return 3
-        if a.json:
-            print(out.plan.model_dump_json(indent=2))
-        else:
-            print(em.explain(out.plan.plan_id).markdown)
-        print(f"plan id: {out.plan.plan_id} (version {out.plan.version})", file=sys.stderr)
-        return 0
-    if a.command == "tradeoffs":
-        return _tradeoffs(em, a)
-    if a.command == "ledger":
-        return _ledger(em, a)
-    if a.command == "quotes":
-        return _quotes(em, a)
-    if a.command == "outreach":
-        return _outreach(em, a)
-    if a.command == "inbox":
-        return _inbox(em, a)
-    if a.command == "jobs":
-        return _jobs(em, a)
-    if a.command == "delete-plan":
-        if a.confirm != a.plan_id:
-            print("--confirm must repeat the plan id", file=sys.stderr)
-            return 2
-        print(json.dumps(em.delete_plan(a.plan_id)))
-        return 0
-    if a.command == "verify":
-        return _verify(em, a)
-    if a.command == "repair":
-        return _repair(em, a)
-    if a.command == "purge-logs":
-        removed = em.purge_logs(a.days)
-        print(f"removed {len(removed)} log file(s)")
-        return 0
-    if a.command == "testvendor":
-        if not a.i_own_this_address:
-            print("a test vendor needs --i-own-this-address: you confirm the address is yours", file=sys.stderr)
-            return 2
-        plan = em.store.latest(a.plan_id)
-        biz, contact = em.add_test_vendor(a.name, plan.request.city, VendorCategory(a.category), a.email, True, a.by, a.plan_id)
-        print(f"TEST VENDOR {biz.name} ({biz.vendor_id}) added to the shortlist; address {contact.email} confirmed as owned by {a.by}")
-        return 0
-    if a.command in ("flights", "multicity"):
-        return _travel(em, a)
-    if a.command == "discover":
-        return _discover(em, a)
-    if a.command == "weather":
-        return _weather(em, a)
-    if a.command == "deals":
-        return _deals(em, a)
-    if a.command == "confirm":
-        out = em.confirm(a.plan_id, VendorCategory(a.category))
-        return _print_replan(em, out, False)
-    if a.command == "replan":
-        out = em.replan(a.plan_id, _disruption(a), a.today)
-        return _print_replan(em, out, a.json)
-    if a.command == "show":
-        if a.json:
-            print(em.store.load(a.plan_id, a.version).model_dump_json(indent=2))
-        else:
-            print(em.explain(a.plan_id, a.version).markdown)
-        return 0
-    if a.command == "diff":
-        print(em.diff(a.plan_id, a.old, a.new).model_dump_json(indent=2))
-        return 0
-    if a.command == "validate":
-        report = em.revalidate(a.plan_id, a.version)
-        print(f"{'PASSED' if report.passed else 'FAILED'}: {sum(c.passed for c in report.checks)}/{len(report.checks)} checks")
-        if report.passed:
-            v = em.verification(a.plan_id, a.version)
-            print(("VERIFIED" if v["state"] == "verified" else "NEEDS VERIFICATION") + ": " + v["label"] + "".join(f"\n  - {i['detail']}. To resolve: {i['repair']}" for i in v["items"]))
-        _print_violations(report.violations)
-        return 0 if report.passed else 3
+def _intake(em: EventMate, a) -> int:
+    res = em.manager.run_intake(a.request, today=a.today, guest_list_id=a.guest_list)
+    print(res.model_dump_json(indent=2))
+    return 0 if res.status == "intake_complete" else 3
+
+
+def _plan(em: EventMate, a) -> int:
+    out = em.plan(a.request, today=a.today, guest_list_id=a.guest_list)
+    _print_reality(out.intake.reality)
+    if out.plan is None:
+        print("No plan: hard constraints cannot be met.", file=sys.stderr)
+        _print_violations(out.violations)
+        return 3
+    if a.json:
+        print(out.plan.model_dump_json(indent=2))
+    else:
+        print(em.explain(out.plan.plan_id).markdown)
+    print(f"plan id: {out.plan.plan_id} (version {out.plan.version})", file=sys.stderr)
+    return 0
+
+
+def _delete_plan(em: EventMate, a) -> int:
+    if a.confirm != a.plan_id:
+        print("--confirm must repeat the plan id", file=sys.stderr)
+        return 2
+    print(json.dumps(em.delete_plan(a.plan_id)))
+    return 0
+
+
+def _purge_logs(em: EventMate, a) -> int:
+    removed = em.purge_logs(a.days)
+    print(f"removed {len(removed)} log file(s)")
+    return 0
+
+
+def _testvendor(em: EventMate, a) -> int:
+    if not a.i_own_this_address:
+        print("a test vendor needs --i-own-this-address: you confirm the address is yours", file=sys.stderr)
+        return 2
+    plan = em.store.latest(a.plan_id)
+    biz, contact = em.add_test_vendor(a.name, plan.request.city, VendorCategory(a.category), a.email, True, a.by, a.plan_id)
+    print(f"TEST VENDOR {biz.name} ({biz.vendor_id}) added to the shortlist; address {contact.email} confirmed as owned by {a.by}")
+    return 0
+
+
+def _confirm(em: EventMate, a) -> int:
+    return _print_replan(em, em.confirm(a.plan_id, VendorCategory(a.category)), False)
+
+
+def _replan(em: EventMate, a) -> int:
+    return _print_replan(em, em.replan(a.plan_id, _disruption(a), a.today), a.json)
+
+
+def _show(em: EventMate, a) -> int:
+    if a.json:
+        print(em.store.load(a.plan_id, a.version).model_dump_json(indent=2))
+    else:
+        print(em.explain(a.plan_id, a.version).markdown)
+    return 0
+
+
+def _diff(em: EventMate, a) -> int:
+    print(em.diff(a.plan_id, a.old, a.new).model_dump_json(indent=2))
+    return 0
+
+
+def _validate(em: EventMate, a) -> int:
+    report = em.revalidate(a.plan_id, a.version)
+    print(f"{'PASSED' if report.passed else 'FAILED'}: {sum(c.passed for c in report.checks)}/{len(report.checks)} checks")
+    if report.passed:
+        v = em.verification(a.plan_id, a.version)
+        print(("VERIFIED" if v["state"] == "verified" else "NEEDS VERIFICATION") + ": " + v["label"] + "".join(f"\n  - {i['detail']}. To resolve: {i['repair']}" for i in v["items"]))
+    _print_violations(report.violations)
+    return 0 if report.passed else 3
+
+
+def _list_plans(em: EventMate, a) -> int:
     for pid in em.store.list_plans():
         latest = em.store.latest(pid)
         print(f"{pid}\tv{latest.version}\t{latest.request.event_type.value}\t{latest.request.city}\t{latest.request.event_date}")
     return 0
+
+
+def _run(em: EventMate, a) -> int:
+    handler = _COMMANDS.get(a.command, _list_plans)  # no command: list the plans
+    return handler(em, a)
 
 
 def _print_reality(rc) -> None:
@@ -574,44 +573,49 @@ def _jobs(em: EventMate, a) -> int:
     return 0
 
 
-def _inbox(em: EventMate, a) -> int:
-    if a.what == "poll":
-        import time
+def _inbox_poll(em: EventMate, a) -> int:
+    import time
 
-        while True:
-            res = em.poll_conversations()
-            print(f"sent {res.sent}, new replies {res.new_messages}" + "".join(f"; waiting: {strip_terminal(w)}" for w in res.waiting) + "".join(f"; ERROR {strip_terminal(e)}" for e in res.errors))
-            if not a.watch:
-                return 1 if res.errors else 0
-            time.sleep(max(5, a.watch))
-    if a.what in ("kill", "resume"):
-        (em.kill_all_autoreplies if a.what == "kill" else em.resume_autoreplies)()
-        print("every automatic message is stopped" if a.what == "kill" else "automatic replies may be granted again; existing permissions apply")
-        return 0
-    if not a.plan_id:
-        print("give a plan id", file=sys.stderr)
+    while True:
+        res = em.poll_conversations()
+        print(f"sent {res.sent}, new replies {res.new_messages}" + "".join(f"; waiting: {strip_terminal(w)}" for w in res.waiting) + "".join(f"; ERROR {strip_terminal(e)}" for e in res.errors))
+        if not a.watch:
+            return 1 if res.errors else 0
+        time.sleep(max(5, a.watch))
+
+
+def _inbox_kill_switch(em: EventMate, a) -> int:
+    (em.kill_all_autoreplies if a.what == "kill" else em.resume_autoreplies)()
+    print("every automatic message is stopped" if a.what == "kill" else "automatic replies may be granted again; existing permissions apply")
+    return 0
+
+
+def _inbox_autoreply(em: EventMate, a) -> int:
+    if a.off:
+        em.revoke_autoreply(a.plan_id)
+    elif a.name:
+        em.grant_autoreply(a.plan_id, a.name, a.hours, a.max_per_thread, a.max_total)
+    st = em.autoreply_status(a.plan_id)
+    m = st.mandate
+    if st.killed:
+        print("automatic replies are OFF: the kill switch is on (`inbox resume` lifts it)")
+    elif st.active:
+        print(f"automatic follow-up questions are ON until {m.expires_at:%Y-%m-%d %H:%M} UTC ({st.sent_total} of {m.max_total} used, {m.max_per_thread} per vendor, {m.window_start:02d}:00-{m.window_end:02d}:00 IST)")
+    else:
+        print("automatic replies are off for this plan")
+    return 0
+
+
+def _inbox_decide(em: EventMate, a) -> int:
+    if not a.draft_id or (a.what == "approve" and not a.hash):
+        print("approve needs DRAFT_ID and --hash (see `inbox show`)", file=sys.stderr)
         return 2
-    if a.what == "autoreply":
-        if a.off:
-            em.revoke_autoreply(a.plan_id)
-        elif a.name:
-            em.grant_autoreply(a.plan_id, a.name, a.hours, a.max_per_thread, a.max_total)
-        st = em.autoreply_status(a.plan_id)
-        m = st.mandate
-        if st.killed:
-            print("automatic replies are OFF: the kill switch is on (`inbox resume` lifts it)")
-        elif st.active:
-            print(f"automatic follow-up questions are ON until {m.expires_at:%Y-%m-%d %H:%M} UTC ({st.sent_total} of {m.max_total} used, {m.max_per_thread} per vendor, {m.window_start:02d}:00-{m.window_end:02d}:00 IST)")
-        else:
-            print("automatic replies are off for this plan")
-        return 0
-    if a.what in ("approve", "deny"):
-        if not a.draft_id or (a.what == "approve" and not a.hash):
-            print("approve needs DRAFT_ID and --hash (see `inbox show`)", file=sys.stderr)
-            return 2
-        d = em.approve_outreach(a.plan_id, a.draft_id, a.hash) if a.what == "approve" else em.deny_outreach(a.plan_id, a.draft_id)
-        print(f"{strip_terminal(d.vendor_name)}: {d.status}" + (f" ({strip_terminal(d.error)})" if d.error else ""))
-        return 0
+    d = em.approve_outreach(a.plan_id, a.draft_id, a.hash) if a.what == "approve" else em.deny_outreach(a.plan_id, a.draft_id)
+    print(f"{strip_terminal(d.vendor_name)}: {d.status}" + (f" ({strip_terminal(d.error)})" if d.error else ""))
+    return 0
+
+
+def _inbox_show(em: EventMate, a) -> int:
     box = em.inbox(a.plan_id)
     if a.json:
         print(box.model_dump_json(indent=2))
@@ -627,6 +631,21 @@ def _inbox(em: EventMate, a) -> int:
             for x in m.analysis.amounts:
                 print(f"       they wrote: INR {x.low_inr:,}" + (f" to {x.high_inr:,}" if x.high_inr != x.low_inr else "") + f" ({x.unit}); not recorded as a quote")
     return 0
+
+
+def _inbox(em: EventMate, a) -> int:
+    if a.what == "poll":
+        return _inbox_poll(em, a)
+    if a.what in ("kill", "resume"):
+        return _inbox_kill_switch(em, a)
+    if not a.plan_id:
+        print("give a plan id", file=sys.stderr)
+        return 2
+    if a.what == "autoreply":
+        return _inbox_autoreply(em, a)
+    if a.what in ("approve", "deny"):
+        return _inbox_decide(em, a)
+    return _inbox_show(em, a)
 
 
 def _quote_scores(em: EventMate, a) -> int:
@@ -712,6 +731,14 @@ def _print_replan(em: EventMate, out, as_json: bool) -> int:
         print(em.explain(out.plan.plan_id).markdown)
     print(f"plan id: {out.plan.plan_id} (version {out.plan.version}, from {out.plan.parent_version})", file=sys.stderr)
     return 0
+
+
+_COMMANDS = {
+    "intake": _intake, "plan": _plan, "tradeoffs": _tradeoffs, "ledger": _ledger, "quotes": _quotes, "outreach": _outreach, "inbox": _inbox, "jobs": _jobs,
+    "delete-plan": _delete_plan, "verify": _verify, "repair": _repair, "purge-logs": _purge_logs, "testvendor": _testvendor, "flights": _travel,
+    "multicity": _travel, "discover": _discover, "weather": _weather, "deals": _deals, "confirm": _confirm, "replan": _replan, "show": _show,
+    "diff": _diff, "validate": _validate,
+}
 
 
 if __name__ == "__main__":

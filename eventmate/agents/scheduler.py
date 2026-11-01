@@ -69,6 +69,20 @@ class EventPolicy(_Model):
         return self.event_defaults[request.event_type.value]
 
 
+class _TaskGraph:
+    """The tasks and precedences collected while a schedule spec is built."""
+
+    def __init__(self) -> None:
+        self.tasks: list[ScheduleTask] = []
+        self.deps: list[ScheduleDependency] = []
+
+    def task(self, id_: str, name: str, minutes: int, **kw) -> None:
+        self.tasks.append(ScheduleTask(id=id_, name=name, duration=minutes, **kw))
+
+    def dep(self, before: str, after: str, lag: int = 0) -> None:
+        self.deps.append(ScheduleDependency(before=before, after=after, min_lag=lag))
+
+
 class SchedulingAgent:
     agent_name = AgentName.SCHEDULER
 
@@ -92,81 +106,13 @@ class SchedulingAgent:
         start_hour, event_minutes = p.event_window(request)
         event_start = day0 + start_hour * 60
         has = set(categories)
-        tasks: list[ScheduleTask] = []
-        deps: list[ScheduleDependency] = []
+        graph = _TaskGraph()
+        self._add_pre_event(graph, request, has, now, day0)
+        setups = self._add_setups(graph, has, day0)
+        self._add_event_day(graph, request, setups, event_minutes, event_start)
+        tasks, deps = self._apply_fixed(graph, fixed_starts)
 
-        def task(id_, name, minutes, **kw):
-            tasks.append(ScheduleTask(id=id_, name=name, duration=minutes, **kw))
-
-        def dep(a, b, lag=0):
-            deps.append(ScheduleDependency(before=a, after=b, min_lag=lag))
-
-        pre = {"group": "pre_event", "earliest_start": now, "prefer": "early", "resource": "organizer"}
-        task("book_venue", "Book venue", p.booking_minutes, **pre)
-        if VendorCategory.CATERER in has:
-            task("book_caterer", "Book caterer", p.booking_minutes, **pre)
-            dep("book_venue", "book_caterer")
-        if VendorCategory.PHOTOGRAPHER in has:
-            task("book_photographer", "Book photographer", p.booking_minutes, **pre)
-            dep("book_venue", "book_photographer")
-
-        if ReminderKind.INVITATION in request.reminders:
-            task("reminder_invitation", "Reminder: send invitations", p.reminder_minutes, **pre)
-            task("send_invitations", "Send invitations", p.send_invitations_minutes, deadline_end=max(0, day0 - p.invitation_lead_days * DAY), **pre)
-            dep("book_venue", "reminder_invitation")
-            dep("reminder_invitation", "send_invitations", p.reminder_to_send_gap_days * DAY)
-        if ReminderKind.VENDOR_CONFIRMATION in request.reminders:
-            task(
-                "reminder_vendor_confirmation",
-                "Reminder: confirm vendors",
-                p.reminder_minutes,
-                group="pre_event",
-                earliest_start=max(now, day0 - p.vendor_confirmation_window_start_days * DAY + p.work_start_hour * 60),
-                deadline_end=max(0, day0 - p.vendor_confirmation_window_end_days * DAY),  # before origin = already impossible
-                prefer="early",
-                resource="organizer",
-            )
-            for t in [t.id for t in tasks if t.id.startswith("book_")]:
-                dep(t, "reminder_vendor_confirmation")
-
-        day = {"group": "event_day"}
-        access = day0 + p.venue_access_hour * 60
-        task("venue_setup", "Venue setup", p.venue_setup_minutes, earliest_start=access, prefer="late", resource="venue", **day)
-        dep("book_venue", "venue_setup")
-        setups = ["venue_setup"]
-        if VendorCategory.CATERER in has:
-            task("catering_setup", "Catering setup", p.catering_setup_minutes, earliest_start=access, prefer="late", resource="caterer", **day)
-            dep("venue_setup", "catering_setup")
-            dep("book_caterer", "catering_setup")
-            setups.append("catering_setup")
-        if VendorCategory.PHOTOGRAPHER in has:
-            task("photography_prep", "Photography prep", p.photography_prep_minutes, earliest_start=access, prefer="late", resource="photographer", **day)
-            dep("venue_setup", "photography_prep")
-            dep("book_photographer", "photography_prep")
-            setups.append("photography_prep")
-        task("event", "Event", event_minutes, fixed_start=event_start, resource="venue", **day)
-        for s in setups:
-            dep(s, "event", p.setup_buffer_minutes)
         program = request.community.program if request.community else ()
-        for a in program:  # programme activities share named resources and must sit inside the event; the same CP-SAT model places them
-            task(f"activity_{a.activity_id}", f"Activity: {a.title}", a.minutes, earliest_start=event_start, deadline_end=event_start + event_minutes, prefer="early", resource=f"res_{a.resource}", **day)
-            if a.after:
-                dep(f"activity_{a.after}", f"activity_{a.activity_id}")
-        task("teardown", "Teardown", p.teardown_minutes, resource="venue", **day)
-        dep("event", "teardown")
-
-        for tid in (fixed_starts or {}).keys():
-            if tid not in {t.id for t in tasks}:
-                raise ValueError(f"cannot fix unknown task {tid!r}")
-        # A confirmed booking already happened. It cannot be ordered after a step that has not
-        # happened yet, so precedences *into* a fixed task from a non-fixed task are dropped.
-        fixed_ids = set(fixed_starts or {})
-        deps = [d for d in deps if not (d.after in fixed_ids and d.before not in fixed_ids)]
-        # a fixed task (confirmed booking) is also exempt from the "not before now" floor
-        tasks = [t.model_copy(update={"fixed_start": fixed_starts[t.id], "earliest_start": 0}) if fixed_starts and t.id in fixed_starts else t for t in tasks]
-        # model_copy skips validation; rebuild through the validated constructor
-        tasks = [ScheduleTask.model_validate(t.model_dump()) for t in tasks]
-
         resources = {"organizer": request.organizers, "venue": 1}
         for a in program:
             resources[f"res_{a.resource}"] = 1
@@ -176,6 +122,87 @@ class SchedulingAgent:
             resources["photographer"] = 1
         horizon = event_start + event_minutes + p.teardown_minutes + DAY
         return ScheduleSpec(tasks=tuple(tasks), dependencies=tuple(deps), resources=resources, horizon=max(horizon, now + DAY), anchor_task="event")
+
+    def _add_pre_event(self, g: _TaskGraph, request: EventRequest, has: set, now: int, day0: int) -> None:
+        """Bookings and reminders: the organizer's work before the day."""
+        p = self.policy
+        pre = {"group": "pre_event", "earliest_start": now, "prefer": "early", "resource": "organizer"}
+        g.task("book_venue", "Book venue", p.booking_minutes, **pre)
+        if VendorCategory.CATERER in has:
+            g.task("book_caterer", "Book caterer", p.booking_minutes, **pre)
+            g.dep("book_venue", "book_caterer")
+        if VendorCategory.PHOTOGRAPHER in has:
+            g.task("book_photographer", "Book photographer", p.booking_minutes, **pre)
+            g.dep("book_venue", "book_photographer")
+
+        if ReminderKind.INVITATION in request.reminders:
+            g.task("reminder_invitation", "Reminder: send invitations", p.reminder_minutes, **pre)
+            g.task("send_invitations", "Send invitations", p.send_invitations_minutes, deadline_end=max(0, day0 - p.invitation_lead_days * DAY), **pre)
+            g.dep("book_venue", "reminder_invitation")
+            g.dep("reminder_invitation", "send_invitations", p.reminder_to_send_gap_days * DAY)
+        if ReminderKind.VENDOR_CONFIRMATION in request.reminders:
+            g.task(
+                "reminder_vendor_confirmation",
+                "Reminder: confirm vendors",
+                p.reminder_minutes,
+                group="pre_event",
+                earliest_start=max(now, day0 - p.vendor_confirmation_window_start_days * DAY + p.work_start_hour * 60),
+                deadline_end=max(0, day0 - p.vendor_confirmation_window_end_days * DAY),  # before origin = already impossible
+                prefer="early",
+                resource="organizer",
+            )
+            for t in [t.id for t in g.tasks if t.id.startswith("book_")]:
+                g.dep(t, "reminder_vendor_confirmation")
+
+    def _add_setups(self, g: _TaskGraph, has: set, day0: int) -> list[str]:
+        """Venue, catering and photography setup on the day; returns the setup task ids the event must wait for."""
+        p = self.policy
+        day = {"group": "event_day"}
+        access = day0 + p.venue_access_hour * 60
+        g.task("venue_setup", "Venue setup", p.venue_setup_minutes, earliest_start=access, prefer="late", resource="venue", **day)
+        g.dep("book_venue", "venue_setup")
+        setups = ["venue_setup"]
+        if VendorCategory.CATERER in has:
+            g.task("catering_setup", "Catering setup", p.catering_setup_minutes, earliest_start=access, prefer="late", resource="caterer", **day)
+            g.dep("venue_setup", "catering_setup")
+            g.dep("book_caterer", "catering_setup")
+            setups.append("catering_setup")
+        if VendorCategory.PHOTOGRAPHER in has:
+            g.task("photography_prep", "Photography prep", p.photography_prep_minutes, earliest_start=access, prefer="late", resource="photographer", **day)
+            g.dep("venue_setup", "photography_prep")
+            g.dep("book_photographer", "photography_prep")
+            setups.append("photography_prep")
+        return setups
+
+    def _add_event_day(self, g: _TaskGraph, request: EventRequest, setups: list[str], event_minutes: int, event_start: int) -> None:
+        """The event itself, any programme activities, and teardown."""
+        p = self.policy
+        day = {"group": "event_day"}
+        g.task("event", "Event", event_minutes, fixed_start=event_start, resource="venue", **day)
+        for s in setups:
+            g.dep(s, "event", p.setup_buffer_minutes)
+        program = request.community.program if request.community else ()
+        for a in program:  # programme activities share named resources and must sit inside the event; the same CP-SAT model places them
+            g.task(f"activity_{a.activity_id}", f"Activity: {a.title}", a.minutes, earliest_start=event_start, deadline_end=event_start + event_minutes, prefer="early", resource=f"res_{a.resource}", **day)
+            if a.after:
+                g.dep(f"activity_{a.after}", f"activity_{a.activity_id}")
+        g.task("teardown", "Teardown", p.teardown_minutes, resource="venue", **day)
+        g.dep("event", "teardown")
+
+    @staticmethod
+    def _apply_fixed(g: _TaskGraph, fixed_starts: dict[str, int] | None) -> tuple[list[ScheduleTask], list[ScheduleDependency]]:
+        """Pin confirmed bookings to their start; they are exempt from the "not before now" floor and from precedences out of steps not yet done."""
+        known = {t.id for t in g.tasks}
+        for tid in (fixed_starts or {}):
+            if tid not in known:
+                raise ValueError(f"cannot fix unknown task {tid!r}")
+        # A confirmed booking already happened. It cannot be ordered after a step that has not
+        # happened yet, so precedences *into* a fixed task from a non-fixed task are dropped.
+        fixed_ids = set(fixed_starts or {})
+        deps = [d for d in g.deps if not (d.after in fixed_ids and d.before not in fixed_ids)]
+        tasks = [t.model_copy(update={"fixed_start": fixed_starts[t.id], "earliest_start": 0}) if fixed_starts and t.id in fixed_starts else t for t in g.tasks]
+        # model_copy skips validation; rebuild through the validated constructor
+        return [ScheduleTask.model_validate(t.model_dump()) for t in tasks], deps
 
     def _earliest_event_start(self, categories: Sequence[VendorCategory]) -> int:
         """Minutes after midnight: venue access, venue setup, then the longest parallel setup, then the buffer."""

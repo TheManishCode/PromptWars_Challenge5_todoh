@@ -302,6 +302,62 @@ def _parse_city(text: str, known: Iterable[str], problems: list[str]) -> str | N
     return next(iter(found))
 
 
+def _parse_event_type(text: str, assumptions: list[str]) -> tuple[EventType, CommunityDetails | None]:
+    event_type = next((t for rx, t in _EVENT_TYPES if rx.search(text)), None)
+    if event_type is not None:
+        return event_type, None
+    hit = match_subtype(text)  # keywords and subtypes are data (community_profiles.json), so the demo subtype is a config choice
+    if hit is None:
+        assumptions.append("event type not recognised; treated as 'other'")
+        return EventType.OTHER, None
+    subtype, keyword = hit
+    if "community" in keyword:
+        if subtype == load_profiles().default:
+            assumptions.append(f"community subtype not specified; using '{subtype}'")
+    else:
+        assumptions.append(f"treated as a community event ({subtype.replace('_', ' ')}) because the text mentions '{keyword}'; check this")
+    return EventType.COMMUNITY, CommunityDetails(subtype=subtype)
+
+
+def _parse_setting(text: str, assumptions: list[str]) -> VenueSetting:
+    wants_in, wants_out = _mentioned(_INDOOR, text), _mentioned(_OUTDOOR, text)
+    if wants_in and not wants_out:
+        return VenueSetting.INDOOR
+    if wants_out and not wants_in:
+        return VenueSetting.OUTDOOR
+    assumptions.append("venue setting not specified or conflicting; any setting accepted")
+    return VenueSetting.ANY
+
+
+def _parse_services(text: str, assumptions: list[str]) -> tuple[list[VendorCategory], tuple]:
+    services = [VendorCategory.VENUE]
+    if not re.search(r"\bvenue\b", text, re.I | re.A):
+        assumptions.append("a venue is always required; added to services")
+    if _mentioned(_CATERER, text):
+        services.append(VendorCategory.CATERER)
+    if _mentioned(_PHOTO, text):
+        services.append(VendorCategory.PHOTOGRAPHER)
+
+    dietary = tuple(d for rx, d in _DIETS if _mentioned(rx, text))
+    caterer_refused = bool(_CATERER.search(text)) and VendorCategory.CATERER not in services
+    if dietary and VendorCategory.CATERER not in services and not caterer_refused:
+        services.append(VendorCategory.CATERER)
+        assumptions.append("dietary requirement given; caterer added to services")
+    return services, dietary
+
+
+def _parse_reminders(text: str, assumptions: list[str]) -> list[ReminderKind]:
+    reminders: list[ReminderKind] = []
+    if _mentioned(_REMINDER, text):
+        if _mentioned(_REM_INVITE, text):
+            reminders.append(ReminderKind.INVITATION)
+        if _mentioned(_REM_VENDOR, text):
+            reminders.append(ReminderKind.VENDOR_CONFIRMATION)
+        if not reminders:
+            assumptions.append("reminders mentioned but kind not recognised; none scheduled")
+    return reminders
+
+
 def parse_request(
     text: str,
     today: date | None = None,
@@ -328,53 +384,10 @@ def parse_request(
     if problems:
         raise RequestParseError(problems)
 
-    event_type = next((t for rx, t in _EVENT_TYPES if rx.search(text)), None)
-    community = None
-    if event_type is None:
-        hit = match_subtype(text)  # keywords and subtypes are data (community_profiles.json), so the demo subtype is a config choice
-        if hit is not None:
-            event_type, (subtype, keyword) = EventType.COMMUNITY, hit
-            community = CommunityDetails(subtype=subtype)
-            if "community" in keyword:
-                if subtype == load_profiles().default:
-                    assumptions.append(f"community subtype not specified; using '{subtype}'")
-            else:
-                assumptions.append(f"treated as a community event ({subtype.replace('_', ' ')}) because the text mentions '{keyword}'; check this")
-        else:
-            event_type = EventType.OTHER
-            assumptions.append("event type not recognised; treated as 'other'")
-
-    wants_in, wants_out = _mentioned(_INDOOR, text), _mentioned(_OUTDOOR, text)
-    if wants_in and not wants_out:
-        setting = VenueSetting.INDOOR
-    elif wants_out and not wants_in:
-        setting = VenueSetting.OUTDOOR
-    else:
-        setting = VenueSetting.ANY
-        assumptions.append("venue setting not specified or conflicting; any setting accepted")
-
-    services = [VendorCategory.VENUE]
-    if not re.search(r"\bvenue\b", text, re.I | re.A):
-        assumptions.append("a venue is always required; added to services")
-    if _mentioned(_CATERER, text):
-        services.append(VendorCategory.CATERER)
-    if _mentioned(_PHOTO, text):
-        services.append(VendorCategory.PHOTOGRAPHER)
-
-    dietary = tuple(d for rx, d in _DIETS if _mentioned(rx, text))
-    caterer_refused = bool(_CATERER.search(text)) and VendorCategory.CATERER not in services
-    if dietary and VendorCategory.CATERER not in services and not caterer_refused:
-        services.append(VendorCategory.CATERER)
-        assumptions.append("dietary requirement given; caterer added to services")
-
-    reminders: list[ReminderKind] = []
-    if _mentioned(_REMINDER, text):
-        if _mentioned(_REM_INVITE, text):
-            reminders.append(ReminderKind.INVITATION)
-        if _mentioned(_REM_VENDOR, text):
-            reminders.append(ReminderKind.VENDOR_CONFIRMATION)
-        if not reminders:
-            assumptions.append("reminders mentioned but kind not recognised; none scheduled")
+    event_type, community = _parse_event_type(text, assumptions)
+    setting = _parse_setting(text, assumptions)
+    services, dietary = _parse_services(text, assumptions)
+    reminders = _parse_reminders(text, assumptions)
 
     assumptions = list(dict.fromkeys(assumptions))
     try:

@@ -115,7 +115,25 @@ class ExplainerAgent:
     def _render(self, plan: PlanVersion, diff: PlanDiff | None, community=None, verification: dict | None = None) -> str:
         r = plan.request
         vstatus = verification or {"state": "verified" if plan.validation.fully_verified else "needs_verification", "label": plan.validation.verification_label(), "items": [{"detail": u.detail, "repair": u.repair} for u in plan.validation.blocking_unverified()]}
-        out: list[str] = [
+        out = self._summary_section(plan, vstatus)
+        out += self._vendors_section(plan)
+        out += self._budget_section(plan)
+        out += self._timeline_section(plan)
+        if community is not None:
+            out += self._community_section(community)
+        out += self._validity_section(plan, vstatus)
+        if r.assumptions or plan.warnings:
+            out.append("## Assumptions and warnings")
+            out += [f"- Assumption: {_esc(a)}" for a in r.assumptions] + [f"- Warning: {_esc(w)}" for w in plan.warnings]
+            out.append("")
+        if diff is not None:
+            out += self._render_diff(diff)
+        return "\n".join(out).rstrip() + "\n"
+
+    @staticmethod
+    def _summary_section(plan: PlanVersion, vstatus: dict) -> list[str]:
+        r = plan.request
+        return [
             f"# {_esc(r.event_type.value.replace('_', ' ').title())} in {_esc(r.city)} on {r.event_date.strftime('%d %b %Y')}",
             "",
             f"Plan `{plan.plan_id}` version {plan.version}"
@@ -131,6 +149,10 @@ class ExplainerAgent:
             "",
             "## Vendors",
         ]
+
+    @staticmethod
+    def _vendors_section(plan: PlanVersion) -> list[str]:
+        out: list[str] = []
         for s in plan.selections:
             status = " (confirmed booking)" if s.booking_status == BookingStatus.CONFIRMED else ""
             out += [f"### {s.category.value.title()}: {_esc(s.name)}{status}", f"- Cost: {_inr(s.cost)}", f"- Why: {_esc(s.justification)}"]
@@ -140,23 +162,29 @@ class ExplainerAgent:
             else:
                 out.append(f"- Alternatives considered: none. {_esc(s.no_alternative_reason or '')}")
             out.append("")
+        return out
 
-        out += ["## Budget", "| Item | Allocated | Planned |", "|---|---|---|"]
+    @staticmethod
+    def _budget_section(plan: PlanVersion) -> list[str]:
+        out = ["## Budget", "| Item | Allocated | Planned |", "|---|---|---|"]
         for line in plan.allocation.lines:
             sel = plan.selection_for(VendorCategory(line.category))
             out.append(f"| {_esc(line.category.title())} | {_inr(line.amount)} | {_inr(sel.cost) if sel else '-'} |")
-        out += [f"| Contingency | {_inr(plan.allocation.contingency)} | held in reserve |", f"| **Total** | {_inr(plan.allocation.total)} | {_inr(plan.total_cost)} |", ""]
+        return out + [f"| Contingency | {_inr(plan.allocation.contingency)} | held in reserve |", f"| **Total** | {_inr(plan.allocation.total)} | {_inr(plan.total_cost)} |", ""]
 
-        out += ["## Timeline"]
+    @staticmethod
+    def _timeline_section(plan: PlanVersion) -> list[str]:
+        out = ["## Timeline"]
         for title, group in (("Before the event", "pre_event"), ("Event day", "event_day")):
             out.append(f"### {title}")
             out += [f"- {_when(i.start)} to {i.end.strftime('%H:%M')}: {_esc(i.name)}" + (f" ({i.resource})" if i.resource else "") for i in plan.items if i.group == group]
             out.append("")
+        return out
 
-        if community is not None:
-            out += self._community_section(community)
+    @staticmethod
+    def _validity_section(plan: PlanVersion, vstatus: dict) -> list[str]:
         partial = "" if vstatus["state"] == "verified" else " (every check that could be decided; see below for what could not)"
-        out += ["## Why this plan is valid" if vstatus["state"] == "verified" else "## What was checked, and what is still open", f"- {sum(c.passed for c in plan.validation.checks)} of {len(plan.validation.checks)} hard constraints re-checked independently against the database: all passed{partial}"]
+        out = ["## Why this plan is valid" if vstatus["state"] == "verified" else "## What was checked, and what is still open", f"- {sum(c.passed for c in plan.validation.checks)} of {len(plan.validation.checks)} hard constraints re-checked independently against the database: all passed{partial}"]
         for it in vstatus["items"]:
             out.append(f"- Still open: {_esc(it['detail'])}. To resolve: {_esc(it['repair'])}")
         out.append(f"- Symbolic (PDDL) feasibility: {plan.symbolic.status}" + (f", {len(plan.symbolic.plan_actions)} steps" if plan.symbolic.plan_actions else ""))
@@ -164,13 +192,7 @@ class ExplainerAgent:
         if plan.version > 1:
             out.append("- Confirmed bookings from earlier versions were checked for preservation")
         out.append("")
-        if r.assumptions or plan.warnings:
-            out.append("## Assumptions and warnings")
-            out += [f"- Assumption: {_esc(a)}" for a in r.assumptions] + [f"- Warning: {_esc(w)}" for w in plan.warnings]
-            out.append("")
-        if diff is not None:
-            out += self._render_diff(diff)
-        return "\n".join(out).rstrip() + "\n"
+        return out
 
     @staticmethod
     def _community_section(c) -> list[str]:
