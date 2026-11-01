@@ -57,6 +57,14 @@ def run(app, host: str, port: int, requested: str = "auto", remote: bool = False
 
         from waitress import wasyncore
 
+        def pull(fn):
+            """Ask the loop's own thread to run ``fn``. If the wake-up pipe is already closed (EBADF) the loop has finished closing everything, which is exactly what the stop wanted:
+            nothing is left to ask. Seen about one stop in four under load as a traceback from the helper thread."""
+            try:
+                server.trigger.pull_trigger(fn)
+            except OSError:
+                pass
+
         def busy(ch):  # a request being handled, queued, or a response not yet fully sent
             return bool(getattr(ch, "running_tasks", False) or getattr(ch, "requests", None) or getattr(ch, "total_outbufs_len", 0))
 
@@ -69,12 +77,12 @@ def run(app, host: str, port: int, requested: str = "auto", remote: bool = False
                 if not any(busy(c) for c in chans):
                     break
                 time.sleep(0.05)
-            server.trigger.pull_trigger(lambda: wasyncore.close_all(server._map))  # in the loop's own thread, like the listener: closing under a running select() is EBADF
+            pull(lambda: wasyncore.close_all(server._map))  # in the loop's own thread, like the listener: closing under a running select() is EBADF
 
         def stop(_signum, _frame):
             # The listener is closed from inside the loop (the trigger runs the function in the loop's own thread): closing it here would pull a descriptor out from under a
             # select() that Python restarts after the signal, which fails the whole loop. Not server.close(): that also closes the trigger.
-            server.trigger.pull_trigger(lambda: wasyncore.dispatcher.close(server))
+            pull(lambda: wasyncore.dispatcher.close(server))
             threading.Thread(target=drain, daemon=True).start()
 
         signal.signal(signal.SIGTERM, stop)
