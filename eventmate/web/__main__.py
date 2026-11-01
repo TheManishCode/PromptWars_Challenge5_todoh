@@ -51,7 +51,8 @@ def main(argv=None) -> int:
     else:
         app = create_app(api_token=token, allowed_hosts=hosts)
     print(f"to;doh-the event planner UI on http://{a.host}:{a.port}/  ({run_mode} mode; API token {'required' if token else 'not set' if run_mode == 'local' else 'not used: each visitor holds a workspace credential'})")
-    make_bounded_server(app, a.host, a.port).serve_forever()
+    clean = make_bounded_server(app, a.host, a.port).serve_until_signalled()
+    print("stopped" if clean else "stopped; some requests were still running and were abandoned", file=sys.stderr)
     return 0
 
 

@@ -303,6 +303,13 @@ class WorkspaceRegistry:
             write_tombstone(self.root / "tombstones.jsonl", "workspace", workspace_id, datetime.datetime.fromtimestamp(self._clock(), datetime.timezone.utc))
         return existed
 
+    def record_plan_deletion(self, workspace_id: str, plan_id: str) -> None:
+        """Add a deleted plan to the server's deletion log (``<data dir>/tombstones.jsonl``), with the workspace it was in. A backup taken before the deletion
+        is restored with this log, so the plan does not come back (docs/RUNBOOK.md)."""
+        from eventmate.retention import write_tombstone
+
+        write_tombstone(self.root / "tombstones.jsonl", "plan", plan_id, datetime.datetime.fromtimestamp(self._clock(), datetime.timezone.utc), workspace=workspace_id)
+
     def sweep_idle_empty(self, idle_s: float) -> List[str]:
         """Remove workspaces that never saved anything and have been idle for ``idle_s``. A workspace with any data is never touched here."""
         removed = []

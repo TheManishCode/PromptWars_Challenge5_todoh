@@ -79,9 +79,13 @@ def purge_old_logs(log_dir: Path, max_age_days: Optional[int] = None, now: Optio
     return removed
 
 
-def write_tombstone(path: Path, kind: str, ident: str, now: Optional[datetime] = None) -> None:
-    """One line saying that something was deleted and when: ``{kind, id, deleted_at}`` and nothing else, so the deletion is provable and no content survives in it."""
-    line = json.dumps({"kind": kind, "id": ident, "deleted_at": (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")}, sort_keys=True) + "\n"
+def write_tombstone(path: Path, kind: str, ident: str, now: Optional[datetime] = None, workspace: Optional[str] = None) -> None:
+    """One line saying that something was deleted and when: ``{kind, id, deleted_at}`` and nothing else, so the deletion is provable and no content survives in it.
+    The server's own deletion log also names the (opaque) workspace a plan was in, because a restore needs to know where to remove it."""
+    doc = {"kind": kind, "id": ident, "deleted_at": (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")}
+    if workspace:
+        doc["workspace"] = workspace
+    line = json.dumps(doc, sort_keys=True) + "\n"
     fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
     try:
         os.write(fd, line.encode("utf-8"))
