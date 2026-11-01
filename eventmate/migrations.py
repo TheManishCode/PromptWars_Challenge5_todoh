@@ -16,6 +16,8 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Dict, Optional, Tuple
 
+# Money and send state: a damaged file here stops sending (integrity.py), and nothing may be appended behind a cut-off line (jsonl.py)
+AUTHORITATIVE = frozenset({"ledger", "outreach", "inbound", "mandate", "contact", "suppression", "unmatched"})
 CURRENT: Dict[str, int] = {}  # kind -> the version this application writes; a kind not listed is at 1
 UPGRADERS: Dict[Tuple[str, int], Callable[[Dict[str, Any]], Dict[str, Any]]] = {}  # (kind, from_version) -> the document as the next version
 

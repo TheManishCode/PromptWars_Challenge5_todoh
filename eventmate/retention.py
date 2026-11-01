@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -109,14 +110,21 @@ def scrub_plan_from_logs(log_dir: Path, plan_id: str) -> int:
             continue
         kept = [line for line in data.splitlines(keepends=True) if needle not in line]
         removed += len(data.splitlines()) - len(kept)
-        tmp = path.with_name(f".scrub-{os.getpid()}-{path.name}")
+        tmp = path.with_name(f".scrub-{os.getpid()}-{secrets.token_hex(4)}-{path.name}")  # unique: a leftover from an earlier failure must never block a retry
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         try:
-            os.write(fd, b"".join(kept))
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-        os.replace(tmp, path)
+            try:
+                os.write(fd, b"".join(kept))
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            os.replace(tmp, path)
+        except BaseException:
+            try:
+                os.unlink(tmp)  # the half-written copy is not left lying around
+            except FileNotFoundError:
+                pass
+            raise
     return removed
 
 

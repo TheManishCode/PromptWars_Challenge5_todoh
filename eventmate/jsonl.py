@@ -90,6 +90,12 @@ class JsonlLog(Generic[M]):
                 self._rotate_if_needed()
             fd = os.open(self.path, flags, 0o600)
             try:
+                fcntl.flock(fd, fcntl.LOCK_EX)  # released when the descriptor closes: no other appender, in any process or instance, can be half-way through a line while the end is checked
+                tail = self._tail_byte()
+                if tail not in (None, b"\n"):  # the file ends in a cut-off line (a crash in the middle of an append)
+                    if self.channel in migrations.AUTHORITATIVE:
+                        raise migrations.StoreCorrupt(self.path.name, None, "the file ends in a cut-off line; it must be repaired (python -m eventmate verify) before anything is added to it")
+                    line = b"\n" + line  # an operational log starts a fresh line instead of gluing this record onto the fragment
                 view = memoryview(line)
                 while view:
                     view = view[os.write(fd, view):]
@@ -98,6 +104,17 @@ class JsonlLog(Generic[M]):
                 os.close(fd)
             self.entry_ids.append(entry_id)
         return entry
+
+    def _tail_byte(self) -> Optional[bytes]:
+        try:
+            with open(self.path, "rb") as fh:
+                fh.seek(0, os.SEEK_END)
+                if fh.tell() == 0:
+                    return None
+                fh.seek(-1, os.SEEK_END)
+                return fh.read(1)
+        except FileNotFoundError:
+            return None
 
     def read(self) -> List[M]:
         """Load every entry, each upgraded in memory to the current schema. A corrupt line raises ``StoreCorrupt`` naming the file and line rather than being skipped:

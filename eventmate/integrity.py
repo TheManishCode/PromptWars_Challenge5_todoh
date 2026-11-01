@@ -33,7 +33,7 @@ from pydantic import ValidationError
 from eventmate import migrations
 from eventmate.plan_store import PlanStore
 
-AUTHORITATIVE = frozenset({"ledger", "outreach", "inbound", "mandate", "contact", "suppression", "unmatched"})
+AUTHORITATIVE = migrations.AUTHORITATIVE
 PLAN_KEYED = ("outreach", "inbound", "mandate", "ledger", "lead", "ideaset", "ideadecision", "plannote", "digest", "shortlist", "checklist")
 JSONL_NAME = re.compile(r"([a-z_]+)-([A-Za-z0-9_-]{1,64})\.jsonl")
 

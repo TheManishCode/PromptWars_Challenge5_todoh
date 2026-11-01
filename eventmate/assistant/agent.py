@@ -8,6 +8,7 @@ the evidence gathered this turn or it is replaced by a deterministic one.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from collections import defaultdict, deque
@@ -170,15 +171,22 @@ class Assistant:
     def _record(self, tb: TraceBuilder, result: AnswerResult, principal: Principal, plan_id: str, roles: Tuple[str, ...], question: Optional[str] = None) -> AnswerResult:
         question = tb.question if question is None else question
         result = result.model_copy(update={"trace_id": tb.id})
-        entry = self.traces.write(
+        try:
+            entry = self._write_trace(tb, result, principal, plan_id, roles, question)
+        except OSError as exc:  # a full or failing disk must not stop the person from being answered: the trace is lost, the answer is not
+            logging.getLogger("eventmate.assistant").error("trace for %s not written: %s", tb.id, type(exc).__name__)
+            return result
+        if self.exporter:
+            self.exporter.export_trace(entry)
+        return result
+
+    def _write_trace(self, tb: TraceBuilder, result: AnswerResult, principal: Principal, plan_id: str, roles: Tuple[str, ...], question: str):
+        return self.traces.write(
             request_id=tb.id, plan_id=plan_id, user_id=principal.user_id, roles=roles, question_sha256=sha(question), question_masked=guard.mask_pii(question)[:240],
             answer_masked=guard.mask_pii(result.answer)[:600], route=result.route, cache=result.cache, outcome=result.outcome, steps=tuple(tb.steps), cited=result.citations,
             models=tuple(dict.fromkeys(tb.models)), prompt_sha256=self.prompt_sha, kb_version=self.kb.version, tokens_in_est=tb.tin, tokens_out_est=tb.tout,
             total_ms=round((time.perf_counter() - tb.t0) * 1000, 2),
         )
-        if self.exporter:
-            self.exporter.export_trace(entry)
-        return result
 
     # ------------------------------------------- curation and feedback (humans)
 

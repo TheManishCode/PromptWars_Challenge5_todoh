@@ -718,8 +718,8 @@ def create_app(
 
     @app.errorhandler(PlanIntegrityError)
     def _integrity(exc):
-        log.error("plan integrity failure: %s", exc)
-        return _err(500, "stored plan failed its integrity check")
+        log.error("plan integrity failure (request %s): %s", g.get("rid", "-"), exc)  # which file: server log only
+        return _err(503, "stored plan failed its integrity check; nothing was changed. The owner can run `python -m eventmate verify`", code="plan_integrity", request_id=g.get("rid"))
 
     @app.errorhandler(413)
     def _too_big(exc):

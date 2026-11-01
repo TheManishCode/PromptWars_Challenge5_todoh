@@ -188,7 +188,7 @@ def test_tampered_stored_plan_is_reported_without_internals(client, plan_id, em)
     os.chmod(path, 0o644)
     path.write_text(path.read_text().replace('"total_cost": 139000', '"total_cost": 1'))
     r = client.get(f"/api/plans/{plan_id}")
-    assert r.status_code == 500 and r.get_json()["error"] == "stored plan failed its integrity check"
+    assert r.status_code == 503 and r.get_json()["code"] == "plan_integrity" and r.get_json()["error"].startswith("stored plan failed its integrity check")
 
 
 def test_responses_never_echo_the_raw_request_text_or_log_paths(client, plan_id):

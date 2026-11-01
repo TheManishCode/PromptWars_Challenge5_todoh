@@ -405,3 +405,51 @@ def test_log_cleanup_never_touches_the_plan_directory(em, pid, monkeypatch):
 
     assert LOG_FILE.fullmatch("decisions-x.jsonl.20260101T000000Z-1") and not LOG_FILE.fullmatch("ledger-x.jsonl")
     assert sorted(p.name for p in em.store.root.rglob("*") if p.is_file()) == before
+
+
+# ---- found by fault injection against a running server (disk full, torn files, interrupted deletes)
+
+
+def test_nothing_is_appended_to_a_money_file_that_ends_in_a_cut_off_line(em, pid):
+    """A write answered with an error had still landed on disk, glued onto the torn fragment, which damaged the new record as well."""
+    path = ledger_file(em, pid)
+    tear(path)
+    before = path.read_bytes()
+    with pytest.raises(Exception, match="cut-off line"):
+        em.ledger.add(em.store.latest(pid), "payment", C.CATERER, 9, "x")
+    assert path.read_bytes() == before
+
+
+def test_an_operational_log_starts_a_fresh_line_after_a_cut_off_one(em):
+    from eventmate.schemas import AgentName, DecisionType
+
+    log = em.logs.decisions
+    log.log(request_id="a", agent=AgentName.MANAGER, decision_type=DecisionType.ASSESSMENT, summary="s", justification="j", confidence=1.0, source="rule:t")
+    tear(log.path, 40)
+    log.log(request_id="b", agent=AgentName.MANAGER, decision_type=DecisionType.ASSESSMENT, summary="s", justification="j", confidence=1.0, source="rule:t")
+    lines = log.path.read_text().splitlines()
+    assert json.loads(lines[-1])["request_id"] == "b"  # the new record is whole; only the fragment before it is damaged
+
+
+def test_a_log_scrub_that_fails_leaves_no_temp_file_and_can_be_retried(em, monkeypatch):
+    from eventmate.retention import scrub_plan_from_logs
+
+    log_dir = em.logs.decisions.log_dir
+    pid2 = em.plan(EXAMPLE, today=TODAY).plan.plan_id
+    real = os.replace
+    monkeypatch.setattr(os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError(28, "No space left on device")))
+    with pytest.raises(OSError):
+        scrub_plan_from_logs(log_dir, pid2)
+    monkeypatch.setattr(os, "replace", real)
+    assert not [p for p in log_dir.iterdir() if p.name.startswith(".scrub-")]
+    assert scrub_plan_from_logs(log_dir, pid2) > 0  # the retry works (a leftover temp name used to make it fail for ever)
+
+
+def test_an_answer_is_still_given_when_its_trace_cannot_be_written(em, pid, monkeypatch):
+    from eventmate.assistant.agent import Assistant
+    from eventmate.assistant.identity import LOCAL_ORGANIZER
+
+    a = Assistant(em, {})
+    monkeypatch.setattr(a.traces, "write", lambda **kw: (_ for _ in ()).throw(OSError(28, "No space left on device")))
+    r = a.ask("when is the event?", pid, LOCAL_ORGANIZER)
+    assert r.outcome == "answered" and "2026-12-12" in r.answer
