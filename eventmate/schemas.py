@@ -506,7 +506,7 @@ class Vendor(_Provider):
     @model_validator(mode="after")
     def _pricing_matches_category(self) -> Vendor:
         if self.category == VendorCategory.CATERER:
-            if None in (self.price_per_plate, self.min_guests, self.max_guests):
+            if self.price_per_plate is None or self.min_guests is None or self.max_guests is None:
                 raise ValueError("caterer needs price_per_plate, min_guests, max_guests")
             if self.flat_fee is not None:
                 raise ValueError("caterer must not set flat_fee")
@@ -521,8 +521,8 @@ class Vendor(_Provider):
 
     def cost_for(self, guest_count: int) -> int:
         if self.category == VendorCategory.CATERER:
-            return self.price_per_plate * guest_count
-        return self.flat_fee
+            return (self.price_per_plate or 0) * guest_count  # validated present for a caterer
+        return self.flat_fee or 0  # validated present for a photographer
 
 
 class VendorCandidate(_Model):

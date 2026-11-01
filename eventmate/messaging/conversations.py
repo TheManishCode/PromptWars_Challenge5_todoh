@@ -180,7 +180,10 @@ class ConversationService:
             raise ValueError(f"{d.channel} sending is not set up ({st.detail}). Use the link to send it yourself, then mark it sent.")
         self.store.transition(plan_id, draft_id, ("prepared",), status="approved", decided_at=self.now())
         self.dispatch()
-        return self.store.get(plan_id, draft_id)
+        sent = self.store.get(plan_id, draft_id)
+        if sent is None:  # cannot happen: the draft was transitioned above; say so rather than return nothing
+            raise ValueError("The draft disappeared while it was being sent.")
+        return sent
 
     def deny(self, plan_id: str, draft_id: str) -> OutreachDraft:
         d = self.store.get(plan_id, draft_id)
@@ -231,6 +234,8 @@ class ConversationService:
                         self.store.transition(pid, d.draft_id, ("approved",), status="denied", error="the standing permission ended before this was sent")
                         continue
                     local = now.astimezone(IST).hour
+                    if st.mandate is None:
+                        continue
                     if not st.mandate.window_start <= local < st.mandate.window_end:
                         waiting.append(f"{d.vendor_name}: automatic messages wait for the sending window ({st.mandate.window_start:02d}:00-{st.mandate.window_end:02d}:00 IST)")
                         continue
@@ -255,7 +260,7 @@ class ConversationService:
     def _send_one(self, pid: str, d: OutreachDraft, now: datetime) -> int:
         thread = None
         if d.kind == "followup":
-            parent = self.store.get(pid, d.parent_id)
+            parent = self.store.get(pid, d.parent_id) if d.parent_id else None
             if parent and parent.external_id:
                 thread = ThreadRef(in_reply_to=parent.external_id, references=parent.external_id)
         try:
@@ -285,16 +290,17 @@ class ConversationService:
         touched: list[tuple[str, str]] = []
         errors: list[str] = []
         for name, channel in self.channels.items():
-            known = {}
+            known: dict[tuple[str, str], tuple[str, OutreachDraft]] = {}
             for pid, d in sent_drafts:
                 if d.channel == name:
                     key = (d.vendor_id, d.recipient)
-                    if key not in known or d.sent_at > known[key][1].sent_at:
+                    prior = known[key][1].sent_at if key in known else None
+                    if key not in known or (d.sent_at is not None and prior is not None and d.sent_at > prior):
                         known[key] = (pid, d)
             if not known or not channel.status().can_receive:
                 continue
             try:
-                inbound = channel.poll([KnownThread(d.draft_id, d.recipient, d.sent_at, d.external_id) for _, d in known.values()])
+                inbound = channel.poll([KnownThread(d.draft_id, d.recipient, d.sent_at, d.external_id) for _, d in known.values() if d.sent_at is not None])
             except ChannelError as exc:
                 errors.append(f"{name}: {exc}")
                 continue
@@ -329,8 +335,8 @@ class ConversationService:
             by_header = [(p, d) for p, d in candidates if d.external_id and d.external_id in refs]
             if by_header:
                 return by_header[-1]
-        same = [(p, d) for p, d in candidates if d.recipient.lower() == item.sender.lower() and item.received_at >= d.sent_at - timedelta(seconds=60)]
-        return max(same, key=lambda pd: pd[1].sent_at) if same else None
+        same = [(p, d) for p, d in candidates if d.sent_at is not None and d.recipient.lower() == item.sender.lower() and item.received_at >= d.sent_at - timedelta(seconds=60)]
+        return max(same, key=lambda pd: pd[1].sent_at or datetime.min.replace(tzinfo=item.received_at.tzinfo)) if same else None
 
     def _store(self, item: Inbound, pid: str, d: OutreachDraft) -> InboundMessage | None:
         checklist = self.store.checklists.get(d.category.value, ())
@@ -378,6 +384,8 @@ class ConversationService:
         """A permanent delivery failure marks an address bad only if it names the Message-ID of a message we recorded sending. A notice that only names an
         address we wrote to is not enough (anyone can write one): it goes to the user to review. A matching id is correlation, not proof the notice is genuine."""
         b = item.bounce
+        if b is None:
+            return
         hit = next(((pid, d) for pid, d in sent_drafts if d.channel == "email" and b.original_message_id and d.external_id == b.original_message_id), None)
         if hit is None:  # not a message we sent: shown to the user, changes nothing
             if self.unmatched is not None:
@@ -452,11 +460,13 @@ class ConversationService:
         draft as automatic with the disclosure line, and leaves the rest (window, kill switch, send limits) to dispatch. Returns (draft, reason)."""
         root_draft = self.store.get(pid, root)
         if root_draft is not None and self.blocked_reason(root_draft):
-            return None, "do not contact: " + self.blocked_reason(root_draft)
+            return None, "do not contact: " + str(self.blocked_reason(root_draft))
         st = self.autoreply_status(pid)
         if st.killed:
             return None, "the kill switch is on"
         if not st.active:
+            return None, "no standing permission is active for this plan"
+        if st.mandate is None:
             return None, "no standing permission is active for this plan"
         mine = [d for d in self.store.list(pid) if d.approved_by == "mandate" and d.status != "denied"]
         if sum(1 for d in mine if d.parent_id == root) >= st.mandate.max_per_thread:
@@ -509,9 +519,11 @@ class ConversationService:
                 skipped.append(f"{s.name}: already asked")
             elif c is None:
                 skipped.append(f"{s.name}: no contact saved")
-            elif self.suppressions is not None and self.suppressions.active_for(c.preferred, c.email if c.preferred == "email" else c.whatsapp):
+            elif not (c.email if c.preferred == "email" else c.whatsapp):
+                skipped.append(f"{s.name}: no {c.preferred} address saved")
+            elif self.suppressions is not None and self.suppressions.active_for(c.preferred, (c.email if c.preferred == "email" else c.whatsapp) or ""):
                 skipped.append(f"{s.name}: do not contact")
             else:
-                to = c.email if c.preferred == "email" else "+" + c.whatsapp  # stored as digits; the parser wants the country-code marker
+                to = c.email or "" if c.preferred == "email" else "+" + (c.whatsapp or "")  # stored as digits; the parser wants the country-code marker
                 made.append(self.store.draft(plan, s.category, c.preferred, to, sender_name))
         return made, skipped

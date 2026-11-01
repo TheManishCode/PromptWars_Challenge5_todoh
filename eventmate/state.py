@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import contextlib
 from datetime import datetime, timedelta, UTC
-from typing import Literal
+from typing import Literal, overload
 
 from eventmate.guestlist import check_against, totals_of
 from eventmate.schemas import LedgerKind, VendorCategory, _Model
@@ -86,6 +86,10 @@ class EventState(_Model):
     notice: str = "A read-only view assembled from this plan's records. It approves, sends and spends nothing, and a vendor's quote stays unverified until you record it."
 
 
+@overload
+def _aware(t: datetime) -> datetime: ...
+@overload
+def _aware(t: None) -> None: ...
 def _aware(t: datetime | None) -> datetime | None:
     return t if t is None or t.tzinfo else t.replace(tzinfo=UTC)
 
@@ -104,7 +108,7 @@ def _conversation(drafts: list, inbound: list) -> tuple[Conversation, datetime |
     requests = [d for d in drafts if d.kind == "request"]
     if not requests:
         return "none", None
-    latest = max(requests, key=lambda d: d.created_at)
+    latest = max(requests, key=lambda d: _aware(d.created_at))
     replies = [m for m in inbound if m.draft_id == latest.draft_id]
     last_at = max([_aware(latest.sent_at or latest.created_at)] + [_aware(m.received_at) for m in replies])
     if any(m.analysis.asks_to_stop for m in replies):

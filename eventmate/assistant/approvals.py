@@ -99,6 +99,8 @@ class ApprovalQueue:
             with self._lock:
                 yield self._mem
             return
+        if self._path is None:  # in-memory mode returned above
+            raise RuntimeError("the approvals queue has neither a file nor a memory store")
         c = sqlite3.connect(self._path, timeout=10, isolation_level=None)
         try:
             c.execute("PRAGMA journal_mode=WAL")
@@ -128,6 +130,13 @@ class ApprovalQueue:
         r = c.execute(f"SELECT {', '.join(_COLUMNS)} FROM proposals WHERE id = ?", (proposal_id,)).fetchone()  # nosec B608 - the column names are a module constant; every value is bound
         return None if r is None else self._row(r)
 
+    def _must_fetch(self, c: sqlite3.Connection, proposal_id: str) -> Proposal:
+        """A proposal that was just written and must exist (nothing deletes rows here); a missing one is a bug, said plainly."""
+        found = self._fetch(c, proposal_id)
+        if found is None:
+            raise RuntimeError(f"proposal {proposal_id} vanished from the approvals file")
+        return found
+
     def _recover(self) -> None:
         """A proposal left ``approving`` past its lease, or pending past its expiry, is settled now. Nothing is ever re-applied."""
         now = self.now()
@@ -135,10 +144,10 @@ class ApprovalQueue:
         with self._tx() as c:
             for pid, in c.execute("SELECT id FROM proposals WHERE status = 'approving' AND decided_at < ?", (_iso(now - APPLY_LEASE),)).fetchall():
                 c.execute("UPDATE proposals SET status='outcome_unknown', result=? WHERE id=? AND status='approving'", (UNKNOWN[:500], pid))
-                settled.append(self._fetch(c, pid))
+                settled.append(self._must_fetch(c, pid))
             for pid, in c.execute("SELECT id FROM proposals WHERE status = 'pending' AND expires_at IS NOT NULL AND expires_at <= ?", (_iso(now),)).fetchall():
                 c.execute("UPDATE proposals SET status='expired', result='nobody decided this in time; ask again' WHERE id=? AND status='pending'", (pid,))
-                settled.append(self._fetch(c, pid))
+                settled.append(self._must_fetch(c, pid))
         for p in settled:
             self.log.write(request_id=p.id, event=p.status, plan_id=p.plan_id, tool=p.tool, actor="system", content_sha256=p.content_sha256, detail=p.result or "")
 
@@ -230,6 +239,6 @@ class ApprovalQueue:
             with self._tx() as c:
                 c.execute("UPDATE proposals SET status=?, result=? WHERE id=? AND status='approving'", (status, result, p.id))
         with self._db() as c:
-            done = self._fetch(c, p.id)
+            done = self._must_fetch(c, p.id)
         self.log.write(request_id=p.id, event=done.status, plan_id=p.plan_id, tool=p.tool, actor=approver.user_id, content_sha256=p.content_sha256, detail=done.result or "")
         return done

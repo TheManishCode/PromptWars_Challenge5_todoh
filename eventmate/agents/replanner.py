@@ -248,7 +248,7 @@ class ReplannerAgent:
                 Alternative(option="keep the previous plan unchanged", outcome=f"version {parent.version} stays on file", reason_not_chosen=f"it no longer satisfies the request after: {reason}"),
             ),
         )
-        new = assemble_plan(planned.draft, report, parent.version + 1, parent.version, reason, tuple(self.logs.decisions.entry_ids[start:]), released_vendor_ids=release)
+        new = assemble_plan(planned.draft, report, parent.version + 1, parent.version, reason, tuple(self.logs.decisions.entry_ids[start:]), released_vendor_ids=tuple(release))
         lost = self._save(new)
         if lost is not None:
             return lost
@@ -285,11 +285,12 @@ class ReplannerAgent:
         release = set(d.override_confirmed)
         req = parent.request
         if d.kind == DisruptionKind.VENDOR_CANCELLATION:
-            known = any(self.repo.get(c, d.vendor_id) for c in VendorCategory)
+            vendor_id = d.vendor_id or ""
+            known = any(self.repo.get(c, vendor_id) for c in VendorCategory)
             if not known:
                 raise _Rejected(ConstraintViolation(constraint="unknown_vendor", detail=f"{d.vendor_id} is not in the database", repair="use a vendor id from the plan"))
-            excluded = tuple(sorted(set(excluded) | {d.vendor_id}))
-            release.add(d.vendor_id)  # the vendor cancelled: that booking is void, no override needed
+            excluded = tuple(sorted(set(excluded) | {vendor_id}))
+            release.add(vendor_id)  # the vendor cancelled: that booking is void, no override needed
             name = next((s.name for s in parent.selections if s.vendor_id == d.vendor_id), d.vendor_id)
             return req, excluded, release, f"vendor cancellation: {name}"
         if d.kind == DisruptionKind.BUDGET_CHANGE:
@@ -300,11 +301,14 @@ class ReplannerAgent:
             return req.with_changes(community=d.new_community), excluded, release, "community details updated"
         if d.kind == DisruptionKind.GUEST_COUNT_CHANGE:
             return req.with_changes(guest_count=d.new_guest_count), excluded, release, f"guest count change: {req.guest_count} to {d.new_guest_count}"
-        if (d.new_date - today).days > MAX_EVENT_AHEAD_DAYS:
-            raise _Rejected(ConstraintViolation(constraint="event_date_too_far", detail=f"{d.new_date.isoformat()} is more than 3 years away", repair="choose a date within three years"))
-        if d.new_date < today:
-            raise _Rejected(ConstraintViolation(constraint="event_date_in_past", detail=f"{d.new_date.isoformat()} is before today ({today.isoformat()})", repair="choose a date today or later"))
-        return req.with_changes(event_date=d.new_date), excluded, release, f"date change: {req.event_date.isoformat()} to {d.new_date.isoformat()}"
+        new_date = d.new_date
+        if new_date is None:  # the disruption's own validation requires it; this keeps a bad caller honest
+            raise _Rejected(ConstraintViolation(constraint="missing_date", detail="no new date was given", repair="give the new event date"))
+        if (new_date - today).days > MAX_EVENT_AHEAD_DAYS:
+            raise _Rejected(ConstraintViolation(constraint="event_date_too_far", detail=f"{new_date.isoformat()} is more than 3 years away", repair="choose a date within three years"))
+        if new_date < today:
+            raise _Rejected(ConstraintViolation(constraint="event_date_in_past", detail=f"{new_date.isoformat()} is before today ({today.isoformat()})", repair="choose a date today or later"))
+        return req.with_changes(event_date=new_date), excluded, release, f"date change: {req.event_date.isoformat()} to {new_date.isoformat()}"
 
     def _preserve(self, parent: PlanVersion, request: EventRequest, release: set[str]):
         forced: dict[VendorCategory, VendorSelection] = {}

@@ -25,10 +25,15 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from eventmate.assistant.identity import Principal, Role
 from eventmate.web.limits import WindowLimiter
+
+if TYPE_CHECKING:  # types only: importing these at runtime would be circular
+    from eventmate.assistant.agent import Assistant
+    from eventmate.service import EventMate
+    from eventmate.voice.turns import VoiceService
 
 COOKIE = "todoh_ws"
 COOKIE_MAX_AGE = 365 * 24 * 3600  # longevity is the goal: a year, renewed on every use
@@ -48,9 +53,9 @@ class WorkspaceError(Exception):
 @dataclass
 class Workspace:
     id: str
-    em: object
-    assistant: object
-    voice: object
+    em: EventMate
+    assistant: Assistant
+    voice: VoiceService
     lock: threading.RLock
     principal: Principal
     csrf: str
