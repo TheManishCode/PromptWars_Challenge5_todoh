@@ -38,6 +38,7 @@ from werkzeug.local import LocalProxy
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 
 from eventmate.planning import intake
+from eventmate import arcade_pulse as _pulse_mod
 from eventmate.arcade_pulse import pulse as _arcade_pulse
 from eventmate.voice import audio as voice_audio
 from eventmate.voice.notes import NotesDisabled
@@ -475,7 +476,7 @@ def create_app(
         return resp
 
     def caller() -> str:
-        return limits.client_address(request.remote_addr, request.headers.get("X-Forwarded-For"), proxies)
+        return limits.limiter_key(limits.client_address(request.remote_addr, request.headers.get("X-Forwarded-For"), proxies))  # counted per IPv4 address or per IPv6 /64
 
     # The wall: its own SQLite file next to (not inside) the plan directory, so deleting a plan can never touch it. EVENTMATE_WALL=off removes the routes.
     wall: Optional[Wall] = None
@@ -513,6 +514,7 @@ def create_app(
                     return _err(exc.status, str(exc), code=exc.code)
         if g.ws is not None:
             g.workspace_token = consumption.bind(g.ws.id)  # model calls made for this request are charged to this workspace (Phase 4.7)
+            g.pulse_token = _pulse_mod.pulse.bind(g.ws.pulse)  # and the room's run lights are this workspace's own (F-014)
         return None
 
     @app.teardown_request
@@ -520,6 +522,9 @@ def create_app(
         token = g.pop("workspace_token", None)
         if token is not None:
             consumption.unbind(token)
+        pulse_token = g.pop("pulse_token", None)
+        if pulse_token is not None:
+            _pulse_mod.pulse.unbind(pulse_token)
 
     @app.before_request
     def guard():
@@ -826,8 +831,11 @@ def create_app(
                 registry.check_write(g.ws.id)
             except WorkspaceError as exc:
                 return _err(exc.status, str(exc), code=exc.code)
-        with lock:
-            report = transfer.import_archive(data, em)
+        try:
+            with lock:
+                report = transfer.import_archive(data, em, check_space=(lambda n: registry.check_write(g.ws.id, incoming=n)) if shared else None)
+        except WorkspaceError as exc:
+            return _err(exc.status, str(exc), code=exc.code)
         return jsonify(report), 201
 
     @app.delete("/api/workspace")

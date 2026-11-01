@@ -62,6 +62,19 @@ def client_address(remote_addr: Optional[str], forwarded_for: Optional[str], pro
     return str(peer)
 
 
+def limiter_key(address: str) -> str:
+    """The key a per-caller limit is counted under. An IPv6 customer owns a whole /64 (2**64 addresses) and can change address on every request, so counting per
+    address gives them no limit at all (F-015); an IPv6 address is therefore counted as its /64. An IPv4 address, or an IPv4-mapped one, is counted as itself."""
+    ip = _ip(address)
+    if ip is None:
+        return address
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped:
+            return str(ip.ipv4_mapped)
+        return str(ipaddress.ip_network(f"{ip}/64", strict=False))
+    return str(ip)
+
+
 class WindowLimiter:
     """At most ``limit`` calls per ``window_s`` for each key. Keys with no recent calls are dropped, and no more than ``MAX_KEYS`` are tracked."""
 

@@ -23,7 +23,7 @@ import sqlite3
 import threading
 import time
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -55,6 +55,7 @@ class Workspace:
     principal: Principal
     csrf: str
     created: str
+    pulse: object = field(default_factory=lambda: __import__("eventmate.arcade_pulse", fromlist=["ArcadePulse"]).ArcadePulse())  # this workspace's own run lights for the room (F-014)
 
 
 def _hash(credential: str) -> str:
@@ -263,11 +264,11 @@ class WorkspaceRegistry:
         started = sum(1 for p in plans.glob("plan-*-v0001.json") if datetime.datetime.fromtimestamp(p.stat().st_mtime, datetime.timezone.utc).date() == today) if plans.exists() else 0
         return size, started
 
-    def check_write(self, workspace_id: str, creating_plan: bool = False) -> None:
+    def check_write(self, workspace_id: str, creating_plan: bool = False, incoming: int = 0) -> None:
         """Raise 507 ``workspace_quota`` when the workspace holds more than ``EVENTMATE_WS_MAX_BYTES`` (default 50 MB), and 429 ``plans_per_day`` when it has
         started ``EVENTMATE_WS_MAX_PLANS_PER_DAY`` (default 20) plans today. Deleting is never refused by this: it is how a visitor makes room."""
         size, started = self.usage(workspace_id)
-        if size >= self._limit("EVENTMATE_WS_MAX_BYTES", 50 * 1024 * 1024):
+        if size + incoming >= self._limit("EVENTMATE_WS_MAX_BYTES", 50 * 1024 * 1024):  # ``incoming``: what an import is about to add, so one archive cannot step over the quota (F-013)
             raise WorkspaceError(507, "workspace_quota", "this workspace is full; delete something before adding more")
         if creating_plan and started >= self._limit("EVENTMATE_WS_MAX_PLANS_PER_DAY", 20):
             raise WorkspaceError(429, "plans_per_day", "this workspace has made as many plans as it may today; try again tomorrow")

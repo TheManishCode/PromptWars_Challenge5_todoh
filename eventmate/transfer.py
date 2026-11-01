@@ -24,7 +24,7 @@ import stat
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from pydantic import Field, ValidationError
 
@@ -261,11 +261,36 @@ def _bad():
 # --------------------------------------------------------------------------- import: applying
 
 
-def import_archive(raw: bytes, em, now: Optional[datetime] = None) -> dict:
-    """Validate the whole archive, then write it into the workspace ``em``. Returns a report. Raises ``TransferError`` before writing anything for a bad archive."""
+def _reverify(em, plans: Dict[str, List[PlanVersion]]) -> None:
+    """A hash proves the files agree with each other, not that anyone checked the plan: the model only demands ``validation.passed``, so an archive can carry a plan whose
+    vendors, prices and checks were written by hand and would be shown as verified (F-010). Every version is therefore run through this application's own validator, against
+    its own parent, before anything is written; a plan that does not pass here is refused. (A plan that only fails because the vendor data has moved on since it was made is
+    refused too: the message says which plan, and nothing is half-imported.)"""
+    from eventmate.plan_store import draft_from_plan
+
+    for plan_id, versions in plans.items():
+        by_number = {v.version: v for v in versions}
+        for plan in versions:
+            parent = by_number.get(plan.parent_version) if plan.parent_version else None
+            if plan.parent_version and parent is None:
+                raise TransferError("bad_plan", "a plan version names a parent that is not in the archive")
+            try:
+                report = em.validator.validate(draft_from_plan(plan), parent, released_vendor_ids=plan.released_vendor_ids, newly_confirmed_vendor_ids=plan.newly_confirmed_vendor_ids)
+            except Exception:
+                raise TransferError("not_verified", f"plan {plan_id} version {plan.version} could not be checked by this application, so it was not imported") from None
+            if not report.passed:
+                raise TransferError("not_verified", f"plan {plan_id} version {plan.version} does not pass this application's own checks, so it was not imported")
+
+
+def import_archive(raw: bytes, em, now: Optional[datetime] = None, check_space: Optional[Callable[[int], None]] = None) -> dict:
+    """Validate the whole archive, then write it into the workspace ``em``. Returns a report. Raises ``TransferError`` before writing anything for a bad archive.
+    ``check_space`` is called with the size the archive will occupy once unpacked, before anything is written, so a quota can refuse it (F-013)."""
     members = _read_members(raw)
     manifest, plans = _validated(members)
     ledger, leads, guests, history = _parse_records(members, plans)
+    _reverify(em, plans)
+    if check_space is not None:
+        check_space(sum(len(d) for d in members.values()))
     store: PlanStore = em.store
     taken = set(store.list_plans())
     mapping: Dict[str, str] = {}
@@ -281,12 +306,12 @@ def import_archive(raw: bytes, em, now: Optional[datetime] = None) -> dict:
     try:
         for old, versions in plans.items():
             new = mapping.get(old, old)
+            created.append(new)  # before the first save: a failure on any version undoes the ones already written (F-011)
             for plan in versions:
                 if new != old:
-                    plan = PlanVersion.model_validate(json.loads(plan.model_dump_json().replace(old, new)))  # the id changes everywhere it appears, then the version is hashed again
+                    plan = PlanVersion.model_validate({**json.loads(plan.model_dump_json()), "plan_id": new})  # the id field only, never a text replace over the plan (F-012); the version is hashed again on save
                 store.save(plan)
                 counts["versions"] += 1
-            created.append(new)
             counts["plans"] += 1
             for entry in ledger.get(old, ()):
                 em.ledger._file(new)._append(entry.model_copy(update={"plan_id": new}), entry.entry_id)

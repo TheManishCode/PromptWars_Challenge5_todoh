@@ -12,6 +12,7 @@ light the matching module while real work happens. This is observability only:
 
 from __future__ import annotations
 
+import contextvars
 import threading
 import time
 from typing import Dict, List, Optional
@@ -108,5 +109,38 @@ class ArcadePulse:
             }
 
 
-# One pulse per process; the web server is single-user and serialises runs.
-pulse = ArcadePulse()
+class _CurrentPulse:
+    """The pulse hooks call. Each request binds its own workspace's pulse (``bind``), so a visitor sees only the runs their own workspace made: one pulse for the whole
+    process would show every visitor the last request text and error of every other (F-014). With nothing bound (the CLI, tests, a background worker) it is a private
+    default that no web route reads."""
+
+    def __init__(self) -> None:
+        self._default = ArcadePulse()
+        self._var: "contextvars.ContextVar[Optional[ArcadePulse]]" = contextvars.ContextVar("eventmate_pulse", default=None)
+
+    def bind(self, pulse_: ArcadePulse):
+        return self._var.set(pulse_)
+
+    def unbind(self, token) -> None:
+        self._var.reset(token)
+
+    def _target(self) -> ArcadePulse:
+        return self._var.get() or self._default
+
+    def begin_run(self, label: str) -> int:
+        return self._target().begin_run(label)
+
+    def stage_started(self, name: str) -> None:
+        self._target().stage_started(name)
+
+    def stage_done(self, name: str) -> None:
+        self._target().stage_done(name)
+
+    def finish(self, ok: bool, error: str = "") -> None:
+        self._target().finish(ok, error)
+
+    def snapshot(self) -> dict:
+        return self._target().snapshot()
+
+
+pulse = _CurrentPulse()
