@@ -110,6 +110,12 @@ The current pass count, date and environment are recorded in [docs/HANDOFF.md](d
 | [docs/ROADMAP.md](docs/ROADMAP.md) | what is built, deferred and rejected |
 | [docs/JOBS_DESIGN.md](docs/JOBS_DESIGN.md) | follow-through jobs design |
 | [docs/HANDOFF.md](docs/HANDOFF.md) | current state for the next contributor |
+| [docs/SCORECARD.md](docs/SCORECARD.md) | the six judged parameters, scored with evidence and what is missing |
+| [docs/RELEASE.md](docs/RELEASE.md) | release notes, owner decisions before deploying, deploy and rollback |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | measured server and asset numbers, the budget, what was not measured |
+| [docs/GENAI.md](docs/GENAI.md) | where a model is used, what limits it, what happens without one |
+| [SECURITY.md](SECURITY.md) | reporting a vulnerability, what is defended and how it is checked |
+| [deploy/](deploy/) | compose stack, Prometheus alert rules, Grafana dashboard (`docs/RUNBOOK.md`) |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | how to contribute |
 
 ## Contributing
