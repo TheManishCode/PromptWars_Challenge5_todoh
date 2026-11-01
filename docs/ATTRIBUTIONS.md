@@ -7,18 +7,10 @@ Two files in `eventmate/web/static/` are not ours. Both are served only by the a
 - Title: Polytoria Avatar V3 "Pauly"
 - Author: dantheman (https://sketchfab.com/beachr267)
 - Source: https://sketchfab.com/3d-models/polytoria-avatar-v3-pauly-2c1fbaf2dec1411ca1ae5bfd0afaaa9e
-- Licence: Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). Attribution is required and is shown in the page footer.
+- Licence: Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). Attribution is required and is shown in the room's footer.
 - Changes: none. The file is byte-for-byte what was downloaded (it carries its own licence and author in its metadata).
 - SHA-256: `cf98b66b20b9480db1e981eb65c56861a88da547af91784919c6263100729673`
 - Why this model: 880 KB and about 3,500 triangles, and it ships 23 animations (Idle, Wave, Point, Dance and others) so the avatar can react without any extra tooling. A second candidate (a commercial brand mascot) was not used: it had no animations, was larger, and is a trademarked character.
-
-## 3D viewer: `model-viewer.min.js`
-
-- Project: `<model-viewer>` by Google (https://modelviewer.dev, https://github.com/google/model-viewer), npm package `@google/model-viewer` 4.4.0
-- Licence: Apache-2.0 (the licence text is in the file header; it bundles three.js, MIT, and fflate, MIT)
-- Changes: none (the published `dist/model-viewer.min.js`)
-- SHA-256: `18b2e711035aa4705ee281530a55dc2338ff05eed3d70ae16d54105282a75ed5`
-- It mentions Google-hosted decoders for compressed models. This avatar uses none, and the page's Content-Security-Policy (`connect-src 'self'`) would block them anyway.
 
 ## Content-Security-Policy impact
 

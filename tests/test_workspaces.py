@@ -189,7 +189,7 @@ def test_the_cap_on_workspaces_is_a_clear_503(tmp_path):
 def test_the_page_its_files_and_healthz_need_no_workspace(tmp_path):
     app, registry = shared_app(tmp_path)
     c = app.test_client()
-    for url in ("/", "/healthz", "/static/app.js"):
+    for url in ("/", "/healthz", "/static/arcade.js"):
         assert c.get(url, base_url=BASE, headers={"Host": HOST}).status_code == 200, url
     assert registry.directory.count() == 0  # looking at the page makes nothing
 

@@ -2265,16 +2265,40 @@ async function wallLeaveFocus() {
   wallRoundUi("idle");
 }
 
+/* Focused scene views (signature wall, holo table, dossier) have no back
+   button: a clean tap on empty room background returns to the room. Taps on
+   the puzzle board, the open paper, or any control keep working and never
+   close the view; a drag (the gate puzzle) never counts as a tap; the tap
+   that opened the view cannot immediately close it. Escape still works. */
+const focusExit = { openedAt: 0, leavers: [] };
+function noteFocusOpened() { focusExit.openedAt = performance.now(); }
+function wireBackgroundExit() {
+  const UI = "#paper, #wall-panel, #voice-panel, #chat, .hud, #credits-panel, #flight-layer, #gl-fallback, button, input, select, textarea, a, audio";
+  let down = null;
+  document.addEventListener("pointerdown", function (ev) {
+    down = { x: ev.clientX, y: ev.clientY, t: performance.now(), ui: !!(ev.target.closest && ev.target.closest(UI)) };
+  }, true);
+  document.addEventListener("pointerup", function (ev) {
+    const d = down; down = null;
+    if (!d) return;
+    if (performance.now() - focusExit.openedAt < 450) return; // the opening tap must not close the view
+    if (Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 7) return; // a drag (gate puzzle, camera), not a tap
+    if (performance.now() - d.t > 600) return; // a long press is not a tap
+    if (d.ui || (ev.target.closest && ev.target.closest(UI))) return; // a control, the paper or the panel
+    if (performance.now() - (Arcade3D.lastSceneTap ? Arcade3D.lastSceneTap() : 0) < 300) return; // a 3D board/control took this tap
+    focusExit.leavers.forEach(function (leave) { leave(); });
+  }, true);
+}
+
 /* wall focus: same tuck-away pattern as the holo table and the dossier */
 function wireWallFocus() {
-  const back = $("#holo-back");
   Arcade3D.onWallFocus(function () {
+    noteFocusOpened();
     const chat = $("#chat");
     chat.dataset.wallWasCollapsed = chat.classList.contains("collapsed") ? "1" : "";
     chat.classList.add("collapsed");
     document.body.classList.add("wall-focus");
     Arcade3D.wallFocus();
-    if (back) back.hidden = false;
     const panel = $("#wall-panel");
     if (panel) panel.hidden = false;
     if (!wallSolved() && wall.available !== false) {
@@ -2297,11 +2321,10 @@ function wireWallFocus() {
     if (!chat.dataset.wallWasCollapsed) chat.classList.remove("collapsed");
     document.body.classList.remove("wall-focus");
     delete chat.dataset.wallWasCollapsed;
-    if (back) back.hidden = true;
     const panel = $("#wall-panel");
     if (panel) panel.hidden = true;
   }
-  if (back) back.addEventListener("click", leave);
+  focusExit.leavers.push(leave);
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") leave(); });
   Arcade3D.onWallTap(function (cell) { wallTap(cell); });
   const signBtn = $("#wall-sign-btn");
@@ -2322,15 +2345,14 @@ function wireWallFocus() {
 
 /* holographic table focus: chat tucks away, BACK chip returns */
 function wireHoloFocus() {
-  const back = $("#holo-back");
   Arcade3D.onHoloFocus(function () {
+    noteFocusOpened();
     const chat = $("#chat");
     const wasCollapsed = chat.classList.contains("collapsed");
     chat.dataset.holoWasCollapsed = wasCollapsed ? "1" : "";
     chat.classList.add("collapsed");
     document.body.classList.add("holo-focus");
     Arcade3D.holoFocus();
-    if (back) back.hidden = false;
   });
   function leave() {
     if (!Arcade3D.holoFocused()) return;
@@ -2339,23 +2361,21 @@ function wireHoloFocus() {
     if (!chat.dataset.holoWasCollapsed) chat.classList.remove("collapsed");
     document.body.classList.remove("holo-focus");
     delete chat.dataset.holoWasCollapsed;
-    if (back) back.hidden = true;
   }
-  if (back) back.addEventListener("click", leave);
+  focusExit.leavers.push(leave);
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") leave(); });
 }
 
 
 /* dossier easter egg focus: same tuck-away pattern as the holo table */
 function wireDossierFocus() {
-  const back = $("#holo-back");
   Arcade3D.onDossierFocus(function () {
+    noteFocusOpened();
     const chat = $("#chat");
     chat.dataset.dossierWasCollapsed = chat.classList.contains("collapsed") ? "1" : "";
     chat.classList.add("collapsed");
     document.body.classList.add("dossier-focus");
     Arcade3D.dossierFocus();
-    if (back) back.hidden = false;
   });
   function leave() {
     if (!Arcade3D.dossierFocused()) return;
@@ -2364,9 +2384,8 @@ function wireDossierFocus() {
     if (!chat.dataset.dossierWasCollapsed) chat.classList.remove("collapsed");
     document.body.classList.remove("dossier-focus");
     delete chat.dataset.dossierWasCollapsed;
-    if (back) back.hidden = true;
   }
-  if (back) back.addEventListener("click", leave);
+  focusExit.leavers.push(leave);
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") leave(); });
 }
 
@@ -2376,6 +2395,7 @@ function boot() {
   wireHoloFocus();
   wireDossierFocus();
   wireWallFocus();
+  wireBackgroundExit();
   wallTick(); // wall backend absent today: probes fail quietly, table stays hidden
 
   // small screens: start with the chat tucked away so the machine is the

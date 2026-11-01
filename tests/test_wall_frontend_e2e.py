@@ -141,7 +141,7 @@ def test_the_real_frontend_drives_the_real_wall_end_to_end(wall_world):
                     body = None
                 calls.append({"method": r.request.method, "path": r.url.split(base)[-1], "status": r.status, "req_headers": r.request.headers, "req_body": r.request.post_data, "body": body, "cache": r.headers.get("cache-control")})
         page.on("response", on_response)
-        page.goto(base + "/arcade")
+        page.goto(base + "/")
         until(page, "!!window.__scene && !!window.__cams", 30)
 
         # 1. the page bootstraps the wall on load: cookie, CSRF value, meta
@@ -254,7 +254,7 @@ def test_the_real_arcade_page_builds_a_plan_attaches_a_guest_list_and_every_api_
         page.on("pageerror", lambda e: problems.append(("pageerror", str(e))))
         page.on("console", lambda m: problems.append(("console", m.text)) if m.type == "error" else None)
         page.on("response", lambda r: calls.append((r.request.method, r.url.split(base)[-1], r.status)) if "/api/" in r.url else None)
-        page.goto(base + "/arcade")
+        page.goto(base + "/")
         page.wait_for_selector("#msg", timeout=20000)
         page.fill("#msg", EXAMPLE)
         page.press("#msg", "Enter")
@@ -309,7 +309,7 @@ def test_shared_mode_two_browsers_each_get_their_own_workspace_and_the_page_cope
             page = ctx.new_page()
             calls = []
             page.on("response", lambda r, c=calls: c.append((r.request.method, r.url.split(base)[-1], r.status)) if "/api/" in r.url else None)
-            page.goto(base + "/arcade")
+            page.goto(base + "/")
             page.wait_for_selector("#msg", timeout=20000)
             if who == "a":
                 page.fill("#msg", EXAMPLE)
@@ -344,7 +344,7 @@ def test_a_lost_wall_cookie_gives_a_401_the_page_refreshes_the_session_and_never
         page = ctx.new_page()
         page.add_init_script(OBSERVE_THREE)
         page.on("response", lambda r: posts.append((r.request.method, r.url.split(base)[-1], r.status)) if "/api/wall/" in r.url and r.request.method == "POST" else None)
-        page.goto(base + "/arcade")
+        page.goto(base + "/")
         until(page, "!!window.__scene && !!window.__cams", 30)
         until(page, "wall.available === true && !!wall.csrf", 20)
         page.evaluate("sessionStorage.setItem('em_wall_solved', '1')")  # the puzzle itself is covered by the other test
@@ -380,7 +380,7 @@ def test_shared_mode_a_lost_workspace_cookie_shows_a_clear_state_not_a_silent_fa
         ctx = browser.new_context(viewport={"width": 1300, "height": 900})
         page = ctx.new_page()
         page.on("response", lambda r: seen.append((r.request.method, r.url.split(base)[-1], r.status)) if "/api/" in r.url and "/api/wall" not in r.url else None)
-        page.goto(base + "/arcade")
+        page.goto(base + "/")
         page.wait_for_selector("#msg", timeout=20000)
         page.wait_for_timeout(1000)
         ctx.clear_cookies(name="todoh_ws")

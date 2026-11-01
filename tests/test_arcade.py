@@ -73,10 +73,11 @@ def test_plan_run_drives_the_pulse(client):
 
 
 def test_arcade_page_and_assets_are_served_with_credit(client):
-    page = client.get("/arcade")
+    page = client.get("/")  # the room answers at the root: there is no /arcade page to land on
     assert page.status_code == 200 and page.mimetype == "text/html"
     html = page.get_data(as_text=True)
-    assert "Snji" in html and "dantheman" in html and "CC BY 4.0" in html
+    # the credits the page now makes (frontend v20): cabinet by Matthew, attendant by dantheman. The cabinet credit was matched from a package README, not checked against the source page
+    assert "Matthew" in html and "PacMan Arcade Machine" in html and "dantheman" in html and "CC BY 4.0" in html
     for name in ("cabinet.glb", "arcade.js", "arcade3d.js", "three.min.js"):
         assert client.get(f"/static/{name}").status_code == 200, name
     assert client.get("/static/character.glb").status_code == 404
@@ -94,7 +95,7 @@ def test_every_whitelisted_static_file_exists_and_page_scripts_are_local():
 def test_assets_are_gzipped_only_when_asked_and_round_trip(client):
     import gzip
 
-    for name, vendor in (("app.js", False), ("three.min.js", True), ("avatar.glb", False)):
+    for name, vendor in (("arcade.js", False), ("three.min.js", True), ("avatar.glb", False)):
         raw = (STATIC / ("vendor" if vendor else "") / name).read_bytes()
         plain = client.get(f"/static/{name}")
         assert plain.status_code == 200 and "Content-Encoding" not in plain.headers and plain.data == raw
@@ -109,3 +110,12 @@ def test_the_cabinet_file_matches_the_hash_recorded_in_the_attributions():
     notes = (STATIC.parent.parent.parent / "docs/ATTRIBUTIONS.md").read_text()
     assert hashlib.sha256((STATIC / "cabinet.glb").read_bytes()).hexdigest() in notes  # substituting the file must be visible
     assert "downscaled" in notes and "CC BY 4.0" in notes
+
+
+def test_the_room_is_the_only_interface_and_old_addresses_lead_to_it(client):
+    room = client.get("/")
+    assert room.status_code == 200 and room.mimetype == "text/html" and b'id="gl"' in room.get_data() and b"request-text" not in room.get_data()
+    old = client.get("/arcade")
+    assert old.status_code == 308 and old.headers["Location"].endswith("/")  # no second page: only a redirect for old links
+    for gone in ("/classic", "/static/app.js", "/static/style.css", "/static/index.html", "/static/model-viewer.min.js"):
+        assert client.get(gone).status_code == 404, gone

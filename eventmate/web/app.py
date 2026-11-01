@@ -33,7 +33,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Literal, Optional
 
-from flask import Flask, Response, abort, g, jsonify, request
+from flask import Flask, Response, abort, g, jsonify, redirect, request
 from werkzeug.local import LocalProxy
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 
@@ -77,8 +77,8 @@ from eventmate.wall.store import WallConfig, WallStore
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_FILES = {
-    "app.js": "text/javascript; charset=utf-8", "style.css": "text/css; charset=utf-8", "favicon.svg": "image/svg+xml",
-    "avatar.glb": "model/gltf-binary", "model-viewer.min.js": "text/javascript; charset=utf-8",  # the assistant avatar and its viewer (docs/ATTRIBUTIONS.md)
+    "favicon.svg": "image/svg+xml",
+    "avatar.glb": "model/gltf-binary",  # the attendant in the room (docs/ATTRIBUTIONS.md)
     # the /arcade page: a 3D cabinet scene (docs/ARCADE_UI.md)
     "cabinet.glb": "model/gltf-binary", "arcade.css": "text/css; charset=utf-8", "arcade.js": "text/javascript; charset=utf-8",
     "arcade3d.js": "text/javascript; charset=utf-8", "three.min.js": "text/javascript; charset=utf-8", "CopyShader.js": "text/javascript; charset=utf-8",
@@ -92,13 +92,12 @@ STATIC_FILES = {
     # the cabinet CRT's night road (car/road/barrier - attribution in docs/ATTRIBUTIONS.md)
     "holo_table.glb": "model/gltf-binary", "secret_dossier.glb": "model/gltf-binary", "road.glb": "model/gltf-binary", "car.glb": "model/gltf-binary", "barrier.glb": "model/gltf-binary",
 }
-# The avatar viewer injects one fixed <style> block, reads the model's textures from blob: URLs that its own script creates, and compiles a small WebAssembly decoder.
-# Each is allowed as narrowly as possible: one exact hash instead of unsafe-inline, blob: (which only same-origin script can mint) instead of any external source,
-# and wasm-unsafe-eval, which permits WebAssembly compilation only and never string eval.
-VIEWER_STYLE_HASH = "sha256-PXtZZkJMMyc18o/DN1ZEFOJ2qEGq95IQbVaJFMOXOb0="
-LONG_CACHE = frozenset({"avatar.glb", "model-viewer.min.js", "cabinet.glb", "three.min.js", "alley_van.glb", "alley_dumpster.glb", "alley_candy.glb", "vend_nuka.glb", "vend_retro.glb", "vend_cat.glb", "wall_mural.glb", "wall_posters.glb", "road.glb", "car.glb", "barrier.glb", "holo_table.glb", "secret_dossier.glb"})  # large and unchanging: not re-sent on every page load
+# blob: (which only same-origin script can mint) is allowed for recordings and model textures instead of any external source, and wasm-unsafe-eval permits
+# WebAssembly compilation only, never string eval. Both were kept when the classic page and its model viewer (and the one style hash it needed) were removed;
+# neither has been shown to be unneeded by the room, so narrowing them is left until the real models have been run.
+LONG_CACHE = frozenset({"avatar.glb", "cabinet.glb", "three.min.js", "alley_van.glb", "alley_dumpster.glb", "alley_candy.glb", "vend_nuka.glb", "vend_retro.glb", "vend_cat.glb", "wall_mural.glb", "wall_posters.glb", "road.glb", "car.glb", "barrier.glb", "holo_table.glb", "secret_dossier.glb"})  # large and unchanging: not re-sent on every page load
 # third-party files live in static/vendor/ but are served from the same flat /static/<name> URLs
-VENDOR_FILES = frozenset({"model-viewer.min.js", "three.min.js", "CopyShader.js", "LuminosityHighPassShader.js", "EffectComposer.js", "RenderPass.js", "ShaderPass.js", "MaskPass.js", "UnrealBloomPass.js", "GLTFLoader.js"})
+VENDOR_FILES = frozenset({"three.min.js", "CopyShader.js", "LuminosityHighPassShader.js", "EffectComposer.js", "RenderPass.js", "ShaderPass.js", "MaskPass.js", "UnrealBloomPass.js", "GLTFLoader.js"})
 GZIP_MIN = 1024  # below this the header overhead outweighs the saving
 _gzip_cache: Dict[tuple, bytes] = {}  # (name, mtime_ns) -> compressed bytes; the file set is fixed and small
 WORKSPACE_EXEMPT = ("/api/owner/status", "/api/wall/")  # /api routes with their own authentication: no workspace is looked up or made for them
@@ -109,7 +108,7 @@ SENDING_ROUTES = re.compile(
 )
 LOOPBACK = {"127.0.0.1", "localhost", "[::1]", "::1"}
 CSP = (
-    f"default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' '{VIEWER_STYLE_HASH}'; img-src 'self' data: blob:; "
+    "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; "
     "media-src 'self' blob:; connect-src 'self' blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 )
 HEAVY_MAX = 4  # concurrent network-bound searches
@@ -775,11 +774,12 @@ def create_app(
 
     @app.get("/")
     def index():
-        return Response((STATIC_DIR / "index.html").read_bytes(), mimetype="text/html")
+        """The arcade room is the only interface (the classic page was removed on the owner's instruction)."""
+        return Response((STATIC_DIR / "arcade.html").read_bytes(), mimetype="text/html")
 
     @app.get("/arcade")
     def arcade():
-        return Response((STATIC_DIR / "arcade.html").read_bytes(), mimetype="text/html")
+        return redirect("/", 308)  # one interface: the room lives at /, this is only for old links
 
     @app.get("/static/<name>")
     def static_file(name: str):

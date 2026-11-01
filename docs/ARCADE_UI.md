@@ -15,7 +15,7 @@ code — nothing on screen claims a stage happened that did not.
    BRIEF reservoir on the left that drains and refills). Continuous liquid, never
    dashed packets. Module state comes only from `/api/arcade/pulse`.
 3. **Chat stays a chat** — the intake conversation happens in the normal chat
-   overlay at the bottom. It drives the same NLU/intake as the classic UI.
+   overlay at the bottom. It drives the intake API.
 4. **Coin only after confirmation** — the BUILD MY PLAN button is the coin. The
    attendant presses it, a coin arcs into the slot, the machine accepts it, and
    the camera pushes in until the CRT is nearly full-screen.
@@ -38,7 +38,7 @@ code — nothing on screen claims a stage happened that did not.
 | On screen | Backed by |
 |---|---|
 | Module lights / stage order / stage durations | `GET /api/arcade/pulse` -> `eventmate/arcade_pulse.py`, which records real planner hooks (`eventmate/agents/planner.py`, `eventmate/agents/manager.py`) |
-| Vendor table, budget split, schedule, check counts | The real plan JSON returned by the intake/build API (same engine as the classic UI) |
+| Vendor table, budget split, schedule, check counts | The real plan JSON returned by the intake/build API  |
 | Dossier stamp | `verification_label()` — amber CHECKED unless every check including the symbolic solver passed; never a blanket VERIFIED |
 | Symbolic (PDDL) ribbon | Shown only when the solver actually ran; otherwise an explicit "unavailable - NOT symbolically confirmed" warning box |
 | PAPER JAM slip | Real constraint violations + repair suggestions from the planner response |
@@ -109,8 +109,8 @@ rupees, catering and photography". An infeasible brief (e.g. 20000 rupees for
 
 - Dev-machine preview may lack Fast Downward / VAL; in that case the dossier
   honestly shows the symbolic check as unavailable (amber), by design.
-- The classic UI at `/` still owns outreach, ideas and jobs; the arcade only
-  visualizes planning.
+- The room at `/` is the only interface. The classic page, its script and style, and the `<model-viewer>` that drew its avatar were removed on the owner's
+  instruction; `/arcade` redirects to `/`. Features that only the classic page had a screen for are listed in `docs/FRONTEND_INTEGRATION.md`.
 - The scene targets desktop WebGL; mobile renders the same scene at reduced
   resolution with the chat overlay collapsing to a header bar.
 

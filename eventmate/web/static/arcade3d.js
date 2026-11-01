@@ -1184,14 +1184,14 @@ window.Arcade3D = (function () {
       ptr.y = -(ev.clientY / window.innerHeight) * 2 + 1;
       ray.setFromCamera(ptr, S.camera);
       const hits = ray.intersectObjects([st2.root, st2.list].filter(Boolean), true);
-      if (hits.length && S.holoFocusCb) S.holoFocusCb();
+      if (hits.length) { S.lastSceneTap = performance.now(); if (S.holoFocusCb) S.holoFocusCb(); }
     });
   }
 
 
   /* ---------------- TOP SECRET dossier (easter egg) ----------------
-     User-supplied folder model - source and license still to be
-     confirmed by the owner (docs/ATTRIBUTIONS.md). Lies on the floor
+     "Worm Dossier M.E.G Game Ready" by NightmareBunny (CC-BY-4.0),
+     docs/ATTRIBUTIONS.md. Lies on the floor
      beside the gumball machine, TOP SECRET stamp face up. Clicking it
      focuses the camera; the paper and sticky note rise out of the
      folder. The cover is one solid mesh with no hinge pivot, so a
@@ -1307,7 +1307,7 @@ window.Arcade3D = (function () {
         ptr.x = (ev.clientX / window.innerWidth) * 2 - 1;
         ptr.y = -(ev.clientY / window.innerHeight) * 2 + 1;
         ray.setFromCamera(ptr, S.camera);
-        if (ray.intersectObject(grp, true).length && S.dossierFocusCb) S.dossierFocusCb();
+        if (ray.intersectObject(grp, true).length) { S.lastSceneTap = performance.now(); if (S.dossierFocusCb) S.dossierFocusCb(); }
       });
      } catch (err) { console.error('dossier model:', err); }
     }, undefined, function (err) { console.error('dossier model load:', err && err.message || err); });
@@ -1340,6 +1340,36 @@ window.Arcade3D = (function () {
       c2.fillStyle = col || chalk; c2.fillText(txt, 0, 0);
       c2.restore();
     };
+    if (!st.focused) {
+      // idle room view: the secret hides as faint scratches in the paint - no
+      // panel, no status copy (backend status shows only in the focused view).
+      // The render loop also ties the mesh opacity to the viewing angle, so
+      // the scratches catch the eye at a grazing angle and fade square-on.
+      const ghost = function (txt, x, y, font, col) {
+        c2.font = font; c2.textAlign = "center";
+        c2.save(); c2.translate(x, y); c2.rotate(((Math.abs(x * 7 + y * 13) | 0) % 11 - 5) * 0.009);
+        c2.strokeStyle = "rgba(6,8,12,0.30)"; c2.lineWidth = 5; c2.lineJoin = "round";
+        c2.strokeText(txt, 0, 0);
+        c2.fillStyle = col; c2.fillText(txt, 0, 0);
+        c2.restore();
+      };
+      ghost("I  W A S  H E R E", W / 2, 78, "bold 40px monospace", "rgba(232,226,208,0.20)");
+      c2.strokeStyle = "rgba(232,226,208,0.14)"; c2.lineWidth = 2;
+      c2.beginPath(); c2.moveTo(240, 104); c2.lineTo(W - 260, 109); c2.stroke();
+      if (d.slots && d.slots.length) {
+        d.slots.forEach(function (m, i) {
+          ghost(String(m.name || "?").slice(0, 12), 150 + (i % 4) * 240, 190 + Math.floor(i / 4) * 130,
+            "bold 30px monospace", "rgba(232,226,208,0.16)");
+        });
+      }
+      c2.strokeStyle = "rgba(232,226,208,0.12)"; c2.lineWidth = 3;
+      for (let k = 0; k < 6; k++) {
+        const sx = 90 + k * 150, sy = H - 90 - ((k * 53) % 70);
+        c2.beginPath(); c2.moveTo(sx, sy); c2.lineTo(sx + 46, sy + ((k % 2) ? 24 : -18)); c2.stroke();
+      }
+      if (st.tex) st.tex.needsUpdate = true;
+      return;
+    }
     c2.fillStyle = "rgba(6,8,12,0.62)";
     c2.fillRect(46, 22, W - 92, H - 52); // dim the posters behind the board: the names must read
     if (d.mode === "locked") { // the entry puzzle: torn halves line up only at off = 0
@@ -1495,6 +1525,7 @@ window.Arcade3D = (function () {
       ray.setFromCamera(ptr, S.camera);
       const hits = ray.intersectObject(mesh, false);
       if (!hits.length) return;
+      S.lastSceneTap = performance.now(); // a board tap is never a background click
       if (!st.focused) {
         if ((S.holo && S.holo.focused) || (S.dossier && S.dossier.focused)) return;
         if (S.wallFocusCb) S.wallFocusCb();
@@ -1521,9 +1552,12 @@ window.Arcade3D = (function () {
     // only its front half stays in frame - the rear hangs out of view on purpose
     put('/static/alley_van.glb', { len: 3.8, pos: [-3.35, 3.05], rotY: 2.05 });
     put('/static/alley_dumpster.glb', { h: 1.42, pos: [2.6, 4.5], rotY: -0.5 }); // front floor, out of every hologram sightline (user)
-    // vending row along the right wall, fronts angled into the room
-    // vending row along the FRONT right wall: never the hologram's backdrop (user)
-    put('/static/vend_nuka.glb', { h: 1.85, pos: [4.9, 1.5], rotY: -1.45 });
+    // the red machine stands alone against the LEFT wall, flush to it, front
+    // angled into the room - clear of the secret wall (z -3.85..-0.85), the
+    // van (z ~3), the dossier and the CRT sightlines (user)
+    put('/static/vend_nuka.glb', { h: 1.85, pos: [-4.9, 1.3], rotY: 1.45 });
+    // the other two machines keep the vending row along the FRONT right wall:
+    // never the hologram's backdrop (user)
     put('/static/vend_retro.glb', { h: 1.78, pos: [4.9, 2.85], rotY: -1.62 });
     // the big cat vending machine is OPT-IN, never auto-loaded: its CC-BY-NC-ND
     // license restricts sharing adapted copies, so the original 55 MB scan ships
@@ -1562,13 +1596,11 @@ window.Arcade3D = (function () {
       // flatten depth to 12% so the slab hugs the wall and the junk reads as shallow relief
       root.scale.set(k, k, k * 0.12);
       root.position.set(-ctr.x * k, -box.min.y * k - 0.04, wallBack + 0.30 + 0.55 * k * 0.12);
-      console.log('PROBE mural k=' + k + ' rootz=' + root.position.z + ' wallBack=' + wallBack);
       if (new URLSearchParams(location.search).has('muraldebug')) {
         root.traverse(function (o) { if (o.isMesh) o.material = new THREE.MeshBasicMaterial({ color: 0xff2222 }); });
       }
       sc.updateMatrixWorld(true);
       const wb = new THREE.Box3().setFromObject(root);
-      console.log('PROBE mural world=' + JSON.stringify({ min: wb.min, max: wb.max }));
       sc.add(root);
       const muralLight = new THREE.PointLight(0xffd9b0, 1.05, 7);
       muralLight.position.set(0, 2.7, wallBack + 2.1); sc.add(muralLight);
@@ -2284,6 +2316,17 @@ window.Arcade3D = (function () {
         S.dust.rotation.y = t * 0.00004;
         S.dust.position.y = Math.sin(t * 0.00005) * 0.12;
       }
+      // the wall secret reveals by viewing angle: faint square-on, caught at
+      // a grazing angle like raking light; fully readable only when focused
+      if (S.wallb && S.wallb.mesh) {
+        const wbm = S.wallb.mesh;
+        if (S.wallb.focused) { if (wbm.material.opacity !== 1) wbm.material.opacity = 1; }
+        else {
+          const wdx = S.camera.position.x - wbm.position.x, wdz = S.camera.position.z - wbm.position.z;
+          const squareOn = Math.abs(wdx) / Math.max(0.001, Math.sqrt(wdx * wdx + wdz * wdz));
+          wbm.material.opacity = 0.25 + 0.75 * (1 - squareOn);
+        }
+      }
       // hand-held sway + impact impulse, without fighting the camera tweens
       if (!S.reduced) {
         const amp = (S.zoomed ? 0.006 : 0.018);
@@ -2328,6 +2371,7 @@ window.Arcade3D = (function () {
     },
     onDossierFocus: function (cb) { S.dossierFocusCb = cb; },
     wallSetData: function (d) { if (!S.wallb) return; S.wallb.data = d; wallDraw(); },
+    lastSceneTap: function () { return S.lastSceneTap || 0; },
     wallFocus: function () { return wallFocus(); },
     wallUnfocus: function () { wallUnfocus(); },
     wallFocused: function () { return !!(S.wallb && S.wallb.focused); },

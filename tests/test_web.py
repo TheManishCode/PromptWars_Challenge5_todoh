@@ -41,7 +41,7 @@ def plan_id(client):
 
 
 def test_index_and_assets_are_served(client):
-    for url, ctype in (("/", "text/html"), ("/static/app.js", "javascript"), ("/static/style.css", "text/css")):
+    for url, ctype in (("/", "text/html"), ("/static/arcade.js", "javascript"), ("/static/arcade.css", "text/css")):
         r = client.get(url)
         assert r.status_code == 200 and ctype in r.content_type
 
@@ -138,7 +138,7 @@ def test_dns_rebinding_host_is_rejected(client):
 
 
 def test_security_headers_on_every_response(client):
-    for url in ("/", "/api/plans", "/static/app.js"):
+    for url in ("/", "/api/plans", "/static/arcade.js"):
         h = client.get(url).headers
         csp = h["Content-Security-Policy"]
         assert "default-src 'none'" in csp and "script-src 'self'" in csp and "'unsafe-inline'" not in csp and "frame-ancestors 'none'" in csp
@@ -286,20 +286,18 @@ def test_tradeoffs_need_csrf_and_valid_body(client):
     assert post(client, "/api/tradeoffs", {"request": tight(), "x": 1}).status_code == 422
 
 
-# ---- the assistant avatar (a CC-BY model shown with <model-viewer>): served, bounded, credited, and the CSP stays strict
+# ---- the attendant avatar (a CC-BY model drawn in the room): served, bounded, credited, and the CSP stays strict
 
 def test_avatar_assets_are_served_with_the_right_types_and_nothing_else_is(client):
     glb = client.get("/static/avatar.glb")
     assert glb.status_code == 200 and glb.content_type.startswith("model/gltf-binary") and glb.data[:4] == b"glTF" and len(glb.data) < 2_000_000
-    js = client.get("/static/model-viewer.min.js")
-    assert js.status_code == 200 and "javascript" in js.content_type and b"SPDX-License-Identifier" in js.data[:400]
-    assert client.get("/static/model-viewer.min.js.map").status_code == 404 and client.get("/static/avatar.png").status_code == 404
+    assert client.get("/static/model-viewer.min.js").status_code == 404 and client.get("/static/avatar.png").status_code == 404  # the classic page and its viewer are gone
 
 
-def test_the_csp_allows_only_what_the_avatar_viewer_needs_and_nothing_more(client):
+def test_the_csp_allows_only_what_the_room_needs_and_nothing_more(client):
     csp = client.get("/").headers["Content-Security-Policy"]
     assert "img-src 'self' data: blob:" in csp and "connect-src 'self' blob:" in csp and "default-src 'none'" in csp and "script-src 'self' 'wasm-unsafe-eval';" in csp
-    assert "style-src 'self' 'sha256-PXtZZkJMMyc18o/DN1ZEFOJ2qEGq95IQbVaJFMOXOb0=';" in csp  # one exact hash, never unsafe-inline
+    assert "style-src 'self';" in csp  # no hash and never unsafe-inline: the model viewer that needed one is gone
     for never in ("'unsafe-inline'", "'unsafe-eval'", "worker-src", "http:", "https:", "*", "child-src", "frame-src", "object-src"):
         assert never not in csp.replace("frame-ancestors 'none'", ""), never
     assert "frame-ancestors 'none'" in csp and "base-uri 'none'" in csp and "form-action 'none'" in csp
@@ -312,13 +310,13 @@ def test_the_avatar_is_credited_in_the_page_and_the_files_match_the_credit():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
-    page = (root / "eventmate/web/static/index.html").read_text()
+    page = (root / "eventmate/web/static/arcade.html").read_text()
     notes = (root / "docs/ATTRIBUTIONS.md").read_text()
     assert "Polytoria Avatar V3" in page and "dantheman" in page and "CC BY 4.0" in page and 'rel="noopener noreferrer"' in page
-    for name in ("avatar.glb", "model-viewer.min.js"):
-        digest = hashlib.sha256((root / "eventmate/web/static" / ("vendor" if name.endswith(".js") else "") / name).read_bytes()).hexdigest()
+    for name in ("avatar.glb",):
+        digest = hashlib.sha256((root / "eventmate/web/static" / name).read_bytes()).hexdigest()
         assert digest in notes, f"docs/ATTRIBUTIONS.md must record the SHA-256 of {name} (substituting a file must be visible)"
-    assert "creativecommons.org/licenses/by/4.0" in notes and "Apache-2.0" in notes and "sketchfab.com/3d-models/polytoria-avatar-v3-pauly" in notes
+    assert "creativecommons.org/licenses/by/4.0" in notes and "sketchfab.com/3d-models/polytoria-avatar-v3-pauly" in notes
     glb = (root / "eventmate/web/static/avatar.glb").read_bytes()
     clen = int.from_bytes(glb[12:16], "little")
     meta = json.loads(glb[20:20 + clen])

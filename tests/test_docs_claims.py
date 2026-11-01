@@ -23,9 +23,11 @@ def test_the_readme_does_not_call_stop_or_bounce_matching_authenticated():
         assert claim not in readme.lower()
 
 
-def test_the_ui_says_so_next_to_the_list():
-    js = read("eventmate", "web", "static", "app.js")
-    assert "Neither is authenticated: mail headers can be forged" in js and "remote mail server's own words, not verified" in js
+def test_the_room_never_calls_stop_or_bounce_matching_authenticated():
+    """The classic page (removed) said next to the do-not-contact list that neither is authenticated. The room has no such list, so the claim that must hold is the negative one."""
+    js = read("eventmate", "web", "static", "arcade.js").lower()
+    for claim in ("verified stop", "authenticated stop", "authenticated bounce", "verified bounce", "confirmed by the mail server"):
+        assert claim not in js
 
 
 def test_the_demo_states_that_a_discovered_quote_does_not_update_the_plan():
