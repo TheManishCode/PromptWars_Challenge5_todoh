@@ -19,13 +19,13 @@ _INJECTION = {
     "chat_template_token": re.compile(r"<\|(?:im_start|im_end|system|user|assistant|endoftext)\|>|\[/?INST\]|<<SYS>>", re.I),
     "role_change": re.compile(r"\b(?:you are now|from now on,? you|act as|pretend to be|new persona|developer mode|jailbreak|system override|new instructions\s*:)", re.I),
     "prompt_exfiltration": re.compile(r"\b(?:reveal|print|show|repeat|leak)\b[^.\n]{0,30}\b(?:system prompt|hidden instructions?|your instructions)\b", re.I),
-    "fake_authority": re.compile(r"(?:^|\n)\s*(?:#{1,6}\s*|\*\*|\[)?(?:system|assistant|developer)\b(?:\s*:|\s*\]|\*\*|\s*\n)", re.I),
+    "fake_authority": re.compile(r"(?:^|\n)[^\S\n]*(?:#{1,6}[^\S\n]*|\*\*|\[)?(?:system|assistant|developer)\b(?:[^\S\n]*:|\s?\]|\*\*|[^\S\n]*\n)", re.I),  # [^\S\n] not \s: a run of blank lines must not be re-scanned from every line start
     "mass_action": re.compile(r"\b(?:refund|cancel|delete|send|pay|transfer)\b[^.\n]{0,25}\b(?:every|all)\b", re.I),
     "fence_forgery": re.compile(r"<<<|>>>"),
     "tool_forgery": re.compile(r"""["']tool["']\s*:\s*["']""", re.I),
 }
-_EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b")
-_EMAIL_SPOKEN = re.compile(r"\b[\w.+-]{2,}\s{0,3}[\[(]?\s{0,3}at\s{0,3}[\])]?\s{0,3}[\w-]{2,}(?:\s{0,3}[\[(]?\s{0,3}dot\s{0,3}[\])]?\s{0,3}[a-z]{2,}){1,3}\b", re.I)  # "name at gmail dot com" 
+_EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}\b")  # bounded and anchored at a token start: linear time on any input
+_EMAIL_SPOKEN = re.compile(r"(?<![\w.+-])[\w.+-]{2,64}\s{0,3}[\[(]?\s{0,3}at\s{0,3}[\])]?\s{0,3}[\w-]{2,63}(?:\s{0,3}[\[(]?\s{0,3}dot\s{0,3}[\])]?\s{0,3}[a-z]{2,}){1,3}\b", re.I)  # "name at gmail dot com" 
 _PAN = re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b")
 _AADHAAR = re.compile(r"\b\d{4}[ -]?\d{4}[ -]?\d{4}\b")
 _PHONE = re.compile(r"(?<![\w.])(?:\+?91[ -]?)?[6-9](?:[ -]?\d){9}(?!\w)")  # separators allowed between any two digits: "98 76 54 32 10", "9-8-7-..."

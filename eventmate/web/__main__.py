@@ -11,6 +11,7 @@ import os
 import sys
 
 from eventmate.web.app import LOOPBACK, create_app
+from eventmate.web.server import make_bounded_server
 
 
 def main(argv=None) -> int:
@@ -27,7 +28,7 @@ def main(argv=None) -> int:
     hosts = set(LOOPBACK) | set(a.allowed_host)
     app = create_app(api_token=token, allowed_hosts=hosts)
     print(f"to;doh-the event planner UI on http://{a.host}:{a.port}/  (API token {'required' if token else 'not set; loopback only'})")
-    app.run(host=a.host, port=a.port, threaded=True, debug=False, use_reloader=False)
+    make_bounded_server(app, a.host, a.port).serve_forever()
     return 0
 
 

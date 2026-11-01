@@ -42,8 +42,8 @@ _LINK = re.compile(r"https?://|www\.|\b[\w.-]+@[\w.-]+\.\w+", re.I)
 # The whole of each link, address and bare domain, for comparing against evidence. _LINK above only finds that one exists; matching on it alone treats
 # "https://other.example" as present whenever the evidence holds any "https://".
 _LINK_FULL = re.compile(
-    r"https?://[^\s<>\"')\]]+|www\.[^\s<>\"')\]]+|\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+"
-    r"|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|in|org|net|io|co|app|xyz|info|biz|shop|online|site|store|dev|ai|edu|gov)(?![\w-])(?:/[^\s<>\"')\]]*)?", re.I,
+    r"https?://[^\s<>\"')\]]+|www\.[^\s<>\"')\]]+|(?<![\w.+-])[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}"
+    r"|(?<![\w.-])[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63}){0,6}\.(?:com|in|org|net|io|co|app|xyz|info|biz|shop|online|site|store|dev|ai|edu|gov)(?![\w-])(?:/[^\s<>\"')\]]*)?", re.I,
 )
 
 

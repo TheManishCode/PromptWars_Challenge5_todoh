@@ -45,11 +45,14 @@ def test_ledger_proposals_with_hostile_arguments_are_refused_by_the_schema(em, p
     assert a.queue.pending(pid) == [] and em.ledger_entries(pid) == []
 
 
-def test_another_plan_id_in_the_arguments_is_ignored_and_the_session_plan_is_used(em, tmp_path, pid):
+def test_another_plan_id_in_the_arguments_is_refused_and_a_valid_call_lands_on_the_session_plan_only(em, pid):
     other = em.plan(EXAMPLE.replace("Pune", "Mumbai"), today=TODAY).plan.plan_id
-    a, _ = make(em, tool("propose_replan", plan_id=other, kind="guest_count_change", guest_count=10), answer("x"))
-    a.ask("replan this event please", pid, LOCAL_ORGANIZER)
-    assert a.queue.pending(other) == [] and em.store.latest(other).version == 1
+    forged, _ = make(em, tool("propose_replan", plan_id=other, kind="guest_count_change", new_guest_count=10), answer("x"))
+    forged.ask("replan this event please", pid, LOCAL_ORGANIZER)
+    assert forged.queue.pending(pid) == [] and forged.queue.pending(other) == []  # an extra field is refused by the schema, so no proposal exists anywhere
+    honest, _ = make(em, tool("propose_replan", kind="guest_count_change", new_guest_count=10), answer("filed", "propose_replan"))
+    r = honest.ask("replan this event please", pid, LOCAL_ORGANIZER)
+    assert [p.plan_id for p in r.proposals] == [pid] and honest.queue.pending(other) == [] and em.store.latest(other).version == 1
 
 
 def test_a_model_that_claims_a_proposal_was_applied_is_not_believed(em, pid):
@@ -86,8 +89,9 @@ def test_a_model_that_floods_tool_calls_is_stopped_at_the_step_cap(em, pid):
 
 
 def test_the_assistant_has_no_route_to_decide_its_own_proposal(em, pid):
-    a, _ = make(em, tool("propose_replan", kind="guest_count_change", guest_count=10), answer("x"))
+    a, _ = make(em, tool("propose_replan", kind="guest_count_change", new_guest_count=10), answer("x"))
     a.ask("replan this event please", pid, LOCAL_ORGANIZER)
+    assert a.queue.pending(pid), "the proposal exists, so the next assertions are about a live proposal"
     assert not any(t.name.startswith(("decide", "approve")) for t in a.tools.values())
     assert all(t.mutating is (t.name.startswith("propose_")) for t in a.tools.values())
 

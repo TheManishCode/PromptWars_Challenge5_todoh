@@ -76,6 +76,17 @@ def sanitize_label(text: object, limit: int = LABEL_MAX) -> str:
     return _HSPACE.sub(" ", clean.replace("\n", " ")).strip()[:limit].strip()
 
 
+_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b[\]P^_X][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b.?", re.S)
+
+
+def strip_terminal(text: object) -> str:
+    """Third-party text made safe to print to a terminal (red-team finding: an inbound email could carry escape sequences that rewrite earlier lines,
+    set the window title or, on some terminals, write the clipboard). Whole escape sequences go, then every control, format and bidi character;
+    line breaks and tabs become spaces so the text stays on its own line."""
+    clean = _ESCAPE.sub("", str(text))
+    return "".join(" " if ch in "\n\r\t" else ch for ch in clean if ch in "\n\r\t" or unicodedata.category(ch) not in ("Cc", "Cf", "Zl", "Zp"))
+
+
 def render_template(body: str, values: Mapping[str, str]) -> str:
     """Fill ``{name}`` placeholders in one pass. A value is never scanned again, so a value that contains ``{tools}`` stays literal text.
     Placeholders that are not in ``values`` are left as they are."""
