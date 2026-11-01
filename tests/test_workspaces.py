@@ -78,7 +78,8 @@ def test_creation_is_limited_per_address_and_globally_and_capped(tmp_path):
 
 
 def test_storage_growth_per_new_workspace_is_small_and_measured(tmp_path):
-    """Measured: an empty workspace is one database row plus three empty directories (its home, plans and logs). No file exists until it saves something."""
+    """Measured: an empty workspace is one database row, three empty directories (its home, plans and logs) and, since assistant approvals became durable (ADR-074), one
+    16 KB SQLite file for them. No other file exists until it saves something."""
     r = WorkspaceRegistry(tmp_path / "d", SECRET, create_per_address_per_hour=10_000, create_per_hour=10_000)
     r.create("a")
     db = tmp_path / "d" / "workspaces.db"
@@ -90,8 +91,10 @@ def test_storage_growth_per_new_workspace_is_small_and_measured(tmp_path):
     files = [p for p in (tmp_path / "d").rglob("*") if p.is_file()]
     allocated = sum(p.stat().st_blocks * 512 for p in dirs)
     assert (db.stat().st_size - before_db) / 200 < 512  # the row
-    assert len(dirs) == 201 * 3 and [f.name for f in files] == ["workspaces.db"]
-    assert allocated / 201 <= 16 * 1024, allocated / 201  # the directories: a few KB on a typical file system, so the cap of 1,000 workspaces is about 12 MB
+    assert len(dirs) == 201 * 3 and sorted(f.name for f in files) == ["assistant_approvals.db"] * 201 + ["workspaces.db"]
+    assert allocated / 201 <= 16 * 1024, allocated / 201  # the directories: a few KB on a typical file system
+    per_file = [f.stat().st_blocks * 512 for f in files if f.name == "assistant_approvals.db"]
+    assert max(per_file) <= 32 * 1024  # 16 KB each as measured, so the cap of 1,000 workspaces is about 16 MB of approval files plus the directories
 
 
 def test_only_empty_idle_workspaces_are_swept_and_one_with_data_never_is(tmp_path):
