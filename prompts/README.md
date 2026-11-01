@@ -4,7 +4,7 @@ Versioned Markdown prompts for EventMate agents live here, one file per prompt,
 named `<agent>.<purpose>.v<N>.md`. A prompt is never edited in place after it
 is used in a run: add `v<N+1>` instead, so logged LLM traces stay reproducible.
 
-Rules (see `AI_CODING_RULES.md`):
+Rules:
 
 - Prompts carry wording and output format only. No business logic, thresholds,
   prices, availability, capacities or booking status.

@@ -1,4 +1,4 @@
-"""Loads secrets from a local ``.env`` into the process environment (AI_CODING_RULES: keys come from the environment only).
+"""Loads secrets from a local ``.env`` into the process environment (keys come from the environment only).
 
 Only allow-listed names are read, values already set in the real environment win, and nothing here ever returns, logs or
 prints a value: callers get names and warnings. ``.env`` is git-ignored; keep it out of version control and shared drives.

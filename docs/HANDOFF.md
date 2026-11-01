@@ -1,6 +1,6 @@
 # to;doh-the event planner handoff
 
-Read this first, then `AI_CODING_RULES.md`, `DECISIONS.md`, `ROADMAP.md`. Update this file in the same
+Read this first, then `DECISIONS.md`, `ROADMAP.md`. Update this file in the same
 change as any code or decision change, and at the end of every session. Stale handoff = unfinished work.
 
 Last updated: 2026-11-01

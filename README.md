@@ -125,8 +125,7 @@ The current pass count, date and environment are recorded in [docs/HANDOFF.md](d
 | [docs/ROADMAP.md](docs/ROADMAP.md) | built, deferred and rejected |
 | [docs/RELEASE.md](docs/RELEASE.md) | release notes and decisions before going public |
 | [docs/ATTRIBUTIONS.md](docs/ATTRIBUTIONS.md) | licences of the 3D models and libraries |
-| [docs/archive/](docs/archive/) | internal build records (thread coordination, scorecard, readiness review) |
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [AI_CODING_RULES.md](AI_CODING_RULES.md). Every change ships with tests, including at least one adversarial test for each new input surface.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Every change ships with tests, including at least one adversarial test for each new input surface.

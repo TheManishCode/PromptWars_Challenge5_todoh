@@ -1,7 +1,7 @@
 # to;doh-the event planner decision log
 
 Append-only. Never edit or delete an accepted entry; supersede it with a new one
-(`Status: superseded by ADR-NNN`). Rule: `AI_CODING_RULES.md` → "Memory files".
+(`Status: superseded by ADR-NNN`).
 Format per entry: Status · Context · Decision · Why · Rejected alternatives · Consequences.
 
 Entry headings must be exactly `## ADR-NNN: title`, numbered consecutively (a test enforces this).
@@ -456,7 +456,7 @@ Decision:
 2. Multi-city is composed from separate one-way searches, in order, dates non-decreasing, at most 6 legs. The result says it is not a multi-city fare.
    A leg that fails is reported on that leg and removes the total; nothing is estimated. We did **not** try to forge Google's gated header: that is a
    bot-protection token, and bypassing it is not ours to do.
-3. Fares are indicative, never booked or paid by to;doh-the event planner (AI_CODING_RULES: records, never pays). Flight data does not enter plans or the Validator yet.
+3. Fares are indicative, never booked or paid by to;doh-the event planner (records, never pays). Flight data does not enter plans or the Validator yet.
 4. Venue discovery (next slice): Overpass/OSM first (free, no key). Results are `public_listing` candidates with source `tool:overpass`; they are never
    written into the vendor database as facts (ADR-006 rejected that) and carry no price or availability.
 5. Deferred, with reasons: Foursquare Places MCP needs an API key and its terms are unread; Foursquare OS Places is a very large dataset (a city slice
@@ -479,7 +479,7 @@ value with no variable name.
 Decision:
 1. `eventmate/env.py` loads `.env` (path: `EVENTMATE_ENV_FILE`, else `MultiAgentPlanning/.env`) into the process environment. Only names on a fixed
    allow-list are read; values already in the real environment win; the loader returns names and warnings, never values. It refuses a symlink, a
-   non-regular file or one over 64 KB, and warns when the file is readable by others. AI_CODING_RULES still holds: the application reads
+   non-regular file or one over 64 KB, and warns when the file is readable by others. The rule still holds: the application reads
    environment variables; `.env` is just how they get set locally. `.env` is git-ignored; `.env.example` (no values) is the template.
 2. The existing `.env` was reformatted to `OPENWEATHER_API_KEY=<value>`, mode 600. We assumed the bare value is the OpenWeather key, which is what the
    user said it was for; a 32-hex string matches that format but we could not confirm it.

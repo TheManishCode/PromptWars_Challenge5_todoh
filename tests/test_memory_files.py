@@ -1,10 +1,9 @@
-"""Guards the handoff/decision memory files (AI_CODING_RULES.md, "Memory files")."""
+"""Guards the handoff/decision memory files."""
 import re
 from datetime import date
 from pathlib import Path
 
 DOCS = Path(__file__).resolve().parents[1] / "docs"
-RULES = DOCS.parent / "AI_CODING_RULES.md"
 
 
 def _read(name: str) -> str:
@@ -38,6 +37,5 @@ def test_handoff_session_log_is_not_older_than_last_updated():
     assert newest and newest.group(1) == updated, "newest session-log entry must match 'Last updated'"
 
 
-def test_roadmap_exists_and_rules_reference_memory_files():
+def test_roadmap_exists():
     assert "Rejected" in _read("ROADMAP.md")
-    assert "## Memory files" in RULES.read_text(encoding="utf-8")
