@@ -1,6 +1,15 @@
-# to;doh-the event planner
+<p align="center"><img src="docs/assets/logo.svg" alt="to;doh the event planner" width="420"></p>
 
-**A constraint-verified planning copilot for weddings, birthdays and community events.**
+<p align="center"><b>A constraint-verified planning copilot for weddings, birthdays and community events.</b></p>
+
+<p align="center">
+<a href="https://github.com/TheManishCode/event-agent/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheManishCode/event-agent/actions/workflows/ci.yml/badge.svg"></a>
+<img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-3776ab">
+<img alt="Container" src="https://img.shields.io/badge/container-non--root%20%7C%20700%20MB-2496ed">
+<img alt="Accessibility" src="https://img.shields.io/badge/axe--core-0%20violations-8b5cf6">
+</p>
+
+<p align="center"><a href="#quick-start">Quick start</a> · <a href="#what-it-does">Features</a> · <a href="#guarantees-each-is-enforced-and-tested">Guarantees</a> · <a href="docs/DEMO.md">Demo</a> · <a href="#documentation">Docs</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
 
 to;doh-the event planner turns a plain-language brief into a plan with a budget, a timeline and a vendor checklist, and it only shows you a plan after an independent validator has re-checked every hard constraint. When constraints conflict it offers priced trade-offs instead of silently bending them. It can also write to vendors for you, read their replies, and keep a job moving over days, while every price stays a proposal until you confirm it.
 
@@ -100,23 +109,23 @@ The current pass count, date and environment are recorded in [docs/HANDOFF.md](d
 
 ## Documentation
 
-| | |
+| Start here | |
 |---|---|
-| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | environment variables, API keys, optional integrations |
-| [docs/EMAIL_SETUP.md](docs/EMAIL_SETUP.md) | mailbox setup, limits, how to stop everything |
-| [docs/EMAIL_VALIDATION.md](docs/EMAIL_VALIDATION.md) | the plan and record for a real-mailbox test (not yet run) |
 | [docs/DEMO.md](docs/DEMO.md) | a five-minute walkthrough |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | architecture decision records |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | what is built, deferred and rejected |
-| [docs/JOBS_DESIGN.md](docs/JOBS_DESIGN.md) | follow-through jobs design |
-| [docs/HANDOFF.md](docs/HANDOFF.md) | current state for the next contributor |
-| [docs/SCORECARD.md](docs/SCORECARD.md) | the six judged parameters, scored with evidence and what is missing |
-| [docs/RELEASE.md](docs/RELEASE.md) | release notes, owner decisions before deploying, deploy and rollback |
-| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | measured server and asset numbers, the budget, what was not measured |
-| [docs/GENAI.md](docs/GENAI.md) | where a model is used, what limits it, what happens without one |
-| [SECURITY.md](SECURITY.md) | reporting a vulnerability, what is defended and how it is checked |
-| [deploy/](deploy/) | compose stack, Prometheus alert rules, Grafana dashboard (`docs/RUNBOOK.md`) |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | how to contribute |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | environment variables, API keys, optional integrations |
+| [docs/HOSTING.md](docs/HOSTING.md) · [docs/RUNBOOK.md](docs/RUNBOOK.md) · [deploy/](deploy/) | run it for other people: container, compose stack, alerts, backups |
+| [docs/EMAIL_SETUP.md](docs/EMAIL_SETUP.md) | mailbox setup, limits, how to stop everything |
+
+| Understand it | |
+|---|---|
+| [docs/eventmate_architecture.md](docs/eventmate_architecture.md) · [docs/DECISIONS.md](docs/DECISIONS.md) | architecture and every decision record |
+| [docs/GENAI.md](docs/GENAI.md) · [docs/MODEL_INPUTS.md](docs/MODEL_INPUTS.md) | where a model is used and what it may see |
+| [docs/PRIVACY.md](docs/PRIVACY.md) · [SECURITY.md](SECURITY.md) · [docs/SECURITY_FINDINGS.md](docs/SECURITY_FINDINGS.md) | privacy, reporting a vulnerability, what was attacked and fixed |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | measured server and asset numbers |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | built, deferred and rejected |
+| [docs/RELEASE.md](docs/RELEASE.md) | release notes and decisions before going public |
+| [docs/ATTRIBUTIONS.md](docs/ATTRIBUTIONS.md) | licences of the 3D models and libraries |
+| [docs/archive/](docs/archive/) | internal build records (thread coordination, scorecard, readiness review) |
 
 ## Contributing
 

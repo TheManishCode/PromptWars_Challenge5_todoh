@@ -139,7 +139,7 @@ rupees, catering and photography". An infeasible brief (e.g. 20000 rupees for
 - Dev-machine preview may lack Fast Downward / VAL; in that case the dossier
   honestly shows the symbolic check as unavailable (amber), by design.
 - The room at `/` is the only interface. The classic page, its script and style, and the `<model-viewer>` that drew its avatar were removed on the owner's
-  instruction; `/arcade` redirects to `/`. Features that only the classic page had a screen for are listed in `docs/FRONTEND_INTEGRATION.md`.
+  instruction; `/arcade` redirects to `/`. Features that only the classic page had a screen for are listed in `docs/archive/FRONTEND_INTEGRATION.md`.
 - The scene targets desktop WebGL; mobile renders the same scene at reduced
   resolution with the chat overlay collapsing to a header bar.
 

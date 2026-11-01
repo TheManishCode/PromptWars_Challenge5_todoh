@@ -26,3 +26,5 @@ eventmate/workspaces/
 todoh-backup-*/
 deploy/prometheus/owner_token
 deploy/.env
+.hypothesis/
+.ruff_cache/
