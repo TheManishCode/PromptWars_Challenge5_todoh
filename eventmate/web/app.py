@@ -750,6 +750,11 @@ def create_app(
             raise ValueError("JSON object body required")
         return model.model_validate(data)
 
+    def no_body_or_empty_object() -> None:
+        """A DELETE that has nothing to say may carry no body at all (the page sends none); a body, if present, must still be an empty JSON object."""
+        if request.content_length:
+            body(EmptyBody)
+
     def pid(plan_id: str) -> str:
         if not _PLAN_ID.fullmatch(plan_id):
             raise ValueError("invalid plan id")
@@ -1639,7 +1644,7 @@ def create_app(
     @app.delete("/api/plans/<plan_id>/voice-notes/<note_id>")
     def voice_note_delete(plan_id, note_id):
         plan_id = pid(plan_id)
-        body(EmptyBody)
+        no_body_or_empty_object()
         with lock:
             em.store.latest(plan_id)
             return jsonify({"deleted": em.voice_notes.delete(plan_id, note_id)})
@@ -1677,7 +1682,7 @@ def create_app(
     @app.delete("/api/plans/<plan_id>/guests")
     def guests_delete(plan_id):
         plan_id = pid(plan_id)
-        body(EmptyBody)
+        no_body_or_empty_object()
         with lock:
             gone = em.guest_delete(plan_id)
         return jsonify({"deleted": gone})

@@ -2175,12 +2175,14 @@ async function wallReady() {
     return;
   }
   if (r.status !== 200 || !r.data) { wallLine("the wall did not answer"); return; }
-  wallui.skewMs = Date.now() - r.data.server_now * 1000;
+  // the backend sends ISO 8601 strings (docs/WALL.md); the first frontend build read them as epoch seconds and showed NaN
+  const wallTs = function (v) { return typeof v === "number" ? v * 1000 : Date.parse(v); };
+  wallui.skewMs = Date.now() - wallTs(r.data.server_now);
   wallui.phase = "go";
   wallRoundUi("go");
   const cd = $("#wall-countdown");
   if (r.data.deadline_at) {
-    wallui.deadlineLocal = r.data.deadline_at * 1000 + wallui.skewMs;
+    wallui.deadlineLocal = wallTs(r.data.deadline_at) + wallui.skewMs;
     clearInterval(wallui.timer);
     wallui.timer = setInterval(function () {
       const left = wallui.deadlineLocal - Date.now();

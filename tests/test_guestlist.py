@@ -511,3 +511,13 @@ def test_the_frontends_exact_request_bodies_pass_backend_validation(client, pid)
     assert post_json(client, "/api/voice/turns", turn).status_code == 200
     assert post_json(client, "/api/voice/turns/turn-0001/cancel", {"session_id": sid, "generation": 1, "playback_chars": 0}).status_code == 200
     assert client.delete(f"/api/voice/sessions/{sid}", headers=hdr(client)).status_code == 200
+
+
+def test_a_bodyless_delete_removes_the_list_as_the_page_sends_it_and_a_stray_body_is_still_refused(client, pid):
+    """The page calls DELETE with no body at all (found by running it in a browser); the backend tests only ever sent {}."""
+    commit_good(client, pid)
+    h = hdr(client)
+    assert client.delete(f"/api/plans/{pid}/guests", data='{"x": 1}', headers={**h, "Content-Type": "application/json"}).status_code == 422
+    assert client.get(f"/api/plans/{pid}/guests").get_json()["has_list"] is True
+    assert client.delete(f"/api/plans/{pid}/guests", headers=h).get_json() == {"deleted": True}
+    assert client.delete(f"/api/plans/{pid}/guests", headers={**h, "Content-Type": "application/json"}).get_json() == {"deleted": False}  # JSON type, no body: also fine
