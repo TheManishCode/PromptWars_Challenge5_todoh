@@ -124,7 +124,7 @@ def clean_hit_url(url: object) -> Optional[str]:
         return None
     try:
         parts = urllib.parse.urlsplit(url)
-        parts.port  # raises ValueError for a port outside 0-65535
+        _ = parts.port  # reading it raises ValueError for a port outside 0-65535
     except ValueError:
         return None
     host = parts.hostname or ""

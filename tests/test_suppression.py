@@ -19,6 +19,7 @@ from tests.mailfake import MailWorld
 from tests.test_conversations import Clock, FakeChannel
 from tests.test_jobs_worker import NoWhatsApp
 from eventmate.web.app import create_app
+from pydantic import ValidationError
 
 COLLEGE = "Plan a 150-person college fest in Pune on December 12 under INR 250,000. Venue and catering."
 SRC = "https://sharma-caterers.example/contact"
@@ -449,7 +450,7 @@ def test_a_suppression_record_is_validated():
     base = dict(suppression_id="s1", channel="email", value="a@b.example", reason="user", created_at=datetime.now(timezone.utc), created_by="Asha")
     Suppression(**base)
     for bad in ({"reason": "because"}, {"channel": "sms"}, {"lifted_at": datetime.now(timezone.utc)}, {"lifted_by": "Asha"}, {"lifted_at": datetime.now(timezone.utc), "lifted_by": "Asha"}, {"surprise": 1}):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             Suppression(**{**base, **bad})
 
 

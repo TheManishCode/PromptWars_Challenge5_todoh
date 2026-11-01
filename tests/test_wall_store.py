@@ -11,6 +11,7 @@ import pytest
 from eventmate.wall import layout
 from eventmate.wall.store import SCHEMA_VERSION, WallConfig, WallError, WallSchemaError, WallStore
 from tests.wall_helpers import make_wall, wall_db
+from zoneinfo import ZoneInfoNotFoundError
 
 
 def h(n):
@@ -813,7 +814,7 @@ def test_backup_restore_round_trip_and_export_public(tmp_path):
         assert forbidden not in text
     junk = tmp_path / "junk.db"
     junk.write_bytes(b"not a database")
-    with pytest.raises(Exception):
+    with pytest.raises(sqlite3.DatabaseError):
         restore_backup(junk, tmp_path / "nope.db")
 
 
@@ -861,5 +862,5 @@ def test_the_owner_can_change_the_main_settings_from_the_environment():
 @pytest.mark.parametrize("env", [{"EVENTMATE_WALL_CAPACITY": "301"}, {"EVENTMATE_WALL_CAPACITY": "0"}, {"EVENTMATE_WALL_CAPACITY": "-5"}, {"EVENTMATE_WALL_CAPACITY": "abc"}, {"EVENTMATE_WALL_MODERATION": "never"},
                                  {"EVENTMATE_WALL_ZONE": "Mars/Base"}, {"EVENTMATE_WALL_HALL_KIND": "year"}])
 def test_a_bad_setting_stops_the_app_at_start(env):
-    with pytest.raises(Exception):
+    with pytest.raises((ValueError, ZoneInfoNotFoundError)):
         WallConfig.from_env(env)

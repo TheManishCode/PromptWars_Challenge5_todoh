@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 dependencies = ["pydantic>=2.11", "ortools>=9.12", "flask>=3.1"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-cov", "pyflakes", "bandit", "playwright", "pip-audit"]
+dev = ["pytest>=8", "pytest-cov", "pyflakes", "ruff", "bandit", "playwright", "pip-audit"]
 flights = ["flights"]  # fli: Google Flights fares; optional
 serve = ["waitress>=3.0"]  # production server (ZPL-2.1): idle timeouts, connection limit, body limit; required for any non-loopback bind
 
@@ -27,3 +27,16 @@ eventmate = ["data/*.json", "data/*.txt", "data/knowledge/*", "web/static/*", "w
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-p no:cacheprovider"
+
+[tool.ruff]
+line-length = 200
+target-version = "py312"
+
+[tool.ruff.lint]
+# Bugs, not taste: pyflakes, bugbear and syntax errors. B007/B008/B905 are style here (an unused loop counter, a frozen policy object as a default, zip on equal lengths).
+select = ["F", "B", "E9"]
+ignore = ["B007", "B008", "B905"]
+
+[tool.ruff.lint.per-file-ignores]
+"tools/redteam/probe_parsers.py" = ["B023"]  # each lambda is called inside the iteration that defines it
+"tests/test_voice_turns.py" = ["B023"]  # the threads started in the loop are joined before the next iteration

@@ -10,6 +10,7 @@ from eventmate.logs import RunLogs
 from eventmate.schemas import EventType
 from eventmate.service import EventMate
 from tests.conftest import TODAY
+from pydantic import ValidationError
 
 BASE = "around 120 people in Pune on Dec 12, budget 2 lakh, venue and catering"
 
@@ -70,9 +71,9 @@ def test_the_user_can_change_the_subtype_on_the_review_card(logs):
 
 
 def test_a_subtype_that_is_not_in_the_profiles_is_refused():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         IntakeDraft(event_type=EventType.COMMUNITY, community_subtype="moon_base")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         IntakeDraft(event_type=EventType.COMMUNITY, community_subtype="Bad Subtype")
 
 

@@ -38,7 +38,7 @@ def test_unknown_or_malformed_credentials_open_nothing(registry, bad):
 
 def test_rotate_invalidates_the_old_credential_and_revoke_closes_the_workspace_without_deleting_data(registry):
     ws, old = registry.create("a")
-    ws.em.plan  # the workspace exists and can be built
+    _ = ws.em.plan  # the workspace exists and can be built
     new = registry.rotate(ws.id)
     assert registry.open(old) is None and registry.open(new).id == ws.id and new != old
     assert registry.revoke(ws.id) is True
@@ -238,7 +238,7 @@ def test_no_workspace_directory_is_readable_by_other_users_even_under_a_permissi
     try:
         r = WorkspaceRegistry(tmp_path / "d", SECRET, create_per_address_per_hour=1000, create_per_hour=1000)
         ws, _ = r.create("a")
-        ws.em.plan  # the workspace's own stores exist
+        _ = ws.em.plan  # the workspace's own stores exist
     finally:
         os.umask(old)
     bad = [str(p.relative_to(tmp_path)) for p in (tmp_path / "d").rglob("*") if p.is_dir() and stat.S_IMODE(p.stat().st_mode) & 0o077]

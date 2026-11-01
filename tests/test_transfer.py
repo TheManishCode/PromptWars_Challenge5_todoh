@@ -359,7 +359,7 @@ def test_after_a_plan_is_deleted_no_file_but_the_tombstone_holds_anything_of_it_
     home = tmp_path / "a"
     assert scan(home, FIXTURE + (pid,)) == []
     assert em.ledger_entries(keep)[0].note == "keep-me" and em.store.latest(keep).plan_id == keep
-    with pytest.raises(Exception):
+    with pytest.raises(FileNotFoundError):
         em.delete_plan(pid)  # gone: a second delete is a clean miss, not a crash
 
 

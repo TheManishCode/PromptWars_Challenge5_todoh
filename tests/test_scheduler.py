@@ -7,6 +7,7 @@ from eventmate.agents.scheduler import EventPolicy, SchedulingAgent
 from eventmate.cpsat import solve_schedule
 from eventmate.schemas import VendorCategory as C
 from tests.conftest import EXAMPLE, TODAY
+from pydantic import ValidationError
 
 ORIGIN = datetime(2026, 10, 30)
 ALL = (C.VENUE, C.CATERER, C.PHOTOGRAPHER)
@@ -124,7 +125,7 @@ def test_conference_uses_its_own_event_defaults(agent):
 
 def test_policy_rejects_nonsense():
     for kw in (dict(invitation_lead_days=-1), dict(booking_minutes=0), dict(setup_buffer_minutes=-5)):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             EventPolicy(**kw)
 
 

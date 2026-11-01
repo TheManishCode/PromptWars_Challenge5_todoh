@@ -9,6 +9,7 @@ from eventmate.schemas import Idea
 from eventmate.service import EventMate
 from tests.conftest import EXAMPLE, TODAY
 from tests.test_assistant import answer, make, tool
+from pydantic import ValidationError
 
 
 def idea(title, why="Fits the brief.", cost="low", kind="decor"):
@@ -37,7 +38,7 @@ def test_the_traditional_corner_is_kept_with_a_note_for_the_organiser_not_droppe
     assert idea_review_note(idea("Photo Booth with simple props")) == ""
     i = Idea(idea_id="i1", kind="decor", title=item["title"], why=item["why"], est_cost_note="low", fields_used=("event_type",), source="llm:x", review_note=note)
     assert i.review_note == note
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Idea(idea_id="i1", kind="decor", title="t", why="w", fields_used=("event_type",), source="llm:x", review_note="bad\x00note")
 
 

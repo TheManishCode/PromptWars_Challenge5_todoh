@@ -368,7 +368,7 @@ def test_bad_questions_and_unknown_plans_are_refused(em, pid):
     for q in ("", "   ", "x" * 1001):
         with pytest.raises(AssistantError):
             a.ask(q, pid, LOCAL_ORGANIZER)
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         a.ask("when is it", "../etc", LOCAL_ORGANIZER)
 
 

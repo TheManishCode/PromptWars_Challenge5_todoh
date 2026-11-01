@@ -278,7 +278,7 @@ def test_the_real_arcade_page_builds_a_plan_attaches_a_guest_list_and_every_api_
         try:
             until(page, "document.body.innerText.includes('The saved list was removed')", 8)
         except AssertionError:
-            raise AssertionError(f"REMOVE LIST did not remove: calls {[c for c in calls if 'guests' in c[1]]}; page says {page.inner_text('.gprev-note') if page.locator('.gprev-note').count() else page.inner_text('#paper-inner')[-300:]}")
+            raise AssertionError(f"REMOVE LIST did not remove: calls {[c for c in calls if 'guests' in c[1]]}; page says {page.inner_text('.gprev-note') if page.locator('.gprev-note').count() else page.inner_text('#paper-inner')[-300:]}") from None
         # a hostile file: a formula hidden behind a zero-width space. The page's own checker and the server must agree it is not importable
         hostile = "name,party_size,rsvp,dietary\n\u200b=HYPERLINK(1),2,yes,\nRavi,1,pending,\n".encode()
         page.set_input_files("#attach-file", files=[{"name": "bad.csv", "mimeType": "text/csv", "buffer": hostile}])
