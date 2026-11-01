@@ -651,7 +651,7 @@ def create_app(
 
     @app.errorhandler(FileNotFoundError)
     def _nf(exc):
-        return _err(404, "not found")
+        return _err(404, "not found", code="not_found")
 
     @app.errorhandler(PlanIntegrityError)
     def _integrity(exc):
@@ -1845,6 +1845,24 @@ def create_app(
     # The agent's background loop: send what is approved and read replies. Off unless a channel is set up (or EVENTMATE_POLL_SECONDS says otherwise).
     if shared:
         poll_seconds = 0.0  # visitors have no mailbox or gateway; there is nothing to poll or send
+
+        def sweep_round() -> int:
+            """Empty workspaces nobody has used for a few hours go, so a flood of throwaway workspaces cannot hold every slot. One that holds any data is never removed here."""
+            hours = max(1, int(os.environ.get("EVENTMATE_WS_EMPTY_IDLE_HOURS", "6") or 6))
+            return len(registry.sweep_idle_empty(hours * 3600))
+
+        app.config["WORKSPACE_SWEEP"] = sweep_round
+        sweep_every = float(os.environ.get("EVENTMATE_WS_SWEEP_SECONDS", "600") or 600)
+        if sweep_every > 0:
+            def sweep_loop():
+                while True:
+                    time.sleep(sweep_every)
+                    try:
+                        sweep_round()
+                    except Exception as exc:  # one failed sweep must not end the loop
+                        print(f"workspace sweep failed: {type(exc).__name__}", file=sys.stderr)
+
+            threading.Thread(target=sweep_loop, name="eventmate-workspace-sweep", daemon=True).start()
     elif poll_seconds is None:
         raw = os.environ.get("EVENTMATE_POLL_SECONDS", "").strip()
         ready = any(c.status().can_send or c.status().can_receive for c in local.em.conversations.channels.values())

@@ -207,3 +207,20 @@ def test_the_cookie_is_scoped_to_the_workspace_never_to_a_domain_and_the_json_ne
     credential = r.headers["Set-Cookie"].split("todoh_ws=", 1)[1].split(";", 1)[0]
     assert credential not in r.get_data(as_text=True)
     assert all(credential not in str(h) for k, h in r.headers if k.lower() != "set-cookie")
+
+
+def test_the_app_sweeps_empty_idle_workspaces_by_itself_and_never_one_with_data(tmp_path, monkeypatch):
+    monkeypatch.setenv("EVENTMATE_WS_SWEEP_SECONDS", "0")  # no background thread: the round is driven by hand
+    monkeypatch.setenv("EVENTMATE_WS_EMPTY_IDLE_HOURS", "1")
+    from eventmate.web.app import create_app
+    from tests.conftest import TODAY
+
+    now = [1_000_000.0]
+    registry = WorkspaceRegistry(tmp_path / "d", SECRET, clock=lambda: now[0], create_per_address_per_hour=1000, create_per_hour=1000)
+    app = create_app(registry=registry, allowed_hosts={HOST}, today_fn=lambda: TODAY)
+    throwaway, _ = registry.create("a")
+    kept, _ = registry.create("b")
+    (registry.home(kept.id) / "plans" / "plan-x-v0001.json").write_text("{}")
+    now[0] += 2 * 3600
+    assert app.config["WORKSPACE_SWEEP"]() == 1
+    assert not registry.directory.exists(throwaway.id) and registry.directory.exists(kept.id)
