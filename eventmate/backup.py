@@ -71,6 +71,10 @@ def make_backup(data_dir: Path, destination: Path, now: Optional[datetime] = Non
             target = out / path.relative_to(data_dir)
             if path.is_dir():
                 target.mkdir(parents=True, exist_ok=True, mode=0o700)
+            elif path.name.endswith(("-wal", "-shm", "-journal")):
+                continue  # a SQLite side file is part of its database and is never copied on its own: the database is copied below with SQLite's own backup
+            elif path.name.endswith(".db"):
+                _copy_db(path, target)  # jobs.db and any other per-workspace database: a raw copy of a live WAL database can mix two moments and be torn (F-017)
             elif path.is_file():
                 target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 shutil.copy2(path, target)
@@ -93,7 +97,12 @@ def verify_backup(backup: Path) -> List[str]:
             return [f"unsupported backup version {manifest['schema_version']}"]
     except (OSError, ValueError, KeyError, TypeError):
         return ["the manifest is missing or unreadable"]
-    problems = [f"missing: {rel}" for rel in listed if not (backup / rel).is_file()]
+    root = backup.resolve()
+    outside = [rel for rel in listed if Path(rel).is_absolute() or ".." in Path(rel).parts or root not in (backup / rel).resolve().parents]
+    if outside:
+        return [f"the manifest names a file outside the backup: {outside[0][:80]}"]  # nothing outside the backup is ever read or hashed on the manifest's say-so
+    problems = [f"a link in the backup: {p.relative_to(backup)}" for p in backup.rglob("*") if p.is_symlink()]  # a backup is files and folders only; restoring a link would copy what it points at
+    problems += [f"missing: {rel}" for rel in listed if not (backup / rel).is_file()]
     problems += [f"changed: {rel}" for rel, digest in listed.items() if (backup / rel).is_file() and _sha(backup / rel) != digest]
     present = {str(p.relative_to(backup)) for p in backup.rglob("*") if p.is_file() and p.name != "MANIFEST.json"}
     problems += [f"not in the manifest: {rel}" for rel in sorted(present - set(listed))]
