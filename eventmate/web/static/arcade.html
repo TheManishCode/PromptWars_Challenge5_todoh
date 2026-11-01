@@ -11,9 +11,10 @@
 
 <!-- ======================= the dark arcade (3D layer) ======================= -->
 <canvas id="gl" aria-hidden="true"></canvas>
-<div id="gl-fallback" hidden>
-  <p>The 3D floor needs WebGL, which this browser refused. The engine is unchanged —
-  the classic interface at <a href="/">/</a> runs the same verified pipeline.</p>
+<div id="gl-fallback" hidden role="region" aria-label="Text-only mode">
+  <p><strong>Text-only mode.</strong> This browser did not give the page WebGL, so the 3D room is switched off.
+  Nothing else changes: describe your event in the box below, check the brief, press BUILD MY PLAN, and the same
+  verified planner returns the same dossier (plan, overview, ideas, timeline, budget).</p>
 </div>
 
 <div id="replay-banner" hidden>REPLAY — the run already finished · re-lighting its recorded timings, slowed for display</div>
@@ -60,6 +61,17 @@
   <p id="hint">Verified-planning engine behind the glass · nothing is booked, sent or paid</p>
 </main>
 
+<!-- the room is a canvas: every view a tap opens has a real button here, shown only while the keyboard is on it -->
+<nav id="room-nav" aria-label="Room views">
+  <span id="room-nav-label">Explore the room</span>
+  <button type="button" data-view="wall">Signature wall</button>
+  <button type="button" data-view="holo" hidden>Hall of Fame table</button>
+  <span id="room-nav-vend"></span>
+  <button type="button" data-view="dossier">Secret dossier</button>
+  <button type="button" id="room-back" data-view="back" hidden>Back to the room</button>
+</nav>
+<div id="sr-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+
 <!-- signature wall panel: only visible while the wall is focused -->
 <section id="wall-panel" hidden aria-label="signature wall">
   <p id="wall-status" role="status"></p>
@@ -68,6 +80,13 @@
     <button id="wall-sign-btn" type="button">SIGN</button>
   </div>
   <p id="wall-minebox" hidden><span id="wall-mine"></span></p>
+  <div id="wall-pager" hidden>
+    <button id="wall-prev" type="button" aria-label="previous section of the wall">&lsaquo;</button>
+    <span id="wall-pageinfo" aria-live="polite"></span>
+    <button id="wall-next" type="button" aria-label="next section of the wall">&rsaquo;</button>
+  </div>
+  <ul id="wall-names" class="sr-only" aria-label="names on this section of the wall"></ul>
+  <div id="wall-cells" class="sr-only" role="group" aria-label="board spots - the same spots as the canvas"></div>
   <div id="wall-challenge" hidden>
     <div id="wall-startrow">
       <button id="wall-start-timed" type="button" title="find your moved name before the clock runs out - ranked">TIMED</button>
@@ -90,8 +109,8 @@
 <ol id="hall-list" class="sr-only" aria-live="polite" aria-label="Hall of Fame fastest five"></ol>
 
 <!-- ======================= result layer ======================= -->
-<div id="flight-layer" hidden>
-  <article id="paper" class="paper">
+<div id="flight-layer" hidden role="dialog" aria-modal="false" aria-label="Plan dossier">
+  <article id="paper" class="paper" tabindex="-1">
     <div class="paper-inner" id="paper-inner"></div>
     <div class="glass-shine"></div>
   </article>
@@ -113,6 +132,6 @@
     <button id="credits-toggle" type="button" aria-expanded="false">CREDITS &amp; LICENSES</button>
     <span class="credits-line">Cabinet: PacMan Arcade Machine (CC BY 4.0) &middot; attendant: Polytoria Avatar V3 Pauly (CC BY 4.0) &middot; 3D: three.js (MIT)</span>
   </footer>
-    <div id="credits-panel" hidden>Cabinet: <a href="https://sketchfab.com/3d-models/pacman-arcade-machine-297816a91a0947fb9dc917741d4c0be4" target="_blank" rel="noopener noreferrer">PacMan Arcade Machine</a> by <a href="https://sketchfab.com/matthew.leiher" target="_blank" rel="noopener noreferrer">Matthew</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> (side and kick-plate wordmark lettered TODOH; screen shows a todoh pipeline visualization); attendant: <a href="https://sketchfab.com/3d-models/polytoria-avatar-v3-pauly-2c1fbaf2dec1411ca1ae5bfd0afaaa9e" target="_blank" rel="noopener noreferrer">Polytoria Avatar V3 Pauly</a> by <a href="https://sketchfab.com/beachr267" target="_blank" rel="noopener noreferrer">dantheman</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. 3D library: three.js, MIT.</div>
+    <div id="credits-panel" hidden role="region" aria-label="Credits and licenses">Cabinet: <a href="https://sketchfab.com/3d-models/pacman-arcade-machine-297816a91a0947fb9dc917741d4c0be4" target="_blank" rel="noopener noreferrer">PacMan Arcade Machine</a> by <a href="https://sketchfab.com/matthew.leiher" target="_blank" rel="noopener noreferrer">Matthew</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> (side and kick-plate wordmark lettered TODOH; screen shows a todoh pipeline visualization); attendant: <a href="https://sketchfab.com/3d-models/polytoria-avatar-v3-pauly-2c1fbaf2dec1411ca1ae5bfd0afaaa9e" target="_blank" rel="noopener noreferrer">Polytoria Avatar V3 Pauly</a> by <a href="https://sketchfab.com/beachr267" target="_blank" rel="noopener noreferrer">dantheman</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. 3D library: three.js, MIT.</div>
 </body>
 </html>

@@ -35,6 +35,36 @@ body {
 }
 #gl-fallback[hidden] { display: none; }
 #gl-fallback a { color: var(--blue); }
+/* text-only mode (no WebGL): the notice is a banner above the chat, not a full-screen layer hiding behind it */
+body.no-gl #gl-fallback {
+  inset: 0 0 auto 0; align-items: flex-start; justify-content: flex-start; text-align: left;
+  padding: 14px 18px; border-bottom: 1px solid var(--line, #1b3a4d); font-size: 13px; color: #c3d3de; z-index: 30;
+}
+
+/* ============================ keyboard focus and room views ============================ */
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.paper :focus-visible { outline-color: var(--paper-ink); }
+#paper:focus { outline: none; } /* the page itself takes focus programmatically; its controls show the ring */
+/* the room views are a canvas's keyboard twin: invisible to a pointer, a bar over the room while the keyboard is on it */
+#room-nav:not(:focus-within) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+#room-nav:focus-within {
+  position: fixed; top: 10px; left: 10px; right: 10px; z-index: 45;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  background: rgba(4, 8, 14, .96); border: 1px solid var(--blue); border-radius: 12px; padding: 8px 12px;
+}
+#room-nav[hidden] { display: none; }
+#room-nav-label { color: #c3d3de; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; margin-right: 4px; }
+#room-nav-vend { display: contents; }
+#room-nav button { background: transparent; color: var(--ink); border: 1px solid #2e5a7a; border-radius: 8px; padding: 10px 14px; min-height: 44px; font: inherit; font-size: 13px; cursor: pointer; }
+#room-nav button:disabled { opacity: .55; cursor: default; }
+#room-nav button[hidden] { display: none; }
+#wall-pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 6px 0; }
+#wall-pager[hidden] { display: none; }
+#wall-pager button { min-width: 44px; min-height: 44px; }
+#wall-pager button:disabled { opacity: .5; cursor: default; }
+#wall-pageinfo { min-width: 9em; }
+
+#composer input::placeholder { color: #9fb0c3; opacity: 1; }
 
 /* ============================ replay banner + caption ============================ */
 #replay-banner {
@@ -65,11 +95,17 @@ body {
   padding: 0 10px calc(8px + env(safe-area-inset-bottom, 0px));
 }
 #chat > * { pointer-events: auto; }
+/* a soft dark floor under the chat strip: the room behind it is bright in places (the van, the lit floor) and no text colour is legible on every pixel of it.
+   It lives on the body, below the paper, the panels and the chat, so it never dims a page that is open over it. */
+body::after {
+  content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 200px; z-index: 8; pointer-events: none;
+  background: linear-gradient(to top, rgba(3, 6, 12, .86) 0%, rgba(3, 6, 12, .74) 45%, rgba(3, 6, 12, 0) 100%);
+}
 #chat.collapsed #log, #chat.collapsed #review, #chat.collapsed #hint { display: none; }
 #chat header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 4px 6px; border-bottom: 0;
-  background: transparent; text-shadow: 0 1px 4px rgba(0, 0, 0, .85);
+  background: rgba(3, 6, 12, .68); border-radius: 10px 10px 0 0; text-shadow: 0 1px 4px rgba(0, 0, 0, .85); /* a dark strip: the title is read over a bright room */
 }
 #chat h1 { font-size: 12px; letter-spacing: .28em; color: var(--ink); font-weight: 600; }
 #chat h1 .dot { color: var(--blue); margin: 0 6px; }
@@ -149,18 +185,18 @@ body {
 }
 #composer button svg { width: 17px; height: 17px; display: block; margin: 10px 0; }
 #composer button:hover { background: rgba(20, 48, 73, .5); }
-#hint { padding: 5px 8px 0; font-size: 9.5px; letter-spacing: .08em; color: #43536a; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+#hint { padding: 5px 8px 0; font-size: 10.5px; letter-spacing: .08em; color: #9fb0c3; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
 
 /* ============================ the paper ============================ */
 #flight-layer {
   position: fixed; inset: 0; z-index: 30;
   display: flex; align-items: center; justify-content: center;
-  padding-bottom: 114px; /* keep every sheet section + action above the persistent AI bar (84px bar + 30px credits strip) */
+  padding-bottom: calc(var(--bar-h, 150px) + 14px); /* --bar-h is the measured height of the chat strip plus the credits line (arcade.js): the page always ends above it, at any size */
   background: rgba(2, 4, 8, .45);
 }
 #flight-layer[hidden] { display: none; }
 .paper {
-  position: relative; width: min(720px, 92vw); max-height: min(88vh, calc(100vh - 110px)); overflow-y: auto;
+  position: relative; width: min(720px, 92vw); max-height: min(88vh, calc(100vh - var(--bar-h, 150px) - 40px)); overflow-y: auto;
   background:
     linear-gradient(160deg, rgba(0, 0, 0, .06), transparent 30%),
     var(--paper);
@@ -184,6 +220,7 @@ body {
 .paper .sub { font-size: 10.5px; color: #6b6350; margin: 6px 0 16px; letter-spacing: .06em; }
 .paper h2 { font-size: 11.5px; letter-spacing: .22em; margin: 18px 0 6px; color: #4c4636; }
 .paper table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.paper .tbl-scroll { overflow-x: auto; }
 .paper th { text-align: left; font-size: 9.5px; letter-spacing: .14em; color: #6b6350; border-bottom: 1px solid #b3a888; padding: 4px 6px; }
 .paper td { border-bottom: 1px dotted #c6bb9e; padding: 4px 6px; vertical-align: top; }
 .paper td.num, .paper th.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -202,11 +239,11 @@ body {
 .paper .stamp {
   position: sticky; top: 10px; margin-left: auto; margin-right: 8px; width: max-content;
   transform: rotate(8deg); z-index: 3; background: rgba(245, 238, 216, .92);
-  border: 2px solid #2a6a3a; color: #2a6a3a; border-radius: 4px;
-  font-size: 11px; letter-spacing: .22em; padding: 4px 10px; opacity: .85;
+  border: 2px solid #1f5a2e; color: #1f5a2e; border-radius: 4px;
+  font-size: 11px; letter-spacing: .22em; padding: 4px 10px; opacity: .92;
 }
-.paper .stamp.jam { border-color: #8a2626; color: #8a2626; }
-.paper .stamp.warn { border-color: #8a5a12; color: #8a5a12; }
+.paper .stamp.jam { border-color: #7d2020; color: #7d2020; }
+.paper .stamp.warn { border-color: #7a4d0c; color: #7a4d0c; }
 .paper .ribbon {
   margin-top: 10px; padding: 6px 10px; border: 1px dashed #8a5a12; border-radius: 4px;
   color: #8a5a12; font-size: 10.5px; letter-spacing: .05em;
@@ -254,10 +291,8 @@ body {
   #chat header { flex-wrap: wrap; row-gap: 4px; }
   #chat h1 { letter-spacing: .14em; font-size: 11px; }
   #conn { font-size: 8px; max-width: 90px; }
-  #flight-layer { padding-bottom: 132px; }
   .paper-inner { padding: 20px 16px 18px; }
-  .paper { max-height: calc(100vh - 160px); }
-  .paper table { font-size: 10px; display: block; overflow-x: auto; }
+  .paper table { font-size: 10px; }
   .paper h1 { font-size: 14px; }
   #stage-caption { top: auto; bottom: 2%; font-size: 10px; letter-spacing: .2em; }
   #replay-banner { font-size: 9px; max-width: 92vw; text-align: center; }
@@ -269,8 +304,6 @@ body {
   #composer input { flex: 1 1 auto; order: 0; min-width: 0; text-overflow: ellipsis; }
   #composer input::placeholder { text-overflow: ellipsis; }
   #composer button { flex: 0 0 38px; width: 38px; padding: 0; }
-  #flight-layer { padding-bottom: 96px; }
-  .paper { max-height: calc(100vh - 128px); }
 }
 
 /* short viewports at any width: compact single-row composer, sheet kept clear of the bar */
@@ -280,13 +313,13 @@ body {
   #composer button { padding: 2px 10px; }
   #composer button svg { margin: 3px 0; width: 14px; height: 14px; }
   #hint { display: none; }
-  #flight-layer { padding-bottom: 108px; }
-  .paper { max-height: calc(100vh - 136px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .paper.stuck { animation: none; }
   #chat { transition: none; }
+  .vp-dot { animation: none; } /* the recording dot stays lit instead of pulsing */
+  .vp-meter > i { transition: none; }
 }
 
 
@@ -313,7 +346,7 @@ body {
   padding: 10px 14px calc(8px + env(safe-area-inset-bottom, 0px));
 }
 #credits-panel[hidden] { display: none; }
-.arcade-credits a { color: #5aa7c9; }
+.arcade-credits a, #credits-panel a { color: #7cc4e4; }
 
 /* film grain + vignette over the 3D layer (runtime-generated noise, CSP-safe) */
 #film {
@@ -384,12 +417,12 @@ body.dossier-focus #hint{display:none}
 /* signature wall focus panel */
 body.wall-focus #chat{display:none}
 body.wall-focus #hint{display:none}
-#wall-panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:40;min-width:320px;max-width:92vw;background:rgba(72,76,90,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border:1px solid rgba(226,222,206,.22);border-radius:10px;padding:12px 16px;color:#e6e2d2;font-family:var(--mono);font-size:13px;text-align:center}
+#wall-panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:40;min-width:320px;max-width:92vw;background:rgba(24,28,40,.84);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border:1px solid rgba(226,222,206,.22);border-radius:10px;padding:12px 16px;color:#e6e2d2;font-family:var(--mono);font-size:13px;text-align:center}
 #wall-panel p{margin:6px 0}
 #wall-status{color:#d8d3c0;min-height:1.2em}
 #wall-signbox{display:flex;gap:8px;justify-content:center;margin-top:6px}
 #wall-name{background:#0b1018;border:1px solid #223046;border-radius:6px;color:#e8e2d0;font:inherit;padding:7px 10px;width:200px}
-#wall-panel button{background:transparent;color:var(--dim);border:1px solid #223046;border-radius:6px;padding:7px 14px;cursor:pointer;font:inherit;letter-spacing:.1em}
+#wall-panel button{background:transparent;color:#d7dee6;border:1px solid #223046;border-radius:6px;padding:7px 14px;cursor:pointer;font:inherit;letter-spacing:.1em}
 #wall-panel button:hover{color:var(--blue);border-color:#2e5a7a}
 #wall-readybtn{margin-top:6px;color:#ffb54d;border-color:#5a4326}
 #wall-waitline{color:#ffb54d}
@@ -402,6 +435,7 @@ body.wall-focus #hint{display:none}
 
 /* the hidden attribute must always win over the panel display rules */
 #wall-panel [hidden]{display:none !important}
+#wall-name::placeholder{color:#a9b4c2;opacity:1}
 
 /* migrated plan tabs on the paper */
 .sheet-nav { flex-wrap: wrap; row-gap: 6px; justify-content: flex-start; margin-right: 150px; }
@@ -426,6 +460,7 @@ body.wall-focus #hint{display:none}
 .paper .pv-donut { width: 110px; height: 110px; border-radius: 50%; flex: none; }
 .paper .pv-legend p { display: flex; align-items: center; gap: 7px; margin: 2px 0; font-size: 12px; }
 .paper .pv-legend i { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.paper .pv-input::placeholder { color: #5f5948; opacity: 1; }
 .paper .pv-input { width: 100%; box-sizing: border-box; background: rgba(255,255,255,.55); border: 1px solid rgba(58,53,43,.5); border-radius: 3px; padding: 6px 9px; font: inherit; font-size: 12px; color: #26211a; }
 .paper .pv-btn { background: none; border: 1px solid rgba(58,53,43,.65); border-radius: 3px; padding: 5px 12px; font: inherit; font-size: 11px; letter-spacing: .12em; color: #26211a; cursor: pointer; }
 .paper .pv-btn:hover { background: rgba(58,53,43,.08); }
@@ -438,7 +473,7 @@ body.wall-focus #hint{display:none}
 .paper .pv-q { align-self: flex-end; background: rgba(58,53,43,.12); border-radius: 3px; padding: 6px 10px; font-size: 12px; max-width: 85%; }
 .paper .pv-a { align-self: flex-start; border-left: 3px double rgba(58,53,43,.5); padding: 6px 10px; font-size: 12px; max-width: 92%; white-space: pre-wrap; }
 .paper .pv-askmeta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
-.paper .pv-chip { border: 1px solid rgba(58,53,43,.5); border-radius: 3px; padding: 1px 7px; font-size: 10px; color: #4c4436; }
+.paper .pv-chip { border: 1px solid rgba(58,53,43,.5); border-radius: 3px; padding: 1px 7px; font-size: 10px; color: #3a3326; }
 .paper .pv-chip.ok { border-color: #2e6b34; color: #2e6b34; }
 .paper .pv-chip.warn { border-color: #b03a2e; color: #b03a2e; }
 .paper .pv-prop { border: 1px dashed rgba(58,53,43,.6); border-radius: 3px; padding: 5px 9px; margin-top: 6px; font-size: 11px; color: #4c4436; }
@@ -464,8 +499,27 @@ body.wall-focus #hint{display:none}
 .paper .pv-verrow:hover td { background: rgba(58,53,43,.08); }
 
 /* during the tap window the panel collapses to a thin status strip so it cannot cover board cells */
-body.wall-focus.wall-phase-go #wall-panel { min-width: 0; padding: 6px 14px; opacity: .92; }
+body.wall-focus.wall-phase-go #wall-panel { min-width: 0; padding: 6px 14px; }
 body.wall-focus.wall-phase-go #wall-panel #wall-minebox,
 body.wall-focus.wall-phase-go #wall-panel #wall-hallstate { display: none; }
 #cat-load.done { color: var(--blue); border-color: #2e5a7a; opacity: .8; }
 #cat-load.failed { opacity: .35; }
+
+
+/* ============================ target size ============================
+   WCAG 2.2 AA (2.5.8): every control is at least 24 CSS px each way. On a touch screen (coarse pointer) it is 44, the size of a fingertip. */
+.paper .pv-btn, .paper .sheet-tab, .paper .paper-close, .paper .pv-input, .paper select { min-height: 24px; }
+.paper details summary { min-height: 24px; padding: 4px 0; }
+.arcade-credits #credits-toggle { min-height: 24px; }
+#chat-toggle, #sound-toggle, #cat-load { min-height: 28px; }
+@media (pointer: coarse) {
+  #chat-toggle, #sound-toggle, #cat-load, #composer button, #build, .chip, #voice-panel button, #wall-panel button, #wall-panel input,
+  .paper .pv-btn, .paper .sheet-tab, .paper .paper-close, .paper .pv-input, .paper select, .paper details summary { min-width: 44px; min-height: 44px; }
+  #composer input { min-height: 44px; }
+  #composer button { flex: 0 0 44px; width: 44px; }
+  .arcade-credits #credits-toggle { min-height: 44px; padding-top: 6px; padding-bottom: 6px; }
+  .arcade-credits { padding-top: 2px; padding-bottom: calc(2px + env(safe-area-inset-bottom, 0px)); }
+  #chat { bottom: 52px; }
+  #credits-panel { bottom: 50px; }
+  .paper details summary { display: flex; align-items: center; }
+}
