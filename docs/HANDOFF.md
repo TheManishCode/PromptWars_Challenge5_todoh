@@ -9,7 +9,7 @@ Updated by: Claude (thread C: the wall and a red-team pass: ADR-059, ADR-060, AD
 ## Current state
 
 - Package: `eventmate/` (sibling of `src/llm_plan`, which is untouched). Python venv at `.venv`.
-- Tests: `python -m pytest tests` → **2509 passed, 0 failed, 1 skipped** (the one skip is the opt-in real-engine voice test, which needs an engine the owner has installed) (Python 3.14.8, with Fast Downward, VAL and Chromium present; 2026-11-01; includes the Chromium end-to-end tests). Without the solver variables most planning tests error, by design.
+- Tests: `python -m pytest tests` → **3029 passed, 0 failed, 1 skipped, 4 xfailed** on branch `feature/wall-and-pentest` (the one skip is the opt-in real-engine voice test; the 4 xfails are the strict F-001 marks that thread B's fix removes) (Python 3.14.8, with Fast Downward, VAL and Chromium present; 2026-11-01, 302 s; includes the Chromium end-to-end tests). Without the solver variables most planning tests error, by design. Of these, 65 + 68 + 40 + 6 are the wall (names, store, API, admin), 5 serving and 336 under `tests/pentest/`.
 - Git: this repository (`event-agent`) is the home of the code. Tests live in `tests/`; the package is grouped into `planning`, `pricing`, `messaging`, `followthrough`, `integrations`, `agents`, `assistant`, `web`.
 
 ### Roadmap progress (rows count only with passing tests)
