@@ -366,7 +366,11 @@ window.Arcade3D = (function () {
     obj.position.y -= b.min.y - (baseY || 0);
   }
 
+  /* The road theatre needs road.glb, car.glb and barrier.glb, which are optional and not shipped (docs/ATTRIBUTIONS.md). It is switched on by the page, not guessed:
+     <html data-road-assets="1"> once the three files exist. Without it there is no second WebGL context (a real cost on a phone) and no request that can only 404;
+     the cabinet screen says the theatre is not installed. */
   function trackSetup() {
+    if (document.documentElement.dataset.roadAssets !== "1") { TRK.absent = true; TRK.error = "the road theatre models are not installed"; return; }
     const c = document.createElement("canvas");
     const ss = S.lowFx ? 1 : 1.5; // supersample: the CRT magnifies this
     c.width = Math.round(TV.w * ss); c.height = Math.round(TV.h * ss);
@@ -678,11 +682,11 @@ window.Arcade3D = (function () {
       x.textAlign = "center";
       x.font = "bold 26px ui-monospace, Menlo, Consolas, monospace";
       x.fillStyle = "#3a4a5c";
-      x.fillText(TRK.error ? "ROAD ASSETS FAILED TO LOAD" : "WARMING UP THE ROAD…",
+      x.fillText(TRK.absent ? "ROAD THEATRE NOT INSTALLED" : TRK.error ? "ROAD ASSETS FAILED TO LOAD" : "WARMING UP THE ROAD…",
         TV.x + TV.w / 2, TV.y + TV.h / 2 - 6);
       if (TRK.error) {
         x.font = "17px ui-monospace, Menlo, Consolas, monospace";
-        x.fillStyle = "#ff8a8a";
+        x.fillStyle = TRK.absent ? "#7d8ea0" : "#ff8a8a";
         x.fillText(String(TRK.error).slice(0, 90), TV.x + TV.w / 2, TV.y + TV.h / 2 + 24);
       }
     }
@@ -1679,7 +1683,7 @@ window.Arcade3D = (function () {
     const loader = new THREE.GLTFLoader();
     const put = function (url, opts, onPlaced, prio) {
       lazy(prio == null ? 2 : prio, function () {
-        loader.load(url, function (g) { const grp = propPrep(g.scene, opts); sc.add(grp); if (onPlaced) onPlaced(false, grp); }, undefined,
+        loader.load(url, function (g) { const grp = propPrep(g.scene, opts); sc.add(grp); if (S.rearm) S.rearm(); if (onPlaced) onPlaced(false, grp); }, undefined,
           function () { /* prop missing: the den still works */ if (onPlaced) onPlaced(true); });
       });
     };
@@ -2452,21 +2456,33 @@ window.Arcade3D = (function () {
     let frameNo = 0;
     const frameTimes = [];
     let lastNow = 0;
+    // the duration of the last 150 frames, for frameStats() and the ladder's tests; a gap over 1 s is a hidden tab or a stall, not a frame (a 300 ms frame IS a frame: that is the slow device)
+    const ring = new Float32Array(150);
+    let ringN = 0, ringAt = 0, ringLast = 0;
+    const pct = function (sorted, q) { return sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))] : 0; };
+    S.frameStats = function () {
+      const a = Array.prototype.slice.call(ring, 0, ringN).sort(function (x, y) { return x - y; });
+      return { n: ringN, p50: pct(a, 0.5), p95: pct(a, 0.95), max: a.length ? a[a.length - 1] : 0, tier: S.tier, ladder: S.ladder || 0, lowFx: !!S.lowFx, pixelRatio: S.renderer.getPixelRatio() };
+    };
+    // a heavy prop that arrives after the first check can make a device that passed it too slow: look again, until the light path is already in force
+    S.rearm = function () { if (!S.lowFx) { S.fxChecked = false; frameTimes.length = 0; lastNow = 0; } };
     const loop = function () {
       requestAnimationFrame(loop);
       frameNo++;
       const now = performance.now();
-      // auto-degrade ladder for slow devices. Sustained slow frames first drop the render density to 75% (bloom stays); if the next 90 frames are still slow, take the
-      // light path (pixel ratio 1, no bloom, throttled CRT redraw, every second frame skipped). 34 ms (30 fps) is a PROPOSED budget, not a measurement from a device;
-      // measuring stops as soon as a device proves fast.
+      if (ringLast && now - ringLast <= 1000) { ring[ringAt] = now - ringLast; ringAt = (ringAt + 1) % ring.length; ringN = Math.min(ring.length, ringN + 1); }
+      ringLast = now;
+      // auto-degrade ladder for slow devices. If the 95th-percentile frame is over budget (a device that averages well but stutters is still a stuttering device), the
+      // render density drops to 75% (bloom stays); if the next 90 frames are still over, take the light path (pixel ratio 1, no bloom, throttled CRT redraw, every second
+      // frame skipped). 34 ms (30 fps) is a PROPOSED budget, not a measurement from a device; measuring stops once a device proves fast, and starts again when a heavy prop lands.
       if (!S.lowFx && !S.fxChecked) {
-        if (lastNow) frameTimes.push(now - lastNow);
+        if (lastNow && now - lastNow <= 1000) frameTimes.push(now - lastNow); // a hidden tab is not a slow device
         lastNow = now;
         if (frameTimes.length >= 90) {
-          const tail = frameTimes.slice(15);
-          const avg = tail.reduce(function (a, b) { return a + b; }, 0) / tail.length;
+          const tail = frameTimes.slice(15).sort(function (a, b) { return a - b; });
+          const p95 = pct(tail, 0.95);
           frameTimes.length = 0; lastNow = 0;
-          if (avg <= 34) S.fxChecked = true;
+          if (p95 <= 34) S.fxChecked = true;
           else if (!S.ladder) {
             S.ladder = 1;
             const pr = S.renderer.getPixelRatio() * 0.75;
@@ -2597,6 +2613,7 @@ window.Arcade3D = (function () {
       if (kind === "dossier" && S.dossier && S.dossier.grp && S.dossierFocusCb) { S.dossierFocusCb(); return true; }
       return false;
     },
+    frameStats: function () { return S.frameStats ? S.frameStats() : null; },
     holoReady: function () { return !!(S.holo && S.holo.unlocked && S.holo.root); },
     onVendsChanged: function (cb) { S.vendChangedCb = cb; },
     wallLocked: function () { return !!(S.wallb && S.wallb.focused && S.wallb.data && S.wallb.data.mode === "locked"); },
@@ -2606,7 +2623,7 @@ window.Arcade3D = (function () {
   };
   /* No WebGL: the room cannot be drawn, but the planner must still work. Every scene method becomes a no-op (callers await some of them, and
      `await undefined` is fine); the few whose results are read keep a typed empty answer. isMuted, setMuted and init stay real. */
-  const EMPTY = { vendCount: 0, vendLabels: [], vendFocused: false, holoFocused: false, dossierFocused: false, dossierOpen: false, dossierReady: false, cabReady: false, wallFocused: false, lastSceneTap: 0, screenDebug: {}, openView: false, holoReady: false, wallLocked: false, wallNudge: false, wallCells: [], wallAlignOff: 0 };
+  const EMPTY = { vendCount: 0, vendLabels: [], vendFocused: false, holoFocused: false, dossierFocused: false, dossierOpen: false, dossierReady: false, cabReady: false, wallFocused: false, lastSceneTap: 0, screenDebug: {}, openView: false, holoReady: false, wallLocked: false, wallNudge: false, wallCells: [], wallAlignOff: 0, frameStats: null };
   api.disable = function () {
     Object.keys(api).forEach(function (k) {
       if (typeof api[k] !== "function" || k === "disable" || k === "init" || k === "isMuted" || k === "setMuted") return;

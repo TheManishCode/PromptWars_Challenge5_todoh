@@ -1921,9 +1921,12 @@ function hidePaper() {
 }
 
 /* ---------------------------------------------------------------- run */
+let roomUpResolve;
+const roomUp = new Promise(function (resolve) { roomUpResolve = resolve; }); // resolved by boot() once the room has started (or been disabled)
 async function build() {
   if (state.running || !state.draft) return;
   state.running = true;
+  await roomUp; // a very quick visitor on a slow device: the cabinet exists before the coin drops
   $("#build").disabled = true;
   $("#composer").querySelector("button").disabled = true;
 
@@ -2637,19 +2640,28 @@ function syncBarHeight() {
 }
 
 function boot() {
-  const glOk = Arcade3D.init();
-  $("#gl-fallback").hidden = glOk;
-  if (!glOk) { Arcade3D.disable(); document.body.classList.add("no-gl"); } // text-only mode: the planner runs without the room
-  wireRoomNav(glOk);
+  let glOk = null, sessionDone = false;
+  /* Two phases. The room (scene, shaders, models) is the one expensive thing: building it first left the composer dead for seconds on a slow device (its
+     listeners were not yet attached, so Enter reloaded the page). Everything a visitor can touch is wired first; the room starts after the first paint.
+     The marks todoh:ui-ready and todoh:room-ready make the gap visible in any performance trace. */
+  function startRoom() {
+    glOk = Arcade3D.init();
+    $("#gl-fallback").hidden = glOk;
+    if (!glOk) { Arcade3D.disable(); document.body.classList.add("no-gl"); } // text-only mode: the planner runs without the room
+    wireRoomNav(glOk);
+    wireHoloFocus();
+    wireVendFocus();
+    wireDossierFocus();
+    wireWallFocus();
+    wireBackgroundExit();
+    wallTick(); // wall backend absent today: probes fail quietly, table stays hidden
+    performance.mark("todoh:room-ready");
+    roomUpResolve();
+    if (glOk && sessionDone) Arcade3D.powerOn(); // the attendant walks over and turns the cabinet on
+  }
   syncBarHeight();
   if (window.ResizeObserver) new ResizeObserver(syncBarHeight).observe($("#chat"));
   window.addEventListener("resize", syncBarHeight);
-  wireHoloFocus();
-  wireVendFocus();
-  wireDossierFocus();
-  wireWallFocus();
-  wireBackgroundExit();
-  wallTick(); // wall backend absent today: probes fail quietly, table stays hidden
 
   // small screens: start with the chat tucked away so the machine is the
   // first thing seen; the CHAT toggle brings it back.
@@ -3490,10 +3502,14 @@ function onAttachFile() {
       $("#conn").className = "bad";
       $("#conn").title = "offline";
     }
-    if (glOk) Arcade3D.powerOn(); // the attendant walks over and turns the cabinet on
+    sessionDone = true;
+    if (glOk) Arcade3D.powerOn(); // the attendant walks over and turns the cabinet on (when the room is not up yet, startRoom does it)
     // minimal home: no seeded boilerplate - the log shows only the actual conversation
     $("#msg").focus();
   })();
+
+  performance.mark("todoh:ui-ready");
+  requestAnimationFrame(function () { setTimeout(startRoom, 0); }); // after the first paint
 }
 
 document.addEventListener("DOMContentLoaded", boot);

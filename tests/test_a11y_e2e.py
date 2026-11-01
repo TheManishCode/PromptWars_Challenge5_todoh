@@ -34,7 +34,6 @@ from tests.wall_helpers import make_wall  # noqa: E402
 
 TABS = ["plan", "overview", "ideas", "timeline", "vendors", "budget", "community", "vendorchats", "changes", "audit"]
 NAMES = ["Asha", "Bina", "Chetan", "Devika", "Esha", "Farid", "Gita", "Hari", "Indu", "Jai", "Kiran", "Lata", "Mohan", "Nisha"]
-OPTIONAL_MODELS = [(404, "GET", r"/static/(road|car|barrier)\.glb")]  # the cabinet screen's road theatre: declared optional and not shipped in this checkout (docs/ATTRIBUTIONS.md); the page says so on the screen
 COMMUNITY_NOT_APPLICABLE = [(400, "GET", r"/api/plans/[0-9a-f]+/community")]  # an engagement party has no community profile: the tab explains that, the server says 400
 PHONE = {"width": 390, "height": 844}
 LAPTOP = {"width": 1300, "height": 900}
@@ -78,7 +77,7 @@ class Page:
             self.page.add_init_script(OBSERVE_THREE)
         self.base = base
         self.gl = gl
-        self.allow = [(s, m, re.compile(rx)) for s, m, rx in list(allow) + OPTIONAL_MODELS]  # responses a test expects, by status, method and path
+        self.allow = [(s, m, re.compile(rx)) for s, m, rx in list(allow)]  # nothing else is allowed: any other 4xx/5xx or console error fails the test  # responses a test expects, by status, method and path
 
     def open(self, settle_ms=None):
         self.page.goto(self.base + "/")
