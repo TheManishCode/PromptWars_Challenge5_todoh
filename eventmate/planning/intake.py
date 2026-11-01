@@ -124,6 +124,47 @@ class IntakeTurn(_Model):
 # ------------------------------------------------------------ deterministic
 
 
+def _ambiguity_choices(t: str, problems: list[str], budget_problems: list[str]) -> list[IntakeChoice]:
+    """A question with options for each field the text gave several values for (at most six)."""
+    out: list[IntakeChoice] = []
+    counts = {int(m.group(1)) for rx in mgr._GUESTS for m in rx.finditer(t)}
+    if 1 < len(counts) <= 6:
+        out.append(IntakeChoice(field="guest_count", prompt="Which guest count is right?", options=tuple(str(c) for c in sorted(counts))))
+    dates = sorted(set(re.findall(r"\d{4}-\d{2}-\d{2}", next((p for p in problems if p.startswith("multiple different event dates")), ""))))
+    if 1 < len(dates) <= 6:
+        out.append(IntakeChoice(field="event_date", prompt="Which date is right?", options=tuple(dates)))
+    budgets = re.findall(r"\d[\d,]*", next((p for p in budget_problems if p.startswith("multiple different budgets")), ""))
+    if 1 < len(budgets) <= 6:
+        out.append(IntakeChoice(field="budget_total", prompt="Which budget is right?", options=tuple(b.replace(",", "") for b in budgets)))
+    return out
+
+
+def _read_event_type(t: str, notes: list[str]) -> tuple[EventType | None, str | None]:
+    """(event type, community subtype); a community reading from a keyword other than "community" is flagged for the user to check."""
+    event_type = next((et for rx, et in mgr._EVENT_TYPES if rx.search(t)), None)
+    if event_type is not None or (hit := match_subtype(t)) is None:
+        return event_type, None
+    label = load_profiles().get(hit[0]).label
+    if "community" not in hit[1]:
+        notes.append(f"I read this as a community event ({label}) because you wrote '{hit[1]}'. Please check that it is right.")
+    return EventType.COMMUNITY, hit[0]
+
+
+def _read_services_and_reminders(t: str) -> tuple[list[VendorCategory], list[ReminderKind]]:
+    services = [VendorCategory.VENUE] if re.search(r"\bvenue\b", t, re.I | re.A) else []
+    if mgr._mentioned(mgr._CATERER, t):
+        services.append(VendorCategory.CATERER)
+    if mgr._mentioned(mgr._PHOTO, t):
+        services.append(VendorCategory.PHOTOGRAPHER)
+    reminders: list[ReminderKind] = []
+    if mgr._mentioned(mgr._REMINDER, t):
+        if mgr._mentioned(mgr._REM_INVITE, t):
+            reminders.append(ReminderKind.INVITATION)
+        if mgr._mentioned(mgr._REM_VENDOR, t):
+            reminders.append(ReminderKind.VENDOR_CONFIRMATION)
+    return services, reminders
+
+
 def _rule_draft(text: str, today: date, notes: list[str], choices: list[IntakeChoice]) -> IntakeDraft:
     """Best-effort field-by-field read of ``text`` with the deterministic parser; failures become notes."""
     t = unicodedata.normalize("NFKC", text)
@@ -138,35 +179,11 @@ def _rule_draft(text: str, today: date, notes: list[str], choices: list[IntakeCh
     # only ambiguity or invalid values deserve a note; plain absence becomes a question
     notes.extend(p for p in problems if "not found" not in p and not p.startswith("multiple different event dates"))
     notes.extend(a for a in assumptions if a.startswith("year not given"))
-    counts = {int(m.group(1)) for rx in mgr._GUESTS for m in rx.finditer(t)}
-    if 1 < len(counts) <= 6:
-        choices.append(IntakeChoice(field="guest_count", prompt="Which guest count is right?", options=tuple(str(c) for c in sorted(counts))))
-    dates = sorted(set(re.findall(r"\d{4}-\d{2}-\d{2}", next((p for p in problems if p.startswith("multiple different event dates")), ""))))
-    if 1 < len(dates) <= 6:
-        choices.append(IntakeChoice(field="event_date", prompt="Which date is right?", options=tuple(dates)))
-    budgets = re.findall(r"\d[\d,]*", next((p for p in budget_problems if p.startswith("multiple different budgets")), ""))
-    if 1 < len(budgets) <= 6:
-        choices.append(IntakeChoice(field="budget_total", prompt="Which budget is right?", options=tuple(b.replace(",", "") for b in budgets)))
-    event_type = next((et for rx, et in mgr._EVENT_TYPES if rx.search(t)), None)
-    subtype = None
-    if event_type is None and (hit := match_subtype(t)) is not None:
-        event_type, subtype = EventType.COMMUNITY, hit[0]
-        label = load_profiles().get(subtype).label
-        if "community" not in hit[1]:
-            notes.append(f"I read this as a community event ({label}) because you wrote '{hit[1]}'. Please check that it is right.")
+    choices.extend(_ambiguity_choices(t, problems, budget_problems))
+    event_type, subtype = _read_event_type(t, notes)
     wants_in, wants_out = mgr._mentioned(mgr._INDOOR, t), mgr._mentioned(mgr._OUTDOOR, t)
     setting = VenueSetting.INDOOR if wants_in and not wants_out else VenueSetting.OUTDOOR if wants_out and not wants_in else None
-    services = [VendorCategory.VENUE] if re.search(r"\bvenue\b", t, re.I | re.A) else []
-    if mgr._mentioned(mgr._CATERER, t):
-        services.append(VendorCategory.CATERER)
-    if mgr._mentioned(mgr._PHOTO, t):
-        services.append(VendorCategory.PHOTOGRAPHER)
-    reminders = []
-    if mgr._mentioned(mgr._REMINDER, t):
-        if mgr._mentioned(mgr._REM_INVITE, t):
-            reminders.append(ReminderKind.INVITATION)
-        if mgr._mentioned(mgr._REM_VENDOR, t):
-            reminders.append(ReminderKind.VENDOR_CONFIRMATION)
+    services, reminders = _read_services_and_reminders(t)
     return _safe_draft(
         event_type=event_type,
         community_subtype=subtype,

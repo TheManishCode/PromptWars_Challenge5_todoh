@@ -519,48 +519,51 @@ def _outreach(em: EventMate, a) -> int:
     return 0
 
 
-def _jobs(em: EventMate, a) -> int:
+def _jobs_start(em: EventMate, a) -> int:
     from datetime import datetime, timedelta
 
+    if not (a.target and a.extra and a.vendors and a.name):
+        print("jobs start PLAN_ID CATEGORY --vendors id1,id2,id3 --name NAME [--min 3 --cap INR --days 7]", file=sys.stderr)
+        return 2
+    job = em.jobs.start_job(a.target, VendorCategory(a.extra), [v.strip() for v in a.vendors.split(",") if v.strip()], a.goal or f"{a.min_quotes} {a.extra} quotes",
+                            datetime.now(UTC) + timedelta(days=a.days), a.name, a.min_quotes, a.cap)
+    print(f"job {job.job_id}: {len(job.vendors)} requests drafted, nothing sent. Read them with `inbox show {job.plan_id}`, then `jobs approve {job.job_id}`.")
+    return 0
+
+
+def _jobs_approve_or_cancel(em: EventMate, a) -> int:
+    if not a.target:
+        print("give a job id", file=sys.stderr)
+        return 2
+    job = em.jobs.approve_requests(a.target) if a.what == "approve" else em.jobs.cancel(a.target)
+    print(f"job {job.job_id}: {job.status}; {job.next_action}")
+    return 0
+
+
+def _jobs_claim_or_item(em: EventMate, a) -> int:
+    w = em.jobs
+    if not (a.target and a.extra):
+        print(f"jobs {a.what} JOB_ID {'CLAIM_ID' if a.what in ('confirm', 'reject') else 'ITEM_ID'}", file=sys.stderr)
+        return 2
+    if a.what == "confirm":
+        if a.valid_days is None:
+            print("confirm needs --valid-days N (1-90): the vendor's reply rarely says how long the price holds, so you choose", file=sys.stderr)
+            return 2
+        job = w.confirm_claim(a.target, a.extra, a.valid_days)
+    elif a.what == "reject":
+        job = w.reject_claim(a.target, a.extra)
+    elif a.what == "resolve":
+        job = w.resolve_item(a.target, a.extra)
+    else:
+        job = w.approve_nudge(a.target, a.extra)
+    print(f"job {job.job_id}: {job.status}; {job.next_action}")
+    return 0
+
+
+def _jobs_list(em: EventMate, a) -> int:
     from eventmate.followthrough.worker import digest
 
-    w = em.jobs
-    if a.what == "tick":
-        print(w.tick())
-        return 0
-    if a.what == "start":
-        if not (a.target and a.extra and a.vendors and a.name):
-            print("jobs start PLAN_ID CATEGORY --vendors id1,id2,id3 --name NAME [--min 3 --cap INR --days 7]", file=sys.stderr)
-            return 2
-        job = w.start_job(a.target, VendorCategory(a.extra), [v.strip() for v in a.vendors.split(",") if v.strip()], a.goal or f"{a.min_quotes} {a.extra} quotes",
-                          datetime.now(UTC) + timedelta(days=a.days), a.name, a.min_quotes, a.cap)
-        print(f"job {job.job_id}: {len(job.vendors)} requests drafted, nothing sent. Read them with `inbox show {job.plan_id}`, then `jobs approve {job.job_id}`.")
-        return 0
-    if a.what in ("approve", "cancel"):
-        if not a.target:
-            print("give a job id", file=sys.stderr)
-            return 2
-        job = w.approve_requests(a.target) if a.what == "approve" else w.cancel(a.target)
-        print(f"job {job.job_id}: {job.status}; {job.next_action}")
-        return 0
-    if a.what in ("confirm", "reject", "resolve", "nudge"):
-        if not (a.target and a.extra):
-            print(f"jobs {a.what} JOB_ID {'CLAIM_ID' if a.what in ('confirm', 'reject') else 'ITEM_ID'}", file=sys.stderr)
-            return 2
-        if a.what == "confirm":
-            if a.valid_days is None:
-                print("confirm needs --valid-days N (1-90): the vendor's reply rarely says how long the price holds, so you choose", file=sys.stderr)
-                return 2
-            job = w.confirm_claim(a.target, a.extra, a.valid_days)
-        elif a.what == "reject":
-            job = w.reject_claim(a.target, a.extra)
-        elif a.what == "resolve":
-            job = w.resolve_item(a.target, a.extra)
-        else:
-            job = w.approve_nudge(a.target, a.extra)
-        print(f"job {job.job_id}: {job.status}; {job.next_action}")
-        return 0
-    jobs = list(w.store.list(a.target) if (em.store.root / "jobs.db").exists() else [])
+    jobs = list(em.jobs.store.list(a.target) if (em.store.root / "jobs.db").exists() else [])
     if a.json:
         print(json.dumps([json.loads(j.model_dump_json()) for j in jobs], indent=2))
         return 0
@@ -571,6 +574,19 @@ def _jobs(em: EventMate, a) -> int:
     if not jobs:
         print("no jobs")
     return 0
+
+
+def _jobs(em: EventMate, a) -> int:
+    if a.what == "tick":
+        print(em.jobs.tick())
+        return 0
+    if a.what == "start":
+        return _jobs_start(em, a)
+    if a.what in ("approve", "cancel"):
+        return _jobs_approve_or_cancel(em, a)
+    if a.what in ("confirm", "reject", "resolve", "nudge"):
+        return _jobs_claim_or_item(em, a)
+    return _jobs_list(em, a)
 
 
 def _inbox_poll(em: EventMate, a) -> int:
