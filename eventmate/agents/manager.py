@@ -383,7 +383,7 @@ def parse_request(
             raw_text=raw_text,
             event_type=event_type,
             guest_count=guests,
-            city=city.strip(),
+            city=(city or "").strip(),
             event_date=event_date,
             budget_total=budget,
             dietary=dietary,

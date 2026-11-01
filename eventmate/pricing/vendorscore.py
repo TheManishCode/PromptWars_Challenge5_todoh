@@ -92,9 +92,9 @@ def score_category(store: ObservationStore, category: VendorCategory, today: dat
         if r.status == "expiring":
             notes.append(f"quote expires on {o.expires_at.isoformat()}; confirm or re-quote soon")
         components = (_price(o, _unit_price(o, r), medians, counts, notes), _completeness(r, expected), _evidence(o))
-        have = [c for c in components if c.score is not None]
-        weight = sum(c.weight for c in have)
-        overall: int | None = round(sum(c.weight * c.score for c in have) / weight) if weight else None
+        have = [(c.weight, c.score) for c in components if c.score is not None]
+        weight = sum(w for w, _ in have)
+        overall: int | None = round(sum(w * sc for w, sc in have) / weight) if weight else None
         scores.append(VendorScore(
             vendor_id=o.vendor_id, category=category, observation_id=o.observation_id, status=r.status, overall=overall,
             coverage=round(weight, 4), components=components, not_scored=NOT_SCORED, notes=tuple(notes),

@@ -353,6 +353,8 @@ class WallStore:
                 raise WallError(503, "wall_closed", why)
             cur = c.execute("INSERT INTO marks(display_name, status, created_at) VALUES (?, 'pending', ?)", (name, now))
             mark_id = cur.lastrowid
+            if mark_id is None:
+                raise RuntimeError("the mark was not stored")
             if self.config.moderation == "post":
                 self._make_visible(c, mark_id, now)
             c.execute("UPDATE wall_sessions SET mark_id = ? WHERE cred_hash = ?", (mark_id, cred_hash))
@@ -638,7 +640,7 @@ class WallStore:
                 c.execute("UPDATE rounds SET result = 'missed', used_at = ? WHERE round_id = ?", (now, round_id))
                 return reply("missed")
             elapsed = now - r["ready_at"] if timed else None
-            ranked = bool(timed and elapsed >= self.config.speed_floor_ms)
+            ranked = bool(timed and elapsed is not None and elapsed >= self.config.speed_floor_ms)
             pid = self._roll_period(c, now)
             c.execute("UPDATE rounds SET result = 'found', used_at = ?, elapsed_ms = ? WHERE round_id = ?", (now, elapsed, round_id))
             if mark["found_at"] is None:
