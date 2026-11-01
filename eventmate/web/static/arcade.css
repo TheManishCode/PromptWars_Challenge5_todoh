@@ -527,3 +527,28 @@ body.wall-focus.wall-phase-go #wall-panel #wall-hallstate { display: none; }
   #credits-panel { bottom: 50px; }
   .paper details summary { display: flex; align-items: center; }
 }
+
+
+/* ===== laptop chrome: the original text-label design (traced from the pre-icon build, commits 408cf0d..b900e2e) =====
+   On a mouse-and-keyboard screen the icon buttons read as words. The icons stay in the DOM and every button keeps its aria-label, so assistive technology is
+   unchanged; phones and touch screens keep the icons (smaller targets, no room for words). */
+@media (min-width: 900px) and (hover: hover) {
+  #composer button, #chat-toggle, #sound-toggle, #cat-load { font-family: var(--mono); text-transform: uppercase; }
+  #composer button svg, #chat-toggle svg, #sound-toggle svg, #cat-load svg { display: none; }
+  #composer button { flex: 0 0 auto; width: auto; padding: 0 16px; font-size: 12px; letter-spacing: .16em; }
+  #composer #attach-btn::after { content: "ATTACH"; }
+  #composer #mic-btn::after { content: "MIC"; }
+  #composer #live-btn::after { content: "LIVE"; }
+  #composer button[type="submit"]::after { content: "SEND"; }
+  #sound-toggle::after { content: "SOUND ON"; }
+  #sound-toggle.off::after { content: "SOUND OFF"; }
+  #chat-toggle::after { content: "HIDE"; }
+  #chat-toggle[aria-pressed="true"]::after { content: "SHOW"; }
+  #cat-load::after { content: "+ CAT 55MB"; }
+  #cat-load.done::after { content: "CAT LOADED"; }
+  #chat-toggle, #sound-toggle, #cat-load { font-size: 10px; letter-spacing: .16em; padding: 6px 10px; }
+  #conn { width: auto; height: auto; background: none; box-shadow: none; font: 10.5px var(--mono); letter-spacing: .12em; color: #4dc38a; text-transform: uppercase; }
+  #conn::after { content: attr(data-label); }
+  #conn.ok, #conn.bad { background: none; box-shadow: none; }
+  #conn.bad { color: var(--bad); }
+}

@@ -3498,13 +3498,22 @@ function onAttachFile() {
       state.wsId = s.data.workspace && s.data.workspace.mode === "shared" ? s.data.workspace.id : "";
       $("#conn").className = "ok";
       $("#conn").title = "online · " + s.data.today;
+      $("#conn").dataset.label = "online · " + s.data.today; // shown as text on laptop widths (arcade.css)
     } catch (e) {
       $("#conn").className = "bad";
       $("#conn").title = "offline";
+      $("#conn").dataset.label = "offline";
     }
     sessionDone = true;
     if (glOk) Arcade3D.powerOn(); // the attendant walks over and turns the cabinet on (when the room is not up yet, startRoom does it)
-    // minimal home: no seeded boilerplate - the log shows only the actual conversation
+    // laptop: the attendant's first message, as in the original design (phones keep the minimal home: the machine is the first thing seen)
+    if (window.innerWidth >= 900 && !$("#log").children.length) {
+      bubble("bot",
+        "Evening. The attendant is waking the cabinet \u2014 the loop on its screen is the real planning engine.\n" +
+        "Describe your event (guests, city, date, budget; catering / photography / venue if you want them) and I will check the brief with you. " +
+        "When you press BUILD MY PLAN, the coin drops, the camera moves in, and the car on its screen stops at each module as the real work passes through it. " +
+        "The result prints as a dossier you can read.");
+    }
     $("#msg").focus();
   })();
 
