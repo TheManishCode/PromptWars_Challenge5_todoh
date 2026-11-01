@@ -158,6 +158,7 @@ async function sendUser(text) {
   bubble("user", text);
   $("#msg").value = "";
   $("#review").hidden = true;
+  expandChat(); // sending a message means wanting to see the answer: on a phone the chat starts tucked away, and the reply and the BUILD button live in it
   const r = await api("/api/intake", {
     method: "POST",
     body: JSON.stringify({ messages: state.messages, draft: state.draft }),
@@ -752,6 +753,8 @@ async function paperQuotes(host, plan) {
   [["total", "Total"], ["per_plate", "Per plate"]].forEach(function (p) { const o = el("option", null, p[1]); o.value = p[0]; f.basis.appendChild(o); });
   f.guests.type = "number"; f.guests.min = "1"; f.guests.placeholder = "Guests quoted for (per plate)";
   f.expires.type = "date";
+  f.vendor.setAttribute("aria-label", "Vendor this price is from"); f.source.setAttribute("aria-label", "Where the price came from");
+  f.basis.setAttribute("aria-label", "Price basis: total or per plate"); f.expires.setAttribute("aria-label", "Quote valid until");
   f.by.maxLength = 80; f.by.placeholder = "Your name"; f.by.value = state.paperSenderName || "";
   f.evidence.maxLength = 200; f.evidence.placeholder = "Evidence (email subject, message id)";
   f.hidden.maxLength = 80; f.hidden.placeholder = "Hidden cost label (optional)";
@@ -811,7 +814,9 @@ async function paperLedger(host, plan) {
   const msg = el("p", "pv-alt", "");
   const category = el("select", "pv-input");
   s.lines.forEach(function (l) { const o = el("option", null, l.category); o.value = l.category; category.appendChild(o); });
+  category.setAttribute("aria-label", "Ledger category");
   const kind = el("select", "pv-input");
+  kind.setAttribute("aria-label", "Ledger entry kind");
   ["quote", "payment", "refund"].forEach(function (k) { const o = el("option", null, k); o.value = k; kind.appendChild(o); });
   const amount = el("input", "pv-input"); amount.type = "number"; amount.min = "1"; amount.step = "1"; amount.placeholder = "Amount (INR)";
   const note = el("input", "pv-input"); note.maxLength = 200; note.placeholder = "Note (optional)";
@@ -1341,8 +1346,10 @@ async function paperChats(host, plan) {
       arow.appendChild(off);
     } else {
       const hours = el("select", "pv-input");
+      hours.setAttribute("aria-label", "How long automatic follow-ups stay on");
       [[24, "for 24 hours"], [72, "for 3 days"], [168, "for 7 days"]].forEach(function (p) { const o = el("option", null, p[1]); o.value = p[0]; hours.appendChild(o); });
       const perThread = el("select", "pv-input");
+      perThread.setAttribute("aria-label", "Automatic follow-ups allowed per vendor");
       [1, 2, 3, 5].forEach(function (n) { const o = el("option", null, "up to " + n + " per vendor"); o.value = n; if (n === 3) o.selected = true; perThread.appendChild(o); });
       const onBtn = el("button", "pv-btn small", "ALLOW AUTOMATIC FOLLOW-UP QUESTIONS"); onBtn.type = "button";
       onBtn.addEventListener("click", async function () {
@@ -1469,6 +1476,7 @@ function paperDisruption(host, plan) {
     const r = plan.request || {};
     if (st.kind === "vendor_cancellation") {
       const sel = el("select", "pv-input");
+      sel.setAttribute("aria-label", "Vendor that cancelled");
       (plan.selections || []).filter(function (x) { return !!x.vendor_id; }).forEach(function (x) {
         const o = el("option", null, x.category + ": " + x.name + (x.booking_status === "confirmed" ? " (confirmed)" : ""));
         o.value = x.vendor_id; sel.appendChild(o);
@@ -1477,12 +1485,15 @@ function paperDisruption(host, plan) {
       if (!sel.options.length) fbox.appendChild(el("p", "pv-alt", "No vendor with a backend id is selected in this plan, so a cancellation cannot be filed from here."));
     } else if (st.kind === "budget_change") {
       const i = el("input", "pv-input"); i.type = "number"; i.min = "1"; i.step = "1"; i.value = String(r.budget_total || "");
+      i.setAttribute("aria-label", "New total budget in rupees");
       fbox.appendChild(i);
     } else if (st.kind === "guest_count_change") {
       const i = el("input", "pv-input"); i.type = "number"; i.min = "1"; i.max = "100000"; i.step = "1"; i.value = String(r.guest_count || "");
+      i.setAttribute("aria-label", "New guest count");
       fbox.appendChild(i);
     } else {
       const i = el("input", "pv-input"); i.type = "date"; i.value = r.event_date || "";
+      i.setAttribute("aria-label", "New event date");
       fbox.appendChild(i);
     }
     obox.textContent = "";
@@ -1733,10 +1744,41 @@ function renderDashboard(payload) {
   inner.appendChild(close);
 }
 
+/* the paper is rebuilt from code in many places; a control that reaches the page without a name takes its placeholder or title, so a new field can never be silent to a screen reader */
+function nameBareControls(root) {
+  root.querySelectorAll("input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea").forEach(function (c) {
+    if (c.getAttribute("aria-label") || c.getAttribute("aria-labelledby") || c.id && root.querySelector('label[for="' + c.id + '"]') || c.closest("label")) return;
+    const name = c.getAttribute("placeholder") || c.title;
+    if (name) c.setAttribute("aria-label", name);
+  });
+}
+/* a wide table scrolls sideways inside its own box on a phone: the box is a named region, and takes keyboard focus only when it really scrolls (so a keyboard can read the cut-off columns) */
+function wrapTables(root) {
+  root.querySelectorAll("table").forEach(function (tb) {
+    if (tb.parentElement.classList.contains("tbl-scroll")) return;
+    const box = el("div", "tbl-scroll");
+    let h = tb.previousElementSibling;
+    while (h && !/^H[12]$/.test(h.tagName)) h = h.previousElementSibling;
+    box.setAttribute("role", "region");
+    box.setAttribute("aria-label", ((h && h.textContent) || "").trim().slice(0, 60) || "Table");
+    tb.parentNode.insertBefore(box, tb);
+    box.appendChild(tb);
+  });
+  root.querySelectorAll(".tbl-scroll").forEach(function (box) {
+    if (box.scrollWidth > box.clientWidth + 1) box.tabIndex = 0; else box.removeAttribute("tabindex");
+  });
+}
+new MutationObserver(function () { nameBareControls($("#paper")); wrapTables($("#paper")); }).observe($("#paper"), { childList: true, subtree: true });
+window.addEventListener("resize", function () { wrapTables($("#paper")); });
+
 $("#paper").addEventListener("click", (ev) => {
   const t = ev.target.closest("button");
   if (!t || !state.lastPayload) return;
-  if (t.dataset.view) renderPaperView(t.dataset.view);
+  if (t.dataset.view) {
+    renderPaperView(t.dataset.view);
+    const cur = $("#paper .sheet-tab.cur"); // the clicked tab was rebuilt: keep the keyboard on the tab row
+    if (cur) cur.focus({ preventScroll: true });
+  }
 });
 
 /* Trade-offs (parity with the classic UI renderTradeoffs): only options the
@@ -1840,11 +1882,21 @@ function renderJam(payload, httpStatus) {
 function showPaper(jammed) {
   const layer = $("#flight-layer");
   const paper = $("#paper");
+  if (layer.hidden) state.paperOpener = document.activeElement;
   layer.hidden = false;
   paper.classList.remove("stuck");
   void paper.offsetWidth; // restart animation
   paper.classList.add("stuck");
   Arcade3D.hideSheets();
+  paper.focus({ preventScroll: true }); // a keyboard or screen-reader user lands on the page that just appeared
+  announce(jammed ? "Paper jam. The sheet lists what failed and how to repair it." : "Plan dossier opened. Press Escape to go back.");
+}
+
+function expandChat() {
+  const chat = $("#chat");
+  if (!chat.classList.contains("collapsed")) return;
+  chat.classList.remove("collapsed");
+  syncChatToggle();
 }
 
 function syncChatToggle() {
@@ -1856,6 +1908,9 @@ function syncChatToggle() {
 
 function hidePaper() {
   $("#flight-layer").hidden = true;
+  const opener = state.paperOpener; state.paperOpener = null;
+  if (opener && opener.isConnected && !opener.disabled && opener !== document.body) opener.focus({ preventScroll: true });
+  else if ($("#msg")) $("#msg").focus({ preventScroll: true });
   if (state.chatWasOpen) {
     $("#chat").classList.remove("collapsed");
     syncChatToggle();
@@ -1866,9 +1921,12 @@ function hidePaper() {
 }
 
 /* ---------------------------------------------------------------- run */
+let roomUpResolve;
+const roomUp = new Promise(function (resolve) { roomUpResolve = resolve; }); // resolved by boot() once the room has started (or been disabled)
 async function build() {
   if (state.running || !state.draft) return;
   state.running = true;
+  await roomUp; // a very quick visitor on a slow device: the cabinet exists before the coin drops
   $("#build").disabled = true;
   $("#composer").querySelector("button").disabled = true;
 
@@ -2034,6 +2092,7 @@ async function wallTick() {
 const wallui = {
   me: null,
   sectionId: 0,
+  sectionPicked: false, // true once the visitor pages by hand: the board stops jumping to their own section
   section: null,
   round: null,        // the issued round response (holds the frozen snapshot)
   phase: "idle",      // idle | issued | go | done
@@ -2061,17 +2120,19 @@ async function wallPost(path, body, idem) {
   }
 }
 
-function wallLine(txt) { const el = $("#wall-status"); if (el) el.textContent = txt || ""; }
+function wallLine(txt) { const el = $("#wall-status"); if (el) el.textContent = txt || ""; } // #wall-status is role=status: every line is announced
 
 function wallSolved() { try { return sessionStorage.getItem("em_wall_solved") === "1"; } catch (e) { return false; } }
 Arcade3D.onWallSolve(function () {
   try { sessionStorage.setItem("em_wall_solved", "1"); } catch (e) {}
   wallLine("the scratches sit true - a latch clicks open");
+  announce("The scratches sit true. A latch clicks open: you can sign the wall.");
   wallRoundUi("idle");
   wallRefresh();
 });
 
 function wallBoardSync() {
+  wallPaintNames();
   if (!wallSolved() && wall.available !== false) { Arcade3D.wallSetData({ mode: "locked" }); return; }
   if (wallui.round && wallui.phase !== "idle") {
     Arcade3D.wallSetData({
@@ -2092,6 +2153,7 @@ function wallBoardSync() {
     mode: "section", capacity: sec.capacity, slots: sec.slots,
     my_mark_id: wallui.me && wallui.me.mark ? wallui.me.mark.mark_id : null,
   });
+  wallPaintNames();
 }
 
 function wallPaintPanel() {
@@ -2125,10 +2187,17 @@ async function wallRefresh() {
   if (wall.available === false) { wallBoardSync(); wallPaintPanel(); wallLine("the wall's backend is not built yet - this is its sleeping state"); return; }
   const me = await wallGet("/api/wall/me");
   if (me.status === 200 && me.data) wallui.me = me.data;
-  const sec = await wallGet("/api/wall/sections/" + wallui.sectionId + "?limit=300");
-  if (sec.status === 200 && sec.data) wallui.section = sec.data;
+  const mine = wallui.me && wallui.me.mark;
+  if (!wallui.sectionPicked && mine && typeof mine.section_id === "number") wallui.sectionId = mine.section_id; // open on the section that holds the visitor's own name
+  if (wall.meta && wall.meta.section_count === 0) { wallui.section = null; wallui.sectionId = 0; } // nobody has signed yet: there is no section to ask for (it would only be a 404)
+  else {
+    const sec = await wallGet("/api/wall/sections/" + wallui.sectionId + "?limit=300");
+    if (sec.status === 200 && sec.data) wallui.section = sec.data;
+    else if (sec.status === 404 && wallui.sectionId > 0) { wallui.sectionId = 0; wallui.section = null; } // a section that does not exist (yet): back to the first
+  }
   wallBoardSync();
   wallPaintPanel();
+  wallPaintPager();
   if (!wallui.me || !wallui.me.mark) wallLine("sign the wall - one name, permanent");
   else wallLine("");
 }
@@ -2166,6 +2235,8 @@ function wallRoundUi(phase) {
   if (phase === "idle") { const el = $("#wall-startrow"); if (el) el.hidden = false; }
   if (phase === "issued") { const el = $("#wall-readybtn"); if (el) el.hidden = false; }
   if (phase === "go") { const el = $("#wall-waitline"); if (el) el.hidden = false; }
+  wallPaintCells(phase === "go");
+  wallPaintPager(); wallPaintNames(); // paging and the name list belong to the idle board only: a round shows its frozen snapshot
   if (phase === "done") { const el = $("#wall-resultrow"); if (el) el.hidden = false; }
 }
 
@@ -2256,6 +2327,46 @@ async function wallTap(cell) {
   } else {
     if (res) res.textContent = "the clock won. The round is used - the reveal shows where it went.";
   }
+}
+
+/* the board draws one section at a time (a section is a fixed grid): PREV and NEXT walk them, and the same names are listed for screen readers */
+function wallPaintPager() {
+  const pager = $("#wall-pager"); if (!pager) return;
+  const count = (wall.meta && wall.meta.section_count) || 0;
+  const show = count > 1 && wallSolved() && wall.available !== false && wallui.phase === "idle";
+  pager.hidden = !show;
+  if (!show) return;
+  $("#wall-pageinfo").textContent = "section " + (wallui.sectionId + 1) + " of " + count;
+  $("#wall-prev").disabled = wallui.sectionId <= 0;
+  $("#wall-next").disabled = wallui.sectionId >= count - 1;
+}
+function wallPage(step) {
+  const count = (wall.meta && wall.meta.section_count) || 1;
+  const next = Math.max(0, Math.min(count - 1, wallui.sectionId + step));
+  if (next === wallui.sectionId) return;
+  wallui.sectionId = next; wallui.sectionPicked = true;
+  wallRefresh();
+}
+function wallPaintNames() {
+  const host = $("#wall-names"); if (!host) return;
+  host.textContent = "";
+  if (wallui.phase !== "idle" || !wallSolved()) return; // during a round every name must look alike: the cell list is the only list
+  ((wallui.section && wallui.section.slots) || []).forEach(function (m) { host.appendChild(el("li", null, "spot " + m.slot + ": " + (m.name || "?"))); });
+}
+
+/* a round is a search: the cells are real buttons in the same order as the canvas, tapped by keyboard exactly as the board is tapped by pointer */
+function wallPaintCells(on) {
+  const host = $("#wall-cells"); if (!host) return;
+  host.textContent = "";
+  if (!on || !wallui.round) return;
+  const untimed = wallui.round.mode !== "timed";
+  Arcade3D.wallCells().forEach(function (c) {
+    if (untimed && c.mark_id == null) return;
+    const b = el("button", null, "spot " + c.slot + ": " + (c.name || "empty"));
+    b.type = "button";
+    b.addEventListener("click", function () { wallTap({ slot: c.slot, mark_id: c.mark_id }); });
+    host.appendChild(b);
+  });
 }
 
 async function wallRefreshMe() {
@@ -2354,6 +2465,9 @@ function wireWallFocus() {
   Arcade3D.onWallTap(function (cell) { wallTap(cell); });
   const signBtn = $("#wall-sign-btn");
   if (signBtn) signBtn.addEventListener("click", wallSign);
+  const pgPrev = $("#wall-prev"), pgNext = $("#wall-next");
+  if (pgPrev) pgPrev.addEventListener("click", function () { wallPage(-1); });
+  if (pgNext) pgNext.addEventListener("click", function () { wallPage(1); });
   const nameInp = $("#wall-name");
   if (nameInp) nameInp.addEventListener("keydown", function (ev) { if (ev.key === "Enter") wallSign(); });
   const rt = $("#wall-start-timed"), ru = $("#wall-start-untimed");
@@ -2438,15 +2552,116 @@ function wireDossierFocus() {
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") leave(); });
 }
 
+/* ---------------------------------------------------------------- keyboard and assistive technology
+   The room is a canvas, so everything a pointer can do there has a real control in the page: the room views (nav), the gate puzzle (arrow keys),
+   the round board (cell buttons) and the sections (pager). Announcements go through one polite live region. Nothing here is shown to a
+   pointer user: the nav appears only while the keyboard is on it. */
+function announce(text) {
+  const live = $("#sr-live"); if (!live) return;
+  live.textContent = "";
+  setTimeout(function () { live.textContent = text || ""; }, 40); // a changed node is announced, an identical one is not
+}
+
+function roomViewOpen() { return Arcade3D.wallFocused() || Arcade3D.holoFocused() || Arcade3D.vendFocused() || Arcade3D.dossierFocused(); }
+
+const roomNav = { opener: null, wasOpen: false };
+function syncRoomNav() {
+  const nav = $("#room-nav"); if (!nav) return;
+  const open = roomViewOpen();
+  const holo = nav.querySelector('[data-view="holo"]');
+  if (holo) holo.hidden = !Arcade3D.holoReady();
+  $("#room-back").hidden = !open;
+  const labels = Arcade3D.vendLabels();
+  const host = $("#room-nav-vend");
+  if (host.dataset.n !== String(labels.length)) {
+    host.dataset.n = String(labels.length);
+    host.textContent = "";
+    labels.forEach(function (label, i) {
+      const b = el("button", null, label.charAt(0) + label.slice(1).toLowerCase());
+      b.type = "button"; b.dataset.view = "vend"; b.dataset.i = String(i);
+      host.appendChild(b);
+    });
+  }
+  nav.querySelectorAll("button[data-view]").forEach(function (b) { if (b.id !== "room-back") b.disabled = open || state.running; });
+  if (roomNav.wasOpen && !open) { // the view closed (Back, Escape or a tap): the keyboard goes back to the button that opened it
+    const o = roomNav.opener; roomNav.opener = null;
+    const a = document.activeElement;
+    if (o && o.isConnected && !o.disabled && (!a || a === document.body || a.id === "room-back")) o.focus({ preventScroll: true });
+  }
+  roomNav.wasOpen = open;
+}
+
+const VIEW_HELP = {
+  wall: "Signature wall. Press Escape to go back.",
+  holo: "Hall of Fame table. Press Escape to go back.",
+  dossier: "Secret dossier. Press Escape to go back.",
+};
+function wireRoomNav(glOk) {
+  const nav = $("#room-nav");
+  if (!nav) return;
+  if (!glOk) { nav.hidden = true; return; } // text-only mode has no room to move around
+  Arcade3D.onVendsChanged(syncRoomNav);
+  nav.addEventListener("click", function (ev) {
+    const b = ev.target.closest("button[data-view]"); if (!b || b.disabled) return;
+    if (b.dataset.view === "back") { focusExit.leavers.forEach(function (leave) { leave(); }); return; }
+    roomNav.opener = b;
+    if (!Arcade3D.openView(b.dataset.view, Number(b.dataset.i))) { announce("That view is not available right now."); return; }
+    syncRoomNav();
+    $("#room-back").focus({ preventScroll: true });
+    const label = b.dataset.view === "vend" ? b.textContent + ". Press Escape to go back." : VIEW_HELP[b.dataset.view];
+    announce(label + (b.dataset.view === "wall" && Arcade3D.wallLocked() ? " The scratches are out of line: use the left and right arrow keys to line them up." : ""));
+  });
+  new MutationObserver(syncRoomNav).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  syncRoomNav();
+
+  // the gate puzzle by keyboard: the same movement a drag makes, a step at a time
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+    if (!Arcade3D.wallLocked()) return;
+    if (ev.target.closest && ev.target.closest("input, textarea, select")) return;
+    ev.preventDefault();
+    const before = Math.abs(Arcade3D.wallAlignOff());
+    const solved = Arcade3D.wallNudge(ev.key === "ArrowRight" ? 36 : -36);
+    if (solved) return; // onWallSolve announces the latch
+    announce(Math.abs(Arcade3D.wallAlignOff()) < before ? "Closer." : "Further out of line.");
+  });
+}
+
+document.addEventListener("keydown", function (ev) { // Escape closes the dossier unless a room view is open (that view's own handler takes the key)
+  if (ev.key !== "Escape" || $("#flight-layer").hidden || roomViewOpen()) return;
+  if (state.running) return;
+  hidePaper();
+});
+
+/* the open paper must end above the chat strip at any window size and in any state of the strip: the strip's measured height is published for the CSS to use */
+function syncBarHeight() {
+  const top = $("#chat").getBoundingClientRect().top;
+  document.documentElement.style.setProperty("--bar-h", Math.ceil(window.innerHeight - top) + "px");
+}
+
 function boot() {
-  const glOk = Arcade3D.init();
-  $("#gl-fallback").hidden = glOk;
-  wireHoloFocus();
-  wireVendFocus();
-  wireDossierFocus();
-  wireWallFocus();
-  wireBackgroundExit();
-  wallTick(); // wall backend absent today: probes fail quietly, table stays hidden
+  let glOk = null, sessionDone = false;
+  /* Two phases. The room (scene, shaders, models) is the one expensive thing: building it first left the composer dead for seconds on a slow device (its
+     listeners were not yet attached, so Enter reloaded the page). Everything a visitor can touch is wired first; the room starts after the first paint.
+     The marks todoh:ui-ready and todoh:room-ready make the gap visible in any performance trace. */
+  function startRoom() {
+    glOk = Arcade3D.init();
+    $("#gl-fallback").hidden = glOk;
+    if (!glOk) { Arcade3D.disable(); document.body.classList.add("no-gl"); } // text-only mode: the planner runs without the room
+    wireRoomNav(glOk);
+    wireHoloFocus();
+    wireVendFocus();
+    wireDossierFocus();
+    wireWallFocus();
+    wireBackgroundExit();
+    wallTick(); // wall backend absent today: probes fail quietly, table stays hidden
+    performance.mark("todoh:room-ready");
+    roomUpResolve();
+    if (glOk && sessionDone) Arcade3D.powerOn(); // the attendant walks over and turns the cabinet on
+  }
+  syncBarHeight();
+  if (window.ResizeObserver) new ResizeObserver(syncBarHeight).observe($("#chat"));
+  window.addEventListener("resize", syncBarHeight);
 
   // small screens: start with the chat tucked away so the machine is the
   // first thing seen; the CHAT toggle brings it back.
@@ -3287,10 +3502,14 @@ function onAttachFile() {
       $("#conn").className = "bad";
       $("#conn").title = "offline";
     }
-    if (glOk) Arcade3D.powerOn(); // the attendant walks over and turns the cabinet on
+    sessionDone = true;
+    if (glOk) Arcade3D.powerOn(); // the attendant walks over and turns the cabinet on (when the room is not up yet, startRoom does it)
     // minimal home: no seeded boilerplate - the log shows only the actual conversation
     $("#msg").focus();
   })();
+
+  performance.mark("todoh:ui-ready");
+  requestAnimationFrame(function () { setTimeout(startRoom, 0); }); // after the first paint
 }
 
 document.addEventListener("DOMContentLoaded", boot);

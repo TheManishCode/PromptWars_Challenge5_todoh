@@ -366,7 +366,11 @@ window.Arcade3D = (function () {
     obj.position.y -= b.min.y - (baseY || 0);
   }
 
+  /* The road theatre needs road.glb, car.glb and barrier.glb, which are optional and not shipped (docs/ATTRIBUTIONS.md). It is switched on by the page, not guessed:
+     <html data-road-assets="1"> once the three files exist. Without it there is no second WebGL context (a real cost on a phone) and no request that can only 404;
+     the cabinet screen says the theatre is not installed. */
   function trackSetup() {
+    if (document.documentElement.dataset.roadAssets !== "1") { TRK.absent = true; TRK.error = "the road theatre models are not installed"; return; }
     const c = document.createElement("canvas");
     const ss = S.lowFx ? 1 : 1.5; // supersample: the CRT magnifies this
     c.width = Math.round(TV.w * ss); c.height = Math.round(TV.h * ss);
@@ -678,11 +682,11 @@ window.Arcade3D = (function () {
       x.textAlign = "center";
       x.font = "bold 26px ui-monospace, Menlo, Consolas, monospace";
       x.fillStyle = "#3a4a5c";
-      x.fillText(TRK.error ? "ROAD ASSETS FAILED TO LOAD" : "WARMING UP THE ROAD…",
+      x.fillText(TRK.absent ? "ROAD THEATRE NOT INSTALLED" : TRK.error ? "ROAD ASSETS FAILED TO LOAD" : "WARMING UP THE ROAD…",
         TV.x + TV.w / 2, TV.y + TV.h / 2 - 6);
       if (TRK.error) {
         x.font = "17px ui-monospace, Menlo, Consolas, monospace";
-        x.fillStyle = "#ff8a8a";
+        x.fillStyle = TRK.absent ? "#7d8ea0" : "#ff8a8a";
         x.fillText(String(TRK.error).slice(0, 90), TV.x + TV.w / 2, TV.y + TV.h / 2 + 24);
       }
     }
@@ -937,7 +941,7 @@ window.Arcade3D = (function () {
       map: glowDot, color: 0x8fb6d8, size: 0.03, transparent: true, opacity: 0.32,
       blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
     }));
-    if (!S.lowFx && !S.smallGpu) sc.add(S.dust);
+    if (!S.lowFx && !S.smallGpu && !S.reduced) sc.add(S.dust); // no drifting dust under prefers-reduced-motion
   }
 
   /* -------- cabinet: classic upright silhouette, original to;doh-the event planner art --------
@@ -1629,6 +1633,19 @@ window.Arcade3D = (function () {
     S.wallb = { cv: cv, tex: tex, mesh: mesh, data: null, cells: [], focused: false, prevCam: null, alignOff: null };
     wallDraw(); // starts in the honest "sleeping" state until the backend answers
     let dragX = null;
+    // one place moves the scratches (a drag and the arrow keys share it); returns true when they sit true and the latch opens
+    S.wallb.moveAlign = function (delta) {
+      let off = S.wallb.alignOff == null ? 120 : S.wallb.alignOff;
+      off -= delta;
+      if (off > 260) off = 260; if (off < -260) off = -260;
+      if (Math.abs(off) <= 14) {
+        S.wallb.alignOff = 0; dragX = null; wallDraw();
+        if (S.wallSolveCb) S.wallSolveCb();
+        return true;
+      }
+      S.wallb.alignOff = off; wallDraw();
+      return false;
+    };
     S.renderer.domElement.addEventListener("pointerdown", function (ev) {
       if (S.wallb.focused && S.wallb.data && S.wallb.data.mode === "locked") dragX = ev.clientX;
     });
@@ -1636,15 +1653,7 @@ window.Arcade3D = (function () {
       if (dragX == null || !S.wallb.focused) return;
       const dx = ev.clientX - dragX; dragX = ev.clientX;
       const scale = cv.width / (S.renderer.domElement.clientWidth || window.innerWidth || 1);
-      let off = S.wallb.alignOff == null ? 120 : S.wallb.alignOff;
-      off -= dx * scale;
-      if (off > 260) off = 260; if (off < -260) off = -260;
-      if (Math.abs(off) <= 14) {
-        S.wallb.alignOff = 0; dragX = null; wallDraw();
-        if (S.wallSolveCb) S.wallSolveCb();
-        return;
-      }
-      S.wallb.alignOff = off; wallDraw();
+      S.wallb.moveAlign(dx * scale);
     });
     window.addEventListener("pointerup", function () { dragX = null; });
     const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
@@ -1674,7 +1683,7 @@ window.Arcade3D = (function () {
     const loader = new THREE.GLTFLoader();
     const put = function (url, opts, onPlaced, prio) {
       lazy(prio == null ? 2 : prio, function () {
-        loader.load(url, function (g) { const grp = propPrep(g.scene, opts); sc.add(grp); if (onPlaced) onPlaced(false, grp); }, undefined,
+        loader.load(url, function (g) { const grp = propPrep(g.scene, opts); sc.add(grp); if (S.rearm) S.rearm(); if (onPlaced) onPlaced(false, grp); }, undefined,
           function () { /* prop missing: the den still works */ if (onPlaced) onPlaced(true); });
       });
     };
@@ -1696,6 +1705,7 @@ window.Arcade3D = (function () {
       if (side === 'right') o.backX = BACK_X; else o.backZ = BACK_Z;
       put(url, o, function (failed, grp) {
         if (!failed && grp) { const bx = new THREE.Box3().setFromObject(grp), ctr = bx.getCenter(new THREE.Vector3()); (S.vend = S.vend || []).push({ key: key, label: label, grp: grp, x: ctr.x, z: ctr.z, ry: ry, h: h }); }
+        if (!failed && grp && S.vendChangedCb) S.vendChangedCb();
         if (onLoaded) onLoaded(failed, grp);
       }, prio == null ? 1 : prio);
     };
@@ -2446,21 +2456,33 @@ window.Arcade3D = (function () {
     let frameNo = 0;
     const frameTimes = [];
     let lastNow = 0;
+    // the duration of the last 150 frames, for frameStats() and the ladder's tests; a gap over 1 s is a hidden tab or a stall, not a frame (a 300 ms frame IS a frame: that is the slow device)
+    const ring = new Float32Array(150);
+    let ringN = 0, ringAt = 0, ringLast = 0;
+    const pct = function (sorted, q) { return sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))] : 0; };
+    S.frameStats = function () {
+      const a = Array.prototype.slice.call(ring, 0, ringN).sort(function (x, y) { return x - y; });
+      return { n: ringN, p50: pct(a, 0.5), p95: pct(a, 0.95), max: a.length ? a[a.length - 1] : 0, tier: S.tier, ladder: S.ladder || 0, lowFx: !!S.lowFx, pixelRatio: S.renderer.getPixelRatio() };
+    };
+    // a heavy prop that arrives after the first check can make a device that passed it too slow: look again, until the light path is already in force
+    S.rearm = function () { if (!S.lowFx) { S.fxChecked = false; frameTimes.length = 0; lastNow = 0; } };
     const loop = function () {
       requestAnimationFrame(loop);
       frameNo++;
       const now = performance.now();
-      // auto-degrade ladder for slow devices. Sustained slow frames first drop the render density to 75% (bloom stays); if the next 90 frames are still slow, take the
-      // light path (pixel ratio 1, no bloom, throttled CRT redraw, every second frame skipped). 34 ms (30 fps) is a PROPOSED budget, not a measurement from a device;
-      // measuring stops as soon as a device proves fast.
+      if (ringLast && now - ringLast <= 1000) { ring[ringAt] = now - ringLast; ringAt = (ringAt + 1) % ring.length; ringN = Math.min(ring.length, ringN + 1); }
+      ringLast = now;
+      // auto-degrade ladder for slow devices. If the 95th-percentile frame is over budget (a device that averages well but stutters is still a stuttering device), the
+      // render density drops to 75% (bloom stays); if the next 90 frames are still over, take the light path (pixel ratio 1, no bloom, throttled CRT redraw, every second
+      // frame skipped). 34 ms (30 fps) is a PROPOSED budget, not a measurement from a device; measuring stops once a device proves fast, and starts again when a heavy prop lands.
       if (!S.lowFx && !S.fxChecked) {
-        if (lastNow) frameTimes.push(now - lastNow);
+        if (lastNow && now - lastNow <= 1000) frameTimes.push(now - lastNow); // a hidden tab is not a slow device
         lastNow = now;
         if (frameTimes.length >= 90) {
-          const tail = frameTimes.slice(15);
-          const avg = tail.reduce(function (a, b) { return a + b; }, 0) / tail.length;
+          const tail = frameTimes.slice(15).sort(function (a, b) { return a - b; });
+          const p95 = pct(tail, 0.95);
           frameTimes.length = 0; lastNow = 0;
-          if (avg <= 34) S.fxChecked = true;
+          if (p95 <= 34) S.fxChecked = true;
           else if (!S.ladder) {
             S.ladder = 1;
             const pr = S.renderer.getPixelRatio() * 0.75;
@@ -2489,20 +2511,20 @@ window.Arcade3D = (function () {
       if (S.lowFx && frameNo % 2 === 1) return;
       // cold tube-light flicker
       if (S.tubeLight) {
-        const f = Math.random() < 0.03 ? 0.35 : 1;
-        S.tubeLight.intensity = 1.5 * f * (0.92 + 0.08 * Math.sin(t / 90));
+        const f = !S.reduced && Math.random() < 0.03 ? 0.35 : 1; // prefers-reduced-motion: a steady light, no flicker
+        S.tubeLight.intensity = 1.5 * f * (S.reduced ? 1 : 0.92 + 0.08 * Math.sin(t / 90));
       }
       if (S.screenLight && S.powered) {
-        S.screenLight.intensity = 1.2 + 0.08 * Math.sin(t / 210);
+        S.screenLight.intensity = 1.2 + (S.reduced ? 0 : 0.08 * Math.sin(t / 210));
       }
       if (S.slotGlow) {
         S.slotGlow.material.opacity = (S.powered && scr.crt === "INSERT COIN")
-          ? 0.35 + 0.3 * Math.sin(t / 300) : 0;
+          ? 0.35 + (S.reduced ? 0.15 : 0.3 * Math.sin(t / 300)) : 0;
       }
       if (S.attVisor) S.attVisor.material.color.setRGB(0.4, 1.6, 2.0);
-      if (S.attVisor && Math.sin(t / 1700) > 0.96) S.attVisor.material.color.setRGB(0.12, 0.5, 0.7);
-      if (S.attHead) S.attHead.rotation.y = Math.sin(t / 2400) * 0.3; // idle scan
-      if (S.dust && S.dust.visible) {
+      if (S.attVisor && !S.reduced && Math.sin(t / 1700) > 0.96) S.attVisor.material.color.setRGB(0.12, 0.5, 0.7);
+      if (S.attHead) S.attHead.rotation.y = S.reduced ? 0 : Math.sin(t / 2400) * 0.3; // idle scan
+      if (S.dust && S.dust.visible && !S.reduced) {
         S.dust.rotation.y = t * 0.00004;
         S.dust.position.y = Math.sin(t * 0.00005) * 0.12;
       }
@@ -2535,7 +2557,7 @@ window.Arcade3D = (function () {
     return true;
   }
 
-  return {
+  const api = {
     init: init, resize: resize, userGesture: userGesture,
     powerOn: powerOn, coinInsert: coinInsert, stageRun: stageRun,
     livePulse: livePulse, resetWorkflow: resetWorkflow, finishRun: finishRun, hideSheets: hideSheets,
@@ -2581,5 +2603,34 @@ window.Arcade3D = (function () {
       if (m && S.audio) S.audio.suspend(); else if (!m && S.audio) S.audio.resume();
     },
     isMuted: function () { return S.muted; },
+    /* keyboard and assistive-tech entry to the same views a tap opens; false when the view is not available right now */
+    openView: function (kind, i) {
+      if (S.zoomed || (S.holo && S.holo.focused) || (S.dossier && S.dossier.focused) || (S.wallb && S.wallb.focused) || S.vendFocused != null) return false;
+      S.lastSceneTap = performance.now();
+      if (kind === "wall" && S.wallb && S.wallFocusCb) { S.wallFocusCb(); return true; }
+      if (kind === "holo" && S.holo && S.holo.unlocked && S.holo.root && S.holoFocusCb) { S.holoFocusCb(); return true; }
+      if (kind === "vend" && S.vend && S.vend[i] && S.vendFocusCb) { S.vendFocusCb(i); return true; }
+      if (kind === "dossier" && S.dossier && S.dossier.grp && S.dossierFocusCb) { S.dossierFocusCb(); return true; }
+      return false;
+    },
+    frameStats: function () { return S.frameStats ? S.frameStats() : null; },
+    holoReady: function () { return !!(S.holo && S.holo.unlocked && S.holo.root); },
+    onVendsChanged: function (cb) { S.vendChangedCb = cb; },
+    wallLocked: function () { return !!(S.wallb && S.wallb.focused && S.wallb.data && S.wallb.data.mode === "locked"); },
+    wallCells: function () { return S.wallb ? (S.wallb.cells || []).map(function (c) { return { slot: c.slot, mark_id: c.mark_id, name: c.name }; }) : []; },
+    wallAlignOff: function () { return S.wallb && S.wallb.alignOff != null ? S.wallb.alignOff : 120; },
+    wallNudge: function (delta) { return !!(S.wallb && S.wallb.moveAlign && S.wallb.focused && S.wallb.moveAlign(delta)); },
   };
+  /* No WebGL: the room cannot be drawn, but the planner must still work. Every scene method becomes a no-op (callers await some of them, and
+     `await undefined` is fine); the few whose results are read keep a typed empty answer. isMuted, setMuted and init stay real. */
+  const EMPTY = { vendCount: 0, vendLabels: [], vendFocused: false, holoFocused: false, dossierFocused: false, dossierOpen: false, dossierReady: false, cabReady: false, wallFocused: false, lastSceneTap: 0, screenDebug: {}, openView: false, holoReady: false, wallLocked: false, wallNudge: false, wallCells: [], wallAlignOff: 0, frameStats: null };
+  api.disable = function () {
+    Object.keys(api).forEach(function (k) {
+      if (typeof api[k] !== "function" || k === "disable" || k === "init" || k === "isMuted" || k === "setMuted") return;
+      const v = EMPTY[k];
+      api[k] = function () { return Array.isArray(v) ? v.slice() : (v && typeof v === "object" ? Object.assign({}, v) : v); };
+    });
+    S.disabled = true;
+  };
+  return api;
 })();
