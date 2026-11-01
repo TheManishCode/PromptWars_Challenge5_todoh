@@ -35,16 +35,16 @@ Planning an event means juggling a budget, a schedule, a pile of vendors and a h
 
 ```mermaid
 flowchart LR
-    A([Your brief]) --> B[Intake<br/>LLM reads it, you confirm]
-    B --> C[Vendor shortlist<br/>hard constraints + reasons]
-    C --> D[Scheduler<br/>CP-SAT timeline + budget caps]
-    D --> E[Symbolic check<br/>Fast Downward + VAL]
-    E --> F{Validator<br/>re-derives every fact}
-    F -- fails --> G[Named violation<br/>+ concrete repair]
-    F -- passes --> H[(Immutable plan version)]
+    A([Your brief]) --> B["Intake<br/>LLM reads it, you confirm"]
+    B --> C["Vendor shortlist<br/>hard constraints + reasons"]
+    C --> D["Scheduler<br/>CP-SAT timeline + budget caps"]
+    D --> E["Symbolic check<br/>Fast Downward + VAL"]
+    E --> F{"Validator<br/>re-derives every fact"}
+    F -- fails --> G["Named violation<br/>+ concrete repair"]
+    F -- passes --> H[("Immutable plan version")]
     H --> I[Explainer<br/>plain words, same facts]
     H --> J[Ideas<br/>guarded suggestions]
-    H --> K[Outreach<br/>you approve exact text]
+    H --> K["Outreach<br/>you approve exact text"]
     L([Disruption]) --> M[Replanner] --> H
 ```
 
@@ -57,19 +57,19 @@ flowchart TB
         R[REST API]:::ui
         CLI[CLI]:::ui
     end
-    subgraph CORE[Verified core: no model has authority here]
+    subgraph CORE["Verified core: no model has authority here"]
         SVC[Service facade]
-        AG[Agents: Manager, Budget, Vendor, Planner,<br/>Scheduler, Validator, Replanner, Trade-off, Guest]
-        SOL[OR-Tools CP-SAT · Fast Downward · VAL]
-        ST[(Hash-checked plan store<br/>per-workspace)]
+        AG["Agents: Manager, Budget, Vendor, Planner,<br/>Scheduler, Validator, Replanner, Trade-off, Guest"]
+        SOL["OR-Tools CP-SAT · Fast Downward · VAL"]
+        ST[("Hash-checked plan store<br/>per-workspace")]
     end
-    subgraph GEN[GenAI layer: wording only]
-        LLM[Intake · Ideas · Explainer · Assistant · Explore]
-        GD[Guards: no invented prices, vendors or availability]
+    subgraph GEN["GenAI layer: wording only"]
+        LLM["Intake · Ideas · Explainer · Assistant · Explore"]
+        GD["Guards: no invented prices, vendors or availability"]
     end
     subgraph OUT[Follow-through]
         AP[Approvals bound to a content hash]
-        JOB[Background jobs: quotes, nudges, digests]
+        JOB["Background jobs: quotes, nudges, digests"]
         CH[Email / WhatsApp channels]
     end
     UI --> SVC --> AG --> SOL
