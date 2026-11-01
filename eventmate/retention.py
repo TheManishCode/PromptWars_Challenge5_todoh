@@ -120,5 +120,27 @@ def scrub_plan_from_logs(log_dir: Path, plan_id: str) -> int:
     return removed
 
 
+TEMP_NAME = re.compile(r"\.(?:tmp|heads|scrub)-[A-Za-z0-9_.-]+")
+
+
+def sweep_stale_temp(*dirs: Path, max_age_s: float = 600.0, now: Optional[float] = None) -> List[str]:
+    """Remove temporary files a crash left behind (a half-written guest list holds names, a half-written plan holds the plan). Only files older than ``max_age_s``
+    are touched, so a write that is happening right now in another process is safe; each is overwritten before it is unlinked."""
+    cutoff, removed = (time.time() if now is None else now) - max_age_s, []
+    for root in dirs:
+        root = Path(root)
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if path.is_symlink() or not path.is_file() or not TEMP_NAME.fullmatch(path.name):
+                continue
+            try:
+                if path.stat().st_mtime < cutoff and wipe(path):
+                    removed.append(str(path.relative_to(root)))
+            except OSError:
+                pass
+    return removed
+
+
 def report(versions: int, files: int, jobs: int) -> Dict[str, int]:
     return {"plan_versions": versions, "message_and_ledger_files": files, "jobs": jobs}

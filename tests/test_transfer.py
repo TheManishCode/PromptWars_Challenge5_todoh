@@ -395,3 +395,84 @@ def test_deleting_a_workspace_that_is_not_there_is_a_clean_no_op_and_local_mode_
     token = local.get("/api/session").get_json()["csrf"]
     r = local.delete("/api/workspace", data=json.dumps({"confirm": "delete"}), headers={"X-EventMate-CSRF": token, "Content-Type": "application/json"})
     assert r.status_code == 404 and r.get_json()["code"] == "not_found"
+
+
+def residue(root, needles):
+    """Files under ``root`` that name or contain a needle, ignoring the deletion log and the plan's own version files (those are removed last, by design)."""
+    hits = []
+    for p in Path(root).rglob("*"):
+        if not p.is_file() or p.name == "tombstones.jsonl" or (p.name.startswith("plan-") and p.name != "plan-heads.jsonl"):
+            continue
+        hits += [(str(p.relative_to(root)), n) for n in needles if n.encode() in p.read_bytes() or n in p.name]
+    return hits
+
+
+# ---- crash recovery (found by crash-point testing: kill the process before each filesystem change and look at what is left)
+
+
+def _dead_pid():
+    import subprocess
+
+    p = subprocess.Popen(["true"])
+    p.wait()
+    return p.pid
+
+
+def test_an_import_killed_part_way_is_rolled_back_by_the_next_start_and_leaves_no_plan_without_its_ledger(tmp_path, monkeypatch):
+    a, pid = populated(tmp_path, "a")
+    archive = export_workspace(a)
+    b = new_em(tmp_path, "b")
+    real = b.ledger._file
+
+    def die(*args, **kw):
+        raise KeyboardInterrupt("simulated death between a plan's versions and its ledger")  # not an Exception: nothing in the import catches it, as with a kill
+
+    monkeypatch.setattr(b.ledger, "_file", die)
+    with pytest.raises(KeyboardInterrupt):
+        import_archive(archive, b)
+    monkeypatch.setattr(b.ledger, "_file", real)
+    markers = list(Path(b.store.root).glob("import-pending-*.json"))
+    assert len(markers) == 1 and b.store.list_plans() == [pid]  # the half-imported plan is there, without its ledger or guest list
+    doc = json.loads(markers[0].read_text())
+    doc["pid"] = _dead_pid()  # the process that was importing is gone
+    markers[0].write_text(json.dumps(doc))
+    again = new_em(tmp_path, "b")  # the next start
+    assert again.store.list_plans() == [] and not list(Path(again.store.root).glob("import-pending-*.json"))
+    assert residue(tmp_path / "b", (pid,)) == []
+
+
+def test_an_import_whose_process_is_still_alive_is_left_alone(tmp_path):
+    import os
+
+    a, pid = populated(tmp_path, "a")
+    b = new_em(tmp_path, "b")
+    import_archive(export_workspace(a), b)
+    marker = Path(b.store.root) / "import-pending-live.json"
+    marker.write_text(json.dumps({"pid": os.getppid(), "plans": [pid]}))  # the parent process is alive: this import may be running
+    new_em(tmp_path, "b")
+    assert marker.exists() and b.store.list_plans() == [pid]
+
+
+def test_stale_temporary_files_are_wiped_and_a_fresh_one_is_left_alone(tmp_path):
+    import os
+    import time
+
+    from eventmate.retention import sweep_stale_temp
+
+    (tmp_path / "guests").mkdir()
+    old, fresh = tmp_path / "guests" / ".tmp-aaaa", tmp_path / "guests" / ".tmp-bbbb"
+    old.write_text("Asha Quill")
+    fresh.write_text("Bo Marlowe")
+    real = tmp_path / "guests" / "guests-abc.json"
+    real.write_text("{}")
+    os.utime(old, (time.time() - 3600, time.time() - 3600))
+    assert sweep_stale_temp(tmp_path) == ["guests/.tmp-aaaa"] and not old.exists() and fresh.exists() and real.exists()
+
+
+def test_a_delete_killed_after_the_logs_were_scrubbed_can_be_run_again_and_the_logs_never_name_the_plan(tmp_path, monkeypatch):
+    em, pid = populated(tmp_path, "a")
+    monkeypatch.setattr(em.store, "delete", lambda p: (_ for _ in ()).throw(KeyboardInterrupt("died before the versions were removed")))
+    with pytest.raises(KeyboardInterrupt):
+        em.delete_plan(pid)
+    assert pid in em.store.list_plans()  # still listed, so it can be deleted again
+    assert residue(tmp_path / "a", (pid,)) == []  # and nothing but the plan's own versions names it (those are about to go): the logs and head record are already clean

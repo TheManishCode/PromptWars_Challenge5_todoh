@@ -23,7 +23,7 @@ from eventmate.guestlist import GuestListStore, GuestPreview, check_against, par
 from eventmate.voice.notes import VoiceNoteStore
 from eventmate import migrations
 from eventmate.integrity import Guard
-from eventmate.retention import PlanBusy, delete_plan_files, purge_old_logs, report, scrub_plan_from_logs, write_tombstone
+from eventmate.retention import PlanBusy, delete_plan_files, purge_old_logs, report, scrub_plan_from_logs, sweep_stale_temp, write_tombstone
 from eventmate.agents.budget import BudgetAgent, BudgetPolicy
 from eventmate.agents.explainer import ExplainerAgent, Explanation
 from eventmate.agents.guest import GuestAgent, GuestRepository
@@ -153,6 +153,10 @@ class EventMate:
         with contextlib.suppress(Exception):  # approve and dispatch re-check every draft anyway; a store that cannot be read yet must not stop start-up
             self.conversations.supersede_all_stale()  # drafts that predate version tracking, or that no longer match their plan, are marked stale once
         self.replanner = ReplannerAgent(self.logs, self.repo, budget, vendor, guest, planner, self.validator, self.store)
+        sweep_stale_temp(self.store.root, self.logs.decisions.log_dir)  # what a crash left half-written, once it is old enough that nothing is still writing it
+        from eventmate.transfer import recover_interrupted_imports
+
+        recover_interrupted_imports(self)  # an import whose process died part-way is rolled back, so a plan never exists without its ledger and guest list
 
     def _clock(self, today: Optional[date]) -> None:
         """Quote expiry is judged against the caller's 'today' (tests and the web app inject one)."""
@@ -258,9 +262,12 @@ class EventMate:
         self.guest_lists.delete(plan_id)  # also drops any preview still waiting for a commit
         files = delete_plan_files(self.store.root, plan_id) + self.voice_notes.delete_plan(plan_id)
         jobs = self.jobs.store.delete_plan(plan_id) if (self.store.root / "jobs.db").exists() else 0
-        versions = self.store.delete(plan_id)  # last: until it is gone the plan still lists, so a failed delete can simply be run again
+        # Order matters for a crash: everything that merely mentions the plan goes first, the versions go LAST. Until they are gone the plan still lists, so a delete that was
+        # interrupted anywhere can simply be run again; if the versions went first, a crash would leave its id in the logs with no way left to delete it (found by crash-point testing).
         lines = scrub_plan_from_logs(self.logs.decisions.log_dir, plan_id)  # its questions, answers and decisions go with it; only the tombstone keeps the id
+        self.store._forget_head(plan_id)
         write_tombstone(self.store.root / "tombstones.jsonl", "plan", plan_id)
+        versions = self.store.delete(plan_id)
         self.logs.decisions.log(
             request_id="retention", agent=AgentName.MANAGER, decision_type=DecisionType.ASSESSMENT, summary="A plan was deleted at the user's request",
             justification=f"removed {versions} plan version(s), {files} message and ledger file(s), {jobs} job(s), {lines} log line(s); the tombstone records which plan and when", confidence=1.0, source="rule:retention",

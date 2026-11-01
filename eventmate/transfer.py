@@ -304,6 +304,7 @@ def import_archive(raw: bytes, em, now: Optional[datetime] = None, check_space: 
             mapping[old] = new
     created: List[str] = []
     counts = {"plans": 0, "versions": 0, "ledger_entries": 0, "guest_lists": 0, "leads": 0}
+    marker = _write_marker(Path(store.root), [mapping.get(old, old) for old in plans])  # a crash from here to the end leaves this behind, and the next start rolls the import back
     try:
         for old, versions in plans.items():
             new = mapping.get(old, old)
@@ -327,9 +328,64 @@ def import_archive(raw: bytes, em, now: Optional[datetime] = None, check_space: 
     except Exception:
         for plan_id in created:  # nothing half-imported is left behind
             _undo(em, plan_id)
+        _drop_marker(marker)
         raise
+    _drop_marker(marker)
     return {"imported": counts, "remapped": mapping, "hashes_verified": True, "history_kept": kept,
             "note": "Outreach and jobs are kept as history only and nothing in them can send; draft and approve again if you want to contact a vendor."}
+
+
+PENDING = "import-pending-"
+
+
+def _write_marker(root: Path, plan_ids: List[str]) -> Path:
+    """Before an import writes anything: which plan ids it is about to create (all brand new), and which process is doing it. Removed when the import ends either way."""
+    path = root / f"{PENDING}{secrets.token_hex(6)}.json"
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        json.dump({"pid": os.getpid(), "plans": plan_ids}, fh)
+        fh.flush()
+        os.fsync(fh.fileno())
+    return path
+
+
+def _drop_marker(path: Path) -> None:
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def recover_interrupted_imports(em) -> List[str]:
+    """Roll back every import whose process died part-way (a crash, a kill, a power cut): the plans it listed are new ids nobody else could have used, so they are removed with
+    everything attached to them, and the marker goes. An import that is still running (its process is alive) is left alone. Returns the plan ids removed."""
+    root, removed = Path(em.store.root), []
+    for marker in sorted(root.glob(PENDING + "*.json")):
+        try:
+            doc = json.loads(marker.read_text())
+            ids, pid = [i for i in doc["plans"] if isinstance(i, str)], int(doc["pid"])
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        if pid == os.getpid() or _alive(pid):
+            continue
+        for plan_id in ids:
+            try:
+                _undo(em, plan_id)
+                removed.append(plan_id)
+            except (ValueError, OSError):
+                pass
+        _drop_marker(marker)
+    return removed
 
 
 def _undo(em, plan_id: str) -> None:
