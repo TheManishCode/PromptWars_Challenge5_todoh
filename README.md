@@ -3,7 +3,7 @@
 <p align="center"><b>A constraint-verified planning copilot for weddings, birthdays and community events.</b></p>
 
 <p align="center">
-<a href="https://github.com/TheManishCode/event-agent/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheManishCode/event-agent/actions/workflows/ci.yml/badge.svg"></a>
+<a href="https://github.com/TheManishCode/to_doh_the_event_planner/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheManishCode/to_doh_the_event_planner/actions/workflows/ci.yml/badge.svg"></a>
 <img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-3776ab">
 <img alt="Container" src="https://img.shields.io/badge/container-non--root%20%7C%20700%20MB-2496ed">
 <img alt="Accessibility" src="https://img.shields.io/badge/axe--core-0%20violations-8b5cf6">
