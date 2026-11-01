@@ -19,7 +19,7 @@ ATTACKS = {
     "1,": "1," * (N // 2), "inr": "INR 1 " * (N // 6), "x:": "x: " * (N // 3), "=": "=" * N, "a/": "a/" * (N // 2), "http": "http://a." * (N // 9), '"': '"' * N,
     "'": "'" * N, "(": "(" * N, "\\": "\\" * N, "tab": "\t" * N, "date": "12/12/12 " * (N // 9), "at": "a at b dot " * (N // 11), "ignore": "ignore the " * (N // 11),
 }
-FULLMATCH_ONLY = {"eventmate.llm._PROMPT_ID"}  # used only with fullmatch on a short id, never searched in free text
+FULLMATCH_ONLY = {"eventmate.llm._PROMPT_ID", "eventmate.integrity.JSONL_NAME"}  # used only with fullmatch on a short id or a file name, never searched in free text
 
 
 def module_patterns():

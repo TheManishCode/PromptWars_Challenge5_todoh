@@ -14,20 +14,35 @@ import os
 import re
 import threading
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Generic, List, Optional, Type, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+
+from eventmate import migrations
 
 M = TypeVar("M", bound=BaseModel)
 
 DEFAULT_LOG_DIR = Path(__file__).resolve().parent / "logs"
+ROTATED_SUFFIX = r"\.\d{8}T\d{6}Z-\d{1,4}"  # <name>.jsonl.<UTC time>-<n>: a log that was rotated out
+ROTATED = re.compile(ROTATED_SUFFIX + "$")
+DEFAULT_MAX_BYTES = 20_000_000
+DEFAULT_KEEP = 30
 RUN_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def _int_env(name: str, default: int, lo: int) -> int:
+    try:
+        return max(lo, int(os.environ.get(name, default)))
+    except ValueError:
+        return default
 
 
 class JsonlLog(Generic[M]):
     channel = "log"
     model: Type[M]
+    rotates = False  # only the operational logs (decisions, tool calls, LLM traces, validation failures, assistant traces) rotate; money and send state never does
 
     def __init__(self, log_dir: Optional[Path] = None, run_id: Optional[str] = None):
         run_id = run_id if run_id is not None else uuid.uuid4().hex
@@ -40,10 +55,39 @@ class JsonlLog(Generic[M]):
         self.entry_ids: List[str] = []
         self._lock = threading.Lock()
 
+    def _rotate_if_needed(self) -> None:
+        """Start a new file when this one is over ``EVENTMATE_LOG_MAX_BYTES`` (default 20 MB) or was last written on an earlier UTC day. The old one is renamed
+        ``<name>.jsonl.<UTC time>-<n>`` (atomic, so another process appending at the same moment just starts the new file), and only the newest
+        ``EVENTMATE_LOG_KEEP`` (default 30) rotated files of this log are kept. Never applied to a store that holds money or send state."""
+        try:
+            st = os.stat(self.path)
+        except FileNotFoundError:
+            return
+        if st.st_size == 0:
+            return
+        if st.st_size < _int_env("EVENTMATE_LOG_MAX_BYTES", DEFAULT_MAX_BYTES, 1000) and datetime.fromtimestamp(st.st_mtime, timezone.utc).date() >= datetime.now(timezone.utc).date():
+            return
+        stamp, n = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"), 1
+        while os.path.exists(f"{self.path}.{stamp}-{n}"):
+            n += 1
+        try:
+            os.rename(self.path, f"{self.path}.{stamp}-{n}")
+        except FileNotFoundError:
+            return  # another process rotated it first
+        keep = _int_env("EVENTMATE_LOG_KEEP", DEFAULT_KEEP, 1)
+        rotated = sorted(p for p in self.log_dir.glob(self.path.name + ".*") if ROTATED.search(p.name) and not p.is_symlink())
+        for old in rotated[:-keep]:
+            try:
+                os.unlink(old)
+            except FileNotFoundError:
+                pass
+
     def _append(self, entry: M, entry_id: str) -> M:
-        line = (entry.model_dump_json() + "\n").encode("utf-8")
+        line = (migrations.stamp(self.channel, entry.model_dump_json()) + "\n").encode("utf-8")  # one line, one write, schema_version first
         flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
         with self._lock:
+            if self.rotates:
+                self._rotate_if_needed()
             fd = os.open(self.path, flags, 0o600)
             try:
                 view = memoryview(line)
@@ -56,11 +100,22 @@ class JsonlLog(Generic[M]):
         return entry
 
     def read(self) -> List[M]:
-        """Load every entry; a corrupt line raises rather than being skipped."""
+        """Load every entry, each upgraded in memory to the current schema. A corrupt line raises ``StoreCorrupt`` naming the file and line rather than being skipped:
+        the application fails closed, and ``python -m eventmate verify`` says exactly what is damaged."""
         if not self.path.exists():
             return []
+        out: List[M] = []
         with open(self.path, "r", encoding="utf-8") as fh:
-            return [self.model.model_validate_json(line) for line in fh if line.strip()]
+            for number, line in enumerate(fh, 1):
+                if not line.strip():
+                    continue
+                doc = migrations.parse_line(self.channel, line, self.path.name, number)
+                try:
+                    out.append(self.model.model_validate(doc))
+                except ValidationError as exc:
+                    exc.add_note(f"in {self.path.name} line {number}")  # the original error stays (callers and tests rely on its type); the note says where
+                    raise
+        return out
 
 
 class InterProcessLock:

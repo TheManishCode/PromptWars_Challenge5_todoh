@@ -1,0 +1,807 @@
+{
+  "plan": {
+    "allocation": {
+      "contingency": 20000,
+      "currency": "INR",
+      "lines": [
+        {
+          "amount": 72414,
+          "category": "venue",
+          "share": 0.3621
+        },
+        {
+          "amount": 82759,
+          "category": "caterer",
+          "share": 0.4138
+        },
+        {
+          "amount": 24827,
+          "category": "photographer",
+          "share": 0.1241
+        }
+      ],
+      "total": 200000
+    },
+    "change_reason": "initial plan",
+    "created_at": "2026-11-01T02:48:42.180577Z",
+    "decision_entry_ids": [
+      "ed91626003cd4263a7e7a24d9c0f0789",
+      "53813bf65dae4a01ac7f03efb470c05d",
+      "b3bee5149add469aa3ae7f83fdab31d7",
+      "91ad00fc75f14874adcea536e99a8468",
+      "a55f8451c6e44d3e88e87490c5669a5d",
+      "ee753170c33947919b44f3e258138923",
+      "71a7bbeb30fe4e31a0d7d82c035dba6f",
+      "ba7d259109a64555a4e7626453550b80",
+      "3d166c12cbbe4f9a9f5cd73a88627d65",
+      "7f049e9bf6134d21822b8d12d9d46084",
+      "00e82df99bb2498da762375d24f979fe",
+      "5ab6faf5e9a24548ad50e73c32ba171d"
+    ],
+    "excluded_vendor_ids": [],
+    "guests": {
+      "checks": [
+        {
+          "detail": "no guest list supplied; using the stated headcount",
+          "name": "rsvp_within_headcount",
+          "passed": true
+        }
+      ],
+      "confirmed": 0,
+      "declined": 0,
+      "dietary_counts": {},
+      "guest_list_id": null,
+      "pending": 120,
+      "planning_headcount": 120,
+      "required_diets": [
+        "vegetarian"
+      ],
+      "source": "user_input"
+    },
+    "items": [
+      {
+        "end": "2026-10-30T10:00:00",
+        "group": "pre_event",
+        "name": "Book venue",
+        "resource": "organizer",
+        "start": "2026-10-30T09:00:00",
+        "task_id": "book_venue"
+      },
+      {
+        "end": "2026-10-30T10:15:00",
+        "group": "pre_event",
+        "name": "Reminder: send invitations",
+        "resource": "organizer",
+        "start": "2026-10-30T10:00:00",
+        "task_id": "reminder_invitation"
+      },
+      {
+        "end": "2026-10-30T11:15:00",
+        "group": "pre_event",
+        "name": "Book caterer",
+        "resource": "organizer",
+        "start": "2026-10-30T10:15:00",
+        "task_id": "book_caterer"
+      },
+      {
+        "end": "2026-10-30T12:15:00",
+        "group": "pre_event",
+        "name": "Book photographer",
+        "resource": "organizer",
+        "start": "2026-10-30T11:15:00",
+        "task_id": "book_photographer"
+      },
+      {
+        "end": "2026-10-31T12:15:00",
+        "group": "pre_event",
+        "name": "Send invitations",
+        "resource": "organizer",
+        "start": "2026-10-31T10:15:00",
+        "task_id": "send_invitations"
+      },
+      {
+        "end": "2026-12-05T09:15:00",
+        "group": "pre_event",
+        "name": "Reminder: confirm vendors",
+        "resource": "organizer",
+        "start": "2026-12-05T09:00:00",
+        "task_id": "reminder_vendor_confirmation"
+      },
+      {
+        "end": "2026-12-12T16:00:00",
+        "group": "event_day",
+        "name": "Venue setup",
+        "resource": "venue",
+        "start": "2026-12-12T14:00:00",
+        "task_id": "venue_setup"
+      },
+      {
+        "end": "2026-12-12T17:30:00",
+        "group": "event_day",
+        "name": "Catering setup",
+        "resource": "caterer",
+        "start": "2026-12-12T16:00:00",
+        "task_id": "catering_setup"
+      },
+      {
+        "end": "2026-12-12T17:30:00",
+        "group": "event_day",
+        "name": "Photography prep",
+        "resource": "photographer",
+        "start": "2026-12-12T17:00:00",
+        "task_id": "photography_prep"
+      },
+      {
+        "end": "2026-12-12T22:00:00",
+        "group": "event_day",
+        "name": "Event",
+        "resource": "venue",
+        "start": "2026-12-12T18:00:00",
+        "task_id": "event"
+      },
+      {
+        "end": "2026-12-13T00:00:00",
+        "group": "event_day",
+        "name": "Teardown",
+        "resource": "venue",
+        "start": "2026-12-12T22:00:00",
+        "task_id": "teardown"
+      }
+    ],
+    "newly_confirmed_vendor_ids": [],
+    "origin": "2026-10-30T00:00:00",
+    "parent_version": null,
+    "plan_id": "9407891c06ab",
+    "released_vendor_ids": [],
+    "request": {
+      "assumptions": [
+        "year not given; assumed next occurrence 2026-12-12"
+      ],
+      "budget_total": 200000,
+      "cap_weights": [],
+      "city": "Pune",
+      "community": null,
+      "currency": "INR",
+      "dietary": [
+        "vegetarian"
+      ],
+      "event_date": "2026-12-12",
+      "event_type": "engagement_party",
+      "guest_count": 120,
+      "organizers": 1,
+      "parse_confidence": 0.9,
+      "raw_text": "Plan a 120-person engagement party in Pune on December 12 under INR 200,000. Vegetarian catering, indoor venue, photographer, and reminders for invitations and vendor confirmation.",
+      "reminders": [
+        "invitation",
+        "vendor_confirmation"
+      ],
+      "request_id": "572b892194424915",
+      "services": [
+        "venue",
+        "caterer",
+        "photographer"
+      ],
+      "venue_setting": "indoor"
+    },
+    "selections": [
+      {
+        "alternatives": [
+          {
+            "option": "Heritage Hall",
+            "outcome": "INR 65,000, score 0.581",
+            "reason_not_chosen": "the best affordable combination is higher-scoring overall"
+          },
+          {
+            "option": "Skyline Banquet",
+            "outcome": "rejected",
+            "reason_not_chosen": "budget_cap: cost INR 90,000 vs category cap INR 72,414"
+          },
+          {
+            "option": "Lakeside Lawns",
+            "outcome": "rejected",
+            "reason_not_chosen": "venue_setting: venue is outdoor, requested indoor"
+          }
+        ],
+        "booking_status": "available",
+        "category": "venue",
+        "cost": 55000,
+        "justification": "Orchid Banquet (INR 55,000, score 0.5882) is part of the highest-scoring combination (INR 139,000 total) that fits the budget.",
+        "name": "Orchid Banquet",
+        "no_alternative_reason": null,
+        "score": 0.5882,
+        "source": "database:seed_venues.json",
+        "vendor_id": "ven-pune-orchid"
+      },
+      {
+        "alternatives": [
+          {
+            "option": "Annapurna Caterers",
+            "outcome": "INR 78,000, score 0.575",
+            "reason_not_chosen": "the best affordable combination is higher-scoring overall"
+          },
+          {
+            "option": "Spice Route",
+            "outcome": "rejected",
+            "reason_not_chosen": "budget_cap: cost INR 84,000 vs category cap INR 82,759"
+          },
+          {
+            "option": "Mughlai Darbar",
+            "outcome": "rejected",
+            "reason_not_chosen": "dietary: does not offer: vegetarian; budget_cap: cost INR 96,000 vs category cap INR 82,759"
+          }
+        ],
+        "booking_status": "available",
+        "category": "caterer",
+        "cost": 66000,
+        "justification": "Royal Rasoi (INR 66,000, score 0.585) is part of the highest-scoring combination (INR 139,000 total) that fits the budget.",
+        "name": "Royal Rasoi",
+        "no_alternative_reason": null,
+        "score": 0.585,
+        "source": "database:seed_vendors.json",
+        "vendor_id": "cat-pune-rasoi"
+      },
+      {
+        "alternatives": [
+          {
+            "option": "Candid Frames",
+            "outcome": "INR 22,000, score 0.5975",
+            "reason_not_chosen": "the best affordable combination is higher-scoring overall"
+          },
+          {
+            "option": "Cinematic Co",
+            "outcome": "rejected",
+            "reason_not_chosen": "budget_cap: cost INR 45,000 vs category cap INR 24,827"
+          },
+          {
+            "option": "Moments Hub",
+            "outcome": "rejected",
+            "reason_not_chosen": "date_availability: 2026-12-12 is not in the vendor's available dates"
+          }
+        ],
+        "booking_status": "available",
+        "category": "photographer",
+        "cost": 18000,
+        "justification": "LensCraft Studio (INR 18,000, score 0.602) is part of the highest-scoring combination (INR 139,000 total) that fits the budget.",
+        "name": "LensCraft Studio",
+        "no_alternative_reason": null,
+        "score": 0.602,
+        "source": "database:seed_vendors.json",
+        "vendor_id": "pho-pune-lens"
+      }
+    ],
+    "solution": {
+      "detail": "",
+      "entries": [
+        {
+          "end": 600,
+          "start": 540,
+          "task_id": "book_venue"
+        },
+        {
+          "end": 675,
+          "start": 615,
+          "task_id": "book_caterer"
+        },
+        {
+          "end": 735,
+          "start": 675,
+          "task_id": "book_photographer"
+        },
+        {
+          "end": 615,
+          "start": 600,
+          "task_id": "reminder_invitation"
+        },
+        {
+          "end": 2175,
+          "start": 2055,
+          "task_id": "send_invitations"
+        },
+        {
+          "end": 52395,
+          "start": 52380,
+          "task_id": "reminder_vendor_confirmation"
+        },
+        {
+          "end": 62880,
+          "start": 62760,
+          "task_id": "venue_setup"
+        },
+        {
+          "end": 62970,
+          "start": 62880,
+          "task_id": "catering_setup"
+        },
+        {
+          "end": 62970,
+          "start": 62940,
+          "task_id": "photography_prep"
+        },
+        {
+          "end": 63240,
+          "start": 63000,
+          "task_id": "event"
+        },
+        {
+          "end": 63360,
+          "start": 63240,
+          "task_id": "teardown"
+        }
+      ],
+      "infeasibility_core": [],
+      "objective": 57375,
+      "status": "optimal"
+    },
+    "spec": {
+      "anchor_task": "event",
+      "dependencies": [
+        {
+          "after": "book_caterer",
+          "before": "book_venue",
+          "min_lag": 0
+        },
+        {
+          "after": "book_photographer",
+          "before": "book_venue",
+          "min_lag": 0
+        },
+        {
+          "after": "reminder_invitation",
+          "before": "book_venue",
+          "min_lag": 0
+        },
+        {
+          "after": "send_invitations",
+          "before": "reminder_invitation",
+          "min_lag": 1440
+        },
+        {
+          "after": "reminder_vendor_confirmation",
+          "before": "book_venue",
+          "min_lag": 0
+        },
+        {
+          "after": "reminder_vendor_confirmation",
+          "before": "book_caterer",
+          "min_lag": 0
+        },
+        {
+          "after": "reminder_vendor_confirmation",
+          "before": "book_photographer",
+          "min_lag": 0
+        },
+        {
+          "after": "venue_setup",
+          "before": "book_venue",
+          "min_lag": 0
+        },
+        {
+          "after": "catering_setup",
+          "before": "venue_setup",
+          "min_lag": 0
+        },
+        {
+          "after": "catering_setup",
+          "before": "book_caterer",
+          "min_lag": 0
+        },
+        {
+          "after": "photography_prep",
+          "before": "venue_setup",
+          "min_lag": 0
+        },
+        {
+          "after": "photography_prep",
+          "before": "book_photographer",
+          "min_lag": 0
+        },
+        {
+          "after": "event",
+          "before": "venue_setup",
+          "min_lag": 30
+        },
+        {
+          "after": "event",
+          "before": "catering_setup",
+          "min_lag": 30
+        },
+        {
+          "after": "event",
+          "before": "photography_prep",
+          "min_lag": 30
+        },
+        {
+          "after": "teardown",
+          "before": "event",
+          "min_lag": 0
+        }
+      ],
+      "horizon": 64800,
+      "resources": {
+        "caterer": 1,
+        "organizer": 1,
+        "photographer": 1,
+        "venue": 1
+      },
+      "tasks": [
+        {
+          "deadline_end": null,
+          "duration": 60,
+          "earliest_start": 540,
+          "fixed_start": null,
+          "group": "pre_event",
+          "id": "book_venue",
+          "name": "Book venue",
+          "prefer": "early",
+          "resource": "organizer",
+          "weight": 1
+        },
+        {
+          "deadline_end": null,
+          "duration": 60,
+          "earliest_start": 540,
+          "fixed_start": null,
+          "group": "pre_event",
+          "id": "book_caterer",
+          "name": "Book caterer",
+          "prefer": "early",
+          "resource": "organizer",
+          "weight": 1
+        },
+        {
+          "deadline_end": null,
+          "duration": 60,
+          "earliest_start": 540,
+          "fixed_start": null,
+          "group": "pre_event",
+          "id": "book_photographer",
+          "name": "Book photographer",
+          "prefer": "early",
+          "resource": "organizer",
+          "weight": 1
+        },
+        {
+          "deadline_end": null,
+          "duration": 15,
+          "earliest_start": 540,
+          "fixed_start": null,
+          "group": "pre_event",
+          "id": "reminder_invitation",
+          "name": "Reminder: send invitations",
+          "prefer": "early",
+          "resource": "organizer",
+          "weight": 1
+        },
+        {
+          "deadline_end": 41760,
+          "duration": 120,
+          "earliest_start": 540,
+          "fixed_start": null,
+          "group": "pre_event",
+          "id": "send_invitations",
+          "name": "Send invitations",
+          "prefer": "early",
+          "resource": "organizer",
+          "weight": 1
+        },
+        {
+          "deadline_end": 59040,
+          "duration": 15,
+          "earliest_start": 52380,
+          "fixed_start": null,
+          "group": "pre_event",
+          "id": "reminder_vendor_confirmation",
+          "name": "Reminder: confirm vendors",
+          "prefer": "early",
+          "resource": "organizer",
+          "weight": 1
+        },
+        {
+          "deadline_end": null,
+          "duration": 120,
+          "earliest_start": 62400,
+          "fixed_start": null,
+          "group": "event_day",
+          "id": "venue_setup",
+          "name": "Venue setup",
+          "prefer": "late",
+          "resource": "venue",
+          "weight": 1
+        },
+        {
+          "deadline_end": null,
+          "duration": 90,
+          "earliest_start": 62400,
+          "fixed_start": null,
+          "group": "event_day",
+          "id": "catering_setup",
+          "name": "Catering setup",
+          "prefer": "late",
+          "resource": "caterer",
+          "weight": 1
+        },
+        {
+          "deadline_end": null,
+          "duration": 30,
+          "earliest_start": 62400,
+          "fixed_start": null,
+          "group": "event_day",
+          "id": "photography_prep",
+          "name": "Photography prep",
+          "prefer": "late",
+          "resource": "photographer",
+          "weight": 1
+        },
+        {
+          "deadline_end": null,
+          "duration": 240,
+          "earliest_start": 0,
+          "fixed_start": 63000,
+          "group": "event_day",
+          "id": "event",
+          "name": "Event",
+          "prefer": "none",
+          "resource": "venue",
+          "weight": 1
+        },
+        {
+          "deadline_end": null,
+          "duration": 120,
+          "earliest_start": 0,
+          "fixed_start": null,
+          "group": "event_day",
+          "id": "teardown",
+          "name": "Teardown",
+          "prefer": "none",
+          "resource": "venue",
+          "weight": 1
+        }
+      ]
+    },
+    "symbolic": {
+      "detail": "VAL accepted the plan",
+      "plan_actions": [
+        "do_book_venue",
+        "do_book_caterer",
+        "do_book_photographer",
+        "do_reminder_invitation",
+        "do_venue_setup",
+        "do_reminder_vendor_confirmation",
+        "do_photography_prep",
+        "do_catering_setup",
+        "do_event",
+        "do_send_invitations",
+        "do_teardown"
+      ],
+      "status": "valid"
+    },
+    "total_cost": 139000,
+    "validation": {
+      "checks": [
+        {
+          "detail": "selected ['caterer', 'photographer', 'venue'], requested ['caterer', 'photographer', 'venue']",
+          "name": "services_match_request",
+          "passed": true
+        },
+        {
+          "detail": "plan headcount 120 vs request 120",
+          "name": "headcount_matches",
+          "passed": true
+        },
+        {
+          "detail": "allocation [('venue', 72414), ('caterer', 82759), ('photographer', 24827)] + contingency 20,000 vs recomputed [('venue', 72414), ('caterer', 82759), ('photographer', 24827)] + 20,000",
+          "name": "allocation_matches_request",
+          "passed": true
+        },
+        {
+          "detail": "no guest list supplied; using the stated headcount",
+          "name": "rsvp_within_headcount",
+          "passed": true
+        },
+        {
+          "detail": "Orchid Banquet found",
+          "name": "venue:vendor_exists",
+          "passed": true
+        },
+        {
+          "detail": "status is available",
+          "name": "venue:booking_status",
+          "passed": true
+        },
+        {
+          "detail": "vendor city Pune, requested Pune",
+          "name": "venue:city",
+          "passed": true
+        },
+        {
+          "detail": "2026-12-12 is in the vendor's available dates",
+          "name": "venue:date_availability",
+          "passed": true
+        },
+        {
+          "detail": "120 guests vs capacity 140",
+          "name": "venue:capacity",
+          "passed": true
+        },
+        {
+          "detail": "venue is indoor, requested indoor",
+          "name": "venue:venue_setting",
+          "passed": true
+        },
+        {
+          "detail": "cost INR 55,000 vs category cap INR 72,414",
+          "name": "venue:budget_cap",
+          "passed": true
+        },
+        {
+          "detail": "plan cost INR 55,000, database says INR 55,000",
+          "name": "venue:cost_matches_database",
+          "passed": true
+        },
+        {
+          "detail": "120 guests vs venue capacity 140",
+          "name": "guest_capacity",
+          "passed": true
+        },
+        {
+          "detail": "Royal Rasoi found",
+          "name": "caterer:vendor_exists",
+          "passed": true
+        },
+        {
+          "detail": "status is available",
+          "name": "caterer:booking_status",
+          "passed": true
+        },
+        {
+          "detail": "vendor city Pune, requested Pune",
+          "name": "caterer:city",
+          "passed": true
+        },
+        {
+          "detail": "2026-12-12 is in the vendor's available dates",
+          "name": "caterer:date_availability",
+          "passed": true
+        },
+        {
+          "detail": "120 guests vs served range 100-500",
+          "name": "caterer:capacity",
+          "passed": true
+        },
+        {
+          "detail": "supports all required diets",
+          "name": "caterer:dietary",
+          "passed": true
+        },
+        {
+          "detail": "cost INR 66,000 vs category cap INR 82,759",
+          "name": "caterer:budget_cap",
+          "passed": true
+        },
+        {
+          "detail": "plan cost INR 66,000, database says INR 66,000",
+          "name": "caterer:cost_matches_database",
+          "passed": true
+        },
+        {
+          "detail": "caterer covers every guest diet",
+          "name": "guest_dietary",
+          "passed": true
+        },
+        {
+          "detail": "LensCraft Studio found",
+          "name": "photographer:vendor_exists",
+          "passed": true
+        },
+        {
+          "detail": "status is available",
+          "name": "photographer:booking_status",
+          "passed": true
+        },
+        {
+          "detail": "vendor city Pune, requested Pune",
+          "name": "photographer:city",
+          "passed": true
+        },
+        {
+          "detail": "2026-12-12 is in the vendor's available dates",
+          "name": "photographer:date_availability",
+          "passed": true
+        },
+        {
+          "detail": "cost INR 18,000 vs category cap INR 24,827",
+          "name": "photographer:budget_cap",
+          "passed": true
+        },
+        {
+          "detail": "plan cost INR 18,000, database says INR 18,000",
+          "name": "photographer:cost_matches_database",
+          "passed": true
+        },
+        {
+          "detail": "vendor total INR 139,000 vs budget INR 200,000",
+          "name": "budget_total",
+          "passed": true
+        },
+        {
+          "detail": "task durations, resources and capacities follow the policy",
+          "name": "spec_matches_policy",
+          "passed": true
+        },
+        {
+          "detail": "every expected task is scheduled",
+          "name": "schedule_complete",
+          "passed": true
+        },
+        {
+          "detail": "all durations match",
+          "name": "schedule_durations",
+          "passed": true
+        },
+        {
+          "detail": "all precedences and lags hold",
+          "name": "schedule_dependencies",
+          "passed": true
+        },
+        {
+          "detail": "all time bounds hold",
+          "name": "schedule_bounds",
+          "passed": true
+        },
+        {
+          "detail": "no resource is over capacity",
+          "name": "schedule_resources",
+          "passed": true
+        },
+        {
+          "detail": "wall-clock items equal the solved schedule",
+          "name": "items_match_solution",
+          "passed": true
+        },
+        {
+          "detail": "event must run 18:00 for 240 min on 2026-12-12",
+          "name": "event_time",
+          "passed": true
+        },
+        {
+          "detail": "invitations must finish 14 days before the event",
+          "name": "invitation_lead_time",
+          "passed": true
+        },
+        {
+          "detail": "vendor confirmation reminder must fall 2-7 days before the event",
+          "name": "vendor_confirmation_window",
+          "passed": true
+        },
+        {
+          "detail": "all setups must end 30 min before the event starts",
+          "name": "setup_before_event",
+          "passed": true
+        },
+        {
+          "detail": "teardown starts after the event ends",
+          "name": "teardown_after_event",
+          "passed": true
+        },
+        {
+          "detail": "every requested reminder is scheduled",
+          "name": "reminders_scheduled",
+          "passed": true
+        },
+        {
+          "detail": "Fast Downward found a plan and VAL validated it",
+          "name": "symbolic_feasibility",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "unverified": [],
+      "violations": [],
+      "warnings": []
+    },
+    "version": 1,
+    "warnings": []
+  },
+  "schema_version": 1,
+  "sha256": "2aaf252eed149f22746b9c19b8af0b88867874da1b3827fbc68a24206d21e757"
+}

@@ -143,7 +143,7 @@ def test_concurrent_writers_of_the_same_version_only_one_wins(store, plan):
 def test_list_plans_and_no_temp_files_left_behind(store, plan):
     store.save(plan)
     assert store.list_plans() == ["plan1"]
-    assert [p.name for p in store.root.iterdir()] == ["plan-plan1-v0001.json"]
+    assert sorted(p.name for p in store.root.iterdir()) == ["plan-heads.jsonl", "plan-plan1-v0001.json"]  # the plan, and the record of where each plan's history ends; no temporary files
 
 
 def test_assemble_refuses_a_failed_report(plan):

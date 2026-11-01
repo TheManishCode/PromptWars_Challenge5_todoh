@@ -13,6 +13,7 @@ from eventmate.schemas import DecisionLogEntry
 
 class DecisionLogger(JsonlLog[DecisionLogEntry]):
     channel = "decisions"
+    rotates = True
     model = DecisionLogEntry
 
     def log(self, **fields) -> DecisionLogEntry:

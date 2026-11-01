@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 
+from eventmate.integrity import StoreDamaged
 from eventmate.messaging.channels import ChannelError, Inbound, OutcomeUnknown
 from eventmate.messaging.conversations import SendPolicy, analyze_reply, suggest_followups
 from eventmate.schemas import ChannelStatus, OutreachDraft, VendorCategory as C
@@ -142,7 +143,7 @@ def test_a_tampered_record_fails_closed_instead_of_sending_other_text(em, pid, c
     d = draft(em, pid)
     path = em.store.root / "outreach" / f"outreach-{pid}.jsonl"
     path.write_text(path.read_text().replace("Hello", "Hallo"))
-    with pytest.raises(ValidationError, match="content_hash"):
+    with pytest.raises((ValidationError, StoreDamaged)):  # the changed record fails its own hash; the integrity guard now also stops every send until the owner repairs the file
         em.approve_outreach(pid, d.draft_id, d.content_hash)
     assert chans["email"].sent == []
 

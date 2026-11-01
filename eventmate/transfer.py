@@ -28,6 +28,7 @@ from typing import Dict, List, Optional, Tuple
 
 from pydantic import Field, ValidationError
 
+from eventmate import migrations
 from eventmate.plan_store import PlanStore, _canonical, new_plan_id
 from eventmate.schemas import DealLead, Guest, LedgerEntry, PlanVersion, _Model
 
@@ -234,11 +235,11 @@ def _parse_records(members: Dict[str, bytes], plans: Dict[str, List[PlanVersion]
             if kind in ("ledger", "leads", "guests") and plan_id not in plans:
                 raise TransferError("bad_member", "a record file belongs to a plan that is not in the archive")
             if kind == "ledger":
-                ledger[plan_id] = [LedgerEntry.model_validate_json(x) for x in _lines(data)]
+                ledger[plan_id] = [LedgerEntry.model_validate(migrations.parse_line("ledger", x, name, i)) for i, x in enumerate(_lines(data), 1)]
                 if any(e.plan_id != plan_id for e in ledger[plan_id]):
                     raise TransferError("bad_record", "a ledger entry names a different plan")
             elif kind == "leads":
-                leads[plan_id] = [DealLead.model_validate_json(x) for x in _lines(data)]
+                leads[plan_id] = [DealLead.model_validate(migrations.parse_line("lead", x, name, i)) for i, x in enumerate(_lines(data), 1)]
                 if any(e.plan_id != plan_id for e in leads[plan_id]):
                     raise TransferError("bad_record", "a saved lead names a different plan")
             elif kind == "guests":
@@ -249,7 +250,7 @@ def _parse_records(members: Dict[str, bytes], plans: Dict[str, List[PlanVersion]
                 guests[plan_id] = tuple(Guest.model_validate(g) for g in rows)
             elif kind == "history":
                 history[name] = [x if isinstance(x, dict) else _bad() for x in (_json(line) for line in _lines(data))]
-    except (ValidationError, KeyError, TypeError):
+    except (ValidationError, KeyError, TypeError, migrations.StoreCorrupt):
         raise TransferError("bad_record", "a record in the archive is not valid") from None
     return ledger, leads, guests, history
 

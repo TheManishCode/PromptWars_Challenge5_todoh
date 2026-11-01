@@ -91,6 +91,7 @@ class FeedbackLog(JsonlLog[FeedbackEvent]):
 
 class TraceLog(JsonlLog[TraceEntry]):
     channel = "assistant_traces"
+    rotates = True
     model = TraceEntry
 
     def write(self, **fields) -> TraceEntry:

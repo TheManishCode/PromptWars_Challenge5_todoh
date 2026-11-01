@@ -55,7 +55,8 @@ from eventmate.agents.vendor import DataIntegrityError
 from eventmate.env import load_env
 from eventmate.integrations.explore import ExploreError, ExploreNotConfigured, route as explore_route
 from eventmate import consumption
-from eventmate import transfer
+from eventmate import migrations, transfer
+from eventmate.integrity import StoreDamaged
 from eventmate.web import hosting, limits, observe
 from eventmate.workspaces import COOKIE, COOKIE_MAX_AGE, Workspace, WorkspaceError, WorkspaceRegistry
 from eventmate.llm import METER, LLMError, client_from_env
@@ -773,6 +774,15 @@ def create_app(
 
     class WorkspaceDeleteBody(_Strict):
         confirm: Literal["delete"]
+
+    @app.errorhandler(StoreDamaged)
+    def _store_damaged(exc):
+        return _err(503, str(exc)[:300], code="store_damaged")
+
+    @app.errorhandler(migrations.StoreCorrupt)
+    def _store_corrupt(exc):
+        log.error("a stored record cannot be read (request %s): %s", g.get("rid", "-"), exc)  # which file and line: server log only
+        return _err(503, "a stored file is damaged or from a newer version of the application; nothing was changed. The owner can run `python -m eventmate verify`", code="store_damaged", request_id=g.get("rid"))
 
     @app.errorhandler(transfer.TransferError)
     def _transfer_error(exc):
