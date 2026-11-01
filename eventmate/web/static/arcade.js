@@ -2392,6 +2392,30 @@ function wireHoloFocus() {
 }
 
 
+/* vending corner focus: chat tucks away, the machine's name shows, a tap elsewhere or Escape returns */
+function wireVendFocus() {
+  Arcade3D.onVendFocus(function (i) {
+    noteFocusOpened();
+    const chat = $("#chat");
+    chat.dataset.vendWasCollapsed = chat.classList.contains("collapsed") ? "1" : "";
+    chat.classList.add("collapsed");
+    document.body.classList.add("vend-focus");
+    const shown = Arcade3D.vendFocus(i);
+    if (shown) setCaption(shown.label);
+  });
+  function leave() {
+    if (!Arcade3D.vendFocused()) return;
+    Arcade3D.vendUnfocus();
+    const chat = $("#chat");
+    if (!chat.dataset.vendWasCollapsed) chat.classList.remove("collapsed");
+    document.body.classList.remove("vend-focus");
+    delete chat.dataset.vendWasCollapsed;
+    setCaption("");
+  }
+  focusExit.leavers.push(leave);
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") leave(); });
+}
+
 /* dossier easter egg focus: same tuck-away pattern as the holo table */
 function wireDossierFocus() {
   Arcade3D.onDossierFocus(function () {
@@ -2418,6 +2442,7 @@ function boot() {
   const glOk = Arcade3D.init();
   $("#gl-fallback").hidden = glOk;
   wireHoloFocus();
+  wireVendFocus();
   wireDossierFocus();
   wireWallFocus();
   wireBackgroundExit();

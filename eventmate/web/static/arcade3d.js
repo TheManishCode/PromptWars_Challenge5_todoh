@@ -379,7 +379,7 @@ window.Arcade3D = (function () {
     sc.background = new THREE.Color(0x070b13);
     sc.fog = new THREE.Fog(0x070b13, 24, 64);
     TRK.cam = new THREE.PerspectiveCamera(38, TV.w / TV.h, 0.1, 200);
-    sc.add(new THREE.HemisphereLight(0xaecbe8, 0x241c14, 1.25));
+    sc.add(new THREE.HemisphereLight(0xb9d3f2, 0x2c2236, 1.55));
     const moon = new THREE.DirectionalLight(0xcfe2ff, 0.95);
     moon.position.set(-6, 12, 7); sc.add(moon);
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 120),
@@ -706,6 +706,55 @@ window.Arcade3D = (function () {
     map, color: new THREE.Color(boost || 1.6, boost || 1.6, boost || 1.6),
   });
 
+  /* ---------------- device tier and model choice ----------------
+     The room's models are heavy in memory, not just in bytes: the originals hold textures up to 4096 x 4096 (89 MB of GPU memory each, 1.2 GB for the whole
+     room), which a phone cannot hold. Every model ships twice, optimised by tools/assets/optimize_models.sh: "high" (textures <= 2048, WebP) and "low"
+     (<= 1024, about a quarter of the GPU memory). A phone-sized screen, a device with 2 GB or less, or a Save-Data connection gets "low"; ?tier=low|high forces it.
+     The cat vending machine (CC BY-NC-ND: no derivatives, so only its 54 MB original exists) is loaded only on a "high" device, or when asked for. */
+  function detectTier() {
+    const forced = new URLSearchParams(location.search).get("tier");
+    if (forced === "low" || forced === "high") return forced;
+    const nav = navigator, conn = nav.connection || {};
+    const shortSide = Math.min(window.screen.width, window.screen.height);
+    if (conn.saveData || (nav.deviceMemory && nav.deviceMemory <= 2)) return "low";
+    return shortSide < 700 ? "low" : "high"; // a phone: its GPU memory is the scarce thing, whatever its CPU
+  }
+  const TIER = detectTier();
+  const HAS_LOW = { cabinet: 1, alley_van: 1, alley_dumpster: 1, alley_candy: 1, vend_nuka: 1, vend_retro: 1, wall_mural: 1, wall_posters: 1, holo_table: 1, secret_dossier: 1 };
+  // Every model is asked for by the version address the page was given (<meta name="asset-version">), and in the tier's size: a replaced file is a new address, so no
+  // browser keeps the old one, and a phone never downloads the laptop's textures.
+  (function () {
+    const meta = document.querySelector('meta[name="asset-version"]');
+    const v = meta && meta.content;
+    if (!THREE.GLTFLoader) return;
+    const orig = THREE.GLTFLoader.prototype.load;
+    THREE.GLTFLoader.prototype.load = function (url) {
+      const args = Array.prototype.slice.call(arguments);
+      if (typeof url === "string" && url.indexOf("/static/") === 0 && url.indexOf("?") < 0) {
+        let u = url;
+        const m = /^\/static\/([a-z_]+)\.glb$/.exec(u);
+        if (TIER === "low" && m && HAS_LOW[m[1]]) u = "/static/" + m[1] + ".low.glb";
+        args[0] = v ? u + "?v=" + v : u;
+      }
+      return orig.apply(this, args);
+    };
+  })();
+  /* ---------------- loading order ----------------
+     First paint needs only the room, the cabinet and the attendant. Everything else is queued and fetched one model at a time, most important first (the mural, then the
+     vending machines, then the van and the small props, the posters, the Hall table, the dossier, and last the 54 MB cat machine), with a gap between them so a phone
+     is never decoding two large models at once and the page stays responsive while they arrive. The queue starts after the first frames have been drawn. */
+  const LAZY = { q: [], timer: null, started: false, n: 0 };
+  function lazy(prio, fn) { LAZY.q.push({ prio: prio, fn: fn, n: LAZY.n++ }); if (LAZY.started && !LAZY.timer) lazyPump(); }
+  function lazyPump() {
+    LAZY.timer = null;
+    if (!LAZY.q.length) return;
+    LAZY.q.sort(function (a, b) { return a.prio - b.prio || a.n - b.n; });
+    const job = LAZY.q.shift();
+    try { job.fn(); } catch (e) { console.error("lazy load:", e && e.message || e); }
+    LAZY.timer = setTimeout(lazyPump, TIER === "low" ? 450 : 120);
+  }
+  function lazyStart() { LAZY.started = true; if (!LAZY.timer) lazyPump(); }
+
   const CAB_Z = -3.25; // cabinet centred, pulled closer to the mural wall (user, 01:18)
 
   function shadowed(mesh, cast, receive) {
@@ -758,14 +807,44 @@ window.Arcade3D = (function () {
     return tex;
   }
 
+  /* A weathered stone wall for the left side, where the visitor's name is cut (docs: wall carving strategy). Procedural, no asset, no licence surface:
+     a mid-grey mottled base with faint block seams and damp streaks. The mottling is small-scale and low-alpha on purpose: it ages the stone without becoming a pattern. */
+  function plasterTexture() {
+    const c = document.createElement("canvas"); c.width = 1024; c.height = 512;
+    const x = c.getContext("2d");
+    x.fillStyle = "#3b3b40"; x.fillRect(0, 0, 1024, 512);
+    let seed = 90210; const r = function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    for (let i = 0; i < 9000; i++) { // fine mottling: many tiny, faint marks, so the surface is aged and never shows a pattern
+      const g = (r() * 60 - 30) | 0, a = 0.015 + r() * 0.025, rad = 0.8 + r() * 3.2;
+      x.fillStyle = g > 0 ? "rgba(" + (150 + g) + "," + (155 + g) + "," + (165 + g) + "," + a + ")" : "rgba(20,24,34," + a + ")";
+      x.beginPath(); x.arc(r() * 1024, r() * 512, rad, 0, 6.283); x.fill();
+    }
+    x.strokeStyle = "rgba(14,18,26,0.28)"; x.lineWidth = 2; // block seams
+    for (let row = 0; row < 4; row++) {
+      const y = row * 128 + 4; x.beginPath(); x.moveTo(0, y); x.lineTo(1024, y + (r() * 3 - 1.5)); x.stroke();
+      for (let col = 0; col < 5; col++) { const bx = ((col * 205 + (row % 2) * 102) % 1024); x.beginPath(); x.moveTo(bx, y); x.lineTo(bx + (r() * 3 - 1.5), y + 128); x.stroke(); }
+    }
+    for (let i = 0; i < 14; i++) { // damp streaks running down from the top
+      const sx = r() * 1024, len = 120 + r() * 300, g = x.createLinearGradient(0, 0, 0, len);
+      g.addColorStop(0, "rgba(12,16,24,0.20)"); g.addColorStop(1, "rgba(12,16,24,0)");
+      x.fillStyle = g; x.fillRect(sx, 0, 6 + r() * 26, len);
+    }
+    for (let i = 0; i < 9; i++) { // lichen: a few pale, greenish patches
+      x.fillStyle = "rgba(150,170,130," + (0.04 + r() * 0.04) + ")"; x.beginPath(); x.ellipse(r() * 1024, r() * 512, 6 + r() * 18, 4 + r() * 10, r() * 3, 0, 6.283); x.fill();
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
   function buildRoom(sc) {
-    sc.fog = new THREE.FogExp2(0x04060b, 0.045);
+    sc.fog = new THREE.FogExp2(0x070b18, 0.03); // thinner than before and re-scaled in resize(): a camera that backs off for a tall screen must not drown the room in fog
     sc.background = new THREE.Color(0x030509);
     const floorTex = floorTexture();
     floorTex.repeat.set(6, 6);
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40),
       new THREE.MeshStandardMaterial({ map: floorTex, bumpMap: floorTex, bumpScale: 0.012,
-        roughness: 0.5, metalness: 0.12, envMapIntensity: 0.7 }));
+        roughness: 0.82, metalness: 0.05, envMapIntensity: 0.35 })); // matte enough that a light does not leave a glare pool on it
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     sc.add(floor);
@@ -781,7 +860,9 @@ window.Arcade3D = (function () {
     const wallL = new THREE.Mesh(new THREE.PlaneGeometry(30, 12),
       new THREE.MeshStandardMaterial({ map: grafTex, roughness: 0.92, envMapIntensity: 0.25 }));
     wallL.rotation.y = Math.PI / 2; wallL.position.set(-5.6, 6, 5); sc.add(wallL);
-    const wallR = wallL.clone(); wallR.rotation.y = -Math.PI / 2; wallR.position.x = 5.6; sc.add(wallR);
+    const stoneTex = plasterTexture(); stoneTex.repeat.set(7, 3.5);
+    wallL.material = new THREE.MeshStandardMaterial({ map: stoneTex, color: 0x8a847a, roughness: 0.96, envMapIntensity: 0.1 }); // the left wall is plain weathered stone: the name is cut into it
+    const wallR = wallL.clone(); wallR.material = new THREE.MeshStandardMaterial({ map: grafTex, roughness: 0.92, envMapIntensity: 0.25 }); wallR.rotation.y = -Math.PI / 2; wallR.position.x = 5.6; sc.add(wallR);
     [[-2.8, -3.6, 0.7], [2.2, -3.9, 0.95]].forEach(([cx, cz, drop]) => {
       const pts = [new THREE.Vector3(cx, 5.2, cz), new THREE.Vector3(cx + 0.35, 5.2 - drop, cz + 0.15),
         new THREE.Vector3(cx - 0.15, 5.2 - drop * 1.35, cz + 0.4)];
@@ -821,20 +902,29 @@ window.Arcade3D = (function () {
       scrn.position.set(x + Math.sin(ry) * 0.42, 1.25, z + Math.cos(ry) * 0.42);
       scrn.rotation.y = ry; sc.add(scrn); (S.roomCabs = S.roomCabs || []).push(scrn);
     });
-    sc.add(new THREE.AmbientLight(0x36486a, 1.3));
+    sc.add(new THREE.AmbientLight(0x4a5f9a, 1.75));
     const frontFill = new THREE.PointLight(0xa8c4e8, 0.55, 14);
     frontFill.position.set(0.6, 2.1, 4.6); sc.add(frontFill);
     const rim = new THREE.PointLight(0x6fa8ff, 0.55, 9);
     rim.position.set(-2.4, 3.0, -2.2); sc.add(rim);
-    const key = new THREE.SpotLight(0xbfd9f0, 1.9, 20, 0.62, 0.55);
-    key.position.set(1.6, 4.6, 5.6);
-    key.target.position.set(0, 1.2, 0);
+    // the key light used to be aimed at the floor in the middle, which drew a bright pool there and left the walls dim. It now looks at the cabinet and the mural
+    // behind it, with a wide soft cone, so the wall with the art is the brightest surface in the room.
+    const key = new THREE.SpotLight(0xd2e6fa, 2.6, 24, 0.9, 0.85);
+    key.position.set(1.2, 5.0, 5.8);
+    key.target.position.set(0, 2.9, -3.6);
     key.castShadow = true;
-    key.shadow.mapSize.width = key.shadow.mapSize.height = S.lowFx ? 512 : 1024;
+    key.shadow.mapSize.width = key.shadow.mapSize.height = S.lowFx || S.smallGpu ? 512 : 1024;
     key.shadow.camera.near = 1.5; key.shadow.camera.far = 16;
     key.shadow.bias = -0.0004;
     sc.add(key); sc.add(key.target);
     S.keyLight = key;
+    // two coloured washes on the mural from either side (magenta and cyan, the alley's neon), and a gentle glow on the side walls so their graffiti reads at a glancing angle
+    const floorFill = new THREE.PointLight(0x8fb4ff, 0.9, 10); floorFill.position.set(0, 3.2, 3.4); sc.add(floorFill); // soft light on the foreground floor (the floor is matte now, so it glows rather than glares)
+    const washL = new THREE.PointLight(0xff4fb8, 1.5, 11); washL.position.set(-1.6, 4.0, -3.0); sc.add(washL);
+    const washR = new THREE.PointLight(0x35d6ff, 1.5, 11); washR.position.set(1.6, 4.0, -2.4); sc.add(washR);
+    [wallR].forEach(function (w) { w.material.emissiveMap = w.material.map; w.material.emissive = new THREE.Color(0xffffff); w.material.emissiveIntensity = 0.38; }); // the graffiti wall glows; the stone wall does not
+    const ring = new THREE.Mesh(new THREE.RingGeometry(1.22, 1.3, 64), new THREE.MeshBasicMaterial({ color: 0x35d6ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
+    ring.rotation.x = -Math.PI / 2; ring.position.set(0, 0.012, 2.6); sc.add(ring); // a lit edge round the rug: the floor in front of the cabinet is no longer a dark hole
     const n = 140, pos = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
       pos[i * 3] = (rnd() - 0.5) * 9;
@@ -847,7 +937,7 @@ window.Arcade3D = (function () {
       map: glowDot, color: 0x8fb6d8, size: 0.03, transparent: true, opacity: 0.32,
       blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
     }));
-    if (!S.lowFx) sc.add(S.dust);
+    if (!S.lowFx && !S.smallGpu) sc.add(S.dust);
   }
 
   /* -------- cabinet: classic upright silhouette, original to;doh-the event planner art --------
@@ -1056,7 +1146,7 @@ window.Arcade3D = (function () {
      Textures <=2K, geometry quantized;
      the r128 loader reads all of them without extra decoders. */
   function propPrep(root, opts) {
-    root.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    root.traverse(function (o) { if (o.isMesh) { o.castShadow = !S.smallGpu; o.receiveShadow = true; } }); // the shadow pass draws every caster a second time: on a small GPU only the cabinet and the attendant cast
     const box = new THREE.Box3().setFromObject(root);
     const size = box.getSize(new THREE.Vector3());
     const ctr = box.getCenter(new THREE.Vector3());
@@ -1070,6 +1160,13 @@ window.Arcade3D = (function () {
     g2.add(root);
     g2.rotation.y = opts.rotY || 0;
     g2.position.set(opts.pos[0], opts.y || 0, opts.pos[1]);
+    // backs to the wall: the prop's back face is brought exactly to the given plane, whatever its depth (a machine facing +z against the back wall, or facing -x against the right wall)
+    if (opts.backZ !== undefined || opts.backX !== undefined) {
+      g2.updateMatrixWorld(true);
+      const wb = new THREE.Box3().setFromObject(g2);
+      if (opts.backZ !== undefined) g2.position.z += opts.backZ - wb.min.z;
+      if (opts.backX !== undefined) g2.position.x += opts.backX - wb.max.x;
+    }
     return g2;
   }
 
@@ -1146,7 +1243,7 @@ window.Arcade3D = (function () {
     if (!THREE.GLTFLoader) return;
     const st = { unlocked: false, entries: [], root: null, list: null, light: null, cv: null, tex: null, focused: false, prevCam: null };
     S.holo = st;
-    new THREE.GLTFLoader().load("/static/holo_table.glb", function (g) {
+    lazy(4, function () { new THREE.GLTFLoader().load("/static/holo_table.glb", function (g) {
       const root = g.scene;
       root.scale.setScalar(HOLO_POS.s);
       root.position.set(HOLO_POS.x, 0, HOLO_POS.z);
@@ -1173,7 +1270,7 @@ window.Arcade3D = (function () {
       sc.add(gl); st.light = gl;
       drawHoloList();
       holoSetVisible(st.unlocked);
-    }, undefined, function () { /* asset missing: the Hall has no physical display, data still reachable via the API */ });
+    }, undefined, function () { /* asset missing: the Hall has no physical display, data still reachable via the API */ }); });
     // click / tap the table for a clean board view; arcade.js owns the DOM side (chat hide + back control)
     const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
     S.renderer.domElement.addEventListener("pointerdown", function (ev) {
@@ -1314,6 +1411,46 @@ window.Arcade3D = (function () {
   }
 
 
+  /* ---------------- the vending corner: tap a machine to look at it ----------------
+     Same tuck-away pattern as the holo table and the dossier: the page collapses the chat, shows the machine's name, and a tap anywhere else (or Escape) returns. */
+  function vendPose(v) {
+    // the camera stands in front of the machine, looking at its middle. The one on the side wall is seen from a little further along the room, at an angle, so the two
+    // machines on the back wall are not in the way.
+    const fx = Math.sin(v.ry), fz = Math.cos(v.ry), d = v.h * 1.2 + 0.8, along = v.ry !== 0 ? 2.3 : 0;
+    return { pos: [v.x + fx * d, v.h * 0.7 + 0.25, v.z + fz * d + along], tgt: [v.x, v.h * 0.52, v.z] };
+  }
+  function vendFocus(i) {
+    const v = (S.vend || [])[i]; if (!v || S.vendFocused != null) return null;
+    S.vendFocused = i;
+    S.vendPrevCam = { pos: S.camera.position.clone(), tgt: S.camTarget.clone() };
+    S.zoomed = true;
+    const pose = vendPose(v);
+    camTo(pose, 850);
+    return { pose: pose, label: v.label };
+  }
+  function vendUnfocus() {
+    if (S.vendFocused == null) return;
+    S.vendFocused = null; S.zoomed = false;
+    if (S.vendPrevCam) camTo({ pos: S.vendPrevCam.pos.toArray(), tgt: S.vendPrevCam.tgt.toArray() }, 850);
+    else camTo(S.camWide, 850);
+  }
+  function wireVendTaps() {
+    const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+    S.renderer.domElement.addEventListener("pointerdown", function (ev) {
+      if (S.vendFocused != null || !S.vend || !S.vend.length) return;
+      if (S.zoomed || (S.holo && S.holo.focused) || (S.dossier && S.dossier.focused) || (S.wallb && S.wallb.focused)) return;
+      ptr.x = (ev.clientX / window.innerWidth) * 2 - 1;
+      ptr.y = -(ev.clientY / window.innerHeight) * 2 + 1;
+      ray.setFromCamera(ptr, S.camera);
+      let best = -1, bestD = Infinity;
+      S.vend.forEach(function (v, i) {
+        const h = ray.intersectObject(v.grp, true);
+        if (h.length && h[0].distance < bestD) { best = i; bestD = h[0].distance; }
+      });
+      if (best >= 0) { S.lastSceneTap = performance.now(); if (S.vendFocusCb) S.vendFocusCb(best); }
+    });
+  }
+
   /* ---------------- the signature wall (I WAS HERE) ----------------
      Contract 8.6: one permanent name per visitor scratched on the left
      wall, a return-visit challenge (a name secretly moves; find where),
@@ -1329,82 +1466,78 @@ window.Arcade3D = (function () {
     const W = st.cv.width, H = st.cv.height;
     c2.clearRect(0, 0, W, H);
     const d = st.data || { mode: "sleep" };
-    const chalk = "rgba(232,226,208,0.94)";
-    const faint = "rgba(232,226,208,0.30)";
-    const mine = "rgba(125,232,255,0.96)";
-    const scratch = function (txt, x, y, font, col) {
-      c2.font = font; c2.textAlign = "center";
-      c2.save(); c2.translate(x, y); c2.rotate(((Math.abs(x * 7 + y * 13) | 0) % 11 - 5) * 0.009);
-      c2.strokeStyle = "rgba(6,8,12,0.85)"; c2.lineWidth = 6; c2.lineJoin = "round";
-      c2.strokeText(txt, 0, 0);
-      c2.fillStyle = col || chalk; c2.fillText(txt, 0, 0);
-      c2.restore();
-    };
-    if (!st.focused) {
-      // idle room view: the secret hides as faint scratches in the paint - no
-      // panel, no status copy (backend status shows only in the focused view).
-      // The render loop also ties the mesh opacity to the viewing angle, so
-      // the scratches catch the eye at a grazing angle and fade square-on.
-      const ghost = function (txt, x, y, font, col) {
-        c2.font = font; c2.textAlign = "center";
-        c2.save(); c2.translate(x, y); c2.rotate(((Math.abs(x * 7 + y * 13) | 0) % 11 - 5) * 0.009);
-        c2.strokeStyle = "rgba(6,8,12,0.30)"; c2.lineWidth = 5; c2.lineJoin = "round";
-        c2.strokeText(txt, 0, 0);
-        c2.fillStyle = col; c2.fillText(txt, 0, 0);
+    /* Everything on this wall is CUT into the stone, never printed on it (strategy: wall carving). Each glyph is two fills: a dark shadowed upper edge (offset -1.4, -2.0)
+       under a lighter chalk-stone cut face, with a tiny per-glyph rotation so it reads hand-cut. The clue is an incised serif capital face; monospace stays only for the
+       mechanics (names, slot numbers). No rectangles, no marker strokes, no panel: legibility comes from a soft radial wash, never a box. */
+    const SERIF = 'Georgia, "Times New Roman", serif', MONO = "monospace";
+    const FACE = "rgba(226,222,206,0.95)", FAINT = "rgba(226,222,206,0.30)", MINE = "rgba(125,232,255,0.97)";
+    const carve = function (txt, x, y, font, face) {
+      c2.font = font; c2.textAlign = "left"; c2.textBaseline = "alphabetic";
+      const chars = Array.from(String(txt)), widths = chars.map(function (ch) { return c2.measureText(ch).width; });
+      let cx = x - widths.reduce(function (a2, b2) { return a2 + b2; }, 0) / 2;
+      chars.forEach(function (ch, i) {
+        const jitter = (((Math.abs(x * 7 + y * 13 + i * 31) | 0) % 9) - 4) * 0.006;
+        c2.save(); c2.translate(cx, y); c2.rotate(jitter); c2.lineJoin = "round";
+        c2.fillStyle = "rgba(8,10,16,0.82)"; c2.fillText(ch, -1.4, -2.0); // the shadowed upper edge of the cut
+        c2.fillStyle = face || FACE; c2.fillText(ch, 0, 0);               // the lit cut face
         c2.restore();
-      };
-      ghost("I  W A S  H E R E", W / 2, 78, "bold 40px monospace", "rgba(232,226,208,0.20)");
-      c2.strokeStyle = "rgba(232,226,208,0.14)"; c2.lineWidth = 2;
-      c2.beginPath(); c2.moveTo(240, 104); c2.lineTo(W - 260, 109); c2.stroke();
-      if (d.slots && d.slots.length) {
-        d.slots.forEach(function (m, i) {
-          ghost(String(m.name || "?").slice(0, 12), 150 + (i % 4) * 240, 190 + Math.floor(i / 4) * 130,
-            "bold 30px monospace", "rgba(232,226,208,0.16)");
-        });
-      }
-      c2.strokeStyle = "rgba(232,226,208,0.12)"; c2.lineWidth = 3;
-      for (let k = 0; k < 6; k++) {
-        const sx = 90 + k * 150, sy = H - 90 - ((k * 53) % 70);
-        c2.beginPath(); c2.moveTo(sx, sy); c2.lineTo(sx + 46, sy + ((k % 2) ? 24 : -18)); c2.stroke();
-      }
+        cx += widths[i];
+      });
+    };
+    const groove = function (x0, y0, x1, y1, col) {
+      c2.lineCap = "round";
+      c2.strokeStyle = "rgba(8,10,16,0.55)"; c2.lineWidth = 3; c2.beginPath(); c2.moveTo(x0 - 1, y0 - 1.6); c2.lineTo(x1 - 1, y1 - 1.6); c2.stroke();
+      c2.strokeStyle = col || "rgba(226,222,206,0.55)"; c2.lineWidth = 2; c2.beginPath(); c2.moveTo(x0, y0); c2.lineTo(x1, y1); c2.stroke();
+    };
+    const wash = function (cx, cy, rx, ry, a) { // a soft dark halo behind the lettering, fading to nothing: enough to read over the mottling, never a panel
+      c2.save(); c2.translate(cx, cy); c2.scale(1, ry / rx);
+      const g = c2.createRadialGradient(0, 0, 0, 0, 0, rx);
+      g.addColorStop(0, "rgba(8,10,16," + (a == null ? 0.22 : a) + ")"); g.addColorStop(1, "rgba(8,10,16,0)");
+      c2.fillStyle = g; c2.beginPath(); c2.arc(0, 0, rx, 0, 6.283); c2.fill(); c2.restore();
+    };
+    const ghostLine = function (a2, fn) { c2.save(); c2.globalAlpha = a2; fn(); c2.restore(); };
+    if (!st.focused) {
+      // idle room view: the secret is a faint carved ghost - no panel, no status copy (backend status shows only in the focused view). The render loop ties the
+      // mesh opacity to the viewing angle, so the cut catches the eye at a grazing angle and fades square-on.
+      ghostLine(0.2, function () {
+        carve("I  W A S  H E R E", W / 2, 84, "bold 44px " + SERIF);
+        groove(240, 108, W - 260, 112);
+        if (d.slots && d.slots.length) {
+          d.slots.forEach(function (m, i) { carve(String(m.name || "?").slice(0, 12), 150 + (i % 4) * 240, 196 + Math.floor(i / 4) * 130, "bold 30px " + MONO); });
+        }
+        for (let k = 0; k < 3; k++) { const sx = 130 + k * 330, sy = H - 96 - ((k * 53) % 60); groove(sx, sy, sx + 52, sy + ((k % 2) ? 24 : -18)); } // a few stray grooves
+      });
       if (st.tex) st.tex.needsUpdate = true;
       return;
     }
-    c2.fillStyle = "rgba(6,8,12,0.62)";
-    c2.fillRect(46, 22, W - 92, H - 52); // dim the posters behind the board: the names must read
+    wash(W / 2, H / 2, W * 0.5, H * 0.5, 0.22);
     if (d.mode === "locked") { // the entry puzzle: torn halves line up only at off = 0
       const off = st.alignOff == null ? 120 : st.alignOff;
-      const titleY = H * 0.44, font = "bold 76px monospace";
+      const titleY = H * 0.44, font = "bold 80px " + SERIF;
       c2.save(); c2.beginPath(); c2.rect(0, 0, W, titleY); c2.clip();
-      scratch("I  W A S  H E R E", W / 2 + off, titleY + 24, font); c2.restore();
+      carve("I  W A S  H E R E", W / 2 + off, titleY + 24, font); c2.restore();
       c2.save(); c2.beginPath(); c2.rect(0, titleY, W, 78); c2.clip();
-      scratch("I  W A S  H E R E", W / 2 - off * 0.8, titleY + 24, font); c2.restore();
-      c2.strokeStyle = "rgba(232,226,208,0.45)"; c2.lineWidth = 3;
+      carve("I  W A S  H E R E", W / 2 - off * 0.8, titleY + 24, font); c2.restore();
       for (let k = 0; k < 7; k++) {
-        const sx = 140 + k * 118 + ((k % 2) ? off : -off * 0.8);
-        const sy = H * 0.62 + ((k * 37) % 90);
-        c2.beginPath(); c2.moveTo(sx, sy); c2.lineTo(sx + 42, sy + ((k % 2) ? 26 : -20)); c2.stroke();
+        const sx = 140 + k * 118 + ((k % 2) ? off : -off * 0.8), sy = H * 0.62 + ((k * 37) % 90);
+        groove(sx, sy, sx + 42, sy + ((k % 2) ? 26 : -20));
       }
-      scratch("the scratches refuse to sit still", W / 2, H - 96, "bold 24px monospace", "rgba(232,226,208,0.85)");
-      scratch("drag the view sideways until the lines sit true", W / 2, H - 58, "bold 24px monospace", "rgba(125,232,255,0.9)");
+      carve("the lines refuse to sit still", W / 2, H - 96, "italic 26px " + SERIF, "rgba(226,222,206,0.85)");
+      carve("drag the view sideways until they sit true", W / 2, H - 58, "italic 26px " + SERIF, MINE);
       if (st.tex) st.tex.needsUpdate = true;
       return;
     }
-    scratch("I  W A S  H E R E", W / 2, 58, "bold 42px monospace");
-    c2.strokeStyle = "rgba(232,226,208,0.5)"; c2.lineWidth = 3;
-    c2.beginPath(); c2.moveTo(200, 82); c2.lineTo(W - 200, 86); c2.stroke();
+    carve("I  W A S  H E R E", W / 2, 62, "bold 44px " + SERIF);
+    groove(200, 86, W - 200, 90);
     st.cells = [];
     if (d.mode === "sleep") {
-      c2.fillStyle = "rgba(6,8,12,0.78)";
-      c2.fillRect(60, H / 2 - 58, W - 120, 118); // solid backing: the sleep copy must read over any poster
-      scratch("the wall sleeps - its backend is not built yet", W / 2, H / 2 - 8, "25px monospace", "rgba(232,226,208,0.92)");
-      scratch("names stay here permanently once it wakes", W / 2, H / 2 + 36, "19px monospace", "rgba(232,226,208,0.72)");
+      carve("the wall sleeps", W / 2, H / 2 + 6, "italic 34px " + SERIF, "rgba(226,222,206,0.82)"); // one quiet line; the backend's reason is in the small status line below
       if (st.tex) st.tex.needsUpdate = true;
       return;
     }
     if (d.mode === "blank") {
-      scratch("no names yet", W / 2, H / 2 - 8, "30px monospace", faint);
-      scratch("be the first to sign", W / 2, H / 2 + 36, "22px monospace", faint);
+      carve("no names yet", W / 2, H / 2 - 8, "30px " + SERIF, FAINT);
+      carve("be the first to sign", W / 2, H / 2 + 36, "italic 22px " + SERIF, FAINT);
       if (st.tex) st.tex.needsUpdate = true;
       return;
     }
@@ -1436,18 +1569,15 @@ window.Arcade3D = (function () {
       if (m) {
         const liveSearch = d.mode === "round" && !d.result; // pre-reveal every name looks alike
         const isMine = !liveSearch && d.my_mark_id != null && m.mark_id === d.my_mark_id;
-        scratch(String(m.name || "?").slice(0, 12), cx, cy + 12, "bold " + (cols === 4 ? 38 : 26) + "px monospace", isMine ? mine : chalk);
-        if (isMine) {
-          c2.strokeStyle = "rgba(125,232,255,0.75)"; c2.lineWidth = 3;
-          c2.beginPath(); c2.moveTo(cx - 60, cy + 26); c2.lineTo(cx + 60, cy + 28); c2.stroke();
-        }
+        carve(String(m.name || "?").slice(0, 12), cx, cy + 12, "bold " + (cols === 4 ? 38 : 26) + "px " + MONO, isMine ? MINE : FACE);
+        if (isMine) groove(cx - 60, cy + 26, cx + 60, cy + 28, "rgba(125,232,255,0.8)");
       } else {
         c2.save();
         c2.setLineDash([7, 9]);
-        c2.strokeStyle = "rgba(232,226,208,0.16)"; c2.lineWidth = 2;
+        c2.strokeStyle = "rgba(226,222,206,0.14)"; c2.lineWidth = 2;
         c2.strokeRect(cx - cw / 2 + 14, cy - ch / 2 + 10, cw - 28, ch - 20);
         c2.restore();
-        if (d.mode === "round") scratch(String(i), cx, cy + 8, "20px monospace", "rgba(232,226,208,0.35)"); // tap reference
+        if (d.mode === "round") carve(String(i), cx, cy + 8, "20px " + MONO, "rgba(226,222,206,0.4)"); // tap reference
       }
     }
     if (d.mode === "round" && d.result) { // reveal: circle the true destination
@@ -1542,9 +1672,11 @@ window.Arcade3D = (function () {
   function mountAlley(sc, wallBack, wallL, wallR) {
     if (!THREE.GLTFLoader) return;
     const loader = new THREE.GLTFLoader();
-    const put = function (url, opts, onPlaced) {
-      loader.load(url, function (g) { sc.add(propPrep(g.scene, opts)); if (onPlaced) onPlaced(false); }, undefined,
-        function () { /* prop missing: the den still works */ if (onPlaced) onPlaced(true); });
+    const put = function (url, opts, onPlaced, prio) {
+      lazy(prio == null ? 2 : prio, function () {
+        loader.load(url, function (g) { const grp = propPrep(g.scene, opts); sc.add(grp); if (onPlaced) onPlaced(false, grp); }, undefined,
+          function () { /* prop missing: the den still works */ if (onPlaced) onPlaced(true); });
+      });
     };
     // the procedural filler cabinets step aside for the user's real props
     (S.roomCabs || []).forEach(function (c) { c.visible = false; });
@@ -1552,38 +1684,52 @@ window.Arcade3D = (function () {
     // only its front half stays in frame - the rear hangs out of view on purpose
     put('/static/alley_van.glb', { len: 3.8, pos: [-3.35, 3.05], rotY: 2.05 });
     put('/static/alley_dumpster.glb', { h: 1.42, pos: [2.6, 4.5], rotY: -0.5 }); // front floor, out of every hologram sightline (user)
-    // the red machine stands alone against the LEFT wall, flush to it, front
-    // angled into the room - clear of the secret wall (z -3.85..-0.85), the
-    // van (z ~3), the dossier and the CRT sightlines (user)
-    put('/static/vend_nuka.glb', { h: 1.85, pos: [-4.9, 1.3], rotY: 1.45 });
-    // the other two machines keep the vending row along the FRONT right wall:
-    // never the hologram's backdrop (user)
-    put('/static/vend_retro.glb', { h: 1.78, pos: [4.9, 2.85], rotY: -1.62 });
-    // the big cat vending machine is OPT-IN, never auto-loaded: its CC-BY-NC-ND
-    // license restricts sharing adapted copies, so the original 55 MB scan ships
-    // unmodified - and measured testing shows that file freezes the software-GL
-    // preview (and may stutter on low-end devices). The visitor loads it
-    // explicitly via the CAT button (or ?cat=1), with the warning on the button
-    // itself. Its slot stays empty until then.
+    // THE VENDING CORNER (user, 15:00): the three machines stand together where the right wall meets the back wall, each turned to face the arcade cabinet in the
+    // middle of the room. Two against the back wall, the tall cat one against the right wall; the holo table keeps its own spot in front of them.
+    // Facing is computed, not guessed: a prop's front looks along (sin rotY, cos rotY), so rotY = atan2(dx, dz) to the point it should look at.
+    // Backs flat to the wall (user, 15:30): the two on the back wall face straight out into the room, the cat one on the right wall faces straight across it. The mural's
+    // slab stands about 0.4 in front of the wall plane, so "the wall" for a machine's back is that slab.
+    const BACK_Z = wallBack + 0.42, BACK_X = wallR - 0.08;
+    const corner = function (key, label, url, h, x, z, side, onLoaded, prio) {
+      const ry = side === 'right' ? -Math.PI / 2 : 0;
+      const o = { h: h, pos: [x, z], rotY: ry };
+      if (side === 'right') o.backX = BACK_X; else o.backZ = BACK_Z;
+      put(url, o, function (failed, grp) {
+        if (!failed && grp) { const bx = new THREE.Box3().setFromObject(grp), ctr = bx.getCenter(new THREE.Vector3()); (S.vend = S.vend || []).push({ key: key, label: label, grp: grp, x: ctr.x, z: ctr.z, ry: ry, h: h }); }
+        if (onLoaded) onLoaded(failed, grp);
+      }, prio == null ? 1 : prio);
+    };
+    corner('retro', 'RETRO-FUTURE VENDING MACHINE', '/static/vend_retro.glb', 1.78, 2.9, -4.0);
+    corner('nuka', 'NUKA-COLA VENDING MACHINE', '/static/vend_nuka.glb', 1.85, 4.05, -4.0);
+    // the big cat vending machine (CC BY-NC-ND: the original 54 MB file ships unmodified, so it is the one heavy asset). A laptop-class device fetches it
+    // by itself once the room has settled; a phone, a small computer, a Save-Data or slow connection leaves it to the visitor (the CAT button, or ?cat=1).
     const catBtn = document.getElementById('cat-load');
+    let catAsked = false;
     const loadCat = function () {
+      if (catAsked) return; catAsked = true;
       if (catBtn) { catBtn.disabled = true; catBtn.classList.add('done'); catBtn.title = 'cat vending machine loading\u2026'; }
-      put('/static/vend_cat.glb', { h: 1.82, pos: [4.9, 4.2], rotY: -1.75 }, function (failed) {
+      corner('cat', 'CAT VENDING MACHINE', '/static/vend_cat.glb', 1.82, 5.0, -2.85, 'right', function (failed) {
         if (catBtn) {
           catBtn.classList.toggle('failed', !!failed);
           catBtn.classList.toggle('done', !failed);
           catBtn.title = failed ? 'cat vending machine unavailable' : 'cat vending machine loaded';
           catBtn.setAttribute('aria-label', catBtn.title);
         }
-      });
+      }, 9);
     };
     if (catBtn) catBtn.addEventListener('click', loadCat);
+    const conn = navigator.connection || {};
+    const slowLink = conn.saveData || /(^|-)(2g|3g)$/.test(conn.effectiveType || '');
+    const softGL = (function () { // a software rasteriser (SwiftShader, llvmpipe) cannot hold a 54 MB model's textures: leave the cat to the button
+      try { const gl = S.renderer.getContext(), x = gl.getExtension('WEBGL_debug_renderer_info'); return !!x && /swiftshader|llvmpipe|software/i.test(String(gl.getParameter(x.UNMASKED_RENDERER_WEBGL))); } catch (e) { return false; }
+    })();
     if (new URLSearchParams(location.search).has('cat')) loadCat();
+    else if (TIER === 'high' && !slowLink && !softGL) setTimeout(function () { (window.requestIdleCallback || function (f) { f(); })(loadCat, { timeout: 4000 }); }, 3500);
     // gumball machine near the front-left corner, out of the attendant's path
     put('/static/alley_candy.glb', { h: 1.3, pos: [-1.45, -3.05], rotY: 0.12 }); // directly LEFT of the cabinet (user)
 
     // THE wall behind the cabinet: only the girl mural, nothing else
-    loader.load('/static/wall_mural.glb', function (g) {
+    lazy(0, function () { loader.load('/static/wall_mural.glb', function (g) {
       const root = g.scene;
       root.traverse(function (o) { if (o.isMesh) o.receiveShadow = true; });
       const box = new THREE.Box3().setFromObject(root);
@@ -1591,7 +1737,7 @@ window.Arcade3D = (function () {
       const ctr = box.getCenter(new THREE.Vector3());
       // full back-wall coverage: floor to above the camera's sightline at the wall;
       // the horizontal spill hides behind the two side walls
-      const k = 7.2 / size.y;
+      const k = 9.4 / size.y; // taller (user, 15:30): the art runs up toward the ceiling instead of stopping short of a bare wall above it
       // the scan's art slab sits near model z -0.55 with street junk out to +0.7;
       // flatten depth to 12% so the slab hugs the wall and the junk reads as shallow relief
       root.scale.set(k, k, k * 0.12);
@@ -1602,9 +1748,9 @@ window.Arcade3D = (function () {
       sc.updateMatrixWorld(true);
       const wb = new THREE.Box3().setFromObject(root);
       sc.add(root);
-      const muralLight = new THREE.PointLight(0xffd9b0, 1.05, 7);
-      muralLight.position.set(0, 2.7, wallBack + 2.1); sc.add(muralLight);
-    }, undefined, function () { });
+      const muralLight = new THREE.PointLight(0xffd9b0, 1.4, 9);
+      muralLight.position.set(0, 3.4, wallBack + 2.1); sc.add(muralLight);
+    }, undefined, function () { }); });
     // missing-person poster decal by honky (CC-BY-4.0): cropped pieces of the
     // source overlay, layered over the generated graffiti - never the raw wall
     const posterCrop = function (img, sx, sy, sw, sh, x, y, z, faceLeft, w, tilt) {
@@ -1622,7 +1768,7 @@ window.Arcade3D = (function () {
       m.renderOrder = 2;
       sc.add(m);
     };
-    loader.load('/static/wall_posters.glb', function (g) {
+    lazy(3, function () { loader.load('/static/wall_posters.glb', function (g) {
       let img = null;
       g.scene.traverse(function (o) { if (!img && o.isMesh && o.material && o.material.map && o.material.map.image) img = o.material.map.image; });
       if (!img) return;
@@ -1631,14 +1777,12 @@ window.Arcade3D = (function () {
       posterCrop(img, 0, 0, iw * 0.52, ih * 0.58, wallR - 0.05, 2.75, -2.6, false, 2.5, 0.03);
       posterCrop(img, iw * 0.45, ih * 0.30, iw * 0.55, ih * 0.62, wallR - 0.05, 2.15, -0.4, false, 2.1, -0.04);
       posterCrop(img, iw * 0.10, ih * 0.55, iw * 0.45, ih * 0.45, wallR - 0.05, 3.15, 0.9, false, 1.6, 0.06);
-      // left wall: different crops so the two walls do not mirror each other
-      posterCrop(img, iw * 0.30, ih * 0.05, iw * 0.55, ih * 0.60, wallL + 0.05, 2.55, -2.9, true, 2.3, -0.03);
-      posterCrop(img, 0, ih * 0.35, iw * 0.48, ih * 0.60, wallL + 0.05, 2.05, -0.9, true, 2.0, 0.05);
-      posterCrop(img, iw * 0.55, ih * 0.50, iw * 0.42, ih * 0.48, wallL + 0.05, 3.25, 0.5, true, 1.5, -0.06);
-    }, undefined, function () { });
+      // the left wall carries no posters: it is plain stone for the carved name
+    }, undefined, function () { }); });
     // a little warm life over the vending row
-    const rowGlow = new THREE.PointLight(0xffb35c, 0.55, 6.5);
-    rowGlow.position.set(4.2, 2.7, -0.8); sc.add(rowGlow);
+    const rowGlow = new THREE.PointLight(0xffb35c, 0.3, 6.5);
+    rowGlow.position.set(4.1, 2.9, -2.6); sc.add(rowGlow);
+    const cornerNeon = new THREE.PointLight(0xff4fd0, 0.5, 7.5); cornerNeon.position.set(3.6, 3.4, -1.6); sc.add(cornerNeon); // a magenta wash for the machines' faces
   }
 
   // If the user-selected CC-BY model ships as /static/cabinet.glb, mount it as
@@ -2182,19 +2326,22 @@ window.Arcade3D = (function () {
     S.camera.updateProjectionMatrix();
     S.renderer.setSize(w, h, false);
     if (S.composer) S.composer.setSize(w, h);
-    if (aspect < 0.95) {
-      // portrait: the fixed wide shot crops the left wall out entirely, so the
-      // signature board can never be tapped. Reframe: step back/right, yaw
-      // toward the wall, widen the lens a touch. Desktop/landscape unchanged.
-      S.camWide.pos = [2.2, 3.8, 12.5];
-      S.camWide.tgt = [-2.0, 1.6, -0.4];
-      S.camera.fov = 65;
-    } else {
-      S.camWide.pos = [0, 2.35, 6.4];
-      S.camWide.tgt = [0, 1.72, 0];
-      S.camera.fov = 55;
-    }
+    // The room is one composition at every screen size: the laptop shot (camera at [0, 2.35, 6.4] looking at [0, 1.72, 0], fov 55) is the reference. On a narrower
+    // screen the SAME shot is kept and the camera backs off along the same line of sight, by the ratio of the screens' widths, so the same room - mural, both side
+    // walls, van, cabinet, attendant - is in frame. It is smaller, never cropped and never turned.
+    const REF = { pos: [0, 2.35, 6.4], tgt: [0, 1.72, 0], aspect: 1.78 };
+    // Tall screens (user, 15:40): both side walls, the mural, the cabinet row and the van must stay in frame, so the camera still backs off by the ratio of the
+    // screens' widths. What a tall screen has spare is height, and a flat view of the same shot would leave half of it as bare floor and bare wall. So the camera also
+    // RISES as the screen gets taller and looks down at the room, like a diorama: the floor with its props and the taller mural fill the height, and the walls
+    // slope in from the sides instead of being cropped.
+    const tall = Math.max(0, Math.min(1, (1.3 - aspect) / 0.7)); // 0 on a laptop, 1 on a phone held upright
+    const fov = 55 + 14 * tall; // a wider lens on a tall screen: the side walls show their inner faces (graffiti, posters) instead of edge-on slivers
+    const back = Math.max(1, Math.min(REF.aspect / aspect, 3.2)) * (Math.tan(27.5 * Math.PI / 180) / Math.tan(fov / 2 * Math.PI / 180)); // same width of room at the back wall, nearer camera
+    S.camWide.tgt = [REF.tgt[0], REF.tgt[1] + 0.9 * tall, REF.tgt[2] - 0.6 * tall];
+    S.camWide.pos = [REF.pos[0], REF.tgt[1] + (REF.pos[1] - REF.tgt[1]) * back + 3.4 * tall, REF.tgt[2] + (REF.pos[2] - REF.tgt[2]) * back];
+    S.camera.fov = fov;
     S.camera.updateProjectionMatrix();
+    if (S.scene && S.scene.fog) S.scene.fog.density = 0.03 / back; // the same amount of air between the viewer and the wall at every screen size
     const idleNow = !S.zoomed && !(S.wallb && S.wallb.focused) && !(S.holo && S.holo.focused) && !(S.dossier && S.dossier.focused);
     if (idleNow) {
       S.camera.position.set(S.camWide.pos[0], S.camWide.pos[1], S.camWide.pos[2]);
@@ -2224,17 +2371,20 @@ window.Arcade3D = (function () {
     S.reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const canvas = document.getElementById("gl");
     try {
-      S.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      S.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" }); // a hint to the browser and OS to use the stronger GPU, not a guarantee
     } catch (e) {
       try {
-        S.renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+        S.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
       } catch (e2) {
         console.error('webgl:', e2 && e2.message || e2, '| first:', e && e.message || e);
         return false;
       }
     }
     S.lowFx = new URLSearchParams(location.search).has("lowfx");
-    S.renderer.setPixelRatio(S.lowFx ? 1 : 2);
+    S.tier = TIER;
+    S.smallGpu = TIER === "low";
+    // sharpness is paid for in pixels: a phone with a 2.8x screen would draw 8 pixels for every one on a 1x screen. Small devices draw at most 1.25x, laptops at most 2x.
+    S.renderer.setPixelRatio(S.lowFx ? 1 : Math.min(window.devicePixelRatio || 1, S.smallGpu ? 1.25 : 2));
     S.renderer.shadowMap.enabled = true;
     S.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     S.scene = new THREE.Scene();
@@ -2252,7 +2402,8 @@ window.Arcade3D = (function () {
       buildRoom(S.scene);
       mountAlley(S.scene, -4.6, -5.6, 5.6); // back wall / left wall / right wall planes
       mountHoloTable(S.scene); // holographic Hall of Fame table (hidden until hall_unlocked)
-      mountDossier(S.scene); // TOP SECRET dossier easter egg by the gumball machine
+      lazy(5, function () { mountDossier(S.scene); }); // TOP SECRET dossier easter egg by the gumball machine
+      wireVendTaps(); // tap a vending machine to look at it
       mountWallBoard(S.scene, -5.6); // the I WAS HERE signature wall (left wall)
       buildCabinet(S.scene);
       buildAttendant(S.scene);
@@ -2262,24 +2413,25 @@ window.Arcade3D = (function () {
       return false;
     }
     // bloom on the emissive parts; skipped entirely on the light path
-    if (!S.lowFx && THREE.EffectComposer && THREE.RenderPass && THREE.UnrealBloomPass) {
+    if (!S.lowFx && !S.smallGpu && THREE.EffectComposer && THREE.RenderPass && THREE.UnrealBloomPass) {
       try {
         S.composer = new THREE.EffectComposer(S.renderer);
         S.composer.addPass(new THREE.RenderPass(S.scene, S.camera));
         S.bloom = new THREE.UnrealBloomPass(
-          new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2), 0.5, 0.55, 0.8);
+          new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2), window.innerWidth < window.innerHeight ? 0.34 : 0.5, window.innerWidth < window.innerHeight ? 0.45 : 0.55, 0.8);
         S.composer.addPass(S.bloom);
       } catch (e) {
         S.composer = null; S.bloom = null; // bloom is garnish: never a hard failure
       }
     }
-    scr.tex.anisotropy = S.renderer.capabilities.getMaxAnisotropy();
+    scr.tex.anisotropy = Math.min(4, S.renderer.capabilities.getMaxAnisotropy()); // 4 is plenty for a screen seen at this angle; 16 costs bandwidth for nothing
     S.ok = true;
     fitZoom();
     resize();
     window.addEventListener("resize", resize);
     filmOverlay();
 
+    requestAnimationFrame(function () { requestAnimationFrame(lazyStart); }); // two frames drawn: now the rest of the room may arrive
     let frameNo = 0;
     const frameTimes = [];
     let lastNow = 0;
@@ -2287,16 +2439,26 @@ window.Arcade3D = (function () {
       requestAnimationFrame(loop);
       frameNo++;
       const now = performance.now();
-      // auto-degrade on slow devices: sustained >34ms average drops to the
-      // light path (pixelRatio 1, no bloom, throttled CRT redraw)
+      // auto-degrade ladder for slow devices. Sustained slow frames first drop the render density to 75% (bloom stays); if the next 90 frames are still slow, take the
+      // light path (pixel ratio 1, no bloom, throttled CRT redraw, every second frame skipped). 34 ms (30 fps) is a PROPOSED budget, not a measurement from a device;
+      // measuring stops as soon as a device proves fast.
       if (!S.lowFx && !S.fxChecked) {
         if (lastNow) frameTimes.push(now - lastNow);
         lastNow = now;
         if (frameTimes.length >= 90) {
-          S.fxChecked = true;
           const tail = frameTimes.slice(15);
           const avg = tail.reduce(function (a, b) { return a + b; }, 0) / tail.length;
-          if (avg > 34) {
+          frameTimes.length = 0; lastNow = 0;
+          if (avg <= 34) S.fxChecked = true;
+          else if (!S.ladder) {
+            S.ladder = 1;
+            const pr = S.renderer.getPixelRatio() * 0.75;
+            S.renderer.setPixelRatio(pr);
+            if (S.composer && S.composer.setPixelRatio) S.composer.setPixelRatio(pr);
+            S.renderer.setSize(window.innerWidth, window.innerHeight, false);
+            if (S.composer) S.composer.setSize(window.innerWidth, window.innerHeight);
+          } else {
+            S.fxChecked = true; S.ladder = 2;
             S.lowFx = true;
             S.composer = null; S.bloom = null;
             S.renderer.setPixelRatio(1);
@@ -2306,7 +2468,7 @@ window.Arcade3D = (function () {
         }
       }
       stepTweens(now);
-      const dt = S.clock.getDelta();
+      const dt = Math.min(0.05, S.clock.getDelta()); // a tab that comes back from hiding must not make every animation jump
       const t = S.clock.elapsedTime * 1000;
       if (S.mixer) S.mixer.update(dt || 0.016);
       trackUpdate(dt || 0.016, t);
@@ -2376,6 +2538,12 @@ window.Arcade3D = (function () {
     holoUnfocus: function () { holoUnfocus(); },
     holoFocused: function () { return !!(S.holo && S.holo.focused); },
     onHoloFocus: function (cb) { S.holoFocusCb = cb; },
+    vendFocus: function (i) { return vendFocus(i); },
+    vendUnfocus: function () { vendUnfocus(); },
+    vendFocused: function () { return S.vendFocused != null; },
+    vendCount: function () { return (S.vend || []).length; },
+    vendLabels: function () { return (S.vend || []).map(function (v) { return v.label; }); },
+    onVendFocus: function (cb) { S.vendFocusCb = cb; },
     dossierFocus: function () { return dossierFocus(); },
     dossierUnfocus: function () { dossierUnfocus(); },
     dossierFocused: function () { return !!(S.dossier && S.dossier.focused); },

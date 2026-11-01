@@ -84,8 +84,11 @@ def test_arcade_page_and_assets_are_served_with_credit(client):
 
 
 def test_every_whitelisted_static_file_exists_and_page_scripts_are_local():
+    import json
+
+    optional = {i["path"] for i in json.loads((STATIC.parent / "vendor_manifest.json").read_text()).get("optional", [])}  # listed there with the reason it may be absent
     for name in STATIC_FILES:
-        assert (STATIC / ("vendor" if name in VENDOR_FILES else "") / name).is_file(), name
+        assert (STATIC / ("vendor" if name in VENDOR_FILES else "") / name).is_file() or name in optional, name
     assert VENDOR_FILES <= set(STATIC_FILES) and not [f for f in VENDOR_FILES if (STATIC / f).exists()]  # no stray flat copies
     html = (STATIC / "arcade.html").read_text()
     for src in re.findall(r'<script[^>]+src="([^"]+)"', html):

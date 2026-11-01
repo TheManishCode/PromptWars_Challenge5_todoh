@@ -91,20 +91,206 @@
       "note": "as recorded in docs/ATTRIBUTIONS.md; byte-for-byte the downloaded file; source not re-fetched"
     },
     {
-      "path": "cabinet.glb",
-      "source_url": "https://sketchfab.com/3d-models/game-ready-arcade-machine-25fb590707034cff8b555953d66a0f7b",
-      "licence": "CC-BY-4.0",
-      "version": "unversioned",
-      "sha256": "de45e67aa8889972fa17f415aeb7ac1b12f88a6550724e9cfc188714573b84c4",
-      "note": "modified: 2048 px texture resized to 1024 px (docs/ATTRIBUTIONS.md), so its hash differs from the download"
-    },
-    {
       "path": "favicon.svg",
       "source_url": "(own work)",
       "licence": "project",
       "version": "n/a",
       "sha256": "a07703cb8709bf89452a2d6fc861a6a3004eb875051999d8289d21d1131e3bb1",
       "note": "not third party; listed so every non-code static asset has a hash"
+    },
+    {
+      "path": "cabinet.glb",
+      "source_url": "https://sketchfab.com/3d-models/pacman-arcade-machine-297816a91a0947fb9dc917741d4c0be4",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-high",
+      "sha256": "1c62e78ceb0e406973780c5154a23d56b28f627655fcc9e9fd428c55a236d6d3",
+      "note": "PacMan Arcade Machine by Matthew. DERIVED from pacman_arcade_machine.glb (sha256 32220303a27c5582956d5f565a706ded121a26e1137125ffbfdfcc4fe16e9eab) by tools/assets/optimize_models.sh: textures at most 2048, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "cabinet.low.glb",
+      "source_url": "https://sketchfab.com/3d-models/pacman-arcade-machine-297816a91a0947fb9dc917741d4c0be4",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-low",
+      "sha256": "43f27eccd000de52ed738ceb795dcbe34d18909e5f7f45aa7e112bd3a8a1255f",
+      "note": "PacMan Arcade Machine by Matthew. DERIVED from pacman_arcade_machine.glb (sha256 32220303a27c5582956d5f565a706ded121a26e1137125ffbfdfcc4fe16e9eab) by tools/assets/optimize_models.sh: textures at most 1024, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "alley_van.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-high",
+      "sha256": "4019ae4a44ed021374b215277cda2d5a60ceb2b09f236065027017537ce2d7e7",
+      "note": "VANdalized by billionlioe. DERIVED from vandalized.glb (sha256 ed8c595a5fb43e948c7dd2026854840a13b906ef8f2548bbc709848bd4c4392b) by tools/assets/optimize_models.sh: textures at most 2048, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "alley_van.low.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-low",
+      "sha256": "f508770776e4ecec1855fa6e59704d7c2e7a60ec06968cba0426f0188db35a8f",
+      "note": "VANdalized by billionlioe. DERIVED from vandalized.glb (sha256 ed8c595a5fb43e948c7dd2026854840a13b906ef8f2548bbc709848bd4c4392b) by tools/assets/optimize_models.sh: textures at most 1024, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "alley_dumpster.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-high",
+      "sha256": "e40dfaeba49f2720cc11ce9319ed33099f4ca60911295da3d8da2c3bf7910281",
+      "note": "dumpster by DigitalBirb. DERIVED from dumpster_low_poly.glb (sha256 ffef60d37240a5bc467dbea5f220418f3fca53493687435391491927a52a339a) by tools/assets/optimize_models.sh: textures at most 2048, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "alley_dumpster.low.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-low",
+      "sha256": "773740d25ada258a7ee7662b6e10bde3f5cd652ffd68f33b3ff4353b04695ad5",
+      "note": "dumpster by DigitalBirb. DERIVED from dumpster_low_poly.glb (sha256 ffef60d37240a5bc467dbea5f220418f3fca53493687435391491927a52a339a) by tools/assets/optimize_models.sh: textures at most 1024, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "alley_candy.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-high",
+      "sha256": "5bfa9d8e3f1aca92a1fd5b715419d7c5d039be4e17c202420c1df92959bb57e5",
+      "note": "candy machine by Etman. DERIVED from candy_vending_machine.glb (sha256 b087f9c4c7961d4b704d41d2897fcdb2a73122007bfe31b12022f3ce9df59fea) by tools/assets/optimize_models.sh: textures at most 2048, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "alley_candy.low.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-low",
+      "sha256": "3f00262818a743782f1eb80b9715423f4fbda70be2371a20b8585660536b8592",
+      "note": "candy machine by Etman. DERIVED from candy_vending_machine.glb (sha256 b087f9c4c7961d4b704d41d2897fcdb2a73122007bfe31b12022f3ce9df59fea) by tools/assets/optimize_models.sh: textures at most 1024, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "vend_nuka.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-high",
+      "sha256": "357c805e7c098ba87e172a5bded3b6ef2b92577066d77de4ec9f24e73012c6ff",
+      "note": "Nuka Cola vending machine by gunduzhan. DERIVED from nuka_cola_vending_machine.glb (sha256 e5806cc52158037b75dfc23a4503779e4c8d76766dc74375772a76df21ac48d5) by tools/assets/optimize_models.sh: textures at most 2048, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "vend_nuka.low.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-low",
+      "sha256": "6966eed0998924e808196b00eb5b024e11430e39c460397e5ff1fdb05f8fda07",
+      "note": "Nuka Cola vending machine by gunduzhan. DERIVED from nuka_cola_vending_machine.glb (sha256 e5806cc52158037b75dfc23a4503779e4c8d76766dc74375772a76df21ac48d5) by tools/assets/optimize_models.sh: textures at most 1024, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "vend_retro.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-NC-4.0",
+      "version": "optimised-high",
+      "sha256": "241d48cac6698becf70747aabf147b6a8aea631295e62894cbf46d6bd1a0221d",
+      "note": "retro vending machine by Minh Nguyen (non-commercial use only). DERIVED from vending_machine2k_retro-futuristic.glb (sha256 663a1c1971fc278f553b53466809aa7cc15599aaccaf9ec46312716ba1e95511) by tools/assets/optimize_models.sh: textures at most 2048, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "vend_retro.low.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-NC-4.0",
+      "version": "optimised-low",
+      "sha256": "f154ffc734dcac056a881b6a6979eafec88db2e01f4ca6540f761b24fcca6590",
+      "note": "retro vending machine by Minh Nguyen (non-commercial use only). DERIVED from vending_machine2k_retro-futuristic.glb (sha256 663a1c1971fc278f553b53466809aa7cc15599aaccaf9ec46312716ba1e95511) by tools/assets/optimize_models.sh: textures at most 1024, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "wall_mural.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-NC-SA-4.0",
+      "version": "optimised-high",
+      "sha256": "894c16b7ea557b228eef0c08c04f543e90eae901fd5c5b9bc218cf826353a0ff",
+      "note": "Native girl mural scan by Guillermo, after Tito Ferrara (adapted: share-alike applies). DERIVED from native_by_tito_ferrara_-_girl_mural.glb (sha256 9e5f566887552c75e7765df777f05aca6764fd6b085443cfba632683f8386873) by tools/assets/optimize_models.sh: mural 4096 x 1024, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "wall_mural.low.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-NC-SA-4.0",
+      "version": "optimised-low",
+      "sha256": "69b8598585f674cc32be9b98e15263348522eef7a58a8226bcc843ce70eb8d83",
+      "note": "Native girl mural scan by Guillermo, after Tito Ferrara (adapted: share-alike applies). DERIVED from native_by_tito_ferrara_-_girl_mural.glb (sha256 9e5f566887552c75e7765df777f05aca6764fd6b085443cfba632683f8386873) by tools/assets/optimize_models.sh: mural 2048 x 512, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "wall_posters.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-high",
+      "sha256": "0994565e6ca77db06faafbfc0b4534610d95e7ecc164bc961496a9c1deff225c",
+      "note": "missing-person poster decal by honky. DERIVED from missing_people_poster_wall_overlay_decal_dirty.glb (sha256 d1dc840f06665cadfd214edcb2e0400b30684e177842465e89a698cf50ffebd0) by tools/assets/optimize_models.sh: textures at most 2048, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "wall_posters.low.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-low",
+      "sha256": "747d074ebca72230ac2b5df1a7f92da65132e01a5718b80d63532829a24c7f84",
+      "note": "missing-person poster decal by honky. DERIVED from missing_people_poster_wall_overlay_decal_dirty.glb (sha256 d1dc840f06665cadfd214edcb2e0400b30684e177842465e89a698cf50ffebd0) by tools/assets/optimize_models.sh: textures at most 1024, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "holo_table.glb",
+      "source_url": "https://sketchfab.com/3d-models/sci-fi-hologram-table-b1f81f7e06f74877ae34786142064a8d",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-high",
+      "sha256": "a33d5f0c58e9b8bb1fc9f869b27dab96bea97d1e96d31e02e878fb0e9a87b5a0",
+      "note": "sci-fi hologram table by irzafy. DERIVED from sci-fi_hologram_table.glb (sha256 3988d40a42668b859ce0d42c4cce6028dfdbd285be9196dd81db8d7f36275d21) by tools/assets/optimize_models.sh: textures at most 2048, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "holo_table.low.glb",
+      "source_url": "https://sketchfab.com/3d-models/sci-fi-hologram-table-b1f81f7e06f74877ae34786142064a8d",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-low",
+      "sha256": "a33d5f0c58e9b8bb1fc9f869b27dab96bea97d1e96d31e02e878fb0e9a87b5a0",
+      "note": "sci-fi hologram table by irzafy. DERIVED from sci-fi_hologram_table.glb (sha256 3988d40a42668b859ce0d42c4cce6028dfdbd285be9196dd81db8d7f36275d21) by tools/assets/optimize_models.sh: textures at most 1024, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "secret_dossier.glb",
+      "source_url": "https://sketchfab.com/3d-models/worm-dossier-meg-game-ready-e94be6e9166440e69bbfd58be613957e",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-high",
+      "sha256": "fe8bd80e2ccacbb9564c69d89024378ff52847ca63c7b9b1438d99d2f6e6771b",
+      "note": "Worm Dossier M.E.G Game Ready by NightmareBunny. DERIVED from worm_dossier_m.e.g_game_ready.glb (sha256 dbaf23575f43605f4fcc29d63ebb4e2a2ce4f1e60f499bb3abc4a842c31de9e8) by tools/assets/optimize_models.sh: textures at most 2048, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    },
+    {
+      "path": "secret_dossier.low.glb",
+      "source_url": "https://sketchfab.com/3d-models/worm-dossier-meg-game-ready-e94be6e9166440e69bbfd58be613957e",
+      "licence": "CC-BY-4.0",
+      "version": "optimised-low",
+      "sha256": "5ed7128b98d75278f38c51b1eede9e4a9c4661115c3283b5c6e18478770a4368",
+      "note": "Worm Dossier M.E.G Game Ready by NightmareBunny. DERIVED from worm_dossier_m.e.g_game_ready.glb (sha256 dbaf23575f43605f4fcc29d63ebb4e2a2ce4f1e60f499bb3abc4a842c31de9e8) by tools/assets/optimize_models.sh: textures at most 1024, WebP textures, pruned and de-duplicated; geometry, materials and look unchanged. Changes indicated as CC BY requires."
+    }
+  ],
+  "optional": [
+    {
+      "path": "vend_cat.glb",
+      "source_url": "https://sketchfab.com/",
+      "licence": "CC-BY-NC-ND-4.0",
+      "version": "original",
+      "sha256": "8fbd0408a142f68b25f2e8ac33b6d0f8f5545d774e8b9d207121989cbaaa7a15",
+      "note": "cat vending machine by Minh Nguyen. No derivatives allowed, so the 54.9 MB original is the only form and is NOT committed to the repository: copy it here yourself. If present it must match this hash. A laptop-class device loads it by itself; a phone or small computer loads it only on the CAT button."
+    },
+    {
+      "path": "road.glb",
+      "source_url": "(the user's earlier arcade line)",
+      "licence": "(see docs/ATTRIBUTIONS.md)",
+      "version": "n/a",
+      "sha256": "",
+      "note": "CRT road theatre asset, provided separately; the page shows its own message when it is absent"
+    },
+    {
+      "path": "car.glb",
+      "source_url": "(the user's earlier arcade line)",
+      "licence": "(see docs/ATTRIBUTIONS.md)",
+      "version": "n/a",
+      "sha256": "",
+      "note": "CRT road theatre asset, provided separately"
+    },
+    {
+      "path": "barrier.glb",
+      "source_url": "(the user's earlier arcade line)",
+      "licence": "(see docs/ATTRIBUTIONS.md)",
+      "version": "n/a",
+      "sha256": "",
+      "note": "CRT road theatre asset, provided separately"
     }
   ]
 }

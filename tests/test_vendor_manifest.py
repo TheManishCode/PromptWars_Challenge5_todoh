@@ -17,9 +17,20 @@ def test_every_listed_file_matches_its_recorded_hash():
         assert hashlib.sha256(data).hexdigest() == item["sha256"], f"{item['path']} changed: update web/vendor_manifest.json (and docs/ATTRIBUTIONS.md) in the same change"
 
 
+OPTIONAL = {i["path"]: i for i in manifest.get("optional", [])}  # not committed (too large, or its licence forbids derivatives, or provided separately)
+
+
+def test_an_optional_file_that_is_present_matches_its_recorded_hash():
+    for path, item in OPTIONAL.items():
+        f = STATIC / path
+        if f.exists() and item["sha256"]:
+            assert hashlib.sha256(f.read_bytes()).hexdigest() == item["sha256"], f"{path} is not the file this manifest describes"
+    assert all(item.get("note") and item.get("licence") for item in OPTIONAL.values())
+
+
 def test_every_vendored_and_binary_file_is_listed_and_every_entry_names_its_source_licence_and_version():
     listed = {i["path"] for i in manifest["files"]}
-    on_disk = {p.relative_to(STATIC).as_posix() for p in STATIC.rglob("*") if p.is_file() and any(m in p.relative_to(STATIC).as_posix() for m in BINARY_AND_VENDOR)}
+    on_disk = {p.relative_to(STATIC).as_posix() for p in STATIC.rglob("*") if p.is_file() and any(m in p.relative_to(STATIC).as_posix() for m in BINARY_AND_VENDOR)} - set(OPTIONAL)
     assert on_disk == listed, f"unlisted: {sorted(on_disk - listed)}; listed but missing: {sorted(listed - on_disk)}"
     for item in manifest["files"]:
         assert all(item.get(k) for k in ("source_url", "licence", "version", "sha256")) and len(item["sha256"]) == 64, item["path"]

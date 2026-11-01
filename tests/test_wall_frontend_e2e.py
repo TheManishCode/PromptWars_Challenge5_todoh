@@ -462,7 +462,8 @@ def test_the_wall_can_be_reached_and_tapped_on_phones_and_tablets_in_either_orie
         page.wait_for_timeout(2500)
         pt = page.evaluate(BOARD_POINT, None)
         assert pt and pt["onscreen"], f"the wall board is off screen at {viewport}: {pt}"
-        assert page.evaluate("(window.__cams || [])[0].fov") == (65 if portrait else 55)
+        fov = page.evaluate("(window.__cams || [])[0].fov")
+        assert (55 < fov <= 69) if portrait else fov == 55  # a taller screen gets a wider lens (up to 69) so the side walls show their faces; a wide screen keeps the laptop shot
         for _ in range(5):
             pt = page.evaluate(BOARD_POINT, None)
             page.mouse.click(pt["x"], pt["y"])

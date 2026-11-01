@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import errno
 import gzip
+import hashlib
 import hmac
 import json
 import logging
@@ -33,7 +34,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Literal, Optional
 
-from flask import Flask, Response, abort, g, jsonify, redirect, request
+from flask import Flask, Response, abort, g, jsonify, redirect, request, send_file
 from werkzeug.local import LocalProxy
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 
@@ -92,14 +93,17 @@ STATIC_FILES = {
     "vend_cat.glb": "model/gltf-binary", "wall_mural.glb": "model/gltf-binary", "wall_posters.glb": "model/gltf-binary",
     # the cabinet CRT's night road (car/road/barrier - attribution in docs/ATTRIBUTIONS.md)
     "holo_table.glb": "model/gltf-binary", "secret_dossier.glb": "model/gltf-binary", "road.glb": "model/gltf-binary", "car.glb": "model/gltf-binary", "barrier.glb": "model/gltf-binary",
+    # the same models optimised for phones and small computers (textures <= 1024): tools/assets/optimize_models.sh
+    "cabinet.low.glb": "model/gltf-binary", "alley_van.low.glb": "model/gltf-binary", "alley_dumpster.low.glb": "model/gltf-binary", "alley_candy.low.glb": "model/gltf-binary", "vend_nuka.low.glb": "model/gltf-binary", "vend_retro.low.glb": "model/gltf-binary", "wall_mural.low.glb": "model/gltf-binary", "wall_posters.low.glb": "model/gltf-binary", "holo_table.low.glb": "model/gltf-binary", "secret_dossier.low.glb": "model/gltf-binary",
 }
 # blob: (which only same-origin script can mint) is allowed for recordings and model textures instead of any external source, and wasm-unsafe-eval permits
 # WebAssembly compilation only, never string eval. Both were kept when the classic page and its model viewer (and the one style hash it needed) were removed;
 # neither has been shown to be unneeded by the room, so narrowing them is left until the real models have been run.
-LONG_CACHE = frozenset({"avatar.glb", "cabinet.glb", "three.min.js", "alley_van.glb", "alley_dumpster.glb", "alley_candy.glb", "vend_nuka.glb", "vend_retro.glb", "vend_cat.glb", "wall_mural.glb", "wall_posters.glb", "road.glb", "car.glb", "barrier.glb", "holo_table.glb", "secret_dossier.glb"})  # large and unchanging: not re-sent on every page load
+LONG_CACHE = frozenset({"avatar.glb", "cabinet.glb", "three.min.js", "alley_van.glb", "alley_dumpster.glb", "alley_candy.glb", "vend_nuka.glb", "vend_retro.glb", "vend_cat.glb", "wall_mural.glb", "wall_posters.glb", "road.glb", "car.glb", "barrier.glb", "holo_table.glb", "secret_dossier.glb", "cabinet.low.glb", "alley_van.low.glb", "alley_dumpster.low.glb", "alley_candy.low.glb", "vend_nuka.low.glb", "vend_retro.low.glb", "wall_mural.low.glb", "wall_posters.low.glb", "holo_table.low.glb", "secret_dossier.low.glb"})  # large and unchanging: not re-sent on every page load
 # third-party files live in static/vendor/ but are served from the same flat /static/<name> URLs
 VENDOR_FILES = frozenset({"three.min.js", "CopyShader.js", "LuminosityHighPassShader.js", "EffectComposer.js", "RenderPass.js", "ShaderPass.js", "MaskPass.js", "UnrealBloomPass.js", "GLTFLoader.js"})
 GZIP_MIN = 1024  # below this the header overhead outweighs the saving
+GZIP_MAX = 3 * 1024 * 1024  # above this (the scene models) a file is sent as it is: already compressed, and compressing 50 MB in the request would stall it and sit in memory
 _gzip_cache: Dict[tuple, bytes] = {}  # (name, mtime_ns) -> compressed bytes; the file set is fixed and small
 WORKSPACE_EXEMPT = ("/api/owner/status", "/api/wall/")  # /api routes with their own authentication: no workspace is looked up or made for them
 # POST routes that send, or let something send later, through the owner's mailbox or gateway; refused for every guest workspace
@@ -784,10 +788,27 @@ def create_app(
 
     # ------------------------------------------------------------- pages
 
+    def asset_version() -> str:
+        """A short hash of every served file's name, size and time. The page names each script, style and model with it (``?v=``), so a changed file gets a new address:
+        a phone that cached last week's ``cabinet.glb`` under a one-hour rule showed the old, sideways cabinet beside new code written for the new one."""
+        h = hashlib.sha256()
+        for name in sorted(STATIC_FILES):
+            path = STATIC_DIR / ("vendor" if name in VENDOR_FILES else "") / name
+            try:
+                st = path.stat()
+            except OSError:
+                continue
+            h.update(f"{name}:{st.st_size}:{st.st_mtime_ns}".encode())
+        return h.hexdigest()[:12]
+
     @app.get("/")
     def index():
         """The arcade room is the only interface (the classic page was removed on the owner's instruction)."""
-        return Response((STATIC_DIR / "arcade.html").read_bytes(), mimetype="text/html")
+        version = asset_version()
+        html = (STATIC_DIR / "arcade.html").read_text(encoding="utf-8")
+        html = re.sub(r'((?:src|href)="/static/[A-Za-z0-9_.-]+\.(?:js|css|svg))"', lambda m: f'{m.group(1)}?v={version}"', html)
+        html = html.replace("<head>", f'<head>\n<meta name="asset-version" content="{version}">', 1)
+        return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})  # the page itself is always asked for again; what it names is cached for good
 
     @app.get("/arcade")
     def arcade():
@@ -798,8 +819,14 @@ def create_app(
         if name not in STATIC_FILES:
             abort(404)
         path = STATIC_DIR / ("vendor" if name in VENDOR_FILES else "") / name
+        versioned = request.args.get("v") == asset_version()  # asked for by the address the page was given: it can never be stale, so it may be kept for a year
+        cache = "public, max-age=31536000, immutable" if versioned else ("public, max-age=3600" if name in LONG_CACHE else "no-cache")
+        if path.stat().st_size > GZIP_MAX:
+            resp = send_file(path, mimetype=STATIC_FILES[name].split(";")[0], conditional=True, etag=True, max_age=None)  # streamed, with ETag and Range, never read whole into memory
+            resp.headers["Cache-Control"] = cache if versioned else "no-cache"
+            return resp
         body = path.read_bytes()
-        headers = {"Cache-Control": "public, max-age=3600" if name in LONG_CACHE else "no-cache", "Vary": "Accept-Encoding"}
+        headers = {"Cache-Control": cache, "Vary": "Accept-Encoding"}
         if len(body) >= GZIP_MIN and "gzip" in request.headers.get("Accept-Encoding", "").lower():
             key = (name, path.stat().st_mtime_ns)
             if key not in _gzip_cache:
