@@ -83,14 +83,6 @@
       "note": "licence text kept beside three.min.js; not compared with upstream"
     },
     {
-      "path": "vendor/model-viewer.min.js",
-      "source_url": "https://unpkg.com/@google/model-viewer@4.4.0/dist/model-viewer.min.js",
-      "licence": "Apache-2.0 as recorded in docs/ATTRIBUTIONS.md (the file header also carries BSD-3-Clause for a bundled library; the frontend owner should reconcile the two)",
-      "version": "4.4.0",
-      "sha256": "18b2e711035aa4705ee281530a55dc2338ff05eed3d70ae16d54105282a75ed5",
-      "note": "byte-identical to the npm dist file at that URL (compared 2026-11-01)"
-    },
-    {
       "path": "avatar.glb",
       "source_url": "https://sketchfab.com/3d-models/polytoria-avatar-v3-pauly-2c1fbaf2dec1411ca1ae5bfd0afaaa9e",
       "licence": "CC-BY-4.0",
