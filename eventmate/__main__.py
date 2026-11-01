@@ -561,7 +561,7 @@ def _jobs(em: EventMate, a) -> int:
             job = w.approve_nudge(a.target, a.extra)
         print(f"job {job.job_id}: {job.status}; {job.next_action}")
         return 0
-    jobs = [j for j in (w.store.list(a.target) if (em.store.root / "jobs.db").exists() else [])]
+    jobs = list(w.store.list(a.target) if (em.store.root / "jobs.db").exists() else [])
     if a.json:
         print(json.dumps([json.loads(j.model_dump_json()) for j in jobs], indent=2))
         return 0

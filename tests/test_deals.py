@@ -103,7 +103,7 @@ def agent(hits=(A, B, C, D, E), pages=None, **kw):
 
 
 def q(**kw):
-    base = dict(kind="caterer", city="Pune", guests=100)
+    base = {"kind": "caterer", "city": "Pune", "guests": 100}
     base.update(kw)
     return DealQuery(**base)
 
@@ -192,7 +192,7 @@ def test_budgets_bound_the_work():
     a.run(q())
     assert len(f.fetched) == 2
     many = [f"https://same.in/{i}" for i in range(6)]
-    a, s, f, _ = agent(hits=many, pages={u: "₹600 per plate" for u in many})
+    a, s, f, _ = agent(hits=many, pages=dict.fromkeys(many, "₹600 per plate"))
     a.run(q())
     assert len(f.fetched) == 2  # at most two pages per domain
     a, s, f, _ = agent(max_queries=2)

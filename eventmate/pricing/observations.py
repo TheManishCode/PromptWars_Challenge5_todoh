@@ -10,7 +10,7 @@ import json
 import uuid
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from eventmate.agents.vendor import DATA_DIR, VendorRepository
 from eventmate.jsonl import JsonlLog

@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 from eventmate.jsonl import InterProcessLock, JsonlLog
 from eventmate.schemas import ContactCandidate, ShortlistEntry, VendorCategory

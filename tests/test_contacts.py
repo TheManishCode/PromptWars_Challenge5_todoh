@@ -213,7 +213,7 @@ def test_a_contact_candidate_needs_a_source_a_valid_address_and_a_real_state(bad
 
     from eventmate.schemas import external_vendor_id
 
-    base = dict(candidate_id="c1", vendor_id=external_vendor_id("osm:node/1"), channel="email", value="a@b.example", source_url="https://b.example/", source_kind="page_mailto", found_at=datetime.now(UTC))
+    base = {"candidate_id": "c1", "vendor_id": external_vendor_id("osm:node/1"), "channel": "email", "value": "a@b.example", "source_url": "https://b.example/", "source_kind": "page_mailto", "found_at": datetime.now(UTC)}
     ContactCandidate(**base)
     with pytest.raises(ValidationError):
         ContactCandidate(**{**base, **bad})

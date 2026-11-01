@@ -15,7 +15,7 @@ import time
 import uuid
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -75,11 +75,7 @@ _HAZARDS = (
 _EXTRA_INSTRUCTION = re.compile(r"\b(?:email|send|forward)\b[^.\n]{0,20}\b(?:the plan|this plan|my plan|the guest list)\b", re.I)
 # Words that make a capitalised phrase a description of an item or activity, not the name of a business.
 _GENERIC = frozenset(
-    "floral flower flowers rangoli live rent hire event events balloon balloons fairy light lights lighting photo booth kids kid children childrens table tables linen themed theme "
-    "music dance stage entrance garden outdoor indoor wedding birthday party engagement festive marigold jasmine candle candles diya lantern lanterns paper fabric rental furniture sound "
-    "decor decoration decorations decorative craft crafts games game dj band dhol acoustic diy simple basic classic modern rustic traditional vintage cultural community student "
-    "students team group family friends guest guests welcome signage banner banners bunting art painting mehendi henna haldi sangeet food drink drinks snack snacks dessert desserts "
-    "the a an and for with in on at of to your our add use try set plan pick choose arrange".split()
+    ["floral", "flower", "flowers", "rangoli", "live", "rent", "hire", "event", "events", "balloon", "balloons", "fairy", "light", "lights", "lighting", "photo", "booth", "kids", "kid", "children", "childrens", "table", "tables", "linen", "themed", "theme", "music", "dance", "stage", "entrance", "garden", "outdoor", "indoor", "wedding", "birthday", "party", "engagement", "festive", "marigold", "jasmine", "candle", "candles", "diya", "lantern", "lanterns", "paper", "fabric", "rental", "furniture", "sound", "decor", "decoration", "decorations", "decorative", "craft", "crafts", "games", "game", "dj", "band", "dhol", "acoustic", "diy", "simple", "basic", "classic", "modern", "rustic", "traditional", "vintage", "cultural", "community", "student", "students", "team", "group", "family", "friends", "guest", "guests", "welcome", "signage", "banner", "banners", "bunting", "art", "painting", "mehendi", "henna", "haldi", "sangeet", "food", "drink", "drinks", "snack", "snacks", "dessert", "desserts", "the", "a", "an", "and", "for", "with", "in", "on", "at", "of", "to", "your", "our", "add", "use", "try", "set", "plan", "pick", "choose", "arrange"]
 )
 _BIZ = r"(?:Caterers?|Catering|Events?|Studios?|Photography|Photographers?|Decorators?|Decorations|Banquets?|Resorts?|Hospitality|Productions?|Enterprises|Services|Entertainment|Florists?|Bakery|Bakers|Travels|Rentals)"
 _BUSINESS = re.compile(rf"\b(?:[A-Z][\w&'.-]*\s+){{1,3}}{_BIZ}\b")
@@ -403,7 +399,7 @@ class IdeaService:
         for index, raw in enumerate(pool):
             t = _Template.model_validate(raw)
             c = t.conditions
-            if c.min_guests and facts["guest_count"] < c.min_guests or c.max_guests and facts["guest_count"] > c.max_guests:
+            if (c.min_guests and facts["guest_count"] < c.min_guests) or (c.max_guests and facts["guest_count"] > c.max_guests):
                 continue
             if c.dietary_any and not set(c.dietary_any) & set(facts.get("dietary", [])):
                 continue

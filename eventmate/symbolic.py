@@ -22,7 +22,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 from eventmate.logs import ToolCallLog
 from eventmate.schemas import ScheduleSpec, SymbolicResult

@@ -12,7 +12,8 @@ import hashlib
 import hmac
 import re
 import secrets
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from flask import Flask, Request, Response, jsonify, request
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, ValidationError
@@ -270,8 +271,7 @@ class Wall:
             status, payload, created = store.submit(h, key, body.name)
             if created:
                 self.limits.submit_ip.add(ip)
-            resp = self._private(payload, status)
-            return resp
+            return self._private(payload, status)
 
         @route("/api/wall/me/recovery-code", ("POST",))
         def recovery_code():

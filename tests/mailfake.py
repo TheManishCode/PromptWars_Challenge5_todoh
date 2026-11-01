@@ -122,4 +122,4 @@ def disconnected():
     return smtplib.SMTPServerDisconnected("connection lost during send")
 
 
-__all__ = ["CFG", "MailWorld", "disconnected", "datetime"]
+__all__ = ["CFG", "MailWorld", "datetime", "disconnected"]

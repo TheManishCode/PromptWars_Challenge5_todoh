@@ -71,10 +71,10 @@ def test_an_external_reference_must_come_from_a_known_source_and_shape(em, ref):
 
 
 def test_a_discovered_business_can_never_be_a_test_vendor_or_the_other_way_round(em):
-    for kwargs in (dict(source="test", external_id="osm:node/5"), dict(source="osm", external_id="test:me")):
+    for kwargs in ({"source": "test", "external_id": "osm:node/5"}, {"source": "osm", "external_id": "test:me"}):
         with pytest.raises((ValidationError, ValueError)):
             em.add_discovered(kwargs["external_id"], "N", "Pune", C.CATERER, kwargs["source"])
-    base = dict(vendor_id=external_vendor_id("osm:node/9"), external_id="osm:node/9", name="N", city="Pune", category=C.CATERER, source="osm", created_at=datetime.now(UTC))
+    base = {"vendor_id": external_vendor_id("osm:node/9"), "external_id": "osm:node/9", "name": "N", "city": "Pune", "category": C.CATERER, "source": "osm", "created_at": datetime.now(UTC)}
     ExternalBusiness(**base)
     for bad in ({"is_test": True}, {"vendor_id": external_vendor_id("osm:node/10")}, {"source": "test"}, {"website": "javascript:alert(1)"}, {"source_url": "ftp://x"}, {"surprise": 1}, {"rating": 9.0}, {"name": "x\ny"}):
         with pytest.raises(ValidationError):
@@ -211,7 +211,7 @@ def test_the_vendor_score_ranks_external_businesses_by_their_own_reference_and_t
         em.observe_quote(b.vendor_id, C.CATERER, source_type="user_input", entered_by="asha", observed_at=clock(), expires_at=(clock() + timedelta(days=9)).date(),
                          confidence=0.7, amount_inr=amount, basis="per_plate", guest_count=100, inclusions=("service staff",))
     board = em.vendor_scores(C.CATERER, TODAY)
-    assert [s.vendor_id for s in board.scores][0] == ids[0] and set(s.vendor_id for s in board.scores) == set(ids)
+    assert [s.vendor_id for s in board.scores][0] == ids[0] and {s.vendor_id for s in board.scores} == set(ids)
     assert any(c.name == "price" and c.score is not None for c in board.scores[0].components)  # three comparable quotes: price is scored
     tv, _ = em.add_test_vendor("Test Caterer", "Pune", C.CATERER, "owner@personal.test", owns_address=True, confirmed_by="Asha")
     d = em.vendor_directory()

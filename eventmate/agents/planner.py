@@ -12,7 +12,8 @@ It never decides that a plan is acceptable: the Validator Agent does that.
 from __future__ import annotations
 
 from itertools import product
-from typing import NamedTuple, Sequence
+from typing import NamedTuple
+from collections.abc import Sequence
 
 from eventmate.arcade_pulse import pulse as _arcade_pulse
 from eventmate.agents.scheduler import SchedulingAgent

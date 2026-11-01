@@ -36,7 +36,7 @@ def pid_nophoto(em):
 
 
 def mail(em, pid, **kw):
-    base = dict(category=C.CATERER, channel="email", recipient="sales@annapurna.in", sender_name="Asha")
+    base = {"category": C.CATERER, "channel": "email", "recipient": "sales@annapurna.in", "sender_name": "Asha"}
     return em.draft_outreach(pid, **{**base, **kw})
 
 
@@ -136,8 +136,8 @@ def test_marking_sent_is_the_users_statement_and_is_append_only(em, pid):
 
 def test_the_draft_model_refuses_a_link_that_is_not_mailto_or_wa_me():
     from eventmate.schemas import OutreachDraft
-    base = dict(draft_id="a", plan_id="p", created_at="2026-10-30T00:00:00Z", category="caterer", vendor_id="v", vendor_name="V", channel="email",
-                recipient="a@b.in", subject="s", body="b", link="mailto:a@b.in?subject=s")
+    base = {"draft_id": "a", "plan_id": "p", "created_at": "2026-10-30T00:00:00Z", "category": "caterer", "vendor_id": "v", "vendor_name": "V", "channel": "email",
+                "recipient": "a@b.in", "subject": "s", "body": "b", "link": "mailto:a@b.in?subject=s"}
     OutreachDraft(**base)
     for bad in ("javascript:alert(1)", "https://evil.example/", "https://wa.me.evil.com/1", "mailto:a@b.in\nbcc:x"):
         with pytest.raises(ValidationError):

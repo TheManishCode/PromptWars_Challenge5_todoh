@@ -26,7 +26,7 @@ import secrets
 import threading
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 from pydantic import ValidationError
 
@@ -97,21 +97,21 @@ def assemble_plan(
 
 def draft_from_plan(plan: PlanVersion, **changes) -> PlanDraft:
     """Rebuild the solver-level draft of a stored plan (for re-validation, confirmation, replanning)."""
-    fields = dict(
-        plan_id=plan.plan_id,
-        origin=plan.origin,
-        request=plan.request,
-        guests=plan.guests,
-        allocation=plan.allocation,
-        selections=plan.selections,
-        spec=plan.spec,
-        solution=plan.solution,
-        symbolic=plan.symbolic,
-        items=plan.items,
-        already_done=tuple(sorted(t for t in ("book_venue", "book_caterer", "book_photographer") if _confirmed_task(plan, t))),
-        warnings=plan.warnings,
-        excluded_vendor_ids=plan.excluded_vendor_ids,
-    )
+    fields = {
+        "plan_id": plan.plan_id,
+        "origin": plan.origin,
+        "request": plan.request,
+        "guests": plan.guests,
+        "allocation": plan.allocation,
+        "selections": plan.selections,
+        "spec": plan.spec,
+        "solution": plan.solution,
+        "symbolic": plan.symbolic,
+        "items": plan.items,
+        "already_done": tuple(sorted(t for t in ("book_venue", "book_caterer", "book_photographer") if _confirmed_task(plan, t))),
+        "warnings": plan.warnings,
+        "excluded_vendor_ids": plan.excluded_vendor_ids,
+    }
     fields.update(changes)
     return PlanDraft(**fields)
 

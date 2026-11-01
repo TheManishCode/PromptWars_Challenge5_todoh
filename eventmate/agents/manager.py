@@ -15,7 +15,7 @@ import unicodedata
 import uuid
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import Iterable, Sequence
+from collections.abc import Iterable, Sequence
 
 from pydantic import ValidationError
 

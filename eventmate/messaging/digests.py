@@ -12,7 +12,7 @@ import threading
 import uuid
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, Mapping
+from collections.abc import Callable, Mapping
 
 from eventmate.jsonl import JsonlLog
 from eventmate.followthrough.jobs import Job

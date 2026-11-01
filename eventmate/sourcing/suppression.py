@@ -16,7 +16,7 @@ import re
 import uuid
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from eventmate.jsonl import InterProcessLock, JsonlLog
 from eventmate.schemas import Suppression, UnmatchedMessage, _EMAIL

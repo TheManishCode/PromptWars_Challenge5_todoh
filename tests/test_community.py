@@ -119,16 +119,16 @@ def test_the_expected_headcount_must_lie_inside_the_attendance_range():
 
 
 def test_the_community_details_model_rejects_inconsistent_input():
-    ok = dict(volunteers=("Asha", "Ravi"))
+    ok = {"volunteers": ("Asha", "Ravi")}
     CommunityDetails(**ok, setup_owner="Asha")
     for bad in (
-        dict(setup_owner="Zed"), dict(volunteers=("Asha", "Asha")), dict(shifts=({"volunteer": "Zed", "role": "x", "phase": "event"},)),
-        dict(slots=({"slot_id": "a", "role": "x", "phase": "event"}, {"slot_id": "a", "role": "y", "phase": "event"})),
-        dict(slots=({"slot_id": "a", "role": "x", "phase": "event", "start_min": 30, "end_min": 10},)),
-        dict(program=({"activity_id": "a", "title": "t", "minutes": 30, "resource": "stage", "after": "ghost"},)),
-        dict(program=({"activity_id": "a", "title": "t", "minutes": 30, "resource": "stage", "after": "a"},)),
-        dict(volunteers=("bad\nname",)), dict(subtype="Bad Subtype"), dict(access_needs=("step_free_access", "step_free_access")), dict(access_needs=("flying_carpet",)),
-        dict(funding=({"label": "x", "status": "maybe", "amount_inr": 5},)), dict(funding=({"label": "x", "status": "received", "amount_inr": 0},)), dict(surprise=1),
+        {"setup_owner": "Zed"}, {"volunteers": ("Asha", "Asha")}, {"shifts": ({"volunteer": "Zed", "role": "x", "phase": "event"},)},
+        {"slots": ({"slot_id": "a", "role": "x", "phase": "event"}, {"slot_id": "a", "role": "y", "phase": "event"})},
+        {"slots": ({"slot_id": "a", "role": "x", "phase": "event", "start_min": 30, "end_min": 10},)},
+        {"program": ({"activity_id": "a", "title": "t", "minutes": 30, "resource": "stage", "after": "ghost"},)},
+        {"program": ({"activity_id": "a", "title": "t", "minutes": 30, "resource": "stage", "after": "a"},)},
+        {"volunteers": ("bad\nname",)}, {"subtype": "Bad Subtype"}, {"access_needs": ("step_free_access", "step_free_access")}, {"access_needs": ("flying_carpet",)},
+        {"funding": ({"label": "x", "status": "maybe", "amount_inr": 5},)}, {"funding": ({"label": "x", "status": "received", "amount_inr": 0},)}, {"surprise": 1},
     ):
         with pytest.raises(ValidationError):
             CommunityDetails(**{**ok, **bad} if "volunteers" not in bad else bad)

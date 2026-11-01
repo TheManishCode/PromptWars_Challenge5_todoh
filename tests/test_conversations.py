@@ -408,8 +408,8 @@ def test_contacts_and_request_all(em, pid):
 
 
 @pytest.mark.parametrize("kw", [
-    dict(email=None, whatsapp=None, preferred="email"), dict(email="bad", whatsapp=None, preferred="email"), dict(email="a@b.in", whatsapp=None, preferred="whatsapp"),
-    dict(email=None, whatsapp="123", preferred="whatsapp"), dict(email="a@b.in,c@d.in", whatsapp=None, preferred="email"),
+    {"email": None, "whatsapp": None, "preferred": "email"}, {"email": "bad", "whatsapp": None, "preferred": "email"}, {"email": "a@b.in", "whatsapp": None, "preferred": "whatsapp"},
+    {"email": None, "whatsapp": "123", "preferred": "whatsapp"}, {"email": "a@b.in,c@d.in", "whatsapp": None, "preferred": "email"},
 ])
 def test_bad_contacts_are_refused(em, kw):
     with pytest.raises((ValueError, ValidationError)):

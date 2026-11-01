@@ -49,7 +49,7 @@ def pid(em):
 
 
 def start(em, pid, clock, **kw):
-    args = dict(goal="2 caterer quotes", deadline=clock() + timedelta(days=7), sender_name="Asha", min_quotes=2)
+    args = {"goal": "2 caterer quotes", "deadline": clock() + timedelta(days=7), "sender_name": "Asha", "min_quotes": 2}
     args.update(kw)
     return em.jobs.start_job(pid, C.CATERER, VENDORS, **args)
 

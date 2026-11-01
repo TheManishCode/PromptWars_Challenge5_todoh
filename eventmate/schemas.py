@@ -715,7 +715,7 @@ class ScheduleDependency(_Model):
 
 
 def _has_cycle(ids: list[str], edges: list[tuple[str, str]]) -> bool:
-    indegree = {i: 0 for i in ids}
+    indegree = dict.fromkeys(ids, 0)
     for _, b in edges:
         indegree[b] += 1
     queue = [i for i, n in indegree.items() if n == 0]

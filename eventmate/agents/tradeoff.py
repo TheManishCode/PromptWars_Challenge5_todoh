@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from itertools import combinations
-from typing import Callable
+from collections.abc import Callable
 
 from pydantic import Field
 

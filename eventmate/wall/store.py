@@ -16,7 +16,8 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Any, Callable, Iterator, Mapping
+from typing import Any
+from collections.abc import Callable, Iterator, Mapping
 from zoneinfo import ZoneInfo
 
 from eventmate.wall import layout

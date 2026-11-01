@@ -47,7 +47,7 @@ def rules(app, param):
 
 
 def fill(rule, plan_id, extra=None):
-    values = {name: FAKE_ID for name in rule.arguments}
+    values = dict.fromkeys(rule.arguments, FAKE_ID)
     values.update({"plan_id": plan_id, "category": "caterer", "verdict": "approve", "name": "x", **(extra or {})})
     url = rule.rule
     for name, value in values.items():

@@ -129,7 +129,7 @@ class FakeSearch:
         return "https://www.google.com/travel/flights/booking?tfs=abc"
 
     def search(self, filters, top_n=5, currency=None, language=None, country=None):
-        self.kwargs = dict(currency=currency, filters=filters)
+        self.kwargs = {"currency": currency, "filters": filters}
         if self.exc:
             raise self.exc
         return self.results

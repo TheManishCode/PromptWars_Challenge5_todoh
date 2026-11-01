@@ -34,8 +34,8 @@ target-version = "py312"
 
 [tool.ruff.lint]
 # Bugs, not taste: pyflakes, bugbear and syntax errors. B007/B008/B905 are style here (an unused loop counter, a frozen policy object as a default, zip on equal lengths).
-select = ["F", "B", "E9"]
-ignore = ["B007", "B008", "B905"]
+select = ["F", "B", "E9", "UP", "C4", "SIM105", "SIM102", "SIM201", "RET504", "PERF102", "RUF013", "W291"]
+ignore = ["B007", "B008", "B905", "UP042", "UP007", "SIM105", "SIM102"]  # UP042: str-mixin enums keep their JSON/str behaviour; UP007 is a runtime Union alias; SIM105/SIM102 stay where a trailing comment or else-branch explains the code
 
 [tool.ruff.lint.per-file-ignores]
 "tools/redteam/probe_parsers.py" = ["B023"]  # each lambda is called inside the iteration that defines it

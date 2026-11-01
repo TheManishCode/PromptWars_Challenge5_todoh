@@ -70,7 +70,7 @@ def test_nothing_is_automatic_without_a_grant(em, pid, chans, clock):
 def test_a_grant_has_bounds_an_expiry_and_a_name(em, pid, clock):
     m = grant(em, pid)
     assert m.active_at(clock()) and m.expires_at == T0 + timedelta(hours=72) and (m.max_per_thread, m.max_total) == (3, 10)
-    for bad in (dict(hours=0), dict(hours=24 * 8), dict(max_per_thread=0), dict(max_per_thread=6), dict(max_total=0), dict(max_total=31)):
+    for bad in ({"hours": 0}, {"hours": 24 * 8}, {"max_per_thread": 0}, {"max_per_thread": 6}, {"max_total": 0}, {"max_total": 31}):
         with pytest.raises(ValueError):
             grant(em, pid, **bad)
     with pytest.raises(ValueError):
@@ -80,7 +80,7 @@ def test_a_grant_has_bounds_an_expiry_and_a_name(em, pid, clock):
 
 
 def test_the_model_refuses_an_expiry_in_the_past_or_beyond_a_week():
-    base = dict(plan_id="p", sender_name="A", granted_at="2026-10-30T09:00:00Z", expires_at="2026-11-01T09:00:00Z")
+    base = {"plan_id": "p", "sender_name": "A", "granted_at": "2026-10-30T09:00:00Z", "expires_at": "2026-11-01T09:00:00Z"}
     Mandate(**base)
     for bad in ({"expires_at": "2026-10-30T08:00:00Z"}, {"expires_at": "2026-11-20T09:00:00Z"}, {"window_start": 20, "window_end": 9}, {"surprise": 1}):
         with pytest.raises(ValidationError):

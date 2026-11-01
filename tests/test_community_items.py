@@ -19,7 +19,7 @@ from eventmate.web.app import create_app
 
 COLLEGE = "Plan a 150-person college fest in Pune on December 12 under INR 250,000. Venue and catering."
 VENUE_ONLY = "Plan a 150-person college fest in Pune on December 12 under INR 250,000. Venue only."
-ALL_NO = {k: "no" for k in CommunityAnswers.model_fields}
+ALL_NO = dict.fromkeys(CommunityAnswers.model_fields, "no")
 FORBIDDEN = re.compile(r"\b(?:safe|compliant|compliance|approved|legal|legally|mandatory|certified|permitted)\b|required by law")  # "safety" is a topic, "safe" is a claim
 
 
@@ -90,7 +90,7 @@ def test_items_name_who_to_check_with_and_state_no_rule_or_permit_name(em, pid):
 # ---- only the user marks an item
 
 def mark(em, pid, item, **kw):
-    base = dict(status="confirmed_by_user", by="Asha", on=TODAY, note="")
+    base = {"status": "confirmed_by_user", "by": "Asha", "on": TODAY, "note": ""}
     base.update(kw)
     return em.set_community_item(pid, item, today=TODAY, **base)
 
@@ -115,8 +115,8 @@ def test_not_applicable_needs_a_reason_and_is_recorded_as_the_users_word(em, pid
 
 
 @pytest.mark.parametrize("kw", [
-    dict(by=""), dict(by="x" * 61), dict(by="a\nb"), dict(on=TODAY + timedelta(days=1)), dict(note="n" * 201), dict(note="bad\x00note"), dict(status="verified_by_system"),
-    dict(status="safe"), dict(status="confirmed_by_user", by=None),
+    {"by": ""}, {"by": "x" * 61}, {"by": "a\nb"}, {"on": TODAY + timedelta(days=1)}, {"note": "n" * 201}, {"note": "bad\x00note"}, {"status": "verified_by_system"},
+    {"status": "safe"}, {"status": "confirmed_by_user", "by": None},
 ])
 def test_a_confirmation_needs_a_real_name_a_sane_date_and_a_user_status(em, pid, kw):
     with pytest.raises((ValueError, ValidationError)):

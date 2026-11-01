@@ -124,7 +124,7 @@ def test_conference_uses_its_own_event_defaults(agent):
 
 
 def test_policy_rejects_nonsense():
-    for kw in (dict(invitation_lead_days=-1), dict(booking_minutes=0), dict(setup_buffer_minutes=-5)):
+    for kw in ({"invitation_lead_days": -1}, {"booking_minutes": 0}, {"setup_buffer_minutes": -5}):
         with pytest.raises(ValidationError):
             EventPolicy(**kw)
 

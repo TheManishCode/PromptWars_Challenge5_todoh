@@ -13,7 +13,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from contextlib import contextmanager
-from typing import Callable, Iterator
+from collections.abc import Callable, Iterator
 
 LOCAL = "local"
 WINDOW_S = 3600

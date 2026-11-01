@@ -14,8 +14,7 @@ DAY = 86400
 
 @pytest.fixture
 def clock():
-    t = [1_000_000.0]
-    return t
+    return [1_000_000.0]
 
 
 @pytest.fixture

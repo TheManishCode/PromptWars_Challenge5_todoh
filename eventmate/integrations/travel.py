@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime, timedelta, UTC
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 from eventmate.schemas import (
     MAX_FLIGHT_OPTIONS,
@@ -119,7 +119,7 @@ class FliProvider(FlightProvider):
         price = None
         if r.price is not None:
             if (r.currency or "").upper() == "INR":
-                price = int(round(r.price))
+                price = round(r.price)
             else:
                 warnings.append(f"a fare was published in {r.currency or 'an unknown currency'}, not INR; it is shown without a price")
         segments = tuple(

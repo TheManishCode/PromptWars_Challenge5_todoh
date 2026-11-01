@@ -20,7 +20,8 @@ import threading
 import uuid
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any
+from collections.abc import Callable, Iterator
 
 from pydantic import Field
 

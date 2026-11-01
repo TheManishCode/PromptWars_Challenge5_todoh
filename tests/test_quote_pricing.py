@@ -17,8 +17,8 @@ def em(tmp_path):
 
 
 def rec(em, vendor=RASOI, category=C.CATERER, **kw):
-    base = dict(source_type="user_input", entered_by="asha", observed_at=datetime(2026, 10, 30, tzinfo=UTC),
-                expires_at=date(2026, 11, 20), confidence=0.8, amount_inr=500, basis="per_plate", guest_count=100)
+    base = {"source_type": "user_input", "entered_by": "asha", "observed_at": datetime(2026, 10, 30, tzinfo=UTC),
+                "expires_at": date(2026, 11, 20), "confidence": 0.8, "amount_inr": 500, "basis": "per_plate", "guest_count": 100}
     base.update(kw)
     return em.observe_quote(vendor, category, **base)
 
@@ -41,7 +41,7 @@ def test_valid_per_plate_quote_reprices_the_plan_for_the_current_guest_count(em)
 def test_total_quote_is_used_as_is(em):
     rec(em, basis="total", guest_count=None, amount_inr=70_000)
     sl = em.manager.vendor.shortlist_category(em.manager.parse(EXAMPLE, TODAY), C.CATERER, 10**9)
-    assert next(c for c in sl.candidates + tuple() if c.vendor_id == RASOI).estimated_cost == 70_000
+    assert next(c for c in sl.candidates + () if c.vendor_id == RASOI).estimated_cost == 70_000
 
 
 def test_expired_quote_fails_closed_and_the_vendor_is_not_chosen(em):

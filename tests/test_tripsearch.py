@@ -44,7 +44,7 @@ def flat(price=5000, minutes=120):
 
 
 def req(**kw):
-    base = dict(origin="DEL", stops=(TripStop(code="BOM", nights=3), TripStop(code="GOI", nights=2)), earliest_start=START)
+    base = {"origin": "DEL", "stops": (TripStop(code="BOM", nights=3), TripStop(code="GOI", nights=2)), "earliest_start": START}
     base.update(kw)
     return TripRequest(**base)
 

@@ -26,8 +26,7 @@ def t(name, fn, arg):
     s = time.perf_counter()
     with contextlib.suppress(Exception):
         fn(arg)
-    d = time.perf_counter() - s
-    return d
+    return time.perf_counter() - s
 
 targets = {
  "guard.scan": guard.scan, "guard.mask_pii": guard.mask_pii, "Placeholders.mask": lambda s: Placeholders().mask(s),

@@ -15,7 +15,7 @@ import os
 import smtplib
 import ssl
 import sys
-from typing import Callable, Mapping
+from collections.abc import Callable, Mapping
 
 from eventmate.messaging.channels import ChannelError, EmailChannel, EmailConfig
 from eventmate.env import load_env

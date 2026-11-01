@@ -15,7 +15,8 @@ import time
 import unicodedata
 import uuid
 from datetime import date
-from typing import Iterable, Literal, Sequence
+from typing import Literal
+from collections.abc import Iterable, Sequence
 
 from pydantic import Field, ValidationError, field_validator
 

@@ -11,7 +11,8 @@ import json
 import re
 import threading
 import time
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from eventmate.assistant.trace import sha
 

@@ -58,7 +58,7 @@ def test_a_claim_carries_the_stated_validity_and_a_bounded_snippet():
 # ---- jobs: limits and guards
 
 def job(**kw):
-    base = dict(job_id="j1", plan_id="p1", category="caterer", goal="3 quotes", sender_name="Asha", deadline=NOW + timedelta(days=3), vendors={"v1": VendorProgress(contact_channel="email", recipient="a@b.test", draft_id="d1")}, created_at=NOW)
+    base = {"job_id": "j1", "plan_id": "p1", "category": "caterer", "goal": "3 quotes", "sender_name": "Asha", "deadline": NOW + timedelta(days=3), "vendors": {"v1": VendorProgress(contact_channel="email", recipient="a@b.test", draft_id="d1")}, "created_at": NOW}
     base.update(kw)
     return Job(**base)
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Mapping
+from collections.abc import Mapping
 
 LABEL_MAX = 120
 HIDDEN_LIMIT = 8  # more invisible or tag characters than this in one text and it is refused, not cleaned

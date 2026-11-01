@@ -116,16 +116,16 @@ def f(label, status, amount):
 
 
 @pytest.mark.parametrize("fields,ok", [
-    (dict(own_funds_inr=TOTAL + RESERVE), True),
-    (dict(own_funds_inr=TOTAL + RESERVE - 1), False),
-    (dict(own_funds_inr=100_000, funding=(f("Sponsor", "pledged", 500_000),)), False),  # pledged never counts, however large
-    (dict(own_funds_inr=100_000, funding=(f("Sponsor", "committed", 100_000),)), False),  # committed is not counted by default
-    (dict(own_funds_inr=100_000, funding=(f("Sponsor", "committed", 100_000),), count_committed=True), True),  # opted in
-    (dict(own_funds_inr=100_000, funding=(f("Donor", "received", 57_500),)), True),  # exactly enough
-    (dict(own_funds_inr=100_000, funding=(f("Donor", "received", 57_499),)), False),
-    (dict(own_funds_inr=0, funding=(f("A", "received", 100_000), f("B", "received", 57_500))), True),
-    (dict(funding=(f("Donor", "received", 200_000),)), True),  # no own funds stated: received money alone is the basis
-    (dict(funding=(f("Donor", "pledged", 900_000),)), False),
+    ({"own_funds_inr": TOTAL + RESERVE}, True),
+    ({"own_funds_inr": TOTAL + RESERVE - 1}, False),
+    ({"own_funds_inr": 100_000, "funding": (f("Sponsor", "pledged", 500_000),)}, False),  # pledged never counts, however large
+    ({"own_funds_inr": 100_000, "funding": (f("Sponsor", "committed", 100_000),)}, False),  # committed is not counted by default
+    ({"own_funds_inr": 100_000, "funding": (f("Sponsor", "committed", 100_000),), "count_committed": True}, True),  # opted in
+    ({"own_funds_inr": 100_000, "funding": (f("Donor", "received", 57_500),)}, True),  # exactly enough
+    ({"own_funds_inr": 100_000, "funding": (f("Donor", "received", 57_499),)}, False),
+    ({"own_funds_inr": 0, "funding": (f("A", "received", 100_000), f("B", "received", 57_500))}, True),
+    ({"funding": (f("Donor", "received", 200_000),)}, True),  # no own funds stated: received money alone is the basis
+    ({"funding": (f("Donor", "pledged", 900_000),)}, False),
 ])
 def test_funding_basis_counts_only_what_the_user_says_it_is(em, pid, fields, ok):
     out = update(em, pid, **fields)
@@ -163,7 +163,7 @@ SHIFTS = (
 
 
 def vol(**over):
-    base = dict(volunteers=PEOPLE, slots=SLOTS, shifts=SHIFTS, setup_owner="Meera", cleanup_owner="Ravi")
+    base = {"volunteers": PEOPLE, "slots": SLOTS, "shifts": SHIFTS, "setup_owner": "Meera", "cleanup_owner": "Ravi"}
     base.update(over)
     return base
 
@@ -380,9 +380,9 @@ def test_a_venue_that_answered_but_left_out_a_needed_feature_has_not_declared_it
 def test_recording_an_answer_needs_evidence_a_real_venue_and_known_features(em, pid):
     venue = em.store.latest(pid).selection_for(C.VENUE).vendor_id
     for kwargs in (
-        dict(venue_id=venue, features=("step_free_access",), evidence_ref="", entered_by="Asha"), dict(venue_id=venue, features=("flying",), evidence_ref="x", entered_by="Asha"),
-        dict(venue_id="nope-1", features=(), evidence_ref="x", entered_by="Asha"), dict(venue_id=venue, features=(), evidence_ref="x\ny", entered_by="Asha"),
-        dict(venue_id=venue, features=(), evidence_ref="x", entered_by=""), dict(venue_id="cat-pune-rasoi", features=(), evidence_ref="x", entered_by="Asha"),
+        {"venue_id": venue, "features": ("step_free_access",), "evidence_ref": "", "entered_by": "Asha"}, {"venue_id": venue, "features": ("flying",), "evidence_ref": "x", "entered_by": "Asha"},
+        {"venue_id": "nope-1", "features": (), "evidence_ref": "x", "entered_by": "Asha"}, {"venue_id": venue, "features": (), "evidence_ref": "x\ny", "entered_by": "Asha"},
+        {"venue_id": venue, "features": (), "evidence_ref": "x", "entered_by": ""}, {"venue_id": "cat-pune-rasoi", "features": (), "evidence_ref": "x", "entered_by": "Asha"},
     ):
         with pytest.raises((ValueError, ValidationError)):
             em.record_venue_accessibility(**kwargs)

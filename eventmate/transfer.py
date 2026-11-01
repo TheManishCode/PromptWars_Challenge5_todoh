@@ -24,7 +24,7 @@ import stat
 import zipfile
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from pydantic import Field, ValidationError
 

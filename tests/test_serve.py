@@ -75,7 +75,7 @@ def test_half_open_connections_are_closed_by_the_idle_timeout_and_the_app_stays_
         try:
             if s.recv(10) == b"":
                 closed += 1
-        except (ConnectionResetError, socket.timeout, OSError):
+        except (TimeoutError, ConnectionResetError, OSError):
             closed += 1
     for s in held:
         s.close()

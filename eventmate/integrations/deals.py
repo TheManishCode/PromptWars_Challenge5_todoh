@@ -18,7 +18,8 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, NamedTuple
+from typing import NamedTuple
+from collections.abc import Callable
 
 from eventmate.integrations.discovery import clean_city
 from eventmate.schemas import MAX_BUDGET_INR, DealOffer, DealQuery, DealReport, MarketSummary, SkippedPage

@@ -13,7 +13,7 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Callable
+from collections.abc import Callable
 
 from eventmate.integrations.discovery import DiscoveryError
 from eventmate.env import load_env

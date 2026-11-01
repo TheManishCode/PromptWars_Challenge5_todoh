@@ -15,7 +15,7 @@ import threading
 import time
 from datetime import date, datetime, UTC
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 from flask import Flask, Response, abort, g, jsonify, request
 from werkzeug.local import LocalProxy
 from eventmate import arcade_pulse as _pulse_mod
@@ -51,7 +51,7 @@ from eventmate.web.base import (
     WORKSPACE_EXEMPT,
     _PLAN_ID,
 )
-__all__ = ["create_app", "AUDIO_UPLOAD_LIMIT", "GUEST_UPLOAD_LIMIT", "IntakeConfirmBody", "STATIC_FILES", "VENDOR_FILES", "LOOPBACK"]  # what other modules and the tests import from here
+__all__ = ["AUDIO_UPLOAD_LIMIT", "GUEST_UPLOAD_LIMIT", "LOOPBACK", "STATIC_FILES", "VENDOR_FILES", "IntakeConfirmBody", "create_app"]  # what other modules and the tests import from here
 from eventmate.web.routes import assistant_plans, errors, ideas_sourcing, ledger_external, outreach_jobs, pages, plan_extras, plan_versions, voice_guests, workspace_ops
 
 

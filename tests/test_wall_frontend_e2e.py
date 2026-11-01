@@ -291,7 +291,7 @@ def test_the_real_arcade_page_builds_a_plan_attaches_a_guest_list_and_every_api_
     bad = [c for c in calls if c[2] >= 400 and not (c[1].startswith('/api/wall/sections/0') and c[2] == 404)]  # an empty wall has no section 0: the page polls it and copes (it logs a console 404 each time)
     assert not any(p_ == "pageerror" for p_, _ in problems), problems
     assert [x for x in problems if not _noise(x)] == [], problems
-    assert any(c[1] == "/api/intake" and c[2] == 200 for c in calls) and any(c[1] == "/api/plans" and c[0] == "POST" and c[2] == 201 for c in calls) or any("/api/intake/confirm" in c[1] for c in calls), calls
+    assert (any(c[1] == "/api/intake" and c[2] == 200 for c in calls) and any(c[1] == "/api/plans" and c[0] == "POST" and c[2] == 201 for c in calls)) or any("/api/intake/confirm" in c[1] for c in calls), calls
     assert any("/guests/preview" in c[1] for c in calls), f"the attach never reached the preview route: {calls}"
     assert bad == [], f"API calls the page made that were refused: {bad}"
 

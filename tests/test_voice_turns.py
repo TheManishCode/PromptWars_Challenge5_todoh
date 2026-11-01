@@ -332,7 +332,7 @@ def test_turns_must_move_forward_and_a_newer_one_supersedes_one_still_thinking(e
 def test_bad_turn_requests_are_refused_with_a_reason(em, pid, kw, needle):
     w = World(em, answer("x", "x"))
     sid = w.open(pid)
-    args = dict(turn_id="turn-ok-0001", generation=1, text="compare the vendors please", input_mode="live")
+    args = {"turn_id": "turn-ok-0001", "generation": 1, "text": "compare the vendors please", "input_mode": "live"}
     args.update(kw)
     with pytest.raises(VoiceError) as e:
         w.svc.start_turn(LOCAL_ORGANIZER, sid, args["turn_id"], args["generation"], args["text"], args["input_mode"], kw.get("confidence"), kw.get("language"))

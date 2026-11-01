@@ -17,7 +17,7 @@ import time
 import uuid
 from datetime import date
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from eventmate.guestlist import GuestListStore, GuestPreview, check_against, parse_guest_csv, totals_of
 from eventmate.voice.notes import VoiceNoteStore
@@ -748,7 +748,7 @@ class EventMate:
         for path in files:
             if path.stat().st_size > 20_000_000:
                 continue
-            with open(path, "r", encoding="utf-8") as fh:
+            with open(path, encoding="utf-8") as fh:
                 for line in fh:
                     if any(i in line for i in wanted):
                         entry = DecisionLogEntry.model_validate(migrations.parse_line("decisions", line, path.name, 0))

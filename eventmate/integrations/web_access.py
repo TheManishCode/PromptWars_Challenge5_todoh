@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.robotparser
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from typing import Callable
+from collections.abc import Callable
 
 from eventmate.netutil import read_capped
 

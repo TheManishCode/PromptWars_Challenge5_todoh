@@ -10,7 +10,7 @@ from eventmate.service import EventMate
 from tests.conftest import EXAMPLE, TODAY
 from eventmate.web.app import create_app
 
-GOOD = dict(kind="caterer", url="https://a.in/pricing", domain="a.in", label="Standard Veg Buffet", unit="per_plate", low_inr=800, high_inr=1500, note="call on Monday")
+GOOD = {"kind": "caterer", "url": "https://a.in/pricing", "domain": "a.in", "label": "Standard Veg Buffet", "unit": "per_plate", "low_inr": 800, "high_inr": 1500, "note": "call on Monday"}
 
 
 @pytest.fixture

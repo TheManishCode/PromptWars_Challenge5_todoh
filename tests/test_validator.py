@@ -287,10 +287,10 @@ def test_budget_total_is_exact_at_the_boundary_and_the_contingency_warning_start
 
 
 @pytest.mark.parametrize("tid,change", [
-    ("book_venue", lambda e, s: dict(start=-1, end=e.end - e.start - 1)),  # before time zero
-    ("teardown", lambda e, s: dict(start=s.horizon + 1 - (e.end - e.start), end=s.horizon + 1)),  # one minute past the horizon
-    ("event", lambda e, s: dict(start=e.start + 1, end=e.end + 1)),  # not at its fixed start
-    ("send_invitations", lambda e, s: (lambda d: dict(start=d + 1 - (e.end - e.start), end=d + 1))(next(x.deadline_end for x in s.tasks if x.id == "send_invitations"))),  # one minute after its deadline
+    ("book_venue", lambda e, s: {"start": -1, "end": e.end - e.start - 1}),  # before time zero
+    ("teardown", lambda e, s: {"start": s.horizon + 1 - (e.end - e.start), "end": s.horizon + 1}),  # one minute past the horizon
+    ("event", lambda e, s: {"start": e.start + 1, "end": e.end + 1}),  # not at its fixed start
+    ("send_invitations", lambda e, s: (lambda d: {"start": d + 1 - (e.end - e.start), "end": d + 1})(next(x.deadline_end for x in s.tasks if x.id == "send_invitations"))),  # one minute after its deadline
 ])
 def test_each_kind_of_schedule_bound_is_enforced(validator, draft, tid, change):
     e = entry(draft, tid)

@@ -15,7 +15,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 
 from eventmate.messaging.channels import Channel, ChannelError, OutcomeUnknown
 from eventmate.messaging.conversations import IST
@@ -78,7 +78,7 @@ class OwnerNotifier:
     def status(self) -> NotifyStatus:
         cur = self._latest()
         sent = self._sent_since(self.now() - timedelta(days=1))
-        base = dict(sent_last_day=len(sent), per_day=self.limits.per_day, min_gap_minutes=self.limits.min_gap_minutes)
+        base = {"sent_last_day": len(sent), "per_day": self.limits.per_day, "min_gap_minutes": self.limits.min_gap_minutes}
         if cur is None or cur.status == "disabled":
             return NotifyStatus(state="off", **base)
         return NotifyStatus(state="on" if cur.status == "active" else "pending", destination=cur.destination, **cur.scope.model_dump(), **base)

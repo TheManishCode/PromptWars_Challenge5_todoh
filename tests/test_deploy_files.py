@@ -14,7 +14,7 @@ def exported():
 
     m = observe.Metrics()
     m.end(200, 1, "/x")
-    gauges = {k: 1 for k in ("uptime_seconds", "workspaces", "workspaces_active_last_minute", "searches_in_flight", "searches_capacity", "poll_failures", "disk_free_bytes")}
+    gauges = dict.fromkeys(("uptime_seconds", "workspaces", "workspaces_active_last_minute", "searches_in_flight", "searches_capacity", "poll_failures", "disk_free_bytes"), 1)
     return set(re.findall(r"^(eventmate_[a-z_]+)", observe.prometheus(m, gauges, {"calls": 1}), re.M)) | {"eventmate_http_request_duration_seconds_bucket"}
 
 

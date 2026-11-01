@@ -14,7 +14,8 @@ path works.
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 # Money and send state: a damaged file here stops sending (integrity.py), and nothing may be appended behind a cut-off line (jsonl.py)
 AUTHORITATIVE = frozenset({"ledger", "outreach", "inbound", "mandate", "contact", "suppression", "unmatched"})

@@ -16,7 +16,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, UTC
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 from eventmate.assistant.guard import scan as scan_instructions
 from eventmate.integrity import StoreDamaged

@@ -66,7 +66,7 @@ def test_named_businesses_and_invented_cultural_claims_are_still_blocked(title, 
 ])
 def test_hazardous_ideas_are_blocked_with_a_reason(text, reason):
     why = guard_idea(idea(text), VENDORS)
-    assert why is not None and why.startswith("hazard:") or why is not None and reason in why.lower(), (text, why)
+    assert (why is not None and why.startswith("hazard:")) or (why is not None and reason in why.lower()), (text, why)
 
 
 def test_hazard_wording_is_not_triggered_by_innocent_words():

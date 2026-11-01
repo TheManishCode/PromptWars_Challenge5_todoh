@@ -104,9 +104,9 @@ def test_invalid_specs_are_rejected_at_construction(build):
 
 
 def test_task_models_reject_bad_values():
-    for kw in (dict(duration=0), dict(duration=-5), dict(id="Bad Id"), dict(weight=0), dict(earliest_start=-1)):
+    for kw in ({"duration": 0}, {"duration": -5}, {"id": "Bad Id"}, {"weight": 0}, {"earliest_start": -1}):
         with pytest.raises(ValidationError):
-            T(**{**dict(id="a", name="a", duration=1), **kw})
+            T(**{**{"id": "a", "name": "a", "duration": 1}, **kw})
 
 
 def test_core_is_minimal_even_when_many_unrelated_constraints_exist():

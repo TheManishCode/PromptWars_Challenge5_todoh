@@ -25,7 +25,8 @@ from pathlib import Path
 
 from eventmate import consumption
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
-from typing import Iterable, Protocol
+from typing import Protocol
+from collections.abc import Iterable
 
 PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts"
 _PROMPT_ID = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){1,3}")

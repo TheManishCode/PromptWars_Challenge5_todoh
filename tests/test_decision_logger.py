@@ -16,15 +16,15 @@ from eventmate.schemas import (
 
 
 def _log(logger, **kw):
-    base = dict(
-        request_id="r1",
-        agent=AgentName.MANAGER,
-        decision_type=DecisionType.PARSE,
-        summary="s",
-        justification="j",
-        confidence=0.9,
-        source="user_input",
-    )
+    base = {
+        "request_id": "r1",
+        "agent": AgentName.MANAGER,
+        "decision_type": DecisionType.PARSE,
+        "summary": "s",
+        "justification": "j",
+        "confidence": 0.9,
+        "source": "user_input",
+    }
     base.update(kw)
     return logger.log(**base)
 

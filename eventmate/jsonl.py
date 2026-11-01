@@ -16,7 +16,7 @@ import threading
 import uuid
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -39,7 +39,7 @@ def _int_env(name: str, default: int, lo: int) -> int:
         return default
 
 
-class JsonlLog(Generic[M]):
+class JsonlLog[M: BaseModel]:
     channel = "log"
     model: type[M]
     rotates = False  # only the operational logs (decisions, tool calls, LLM traces, validation failures, assistant traces) rotate; money and send state never does
@@ -120,7 +120,7 @@ class JsonlLog(Generic[M]):
         if not self.path.exists():
             return []
         out: list[M] = []
-        with open(self.path, "r", encoding="utf-8") as fh:
+        with open(self.path, encoding="utf-8") as fh:
             for number, line in enumerate(fh, 1):
                 if not line.strip():
                     continue

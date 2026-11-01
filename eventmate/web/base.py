@@ -353,7 +353,7 @@ class LedgerBody(_Strict):
     note: str = Field(default="", max_length=200)
 
 
-_IATA_FIELD = dict(pattern=r"^[A-Z]{3}$")
+_IATA_FIELD = {"pattern": r"^[A-Z]{3}$"}
 
 
 class FlightBody(_Strict):

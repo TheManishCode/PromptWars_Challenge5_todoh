@@ -13,7 +13,8 @@ import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from pathlib import Path
-from typing import Mapping, NamedTuple, Protocol
+from typing import NamedTuple, Protocol
+from collections.abc import Mapping
 
 from eventmate.voice import audio
 

@@ -269,7 +269,7 @@ def quarantine(path: Path, now: datetime | None = None) -> Quarantine:
         raise ValueError("not a store file this application writes")
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
     raw = path.read_bytes()
-    problems = dict((n, why) for n, why in check_jsonl(path, channel, model) if n is not None)  # the same reasons verify gives
+    problems = {n: why for n, why in check_jsonl(path, channel, model) if n is not None}  # the same reasons verify gives
     dropped, kept = [], []
     for n, line in enumerate(raw.split(b"\n"), 1):
         if not line.strip():

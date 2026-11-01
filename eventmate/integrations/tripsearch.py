@@ -10,7 +10,7 @@ import statistics
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import date, datetime, timedelta, UTC
-from typing import Callable
+from collections.abc import Callable
 
 from eventmate.schemas import FlightOption, FlightSearch, TripLeg, TripPackage, TripRequest, TripSearchResult
 from eventmate.integrations.travel import MULTI_CITY_NOTE, check_date, FlightProvider, TravelError
@@ -170,8 +170,8 @@ def search_trip(
         "best_value": lambda o: (o.price_inr + o.duration_min * hours, o.duration_min),
     }
     candidates, cheapest_totals, dropped = _candidates(plans, results, metrics, hours)
-    shared = dict(request=req, searches_planned=len(unique), searches_used=len(results) + len(errors), orderings_considered=len({p[0] for p in plans}),
-                  dropped_orders=dropped, fetched_at=datetime.now(UTC), note=MULTI_CITY_NOTE)
+    shared = {"request": req, "searches_planned": len(unique), "searches_used": len(results) + len(errors), "orderings_considered": len({p[0] for p in plans}),
+                  "dropped_orders": dropped, "fetched_at": datetime.now(UTC), "note": MULTI_CITY_NOTE}
     if not cheapest_totals:
         warnings.append("no complete itinerary could be priced; widen the dates, try fixed_order, or search again later")
         return TripSearchResult(warnings=tuple(warnings), **shared)

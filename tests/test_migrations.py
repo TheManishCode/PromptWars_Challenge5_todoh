@@ -112,7 +112,7 @@ def test_a_record_from_the_future_is_refused_naming_the_file_the_line_and_both_v
 @pytest.mark.parametrize("bad", ["0", "-1", '"2"', "1.5", "true", "null"])
 def test_a_schema_version_that_is_not_a_positive_whole_number_is_refused(bad):
     with pytest.raises(migrations.StoreCorrupt, match="positive whole number"):
-        migrations.parse_line("ledger", '{"schema_version": %s}' % bad, "ledger-x.jsonl", 1)
+        migrations.parse_line("ledger", f'{{"schema_version": {bad}}}', "ledger-x.jsonl", 1)
 
 
 def test_a_torn_or_damaged_line_is_named_without_its_content(store):

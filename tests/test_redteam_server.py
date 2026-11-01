@@ -30,7 +30,7 @@ def closed_by_server(sock, within_s):
     sock.settimeout(within_s)
     try:
         return sock.recv(10) == b""
-    except socket.timeout:
+    except TimeoutError:
         return False
     except OSError:
         return True

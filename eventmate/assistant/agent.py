@@ -13,7 +13,8 @@ import re
 import time
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
+from collections.abc import Sequence
 
 from pydantic import Field
 

@@ -13,7 +13,8 @@ import os
 from collections import Counter
 from pathlib import Path
 from datetime import date
-from typing import Callable, Collection, Union
+from typing import Union
+from collections.abc import Callable, Collection
 
 from pydantic import ValidationError
 

@@ -6,7 +6,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import OrderedDict, deque
-from typing import Callable
+from collections.abc import Callable
 
 MAX_KEYS = 20_000  # bounded: a flood of distinct addresses cannot grow this without limit; the oldest keys are dropped first
 

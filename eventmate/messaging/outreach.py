@@ -18,7 +18,7 @@ import unicodedata
 import uuid
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
 from urllib.parse import quote
 
 from eventmate.jsonl import JsonlLog

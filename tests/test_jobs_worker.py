@@ -94,7 +94,7 @@ def reply(chan, recipient, body, clock, ext, **kw):
 
 
 def start(w, pid, clock, **kw):
-    args = dict(goal="3 caterer quotes", deadline=clock() + timedelta(days=7), sender_name="Asha", min_quotes=3, max_amount_inr=None)
+    args = {"goal": "3 caterer quotes", "deadline": clock() + timedelta(days=7), "sender_name": "Asha", "min_quotes": 3, "max_amount_inr": None}
     args.update(kw)
     return w.start_job(pid, C.CATERER, VENDORS, **args)
 

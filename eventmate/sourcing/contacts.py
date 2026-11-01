@@ -119,7 +119,7 @@ def _valid_email(value: str) -> str | None:
 
 
 def _mailto_addresses(href: str) -> list[str]:
-    if not href[:7].casefold() == "mailto:":
+    if href[:7].casefold() != "mailto:":
         return []
     decoded = urllib.parse.unquote(href[7:])
     if any(ord(c) < 32 or ord(c) == 127 for c in decoded):

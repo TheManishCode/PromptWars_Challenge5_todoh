@@ -25,7 +25,8 @@ from html.parser import HTMLParser
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, UTC
 from email.message import EmailMessage
-from typing import Callable, Mapping, Protocol, Sequence
+from typing import Protocol
+from collections.abc import Callable, Mapping, Sequence
 from urllib.parse import quote, urlencode, urlsplit
 
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped

@@ -8,7 +8,7 @@ in what is sent to a model, and stop an answer from stating facts that no tool o
 from __future__ import annotations
 
 import re
-from typing import Iterable
+from collections.abc import Iterable
 
 from eventmate.llm import _MARKUP, _NUMBER, _NUMBER_WORDS, links_in
 
@@ -25,7 +25,7 @@ _INJECTION = {
     "tool_forgery": re.compile(r"""["']tool["']\s*:\s*["']""", re.I),
 }
 _EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}\b")  # bounded and anchored at a token start: linear time on any input
-_EMAIL_SPOKEN = re.compile(r"(?<![\w.+-])[\w.+-]{2,64}\s{0,3}[\[(]?\s{0,3}at\s{0,3}[\])]?\s{0,3}[\w-]{2,63}(?:\s{0,3}[\[(]?\s{0,3}dot\s{0,3}[\])]?\s{0,3}[a-z]{2,}){1,3}\b", re.I)  # "name at gmail dot com" 
+_EMAIL_SPOKEN = re.compile(r"(?<![\w.+-])[\w.+-]{2,64}\s{0,3}[\[(]?\s{0,3}at\s{0,3}[\])]?\s{0,3}[\w-]{2,63}(?:\s{0,3}[\[(]?\s{0,3}dot\s{0,3}[\])]?\s{0,3}[a-z]{2,}){1,3}\b", re.I)  # "name at gmail dot com"
 _PAN = re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b")
 _AADHAAR = re.compile(r"\b\d{4}[ -]?\d{4}[ -]?\d{4}\b")
 _PHONE = re.compile(r"(?<![\w.])(?:\+?91[ -]?)?[6-9](?:[ -]?\d){9}(?!\w)")  # separators allowed between any two digits: "98 76 54 32 10", "9-8-7-..."
@@ -95,8 +95,7 @@ def check_answer(answer: str, evidence: str, question: str = "", extra_ok: Itera
 
 _CAPS = re.compile(r"(?<![.!?:\n]\s)(?<!^)\b[A-Z][A-Za-z]{2,}\b")
 _COMMON = frozenset(
-    "january february march april may june july august september october november december monday tuesday wednesday thursday friday saturday sunday "
-    "inr eventmate indian india hindi english jain halal vegan vegetarian none yes sorry thanks".split()
+    ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "inr", "eventmate", "indian", "india", "hindi", "english", "jain", "halal", "vegan", "vegetarian", "none", "yes", "sorry", "thanks"]
 )
 
 

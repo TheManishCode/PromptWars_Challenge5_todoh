@@ -15,7 +15,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Callable, Sequence, Union
+from typing import Union
+from collections.abc import Callable, Sequence
 
 from eventmate.followthrough.claims import extract_claims
 from eventmate.messaging.digests import digest_text
@@ -177,9 +178,7 @@ class JobWorker:
         """A job that ends leaves no message queued behind it: its automatic follow-ups and nudge drafts are denied."""
         requests = {p.draft_id for p in job.vendors.values()}
         for d in self.em.outreach_store.list(job.plan_id):
-            if d.draft_id in requests and d.status in ("prepared", "approved"):  # a request that was never sent
-                self.em.outreach_store.transition(job.plan_id, d.draft_id, ("prepared", "approved"), status="denied", error="the job ended")
-            elif d.kind == "followup" and d.parent_id in requests and d.status in ("prepared", "approved"):
+            if (d.draft_id in requests and d.status in ("prepared", "approved")) or (d.kind == "followup" and d.parent_id in requests and d.status in ("prepared", "approved")):  # a request that was never sent
                 self.em.outreach_store.transition(job.plan_id, d.draft_id, ("prepared", "approved"), status="denied", error="the job ended")
 
     def cancel(self, job_id: str) -> Job:

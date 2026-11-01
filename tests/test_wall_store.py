@@ -131,7 +131,7 @@ def test_removing_a_pending_mark_leaves_no_position_and_a_hidden_one_keeps_its_s
     store, _ = make_wall(tmp_path)
     a, b = visitor(store, 1, approve=False), visitor(store, 2)
     store.remove(a)
-    removed = [m for m in store.list_marks("removed")][0]
+    removed = list(store.list_marks("removed"))[0]
     assert removed["section_id"] is None and removed["name"] == ""
     before = store.list_marks("visible")[0]
     store.hide(b)
@@ -641,7 +641,7 @@ def test_a_restore_or_an_old_pending_mark_approved_after_issue_is_not_in_the_vie
     store.approve(old_pending)
     ids = [s["mark_id"] for s in r["snapshot"]["slots"]]
     assert hidden not in ids and old_pending not in ids
-    hidden_slot = [m for m in __import__("sqlite3").connect(store.path).execute("SELECT slot FROM marks WHERE mark_id = ?", (hidden,))][0][0]
+    hidden_slot = list(__import__("sqlite3").connect(store.path).execute("SELECT slot FROM marks WHERE mark_id = ?", (hidden,)))[0][0]
     assert r["to_slot"] != hidden_slot  # never a hidden mark's slot as an empty target
 
 

@@ -14,7 +14,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, UTC
-from typing import Callable
+from collections.abc import Callable
 
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
 from eventmate.schemas import DiscoveryResult, VenueCandidate

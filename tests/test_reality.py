@@ -110,7 +110,7 @@ def test_no_split_minimum_when_a_service_has_no_share(repo):
     r = parse_request(EXAMPLE, today=TODAY, known_cities=repo.cities())
     zero = r.model_copy(update={"cap_weights": ()})
     pol = BudgetPolicy(weights_bp={"venue": 5000, "caterer": 5000, "photographer": 0})
-    assert minimum_budget_default_split(zero, pol, {c: 1000 for c in r.services}) is None
+    assert minimum_budget_default_split(zero, pol, dict.fromkeys(r.services, 1000)) is None
 
 
 # ---- audit: verdict thresholds are exact, percentages are computed, and the minimums are the true minimum

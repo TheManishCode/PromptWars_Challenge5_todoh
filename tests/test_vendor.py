@@ -198,7 +198,7 @@ def test_non_json_and_missing_files_fail_closed(tmp_path):
 
 
 def test_vendor_model_enforces_pricing_by_category():
-    base = dict(id="x", name="n", city="Pune", rating=4, source="database:x.json")
+    base = {"id": "x", "name": "n", "city": "Pune", "rating": 4, "source": "database:x.json"}
     with pytest.raises(ValueError):
         Vendor(category="caterer", **base)  # no pricing
     with pytest.raises(ValueError):

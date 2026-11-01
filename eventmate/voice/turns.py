@@ -18,7 +18,8 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, UTC
-from typing import Any, Callable, Iterator
+from typing import Any
+from collections.abc import Callable, Iterator
 
 from eventmate.assistant.approvals import ApprovalQueue
 from eventmate.assistant.identity import Principal

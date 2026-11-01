@@ -376,7 +376,7 @@ def test_deleting_a_workspace_removes_everything_leaves_a_minimal_tombstone_and_
     old_cookie = a.credential()
     assert a.delete("/api/workspace", {"confirm": "nope"}).status_code in (400, 422) and registry.directory.exists(a.workspace_id)  # needs the confirmation
     r = a.delete("/api/workspace", {"confirm": "delete"})
-    assert r.status_code == 200 and r.get_json() == {"deleted": True} and "todoh_ws=;" in r.headers["Set-Cookie"].replace(" ", "") or "Expires=Thu, 01 Jan 1970" in r.headers["Set-Cookie"]
+    assert (r.status_code == 200 and r.get_json() == {"deleted": True} and "todoh_ws=;" in r.headers["Set-Cookie"].replace(" ", "")) or "Expires=Thu, 01 Jan 1970" in r.headers["Set-Cookie"]
     root = tmp_path / "data"
     assert scan(root, FIXTURE + (pid, a.workspace_id, old_cookie)) == []
     assert not registry.directory.exists(a.workspace_id) and not registry.home(a.workspace_id).exists()

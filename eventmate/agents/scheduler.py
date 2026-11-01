@@ -9,7 +9,7 @@ in prompts. Time is whole minutes from ``origin`` (midnight of the planning day)
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Sequence
+from collections.abc import Sequence
 
 from pydantic import Field
 
@@ -101,7 +101,7 @@ class SchedulingAgent:
         def dep(a, b, lag=0):
             deps.append(ScheduleDependency(before=a, after=b, min_lag=lag))
 
-        pre = dict(group="pre_event", earliest_start=now, prefer="early", resource="organizer")
+        pre = {"group": "pre_event", "earliest_start": now, "prefer": "early", "resource": "organizer"}
         task("book_venue", "Book venue", p.booking_minutes, **pre)
         if VendorCategory.CATERER in has:
             task("book_caterer", "Book caterer", p.booking_minutes, **pre)
@@ -129,7 +129,7 @@ class SchedulingAgent:
             for t in [t.id for t in tasks if t.id.startswith("book_")]:
                 dep(t, "reminder_vendor_confirmation")
 
-        day = dict(group="event_day")
+        day = {"group": "event_day"}
         access = day0 + p.venue_access_hour * 60
         task("venue_setup", "Venue setup", p.venue_setup_minutes, earliest_start=access, prefer="late", resource="venue", **day)
         dep("book_venue", "venue_setup")
@@ -155,7 +155,7 @@ class SchedulingAgent:
         task("teardown", "Teardown", p.teardown_minutes, resource="venue", **day)
         dep("event", "teardown")
 
-        for tid, _start in (fixed_starts or {}).items():
+        for tid in (fixed_starts or {}).keys():
             if tid not in {t.id for t in tasks}:
                 raise ValueError(f"cannot fix unknown task {tid!r}")
         # A confirmed booking already happened. It cannot be ordered after a step that has not

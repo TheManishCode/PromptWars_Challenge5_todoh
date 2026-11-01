@@ -11,7 +11,7 @@ written to the validation-failure log.
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Iterable
+from collections.abc import Iterable
 
 from eventmate.planning import community
 from eventmate.agents.budget import BudgetPolicy, compute_allocation

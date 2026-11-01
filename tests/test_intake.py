@@ -321,7 +321,7 @@ from eventmate.schemas import EventType, VendorCategory  # noqa: E402
 
 
 def full(**kw):
-    base = dict(event_type=EventType.BIRTHDAY, guest_count=40, city="Pune", event_date=date(2026, 12, 12), budget_total=90_000, services=(VendorCategory.VENUE, VendorCategory.CATERER))
+    base = {"event_type": EventType.BIRTHDAY, "guest_count": 40, "city": "Pune", "event_date": date(2026, 12, 12), "budget_total": 90_000, "services": (VendorCategory.VENUE, VendorCategory.CATERER)}
     base.update(kw)
     return IntakeDraft(**base)
 

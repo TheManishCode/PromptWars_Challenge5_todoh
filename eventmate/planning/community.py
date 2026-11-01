@@ -20,7 +20,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 from eventmate.agents.vendor import DATA_DIR
 from eventmate.jsonl import JsonlLog

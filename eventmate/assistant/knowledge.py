@@ -14,7 +14,7 @@ import math
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 from eventmate.agents.budget import BudgetPolicy
 from eventmate.assistant.identity import Perm, Principal
@@ -23,7 +23,7 @@ from eventmate.schemas import _Model
 
 KNOWLEDGE_DIR = Path(__file__).resolve().parent.parent / "data" / "knowledge"
 _WORD = re.compile(r"[a-z0-9]+")
-_STOP = frozenset("a an the of to in on for and or is are be it its this that with as at by from what how do does can i my me you your".split())
+_STOP = frozenset(["a", "an", "the", "of", "to", "in", "on", "for", "and", "or", "is", "are", "be", "it", "its", "this", "that", "with", "as", "at", "by", "from", "what", "how", "do", "does", "can", "i", "my", "me", "you", "your"])
 _FRONT = re.compile(r"\A---\npermission: (kb:[a-z]+)\n---\n", re.S)
 K1, B = 1.4, 0.75
 

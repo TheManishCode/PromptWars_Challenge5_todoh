@@ -178,7 +178,7 @@ def test_travel_commands_reject_bad_input_with_exit_2(run, monkeypatch):
     _fake_flights(monkeypatch)
     for args in (("flights", "del", "BOM", "2026-12-12"), ("flights", "DEL", "DEL", "2026-12-12"), ("multicity", "DEL,BOM"), ("multicity", "DEL,BOM,2026-12-12")):
         code, _, err = run(*args)
-        assert code == 2 and "error" in err or "ORIGIN" in err, args
+        assert (code == 2 and "error" in err) or "ORIGIN" in err, args
 
 
 def test_discover_command_lists_candidates_with_attribution_and_rejects_hostile_cities(run, monkeypatch):

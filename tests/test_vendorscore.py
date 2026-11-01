@@ -24,10 +24,10 @@ def store(tmp_path):
 
 
 def quote(store, vendor, amount=600, **kw):
-    base = dict(
-        source_type="vendor_quote", entered_by="asha", observed_at=NOW, expires_at=date(2026, 11, 20), confidence=1.0,
-        evidence_ref="email: quote", amount_inr=amount, basis="per_plate", guest_count=100, inclusions=FULL,
-    )
+    base = {
+        "source_type": "vendor_quote", "entered_by": "asha", "observed_at": NOW, "expires_at": date(2026, 11, 20), "confidence": 1.0,
+        "evidence_ref": "email: quote", "amount_inr": amount, "basis": "per_plate", "guest_count": 100, "inclusions": FULL,
+    }
     base.update(kw)
     return store.add_quote(vendor, C.CATERER, **base)
 

@@ -12,7 +12,7 @@ import re
 import secrets
 import time
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from eventmate.retention import PLAN_ID, wipe
 from eventmate.voice import audio

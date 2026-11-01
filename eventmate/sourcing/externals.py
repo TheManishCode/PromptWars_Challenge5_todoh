@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from eventmate.jsonl import InterProcessLock, JsonlLog
 from eventmate.schemas import ExternalBusiness, VendorCategory, VendorRef, external_vendor_id, _EMAIL

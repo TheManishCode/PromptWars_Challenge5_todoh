@@ -25,7 +25,8 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
+from collections.abc import Callable
 
 from eventmate.assistant.identity import Principal, Role
 from eventmate.web.limits import WindowLimiter

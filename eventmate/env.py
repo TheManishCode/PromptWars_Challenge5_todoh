@@ -11,7 +11,7 @@ import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from typing import MutableMapping
+from collections.abc import MutableMapping
 
 ALLOWED = frozenset({
     "OPENWEATHER_API_KEY", "NVIDIA_API_KEY", "OPENROUTER_API_KEY", "EVENTMATE_ENABLE_LLM", "EVENTMATE_ASSET_BASE", "EVENTMATE_OVERPASS_URL",

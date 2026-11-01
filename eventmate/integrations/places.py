@@ -15,7 +15,7 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime, UTC
-from typing import Callable
+from collections.abc import Callable
 
 from eventmate.integrations.discovery import clean_city
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
@@ -147,10 +147,10 @@ class PlacesSource:
             stars = r.get("rating")
             if text:
                 revs.append(PlaceReview(rating=stars if isinstance(stars, int) and 1 <= stars <= 5 else None, text=text, when=_text(r.get("relativePublishTimeDescription"), 60) or None))
-        fields = dict(
-            name=name, address=_text(it.get("formattedAddress"), 200) or None, rating=rating, rating_count=count, weighted_rating=weighted(rating, count),
-            price_level=_PRICE.get(it.get("priceLevel")), reviews=tuple(revs),
-        )
+        fields = {
+            "name": name, "address": _text(it.get("formattedAddress"), 200) or None, "rating": rating, "rating_count": count, "weighted_rating": weighted(rating, count),
+            "price_level": _PRICE.get(it.get("priceLevel")), "reviews": tuple(revs),
+        }
         pid, site = it.get("id"), it.get("websiteUri")
         fields["place_id"] = pid if isinstance(pid, str) and re.fullmatch(r"[A-Za-z0-9_-]{8,200}", pid) else None
         fields["website"] = site if isinstance(site, str) and re.fullmatch(r"https?://[^\s\x00-\x1f\x7f<>\"']{1,2040}", site) else None  # anything else is dropped, the place is kept

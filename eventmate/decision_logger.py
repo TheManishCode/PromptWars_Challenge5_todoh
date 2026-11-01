@@ -7,7 +7,7 @@ from datetime import datetime, UTC
 
 from eventmate.jsonl import DEFAULT_LOG_DIR, RUN_ID_PATTERN, JsonlLog
 
-__all__ = ["DecisionLogger", "DEFAULT_LOG_DIR", "RUN_ID_PATTERN"]  # the last two stay importable from here
+__all__ = ["DEFAULT_LOG_DIR", "RUN_ID_PATTERN", "DecisionLogger"]  # the last two stay importable from here
 from eventmate.schemas import DecisionLogEntry
 
 

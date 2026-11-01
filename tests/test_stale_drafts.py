@@ -226,7 +226,7 @@ def test_a_stale_draft_shows_up_in_the_state_and_in_a_quote_job_as_something_to_
     em.jobs_clock = clock
     job = em.jobs.start_job(pid, C.CATERER, {caterer_id(em, pid): ("email", CONTACT)}, "get a quote", clock() + timedelta(days=3), "Asha", min_quotes=1)
     em.replan(pid, Disruption(kind=K.GUEST_COUNT_CHANGE, new_guest_count=110), today=TODAY)
-    [draft] = [x for x in em.outreach(pid)]
+    [draft] = list(em.outreach(pid))
     assert draft.status == "stale"
     items = [i for i in em.jobs.store.get(job.job_id).items if i.kind == "request_stale" and not i.resolved]
     assert len(items) == 1 and "Draft it again" in items[0].text and "nothing was sent" in items[0].text

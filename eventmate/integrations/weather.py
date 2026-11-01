@@ -15,7 +15,7 @@ import urllib.parse
 import urllib.request
 from collections import Counter
 from datetime import date, datetime, timedelta, UTC
-from typing import Callable
+from collections.abc import Callable
 
 from eventmate.integrations.discovery import clean_city
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
@@ -136,11 +136,11 @@ class OpenWeatherSource:
                 main = item["main"]
                 w = item.get("weather") or [{}]
                 desc = w[0].get("description") if isinstance(w[0], dict) else None
-                base = dict(
-                    local_time=local.strftime("%Y-%m-%dT%H:%M:%S"), temp_c=float(main["temp"]), feels_like_c=float(main.get("feels_like", main["temp"])),
-                    humidity_pct=main.get("humidity") if isinstance(main.get("humidity"), int) else None, rain_chance=float(item.get("pop", 0.0)),
-                    wind_ms=float(item["wind"]["speed"]) if isinstance(item.get("wind"), dict) and "speed" in item["wind"] else None,
-                )
+                base = {
+                    "local_time": local.strftime("%Y-%m-%dT%H:%M:%S"), "temp_c": float(main["temp"]), "feels_like_c": float(main.get("feels_like", main["temp"])),
+                    "humidity_pct": main.get("humidity") if isinstance(main.get("humidity"), int) else None, "rain_chance": float(item.get("pop", 0.0)),
+                    "wind_ms": float(item["wind"]["speed"]) if isinstance(item.get("wind"), dict) and "speed" in item["wind"] else None,
+                }
                 try:
                     slots.append(WeatherSlot(description=desc if isinstance(desc, str) and desc else None, **base))
                 except ValueError:
@@ -148,7 +148,7 @@ class OpenWeatherSource:
             except (KeyError, TypeError, ValueError, IndexError, AttributeError):
                 skipped += 1
         warnings = (f"{skipped} forecast entr{'y' if skipped == 1 else 'ies'} could not be read and were skipped",) if skipped else ()
-        common = dict(city=city, travel_date=day, resolved_place=place, warnings=warnings, fetched_at=datetime.now(UTC))
+        common = {"city": city, "travel_date": day, "resolved_place": place, "warnings": warnings, "fetched_at": datetime.now(UTC)}
         if not slots:
             if local_days and day > max(local_days):
                 note = f"{day.isoformat()} is beyond the forecast horizon (the forecast ends {max(local_days).isoformat()}); check again within five days of the date"

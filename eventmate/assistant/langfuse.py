@@ -18,7 +18,8 @@ import urllib.error
 import urllib.request
 import uuid
 from datetime import datetime, timedelta, UTC
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 from urllib.parse import urlparse
 
 from eventmate.assistant.trace import FeedbackEvent, TraceEntry

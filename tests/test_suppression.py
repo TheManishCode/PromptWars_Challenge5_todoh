@@ -207,7 +207,7 @@ def test_a_plus_tagged_gmail_variant_is_blocked_but_an_unknown_provider_variant_
         assert em.is_suppressed("email", addr) is not None
     assert em.is_suppressed("email", "desk+bookings@shop.example") is None and em.is_suppressed("email", "other@shop.example") is None  # exact match elsewhere
     assert biz  # (the domain-level display says what is not covered)
-    assert "other addresses at shop.example are not blocked" in dict((s.value, n) for s, n in em.suppression_list())["desk@shop.example"]
+    assert "other addresses at shop.example are not blocked" in {s.value: n for s, n in em.suppression_list()}["desk@shop.example"]
 
 
 def test_an_automatic_nudge_is_never_queued_for_a_suppressed_address(em, pid, chans, clock):
@@ -447,7 +447,7 @@ def test_a_bounce_never_blocks_a_different_address_at_the_same_domain(mail):
 def test_a_suppression_record_is_validated():
     from datetime import datetime
 
-    base = dict(suppression_id="s1", channel="email", value="a@b.example", reason="user", created_at=datetime.now(UTC), created_by="Asha")
+    base = {"suppression_id": "s1", "channel": "email", "value": "a@b.example", "reason": "user", "created_at": datetime.now(UTC), "created_by": "Asha"}
     Suppression(**base)
     for bad in ({"reason": "because"}, {"channel": "sms"}, {"lifted_at": datetime.now(UTC)}, {"lifted_by": "Asha"}, {"lifted_at": datetime.now(UTC), "lifted_by": "Asha"}, {"surprise": 1}):
         with pytest.raises(ValidationError):

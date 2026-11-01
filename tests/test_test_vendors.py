@@ -42,14 +42,14 @@ def pid(em):
 
 
 def make(em, pid=None, **kw):
-    args = dict(name="Test Caterer", city="Pune", category=C.CATERER, email="owner@personal.test", owns_address=True, confirmed_by="Asha")
+    args = {"name": "Test Caterer", "city": "Pune", "category": C.CATERER, "email": "owner@personal.test", "owns_address": True, "confirmed_by": "Asha"}
     args.update(kw)
     return em.add_test_vendor(plan_id=pid, **args)
 
 
 # ---- ownership must be confirmed
 
-@pytest.mark.parametrize("kw", [dict(owns_address=False), dict(owns_address=None), dict(owns_address="yes"), dict(owns_address=1), dict(confirmed_by=""), dict(confirmed_by="  ")])
+@pytest.mark.parametrize("kw", [{"owns_address": False}, {"owns_address": None}, {"owns_address": "yes"}, {"owns_address": 1}, {"confirmed_by": ""}, {"confirmed_by": "  "}])
 def test_a_test_vendor_needs_the_users_explicit_statement_that_they_own_the_address(em, pid, kw):
     with pytest.raises(ValueError, match="own"):
         make(em, pid, **kw)

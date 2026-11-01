@@ -16,7 +16,8 @@ import sqlite3
 import threading
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import Iterator, Literal
+from typing import Literal
+from collections.abc import Iterator
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 

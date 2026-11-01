@@ -15,7 +15,7 @@ import os
 import threading
 import time
 from collections import deque
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
 
 MAX_KEYS = 20_000
 _OVERFLOW = "~overflow"  # every key beyond MAX_KEYS shares this bucket, so memory stays bounded and the flood limits itself

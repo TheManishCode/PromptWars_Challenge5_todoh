@@ -45,14 +45,14 @@ def cancel(vid, **kw):
 @pytest.mark.parametrize(
     "kwargs",
     [
-        dict(kind=K.VENDOR_CANCELLATION),
-        dict(kind=K.BUDGET_CHANGE),
-        dict(kind=K.GUEST_COUNT_CHANGE),
-        dict(kind=K.DATE_CHANGE),
-        dict(kind=K.BUDGET_CHANGE, new_budget=1, vendor_id="x"),
-        dict(kind=K.BUDGET_CHANGE, new_budget=0),
-        dict(kind=K.GUEST_COUNT_CHANGE, new_guest_count=0),
-        dict(kind=K.VENDOR_CANCELLATION, vendor_id="../x"),
+        {"kind": K.VENDOR_CANCELLATION},
+        {"kind": K.BUDGET_CHANGE},
+        {"kind": K.GUEST_COUNT_CHANGE},
+        {"kind": K.DATE_CHANGE},
+        {"kind": K.BUDGET_CHANGE, "new_budget": 1, "vendor_id": "x"},
+        {"kind": K.BUDGET_CHANGE, "new_budget": 0},
+        {"kind": K.GUEST_COUNT_CHANGE, "new_guest_count": 0},
+        {"kind": K.VENDOR_CANCELLATION, "vendor_id": "../x"},
     ],
 )
 def test_invalid_disruptions_cannot_be_constructed(kwargs):
@@ -281,7 +281,7 @@ def test_replan_decisions_are_logged_with_alternatives_or_failures(em, planned):
     em.replan(planned.plan_id, Disruption(kind=K.DATE_CHANGE, new_date=date(2026, 10, 1)), LATER)
     entries = [e for e in em.logs.decisions.read() if e.agent.value == "replanner"]
     assert any(e.decision_type.value == "recommendation" and e.alternatives for e in entries)
-    assert any(e.decision_type.value == "failure" and "Repair" in e.justification or "nothing" in e.justification for e in entries)
+    assert any((e.decision_type.value == "failure" and "Repair" in e.justification) or "nothing" in e.justification for e in entries)
 
 
 # ------------------------------------------------------ time-awareness (bug hunt)
