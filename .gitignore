@@ -11,6 +11,8 @@ eventmate/plans/
 plans/
 logs/
 *.jsonl
+# test fixtures in the pre-versions file format are real inputs and must be committed
+!tests/fixtures/**/*.jsonl
 .coverage
 eventmate/wall_data/
 *.sqlite3-wal

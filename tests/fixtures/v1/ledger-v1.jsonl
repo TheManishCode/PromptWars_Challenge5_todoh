@@ -1,0 +1,2 @@
+{"amount": 5000, "category": "caterer", "entry_id": "49726785fa6d4e1581b613ee101134d9", "kind": "payment", "note": "advance", "plan_id": "9407891c06ab", "source": "user_input", "timestamp": "2026-11-01T02:48:42.182387Z"}
+{"amount": 60000, "category": "venue", "entry_id": "adacf1bbaf1b45d986914ae07675763e", "kind": "quote", "note": "hall quote", "plan_id": "9407891c06ab", "source": "user_input", "timestamp": "2026-11-01T02:48:42.182929Z"}
