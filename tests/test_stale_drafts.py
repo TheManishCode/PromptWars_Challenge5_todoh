@@ -7,7 +7,7 @@ import pytest
 
 from eventmate.messaging.conversations import ConversationService, SendPolicy
 from eventmate.messaging.outreach import basis_sha256
-from eventmate.schemas import Disruption, DisruptionKind as K, VendorCategory as C
+from eventmate.schemas import OutreachDraft, Disruption, DisruptionKind as K, VendorCategory as C
 from eventmate.service import EventMate
 from eventmate.state import build_state
 from tests.conftest import EXAMPLE, TODAY
@@ -146,12 +146,65 @@ def test_a_discovered_vendor_is_never_rebound_to_a_seed_vendor_and_goes_stale_on
         em.approve_outreach(pid, d.draft_id, d.content_hash)
 
 
-def test_an_unreadable_plan_fails_closed_and_a_legacy_draft_without_a_version_is_left_alone(em, pid):
+def test_an_unreadable_plan_fails_closed_and_a_legacy_draft_without_a_version_is_stale(em, pid):
     d = em.draft_outreach(pid, C.CATERER, "email", CONTACT, "Asha")
     svc = ConversationService(em.outreach_store, {}, lambda plan_id: (_ for _ in ()).throw(FileNotFoundError("gone")))
     assert svc.stale_reason(d) == "the plan could not be read"
-    assert svc.stale_reason(d.model_copy(update={"plan_version": None})) is None
-    assert svc.stale_reason(d.model_copy(update={"status": "sent"})) is None and svc.stale_reason(d.model_copy(update={"status": "denied"})) is None
+    legacy = d.model_copy(update={"plan_version": None})
+    assert "before drafts recorded" in svc.stale_reason(legacy)
+    for status_ in ("sent", "denied", "marked_sent", "sending", "outcome_unknown", "failed", "expired", "blocked", "stale"):
+        assert svc.stale_reason(d.model_copy(update={"status": status_})) is None and svc.stale_reason(legacy.model_copy(update={"status": status_})) is None  # history is never touched
+
+
+def write_legacy(em, pid, status_="prepared", kind="request", parent=None):
+    """A draft exactly as an older version of the app stored it: no plan_version, basis or pick flag."""
+    d = em.draft_outreach(pid, C.CATERER, "email", CONTACT, "Asha")
+    extra = {"sent_at": d.created_at, "external_id": "<legacy@x.test>"} if status_ in ("sent",) else {}
+    old = OutreachDraft.model_validate({**d.model_dump(), "plan_version": None, "basis_sha256": "", "for_plan_pick": False, "status": status_, **extra})
+    em.outreach_store._file(pid)._append(old, d.draft_id)
+    return old
+
+
+def reopen(em, tmp_path, chans, clock):
+    e = EventMate(log_dir=tmp_path / "logs", plan_dir=tmp_path / "plans", run_id="stale2", channels=chans)
+    e.outreach_store.now = e.conversations.now = clock
+    return e
+
+
+def test_a_waiting_legacy_draft_is_refused_and_marked_stale_at_approval(em, pid, chans):
+    d = write_legacy(em, pid)
+    with pytest.raises(ValueError, match=STALE):
+        em.approve_outreach(pid, d.draft_id, d.content_hash)
+    assert status(em, pid, d) == "stale" and chans["email"].sent == []
+
+
+def test_an_approved_but_unsent_legacy_draft_is_never_sent(em, pid, chans):
+    d = write_legacy(em, pid, "approved")
+    em.poll_conversations()
+    assert chans["email"].sent == [] and status(em, pid, d) == "stale"
+
+
+def test_start_up_marks_waiting_and_approved_legacy_drafts_stale_and_leaves_sent_history_alone(em, pid, chans, clock, tmp_path):
+    waiting = write_legacy(em, pid, "prepared")
+    approved = write_legacy(em, pid, "approved")
+    sent = write_legacy(em, pid, "sent")
+    denied = write_legacy(em, pid, "denied")
+    before = {x.draft_id: x for x in em.outreach_store.list(pid) if x.draft_id == sent.draft_id or x.draft_id == denied.draft_id}
+    again = reopen(em, tmp_path, chans, clock)  # the app restarts on the same directories
+    st = {d.draft_id: d.status for d in again.outreach(pid)}
+    assert st[waiting.draft_id] == "stale" and st[approved.draft_id] == "stale" and st[sent.draft_id] == "sent" and st[denied.draft_id] == "denied"
+    assert again.outreach_store.get(pid, sent.draft_id) == before[sent.draft_id] and again.outreach_store.get(pid, denied.draft_id) == before[denied.draft_id]
+    again.poll_conversations()
+    assert chans["email"].sent == []  # nothing was sent by the restart or by polling
+    assert reopen(em, tmp_path, chans, clock).conversations.supersede_all_stale() == []  # and the sweep is idempotent
+
+
+def test_a_legacy_followup_to_a_sent_request_is_stale_too_but_the_sent_request_is_not(em, pid, chans):
+    parent = write_legacy(em, pid, "sent")
+    f = em.outreach_store.followup(pid, parent.draft_id, "Could you share the total price?", "Asha")
+    legacy_follow = f.model_copy(update={"plan_version": None, "for_plan_pick": False})
+    em.outreach_store._file(pid)._append(legacy_follow, f.draft_id)
+    assert em.conversations.supersede_stale(pid) == [f.draft_id] and status(em, pid, parent) == "sent"
 
 
 def fake_plan(guests=100, vendor="v1", date="2026-12-12", diets=(), city="Pune", kind="wedding"):

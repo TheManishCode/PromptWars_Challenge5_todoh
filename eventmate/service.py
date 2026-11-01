@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -145,6 +146,8 @@ class EventMate:
         self.manager = ManagerAgent(self.repo, decisions, budget, vendor, guest, planner, self.validator, self.explainer, self.store)
         self.tradeoff = TradeoffAgent(self.repo, decisions, self._dry_run_ok, budget_policy)
         self._guest_list_id: Optional[str] = None
+        with contextlib.suppress(Exception):  # approve and dispatch re-check every draft anyway; a store that cannot be read yet must not stop start-up
+            self.conversations.supersede_all_stale()  # drafts that predate version tracking, or that no longer match their plan, are marked stale once
         self.replanner = ReplannerAgent(self.logs, self.repo, budget, vendor, guest, planner, self.validator, self.store)
 
     def _clock(self, today: Optional[date]) -> None:

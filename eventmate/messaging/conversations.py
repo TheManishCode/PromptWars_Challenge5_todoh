@@ -115,9 +115,12 @@ class ConversationService:
 
     def stale_reason(self, d: OutreachDraft) -> Optional[str]:
         """Why a not-yet-sent draft no longer matches the plan, or None. The hash proves the text is what the user saw; this checks it is still true.
-        Drafts written before the plan version was recorded are left alone. If the plan cannot be read, that is a reason too: fail closed."""
-        if d.plan_version is None or d.status not in ("prepared", "approved"):
+        A draft written before the plan version was recorded cannot be checked, so it is stale too: it must be drafted again, even if it was already approved
+        (it has not been sent). Sent history is never touched. If the plan cannot be read, that is a reason too: fail closed."""
+        if d.status not in ("prepared", "approved"):
             return None
+        if d.plan_version is None:
+            return "this draft was written before drafts recorded which plan version they match"
         try:
             plan = self.plan_lookup(d.plan_id)
         except Exception:
@@ -140,6 +143,10 @@ class ConversationService:
                 except ValueError:
                     pass  # it was sent, denied or changed by someone else in the meantime
         return done
+
+    def supersede_all_stale(self) -> List[str]:
+        """Sweep every plan once (at start-up): waiting drafts that predate version tracking, or that no longer match their plan, become stale."""
+        return [i for pid in self.store.plan_ids() for i in self.supersede_stale(pid)]
 
     def approve(self, plan_id: str, draft_id: str, content_hash: str) -> OutreachDraft:
         """Approve exactly the content the user saw. The send happens now if the limits allow, otherwise on the next dispatch."""
