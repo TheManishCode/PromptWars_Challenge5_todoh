@@ -958,7 +958,7 @@ Status: Accepted (branch `release/candidate`; not pushed, not merged)
 A wedding in Jaipur, a birthday in Bengaluru or a community event in Kolkata used to return no plan: the data held 12 vendors in two cities. `tools/data/gen_seed_catalog.py` builds `catalog_vendors.json` and `catalog_venues.json` (the seed records plus 62 vendors and 27 venues in nine cities, weekends through 2027) deterministically; `EVENTMATE_CATALOG=seed` selects the small files the existing tests are written against (their scenarios depend on what is infeasible there). `tests/test_catalog_coverage.py` plans eight events across four event types and six cities. Honest limits: the catalogue is synthetic and says so; real vendor data, real prices and availability need an integration. The planner still handles three vendor categories (venue, caterer, photographer): decorators, entertainers and cakes are not planned.
 
 
-## ADR-070: `create_app` split into setup plus ten route modules; module-level code moved to `web/base.py` (2026-11-01)
+## ADR-073: `create_app` split into setup plus ten route modules; module-level code moved to `web/base.py` (2026-11-01)
 
 Status: Accepted (branch `quality/split-app`, merged into `release/candidate`; lane X).
 Context: `web/app.py` was 2,038 lines and `create_app` alone was 1,622 lines holding 177 route functions: the one glaring maintainability problem in a codebase where only 4 of 1,582 functions exceed 30 branches.
