@@ -1,5 +1,6 @@
 # App + Prometheus + Grafana on one host. Put a TLS-terminating proxy (Caddy, nginx, a cloud load balancer) in front of "todoh"; docs/HOSTING.md says what it must forward.
 # Usage: cp deploy/env.example deploy/.env && edit it; echo -n "$OWNER_TOKEN" > deploy/prometheus/owner_token; docker compose -f deploy/docker-compose.yml up -d --build
+name: todoh  # a fixed project name: the folder name ("deploy") would collide with any other stack kept in a folder of that name
 services:
   todoh:
     build: ..

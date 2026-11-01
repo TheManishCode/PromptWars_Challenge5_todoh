@@ -47,3 +47,11 @@ def test_the_dashboard_and_compose_and_prometheus_config_parse_and_are_consisten
 def test_the_dockerfile_runs_unprivileged_with_a_healthcheck_and_the_locked_install():
     text = (ROOT / "Dockerfile").read_text()
     assert "USER todoh" in text and "HEALTHCHECK" in text and "--require-hashes -r requirements-runtime.lock" in text
+
+
+def test_the_example_environment_allows_the_name_prometheus_scrapes_by_and_the_stack_has_a_fixed_project_name():
+    """Found by running the stack: Prometheus reaches the app as `todoh:8000`, which the host check refused (HTTP 400), and the folder name `deploy` collided with another project."""
+    env = (ROOT / "deploy/env.example").read_text()
+    line = next(entry for entry in env.splitlines() if entry.startswith("EVENTMATE_ALLOWED_HOSTS="))
+    assert "todoh" in line.split("=", 1)[1].split(",")
+    assert yaml.safe_load((ROOT / "deploy/docker-compose.yml").read_text())["name"] == "todoh"
