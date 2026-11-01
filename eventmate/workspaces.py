@@ -55,6 +55,7 @@ class Workspace:
     principal: Principal
     csrf: str
     created: str
+    inflight: int = 0  # requests currently using this workspace: it is never dropped from memory while any is running (F-016)
     pulse: object = field(default_factory=lambda: __import__("eventmate.arcade_pulse", fromlist=["ArcadePulse"]).ArcadePulse())  # this workspace's own run lights for the room (F-014)
 
 
@@ -209,12 +210,33 @@ class WorkspaceRegistry:
             ws = Workspace(workspace_id, em, assistant, voice, threading.RLock(), Principal(user_id=workspace_id, roles=(Role.ORGANIZER,)), csrf_for(self.secret, workspace_id),
                            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(info["created"])))
             self._live[workspace_id] = ws
-            while len(self._live) > self.max_live:
-                _, old = self._live.popitem(last=False)
-                pool = getattr(old.voice, "_pool", None)
-                if pool is not None:
-                    pool.shutdown(wait=False)
+            self._evict()
             return ws
+
+    def _evict(self) -> None:
+        """Drop the least recently used workspaces beyond ``max_live``, but never one a request is using. Dropping it would let the next request build a second
+        ``Workspace`` for the same directory with a second lock, and two requests would then change the same files unsynchronised (F-016). The live set may
+        exceed ``max_live`` by the number of requests in flight, and shrinks again as they finish."""
+        for workspace_id in list(self._live):
+            if len(self._live) <= self.max_live:
+                break
+            old = self._live[workspace_id]
+            if old.inflight > 0:
+                continue
+            del self._live[workspace_id]
+            pool = getattr(old.voice, "_pool", None)
+            if pool is not None:
+                pool.shutdown(wait=False)
+
+    def acquire(self, ws: Workspace) -> None:
+        with self._lock:
+            ws.inflight += 1
+
+    def release(self, ws: Workspace) -> None:
+        with self._lock:
+            ws.inflight = max(0, ws.inflight - 1)
+            if len(self._live) > self.max_live:
+                self._evict()
 
     def open(self, credential: Optional[str]) -> Optional[Workspace]:
         workspace_id = self.directory.lookup(credential) if credential else None

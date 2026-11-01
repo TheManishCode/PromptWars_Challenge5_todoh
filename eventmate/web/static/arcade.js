@@ -669,7 +669,7 @@ async function paperLeads(host, plan) {
     head.appendChild(el("span", "pv-chip", (l.low_inr === l.high_inr ? fmtINR(l.low_inr) : fmtINR(l.low_inr) + " to " + fmtINR(l.high_inr)) + " " + String(l.unit).replace(/_/g, " ")));
     card.appendChild(head);
     const a = el("a", "pv-alt", l.domain);
-    a.href = l.url; a.target = "_blank"; a.rel = "noopener noreferrer nofollow";
+    if (/^https?:\/\//i.test(String(l.url))) { a.href = l.url; a.target = "_blank"; a.rel = "noopener noreferrer nofollow"; } // the server only stores http(s); the page does not rely on it
     card.appendChild(a);
     box.appendChild(card);
   });

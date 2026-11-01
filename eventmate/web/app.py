@@ -512,6 +512,9 @@ def create_app(
                     g.ws, g.new_credential = registry.create(caller())
                 except WorkspaceError as exc:
                     return _err(exc.status, str(exc), code=exc.code)
+        if g.ws is not None and shared:
+            registry.acquire(g.ws)  # released in teardown: a workspace in use is never evicted from memory (F-016)
+            g.ws_held = g.ws
         if g.ws is not None:
             g.workspace_token = consumption.bind(g.ws.id)  # model calls made for this request are charged to this workspace (Phase 4.7)
             g.pulse_token = _pulse_mod.pulse.bind(g.ws.pulse)  # and the room's run lights are this workspace's own (F-014)
@@ -522,6 +525,9 @@ def create_app(
         token = g.pop("workspace_token", None)
         if token is not None:
             consumption.unbind(token)
+        held = g.pop("ws_held", None)
+        if held is not None:
+            registry.release(held)
         pulse_token = g.pop("pulse_token", None)
         if pulse_token is not None:
             _pulse_mod.pulse.unbind(pulse_token)
