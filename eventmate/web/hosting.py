@@ -7,6 +7,8 @@ one visitor's plans to the next, so a build without them refuses unconditionally
 
 from __future__ import annotations
 
+import fcntl
+import os
 from pathlib import Path
 from typing import List, Mapping, Optional, Sequence
 
@@ -55,3 +57,25 @@ def is_https(scheme: str, remote_addr: Optional[str], forwarded_proto: Optional[
         return True
     peer = limits._ip(remote_addr or "")
     return bool(peer is not None and any(peer in n for n in proxies) and (forwarded_proto or "").strip().lower() == "https")
+
+
+class AlreadyRunning(RuntimeError):
+    """Another server process holds this data directory."""
+
+
+def acquire_server_lock(data_dir: Path):
+    """Hold an exclusive lock on the data directory for the life of this process, and refuse to start when another server already has it (F-019).
+
+    The per-workspace locks, the rate limits, the live-workspace set and the workspace-creation counters all live inside one process, so a second server process on
+    the same directory would change the same files with none of them knowing about the other. The runbook says "one process on one disk"; this makes the system say
+    it too. The operator's own commands (backup, delete a workspace, the wall's CLI) do not take this lock: they are meant to run beside the server."""
+    path = Path(data_dir) / ".server.lock"
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        raise AlreadyRunning(f"another server already holds {data_dir}: run one server process per data directory") from None
+    os.ftruncate(fd, 0)
+    os.write(fd, f"{os.getpid()}\n".encode())
+    return fd  # keep it referenced: closing it releases the lock

@@ -484,7 +484,8 @@ def create_app(
         wall_db = Path(os.environ.get("EVENTMATE_WALL_DB") or (registry.root if shared else local.em.store.root.parent) / "wall_data" / "wall.sqlite3")
         bearer_on_wall = bool(api_token) and os.environ.get("EVENTMATE_WALL_BEARER") == "1"  # off by default: a public wall is exempt from the bearer token
         wall = Wall(app, wall_store or WallStore(wall_db, WallConfig.from_env(os.environ)), wall_limits,
-                    bearer_check=(lambda req: hmac.compare_digest(req.headers.get("Authorization", ""), f"Bearer {api_token}")) if bearer_on_wall else None)
+                    bearer_check=(lambda req: hmac.compare_digest(req.headers.get("Authorization", ""), f"Bearer {api_token}")) if bearer_on_wall else None,
+                    client_ip=caller, secure_cookies=shared)  # the wall's limits count the real caller (trusted proxy header, IPv6 as a /64), and in shared mode its cookie is always Secure
 
     # ------------------------------------------------------------ guards
 

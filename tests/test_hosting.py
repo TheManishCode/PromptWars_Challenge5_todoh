@@ -103,3 +103,17 @@ def test_hsts_is_sent_only_over_https(tmp_path, monkeypatch):
     via_proxy = client.get("/healthz", headers={"X-Forwarded-Proto": "https"}, environ_base={"REMOTE_ADDR": "10.0.0.1"})
     assert "Strict-Transport-Security" not in plain.headers and "Strict-Transport-Security" not in spoofed.headers
     assert via_proxy.headers["Strict-Transport-Security"].startswith("max-age=")
+
+
+def test_a_second_server_process_on_the_same_data_directory_is_refused(tmp_path):
+    """F-019: the locks and limits of the app live in one process; two servers on one directory would each be unaware of the other."""
+    import os
+
+    from eventmate.web import hosting
+
+    first = hosting.acquire_server_lock(tmp_path)
+    with pytest.raises(hosting.AlreadyRunning):
+        hosting.acquire_server_lock(tmp_path)
+    assert oct((tmp_path / ".server.lock").stat().st_mode & 0o777) == "0o600" and (tmp_path / ".server.lock").read_text().strip() == str(os.getpid())
+    os.close(first)  # the lock is released when the holder goes away
+    os.close(hosting.acquire_server_lock(tmp_path))

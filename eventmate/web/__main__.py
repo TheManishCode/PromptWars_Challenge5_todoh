@@ -50,6 +50,11 @@ def main(argv=None) -> int:
     if run_mode == "shared":
         from eventmate.workspaces import WorkspaceRegistry
 
+        try:
+            server_lock = hosting.acquire_server_lock(Path(os.environ["EVENTMATE_DATA_DIR"]))  # noqa: F841  (held until the process ends)
+        except hosting.AlreadyRunning as exc:
+            print(f"refusing to start: {exc}", file=sys.stderr)
+            return 2
         registry = WorkspaceRegistry(Path(os.environ["EVENTMATE_DATA_DIR"]), os.environ["EVENTMATE_SECRET"],
                                      max_workspaces=int(os.environ.get("EVENTMATE_MAX_WORKSPACES", "1000")))
         app = create_app(registry=registry, allowed_hosts=hosts)
