@@ -190,6 +190,9 @@ class PlanStore:
         if needle not in data:
             return
         kept = b"".join(line for line in data.splitlines(keepends=True) if needle not in line)
+        if not kept.strip():
+            os.unlink(self.heads_path)  # nothing left to remember: no empty file behind (found by thread C's failed-import test)
+            return
         tmp = self.root / f".heads-{secrets.token_hex(6)}"
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         try:

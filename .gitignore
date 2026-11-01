@@ -11,4 +11,5 @@ eventmate/plans/
 plans/
 logs/
 *.jsonl
+!tests/fixtures/**/*.jsonl  # test fixtures in the pre-versions file format are real inputs and must be committed
 .coverage
