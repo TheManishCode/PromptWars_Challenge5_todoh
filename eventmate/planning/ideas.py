@@ -46,7 +46,7 @@ _KINDS = ("theme", "decor", "activity", "menu_note", "checklist_item")
 _JSON_OBJECT = re.compile(r"\{.*\}", re.S)
 
 _MARKUP = re.compile(r"<[A-Za-z/!][^>]*>|```|\]\(|javascript:", re.I)
-_LINK = re.compile(r"https?://|www\.|\b[\w.-]+@[\w.-]+\.\w+", re.I)
+_LINK = re.compile(r"https?://|www\.|\b[\w.-]{1,64}@[\w.-]{1,255}\.\w+", re.I)  # bounded, like llm._LINK: unbounded runs are quadratic on a long hyphenated string
 _AVAILABILITY = re.compile(
     r"\b(?:available|availability|unavailable|in stock|sold out|booked out|fully booked|vacant)\b"
     r"|\b(?:slots?|dates?|rooms?|halls?)\s+(?:is\s+|are\s+)?(?:open|free|left|vacant)\b|\b(?:open|free)\s+on\b", re.I,

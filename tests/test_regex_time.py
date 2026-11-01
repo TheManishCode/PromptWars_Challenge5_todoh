@@ -58,3 +58,20 @@ def test_the_injection_scan_and_masks_stay_fast_on_a_megabyte_of_hostile_text(la
     guard.scan(text)
     guard.mask_pii(text)
     assert time.perf_counter() - started < 5.0
+
+
+def test_the_two_link_patterns_are_bounded_and_do_the_same_work_on_ordinary_text():
+    """llm._LINK and ideas._LINK were the same quadratic pattern; the sweep above only catches it when the machine is busy enough to push it past a second, so this
+    checks the work directly: ten times the input must cost far less than a hundred times the time."""
+    from eventmate import llm
+    from eventmate.planning import ideas
+
+    for rx in (llm._LINK, ideas._LINK):
+        small, large = "a-" * 2_000, "a-" * 20_000
+        t0 = time.perf_counter()
+        rx.search(small)
+        t_small = max(time.perf_counter() - t0, 1e-4)
+        t0 = time.perf_counter()
+        rx.search(large)
+        assert time.perf_counter() - t0 < t_small * 40, rx.pattern  # linear would be 10x; quadratic is 100x
+        assert rx.search("write to asha@example.com today") and rx.search("see https://x.example") and not rx.search("no links here")
