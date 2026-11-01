@@ -1,6 +1,6 @@
-<p align="center"><img src="docs/assets/logo.svg" alt="to;doh the event planner" width="420"></p>
+<p align="center"><img src="docs/assets/logo.svg" alt="to;doh the event planner" width="520"></p>
 
-<p align="center"><b>A GenAI-powered planning assistant that helps users organise weddings, birthdays and community events with budgets, timelines, vendor checklists and personalised ideas, with every plan checked by solvers rather than trusted to a model.</b><br><a href="docs/PROBLEM_STATEMENT.md">Where each part of that sentence is implemented and tested</a></p>
+<h3 align="center">A GenAI-powered planning assistant for weddings, birthdays and community events.<br>Budgets, timelines, vendor checklists and personalised ideas, with every plan checked by solvers instead of trusted to a model.</h3>
 
 <p align="center">
 <a href="https://github.com/TheManishCode/to_doh_the_event_planner/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheManishCode/to_doh_the_event_planner/actions/workflows/ci.yml/badge.svg"></a>
@@ -9,40 +9,102 @@
 <img alt="Accessibility" src="https://img.shields.io/badge/axe--core-0%20violations-8b5cf6">
 </p>
 
-<p align="center"><a href="#quick-start">Quick start</a> · <a href="#what-it-does">Features</a> · <a href="#guarantees-each-is-enforced-and-tested">Guarantees</a> · <a href="docs/DEMO.md">Demo</a> · <a href="#documentation">Docs</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
+<p align="center"><a href="https://todoh.manishp.dev">Live demo</a> · <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="docs/DEMO.md">5-minute tour</a> · <a href="docs/PROBLEM_STATEMENT.md">Problem-statement map</a></p>
 
-to;doh-the event planner turns a plain-language brief into a plan with a budget, a timeline and a vendor checklist, and it only shows you a plan after an independent validator has re-checked every hard constraint. When constraints conflict it offers priced trade-offs instead of silently bending them. It can also write to vendors for you, read their replies, and keep a job moving over days, while every price stays a proposal until you confirm it.
+---
 
-Language models are used where wording helps (reading your brief, suggesting ideas, answering questions, rewording explanations) and deliberately **not** where facts matter: plan validity, prices, availability, capacity and legal or cultural claims come from code, data, or you.
+## The idea
 
-> **Status: early.** Vendor data is synthetic seed data. Email is tested with fake SMTP/IMAP only and has not been validated against a real mailbox. Treat this as a working prototype, not a production service.
+Planning an event means juggling a budget, a schedule, a pile of vendors and a hundred small decisions, and a chatbot that confidently invents prices does not help. **to;doh** lets you describe the event in plain words. A language model helps with *wording* (reading your brief, suggesting ideas, explaining the result). **Facts and feasibility come from code**: a constraint solver builds the schedule, a second validator re-derives every claim from the database, and nothing is sent to a vendor without your approval.
 
-## What it does
+> *"Plan a 120-person engagement party in Pune on December 12 under INR 200,000. Vegetarian catering, indoor venue, photographer."*
+> → a validated plan with a budget split, a timeline, a vendor checklist with reasons, alternatives, and ideas to make it yours.
 
-| Area | Capability |
+## What you get
+
+| You ask for | You get |
 |---|---|
-| **Plan** | Brief → parsed request → vendor shortlist → CP-SAT schedule → PDDL cross-check → independent validation. Immutable plan versions with diffs |
-| **Budget** | Allocation with a contingency reserve, a reality check up front, a live ledger, and ranked, verified trade-off options |
-| **Replan** | Vendor cancellations, budget, guest-count and date changes produce a new version; confirmed bookings are preserved unless you release them |
-| **Ideas** | Personalized suggestions from verified facts; templates work with no model; model ideas are guarded (no prices, no invented vendors, no availability or cultural claims) |
-| **Community events** | Profile-driven (college fest, neighbourhood, fundraiser, local cultural). Hard checks for attendance, funding, volunteers, timeline and accessibility; conditional items (permits, noise, food licence…) that only you can mark |
-| **Quotes** | Ledger with provenance and expiry, hidden-cost flags, and a transparent vendor score |
-| **Find vendors** | Finds businesses and public contact details from their own pages; you review and confirm each address; then to;doh-the event planner sends and tracks replies. Discovered businesses are kept apart from the vendor database, and a do-not-contact list covers every plan and job |
-| **Vendors** | Hash-approved messages over email (SMTP/IMAP) or WhatsApp (self-hosted gateway, experimental); replies read as untrusted text; optional narrow standing permission with caps, window and kill switch |
-| **Jobs** | "Get N comparable quotes by a deadline": claims you confirm, nudges, expiry, an in-app digest and an optional email copy to you |
-| **Assistant** | Grounded answers with sources, permissioned tools, proposals that need your click |
-| **Interfaces** | Local web UI, REST API, and a CLI |
+| **Budgets** | An allocation with a contingency reserve, an up-front reality check, a live ledger, and ranked trade-off options when money is tight |
+| **Timelines** | A CP-SAT schedule with buffers, cross-checked symbolically (Fast Downward + VAL) |
+| **Vendor checklists** | A shortlist per category with every hard constraint and reason shown; vendor outreach you approve word for word |
+| **Personalised ideas** | Themes, activities and menu notes from the facts of *your* event, labelled as suggestions and never as verified offers |
+| **Weddings, birthdays, community events** | Event-type profiles; community events add attendance, funding, volunteer, permit and accessibility checks |
+| **Change of plans** | Cancel a vendor or change the budget, guest count or date: a new plan version and a diff, with confirmed bookings preserved |
+
+## How it works
+
+```mermaid
+flowchart LR
+    A([Your brief]) --> B[Intake<br/>LLM reads it, you confirm]
+    B --> C[Vendor shortlist<br/>hard constraints + reasons]
+    C --> D[Scheduler<br/>CP-SAT timeline + budget caps]
+    D --> E[Symbolic check<br/>Fast Downward + VAL]
+    E --> F{Validator<br/>re-derives every fact}
+    F -- fails --> G[Named violation<br/>+ concrete repair]
+    F -- passes --> H[(Immutable plan version)]
+    H --> I[Explainer<br/>plain words, same facts]
+    H --> J[Ideas<br/>guarded suggestions]
+    H --> K[Outreach<br/>you approve exact text]
+    L([Disruption]) --> M[Replanner] --> H
+```
+
+### Architecture
+
+```mermaid
+flowchart TB
+    subgraph UI[Interfaces]
+        W[3D arcade web room]:::ui
+        R[REST API]:::ui
+        CLI[CLI]:::ui
+    end
+    subgraph CORE[Verified core: no model has authority here]
+        SVC[Service facade]
+        AG[Agents: Manager, Budget, Vendor, Planner,<br/>Scheduler, Validator, Replanner, Trade-off, Guest]
+        SOL[OR-Tools CP-SAT · Fast Downward · VAL]
+        ST[(Hash-checked plan store<br/>per-workspace)]
+    end
+    subgraph GEN[GenAI layer: wording only]
+        LLM[Intake · Ideas · Explainer · Assistant · Explore]
+        GD[Guards: no invented prices, vendors or availability]
+    end
+    subgraph OUT[Follow-through]
+        AP[Approvals bound to a content hash]
+        JOB[Background jobs: quotes, nudges, digests]
+        CH[Email / WhatsApp channels]
+    end
+    UI --> SVC --> AG --> SOL
+    AG --> ST
+    SVC --> GD --> LLM
+    AG --> AP --> CH
+    JOB --> AP
+    classDef ui fill:#1e1b4b,stroke:#8b5cf6,color:#fff
+```
+
+Where the model sits, what it may see and what stops it going wrong: [docs/GENAI.md](docs/GENAI.md). Every design decision: [docs/DECISIONS.md](docs/DECISIONS.md).
+
+## Guarantees
+
+Each of these is enforced in code and covered by tests.
+
+- **No invented facts.** Prices, capacities, diets and booking status come from the database, you, or a tool. A model may phrase or propose; it never sources a fact.
+- **Validated or not shown.** A plan version cannot exist unless every hard constraint passed an independent re-check, and a failure names the constraint and a repair.
+- **Nothing leaves without approval.** Vendor messages are bound to a hash of their exact text; replies are treated as untrusted data.
+- **Stop requests are honoured, but not authenticated.** A stop request or a permanent delivery failure that names a message we sent puts an address on a do-not-contact list that only you can lift. That matching relies on mail headers that can be forged, so a forgery can only stop us writing to an address we already wrote to, and a bounced address shows why it failed before you can re-enable it. to;doh does not check anti-spam or privacy law: check the rules that apply to you before contacting businesses.
+- **Nothing is overwritten.** Every replan writes a new immutable version and a diff.
+- **Honest about gaps.** A need that cannot be checked from data is marked *Needs verification*, never called verified.
 
 ## Quick start
 
-Requires Python 3.12+ (developed on 3.14).
+Requires Python 3.12+.
 
 ```sh
 python -m venv .venv && . .venv/bin/activate
-pip install -e ".[dev]"            # or: pip install -r requirements.txt
-cp .env.example .env && chmod 600 .env
-python -m eventmate.web            # UI at http://127.0.0.1:8765
+pip install -e ".[dev]"
+cp .env.example .env && chmod 600 .env     # optional: add a model key (NVIDIA / OpenRouter) for the GenAI features
+python -m eventmate.web                    # http://127.0.0.1:8765
 ```
+
+Or from the command line:
 
 ```sh
 python -m eventmate plan "Plan a 120-person engagement party in Pune on December 12 under INR 200,000. Vegetarian catering, indoor venue, photographer."
@@ -50,62 +112,11 @@ python -m eventmate show <plan_id>
 python -m eventmate replan <plan_id> --cancel-vendor cat-pune-rasoi
 ```
 
-**Solvers.** Planning runs a PDDL cross-check with Fast Downward and VAL. Point at them with `EVENTMATE_FD` and `EVENTMATE_VAL` (see [docs/CONFIGURATION.md](docs/CONFIGURATION.md)). Without them planning stops with an explicit "symbolic check unavailable" failure; `--allow-no-symbolic` skips only that check and says so.
+The symbolic timeline check needs [Fast Downward](https://www.fast-downward.org/) and [VAL](https://github.com/KCL-Planning/VAL) (`EVENTMATE_FD`, `EVENTMATE_VAL`; see [docs/CONFIGURATION.md](docs/CONFIGURATION.md)). Without them plans still build, and the check is shown as unavailable rather than faked. With no model key, intake, ideas and explanations fall back to deterministic versions. The full-quality 3D models can be served from a bucket with `EVENTMATE_ASSET_BASE`; without it the room uses the light models in the repository.
 
-## Architecture
+## Status
 
-```
-brief ─ Manager ─ parse ─▶ EventRequest ─ decompose ─▶ task graph
-                              │
-   Guest ── RSVPs, diets ─────┤
-   Budget ── allocation ──────┤──▶ Vendor ── shortlist (every hard constraint, every reason)
-                              │
-   Planner ── vendor set ── Scheduler (CP-SAT) ── PDDL check
-                              │
-   Validator ── re-derives every fact from the database; no valid plan, no PlanVersion
-                              │
-   Plan store (immutable, hash-checked)     Explainer (text with reasons and alternatives)
-                              │
-   Replanner ── disruption ─▶ new version + diff (added / removed / changed / preserved)
-```
-
-```
-eventmate/
-  schemas.py  service.py          typed contracts and the facade everything goes through
-  agents/                         manager, budget, guest, vendor, planner, scheduler, validator, replanner, tradeoff, explainer
-  planning/                       community events, ideas, rule packs, conversational intake
-  pricing/                        quote ledger, vendor score, budget ledger, reality check
-  messaging/                      email/WhatsApp channels, approvals, conversations, digests, owner notifications
-  sourcing/                       discovered businesses, public contact extraction, shortlists, the do-not-contact list
-  followthrough/                  jobs, price claims, the background worker
-  integrations/                   flights, weather, places, venue discovery, deals search, explore (read-only)
-  assistant/                      grounded Q&A, tools, approvals, evals
-  web/                            Flask API and single-page UI
-  data/                           seed vendors, profiles, idea templates, knowledge base
-prompts/                          versioned prompt files (wording and output format only)
-tests/                            the test suite (count: docs/HANDOFF.md)
-docs/                             decisions, roadmap, setup guides, design notes
-```
-
-## Guarantees (each is enforced and tested)
-
-- **No invented facts.** Availability, prices, capacities, diets and booking status come from the database, you, or a tool. A model may phrase or propose; it never sources a fact.
-- **Validated or not shown.** A `PlanVersion` cannot be constructed unless every hard constraint passed an independent re-check.
-- **Failures explain themselves.** Every failure names the violated constraint and a concrete repair.
-- **Nothing is overwritten.** Every replan writes a new immutable version and a diff.
-- **Nothing leaves without approval.** Vendor messages are bound to a hash of their exact text. The only exception is an optional, capped, time-boxed standing permission for fixed follow-up questions, with a kill switch. Request templates and automatic follow-ups never contain your budget or a price; text you type yourself is sent as written.
-- **Nothing found is used until you confirm it.** An address read from a business's own page or listing is a candidate with its source. Only an address you confirm can be written to, and a stop request in a reply to a message we sent, or a permanent delivery failure naming a message we sent, puts it on a do-not-contact list that only you can lift. This matching relies on mail headers that can be forged, so it is not authenticated: a forgery can only stop to;doh-the event planner writing to an address it already wrote to, and a bounced address shows why it failed before you can re-enable it. Discovery depends on what a source publishes and coverage varies by city and category. to;doh-the event planner does not check anti-spam or privacy law; check the rules that apply to you before contacting businesses.
-- **Replies are untrusted data.** A vendor reply never records a quote, changes a plan or approves anything.
-- **Conservative sending.** A send is claimed before it happens (a file lock across processes), and a send whose outcome is unknown is never retried automatically. This reduces the chance of duplicates; it cannot make one impossible.
-- **Provisional until verified.** If a need you stated cannot be checked from the data (for example a required access need the venue has not declared), the plan is built but marked **Needs verification** everywhere; it is not called verified until you record the venue's answer. Conditional requirements (permits, noise rules, licences…) stay "not verified" until you mark them; to;doh-the event planner never says a plan is safe or compliant.
-
-## Testing
-
-```sh
-python -m pytest                  # whole suite
-```
-
-The current pass count, date and environment are recorded in [docs/HANDOFF.md](docs/HANDOFF.md) (the single source for that number); it was last run with Fast Downward, VAL and Chromium available. Without the solvers most planning tests fail by design; without Chromium the browser tests skip. Tests use fake SMTP/IMAP and fake channels and never call a keyed or external service.
+A working prototype, built for a hackathon. Vendor data is synthetic seed data (nine cities), and email has been tested against fake SMTP/IMAP only. The 3D room is the front end; the REST API and CLI expose the same engine.
 
 ## Documentation
 
