@@ -420,7 +420,6 @@ def test_hostile_text_in_stored_records_never_runs_in_the_room(world):
         page.wait_for_selector("#review:not([hidden])", timeout=30000)
         page.click("#build")
         page.wait_for_selector("#paper .stamp", timeout=90000)
-        plan_id = page.evaluate("state.lastPayload.plan.plan_id")
         # the server's plan, with the text fields a third party can influence (vendor and place names, notes, reasons, warnings, labels) replaced by hostile strings, drawn by every renderer
         page.evaluate("""(payload) => {
             const keys = new Set(["name", "label", "city", "change_reason", "detail", "title", "message", "reason", "why", "text", "note", "notes", "source", "description", "summary", "evidence", "vendor_name", "area", "address", "venue", "owner", "phone", "contact"]);
