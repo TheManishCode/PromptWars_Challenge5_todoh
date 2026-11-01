@@ -420,13 +420,13 @@ def test_the_wall_panel_is_readable_in_every_state_over_the_mural(world, viewpor
         _open_wall_by_keyboard(page)
         page.wait_for_selector("#wall-challenge:not([hidden])", timeout=10000)
         measure("challenge")
-        page.click("#wall-start-timed")
+        page.click("#wall-start-untimed")  # no clock: measuring takes real time and a timed round would expire under it
         page.wait_for_selector("#wall-readybtn:not([hidden])", timeout=10000)
         measure("round issued")
         page.click("#wall-readybtn")
         page.wait_for_selector("#wall-waitline:not([hidden])", timeout=10000)
         measure("round running")
-        target = page.query_selector(f"#wall-cells button:nth-child({page.evaluate('wallui.round.to_slot') + 1})")
+        target = page.query_selector('#wall-cells button:has-text("Asha Test")')
         target.focus()
         page.keyboard.press("Enter")  # the real keyboard path: a hidden button is activated by the keyboard, never by a mouse pointer
         page.wait_for_selector("#wall-halloffer:not([hidden])", timeout=10000)

@@ -78,7 +78,7 @@ code — nothing on screen claims a stage happened that did not.
 Target: WCAG 2.2 AA, with no change to the look. Proved three ways, all in `tests/` and runnable with `pytest tests/test_a11y_e2e.py`:
 axe-core 4.14.0 (vendored in `tests/vendor`, hash-checked, never served) finds nothing in any state on a laptop and a phone; text contrast is **measured from rendered pixels**
 (`tests/browser_helpers.py`: axe can only say "incomplete" over a canvas or a gradient); and the keyboard flows below are driven with a real keyboard in a real Chromium.
-Lighthouse (13.6.0, mobile and desktop emulation, software GL) scores accessibility 100 on both.
+Lighthouse (13.6.0, mobile and desktop emulation, software GL, 2026-11-01) scores accessibility 100 and best practices 100 on both (best practices was 96: the console error was the road theatre's three missing models).
 
 - **Keyboard.** The room is a canvas, so everything a tap opens has a real button in `#room-nav`, shown only while the keyboard is on it (a pointer user never sees it).
   Tab reaches it; Enter opens the signature wall, the Hall of Fame table (once unlocked), each vending machine or the secret dossier; focus moves to Back to the room;
