@@ -9,6 +9,7 @@ short-circuit) so a rejection lists *every* reason, not just the first.
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter
 from pathlib import Path
 from datetime import date
@@ -66,8 +67,10 @@ class VendorRepository:
     """Read-only, validated view over the seed JSON files."""
 
     def __init__(self, venues_path: Optional[Path] = None, vendors_path: Optional[Path] = None):
-        venues_path = Path(venues_path) if venues_path else DATA_DIR / "seed_venues.json"
-        vendors_path = Path(vendors_path) if vendors_path else DATA_DIR / "seed_vendors.json"
+        # The demonstration catalogue (9 cities) is the default; EVENTMATE_CATALOG=seed selects the small fixed one the unit tests are written against.
+        prefix = "seed" if os.environ.get("EVENTMATE_CATALOG", "full") == "seed" else "catalog"
+        venues_path = Path(venues_path) if venues_path else DATA_DIR / f"{prefix}_venues.json"
+        vendors_path = Path(vendors_path) if vendors_path else DATA_DIR / f"{prefix}_vendors.json"
         try:
             venues = tuple(Venue.model_validate(r) for r in _load_records(venues_path))
             vendors = tuple(Vendor.model_validate(r) for r in _load_records(vendors_path))

@@ -1,6 +1,9 @@
+import os
 from datetime import date
 
 import pytest
+
+os.environ.setdefault("EVENTMATE_CATALOG", "seed")  # the unit tests are written against the small fixed catalogue; tests/test_catalog_coverage.py uses the full one
 
 from eventmate.decision_logger import DecisionLogger
 from eventmate.agents.vendor import VendorRepository
