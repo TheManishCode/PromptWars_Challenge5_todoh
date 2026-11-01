@@ -174,7 +174,7 @@ def evaluate(
         checks.append(
             ConstraintCheck(
                 name="capacity",
-                passed=(provider.min_guests or 0) <= guests <= (provider.max_guests or 0),  # a caterer's range is validated present
+                passed=provider.min_guests is not None and provider.max_guests is not None and provider.min_guests <= guests <= provider.max_guests,  # a missing range does not pass
                 detail=f"{guests} guests vs served range {provider.min_guests}-{provider.max_guests}",
             )
         )

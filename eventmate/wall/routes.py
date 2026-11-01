@@ -179,7 +179,7 @@ class Wall:
         return cred, hash_credential(cred)
 
     @staticmethod
-    def _body(model: type) -> Any:
+    def _body(model: type[BaseModel]) -> Any:
         try:
             data = request.get_json(silent=True)
         except RecursionError:  # nesting deep enough to exhaust the parser: some Python versions raise this instead of returning None (found by an outside verifier on 3.10)

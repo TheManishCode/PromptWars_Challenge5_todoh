@@ -142,6 +142,8 @@ class PlanStore:
         self._key = signing_key
 
     def _sign(self, body) -> str:
+        if self._key is None:
+            raise ValueError("no signing key is set")
         return hmac.new(self._key, _canonical(body).encode(), hashlib.sha256).hexdigest()
 
     def _path(self, plan_id: str, version: int) -> Path:

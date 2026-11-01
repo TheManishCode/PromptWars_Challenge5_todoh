@@ -209,9 +209,9 @@ def find_contacts(fetcher, website_url: str, max_pages: int = MAX_PAGES) -> Cont
             for v in _mailto_addresses(href):
                 take(v, raw.url, "page_mailto")
         for m in _TEXT_EMAIL.finditer(text):
-            v = _valid_email(m.group(0))
-            if v:
-                take(v, raw.url, "page_text")
+            found = _valid_email(m.group(0))
+            if found:
+                take(found, raw.url, "page_text")
         next_url = _contact_link(links, raw.url) if n == 0 else None
     res.found = sorted(seen.values(), key=lambda f: (f["source_kind"] != "page_mailto", f["value"]))
     if overflow:

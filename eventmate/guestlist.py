@@ -153,12 +153,12 @@ def parse_guest_csv(raw) -> ParseResult:
         rows = list(csv.reader(io.StringIO(text, newline=""), skipinitialspace=True))
     except csv.Error:
         raise GuestListError("the file is not valid CSV (a cell may be far too long, or a quote is never closed)") from None
-    rows = [(n, r) for n, r in enumerate(rows, 1)]
-    while rows and not any(c.strip() for c in rows[0][1]):
-        rows.pop(0)
-    if not rows:
+    numbered = [(n, r) for n, r in enumerate(rows, 1)]
+    while numbered and not any(c.strip() for c in numbered[0][1]):
+        numbered.pop(0)
+    if not numbered:
         raise GuestListError("the file is empty")
-    header = rows[0][1]
+    header = numbered[0][1]
     names = [_clean(h).lower() for h in header]
     unknown = [h for h in names if h not in COLUMNS]
     if unknown or len(set(names)) != len(names):
@@ -167,7 +167,7 @@ def parse_guest_csv(raw) -> ParseResult:
             "the first line must name the columns, using only " + ", ".join(COLUMNS) + " (each once)"
             + (f"; {', '.join(contact)} is not accepted because to;doh-the event planner does not store guest contact details" if contact else "")
         )
-    body = [(n, r) for n, r in rows[1:] if any(c.strip() for c in r)]
+    body = [(n, r) for n, r in numbered[1:] if any(c.strip() for c in r)]
     if len(body) > MAX_ROWS:
         raise GuestListError(f"the list has {len(body)} rows; the limit is {MAX_ROWS}")
 

@@ -519,11 +519,11 @@ class ConversationService:
                 skipped.append(f"{s.name}: already asked")
             elif c is None:
                 skipped.append(f"{s.name}: no contact saved")
-            elif not (c.email if c.preferred == "email" else c.whatsapp):
+            elif not (address := c.email if c.preferred == "email" else c.whatsapp):
                 skipped.append(f"{s.name}: no {c.preferred} address saved")
-            elif self.suppressions is not None and self.suppressions.active_for(c.preferred, (c.email if c.preferred == "email" else c.whatsapp) or ""):
+            elif self.suppressions is not None and self.suppressions.active_for(c.preferred, address):
                 skipped.append(f"{s.name}: do not contact")
             else:
-                to = c.email or "" if c.preferred == "email" else "+" + (c.whatsapp or "")  # stored as digits; the parser wants the country-code marker
+                to = address if c.preferred == "email" else "+" + address  # stored as digits; the parser wants the country-code marker
                 made.append(self.store.draft(plan, s.category, c.preferred, to, sender_name))
         return made, skipped

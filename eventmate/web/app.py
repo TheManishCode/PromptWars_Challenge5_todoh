@@ -10,7 +10,6 @@ import hmac
 import json
 import os
 import secrets
-from typing import cast
 import sys
 import threading
 import time
@@ -29,7 +28,7 @@ from eventmate.env import load_env
 from eventmate import consumption
 from eventmate.web import hosting, limits, observe
 from eventmate.workspaces import COOKIE, COOKIE_MAX_AGE, Workspace, WorkspaceError, WorkspaceRegistry
-from eventmate.llm import LLMClient, client_from_env
+from eventmate.llm import client_from_env
 from eventmate.service import EventMate
 from eventmate.wall.limits import WallLimits
 from eventmate.wall.routes import Wall
@@ -84,11 +83,17 @@ def create_app(
     if not shared:
         if em is None:
             load_env()  # keys first, so the model client below can see them
-            em = EventMate(run_id=f"web-{date.today():%Y%m%d}", llm=cast(LLMClient, client_from_env()))
+            em = EventMate(run_id=f"web-{date.today():%Y%m%d}", llm=client_from_env())
         assistant = assistant or Assistant.from_env(em)
         local = Workspace("local", em, assistant, voice or VoiceService(assistant, em), threading.RLock(), principal, secrets.token_urlsafe(32), date.today().isoformat())
 
-    transcriber = transcriber or Transcriber(engine_from_env(os.environ), (registry.root if registry is not None else cast(EventMate, em).store.root) / "voice" / "tmp")
+    if registry is not None:
+        data_root = registry.root
+    elif em is not None:
+        data_root = em.store.root
+    else:
+        raise RuntimeError("a web app needs a workspace registry or a single EventMate")
+    transcriber = transcriber or Transcriber(engine_from_env(os.environ), data_root / "voice" / "tmp")
 
     stream_slots = threading.BoundedSemaphore(VOICE_STREAMS_MAX)
 
@@ -147,7 +152,7 @@ def create_app(
     wall: Wall | None = None
 
     if os.environ.get("EVENTMATE_WALL", "on").lower() != "off":
-        wall_db = Path(os.environ.get("EVENTMATE_WALL_DB") or (registry.root if registry is not None else cast(Workspace, local).em.store.root.parent) / "wall_data" / "wall.sqlite3")
+        wall_db = Path(os.environ.get("EVENTMATE_WALL_DB") or (registry.root if registry is not None else data_root.parent) / "wall_data" / "wall.sqlite3")
         bearer_on_wall = bool(api_token) and os.environ.get("EVENTMATE_WALL_BEARER") == "1"  # off by default: a public wall is exempt from the bearer token
         wall = Wall(app, wall_store or WallStore(wall_db, WallConfig.from_env(os.environ)), wall_limits,
                     bearer_check=(lambda req: hmac.compare_digest(req.headers.get("Authorization", ""), f"Bearer {api_token}")) if bearer_on_wall else None,
@@ -346,13 +351,14 @@ def create_app(
         module.register(app, k)
 
 
-    if shared:
+    if registry is not None:
+        idle_registry: WorkspaceRegistry = registry
         poll_seconds = 0.0  # visitors have no mailbox or gateway; there is nothing to poll or send
 
         def sweep_round() -> int:
             """Empty workspaces nobody has used for a few hours go, so a flood of throwaway workspaces cannot hold every slot. One that holds any data is never removed here."""
             hours = max(1, int(os.environ.get("EVENTMATE_WS_EMPTY_IDLE_HOURS", "6") or 6))
-            return len(cast(WorkspaceRegistry, registry).sweep_idle_empty(hours * 3600))
+            return len(idle_registry.sweep_idle_empty(hours * 3600))
 
         app.config["WORKSPACE_SWEEP"] = sweep_round
         sweep_every = float(os.environ.get("EVENTMATE_WS_SWEEP_SECONDS", "600") or 600)
@@ -366,9 +372,9 @@ def create_app(
                         print(f"workspace sweep failed: {type(exc).__name__}", file=sys.stderr)
 
             threading.Thread(target=sweep_loop, name="eventmate-workspace-sweep", daemon=True).start()
-    elif poll_seconds is None:
+    elif local is not None and poll_seconds is None:
         raw = os.environ.get("EVENTMATE_POLL_SECONDS", "").strip()
-        ready = any(c.status().can_send or c.status().can_receive for c in cast(Workspace, local).em.conversations.channels.values())
+        ready = any(c.status().can_send or c.status().can_receive for c in local.em.conversations.channels.values())
         poll_seconds = float(raw) if raw.isdigit() else (60.0 if ready else 0.0)
 
     if poll_seconds > 0:

@@ -285,7 +285,9 @@ class ReplannerAgent:
         release = set(d.override_confirmed)
         req = parent.request
         if d.kind == DisruptionKind.VENDOR_CANCELLATION:
-            vendor_id = d.vendor_id or ""
+            vendor_id = d.vendor_id
+            if vendor_id is None:
+                raise _Rejected(ConstraintViolation(constraint="missing_vendor", detail="a vendor cancellation names no vendor", repair="give the id of the vendor that cancelled"))
             known = any(self.repo.get(c, vendor_id) for c in VendorCategory)
             if not known:
                 raise _Rejected(ConstraintViolation(constraint="unknown_vendor", detail=f"{d.vendor_id} is not in the database", repair="use a vendor id from the plan"))

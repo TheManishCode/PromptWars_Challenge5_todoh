@@ -521,8 +521,12 @@ class Vendor(_Provider):
 
     def cost_for(self, guest_count: int) -> int:
         if self.category == VendorCategory.CATERER:
-            return (self.price_per_plate or 0) * guest_count  # validated present for a caterer
-        return self.flat_fee or 0  # validated present for a photographer
+            if self.price_per_plate is None:
+                raise ValueError("caterer needs price_per_plate")  # the model validator guarantees it; a bypass is a bug, not a free quote
+            return self.price_per_plate * guest_count
+        if self.flat_fee is None:
+            raise ValueError("photographer needs flat_fee")
+        return self.flat_fee
 
 
 class VendorCandidate(_Model):

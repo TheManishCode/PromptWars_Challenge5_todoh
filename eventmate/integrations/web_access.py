@@ -65,7 +65,7 @@ def default_resolver(host: str) -> list[str]:
         infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
     except (socket.gaierror, UnicodeError, OSError):
         return []
-    return sorted({i[4][0] for i in infos})
+    return sorted({str(i[4][0]) for i in infos})
 
 
 _IPV4_COMPATIBLE = ipaddress.ip_network("::/96")
@@ -232,7 +232,7 @@ class SafeFetcher:
         max_redirects: int = MAX_REDIRECTS,
     ):
         self.transport, self.resolver, self.max_bytes, self.timeout, self.max_redirects = transport, resolver, max_bytes, timeout, max_redirects
-        self._robots: dict[str, object] = {}
+        self._robots: dict[str, bool | urllib.robotparser.RobotFileParser] = {}
 
     # ------------------------------------------------------------- internals
 
@@ -281,8 +281,8 @@ class SafeFetcher:
             else:
                 verdict = False  # the file exists but cannot be read: be conservative
             self._robots[origin] = verdict
-        verdict = self._robots[origin]
-        return verdict if isinstance(verdict, bool) else verdict.can_fetch(ROBOTS_TOKEN, url)
+        cached = self._robots[origin]
+        return cached if isinstance(cached, bool) else cached.can_fetch(ROBOTS_TOKEN, url)
 
     # ---------------------------------------------------------------- public
 

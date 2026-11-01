@@ -21,8 +21,8 @@ MAX_KEYS = 20_000
 _OVERFLOW = "~overflow"  # every key beyond MAX_KEYS shares this bucket, so memory stays bounded and the flood limits itself
 
 
-def _networks(spec: str) -> list[ipaddress._BaseNetwork]:
-    out = []
+def _networks(spec: str) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    out: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
     for item in (s.strip() for s in spec.split(",")):
         if not item:
             continue
@@ -33,7 +33,7 @@ def _networks(spec: str) -> list[ipaddress._BaseNetwork]:
     return out
 
 
-def trusted_proxies(environ=None) -> list[ipaddress._BaseNetwork]:
+def trusted_proxies(environ=None) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
     return _networks((os.environ if environ is None else environ).get("EVENTMATE_TRUSTED_PROXY", ""))
 
 
