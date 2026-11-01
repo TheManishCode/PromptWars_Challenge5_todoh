@@ -17,7 +17,7 @@ WORKDIR /app
 COPY requirements-runtime.lock pyproject.toml README.md ./
 COPY eventmate ./eventmate
 # The installer is not needed at run time and carries its own vendored copies of libraries (which scanners flag): it is removed once the install is done.
-RUN pip install --require-hashes -r requirements-runtime.lock && pip install --no-deps . && rm -rf /app/eventmate && pip uninstall -y pip setuptools wheel
+RUN pip install --retries 10 --timeout 60 --require-hashes -r requirements-runtime.lock && pip install --no-deps . && rm -rf /app/eventmate && pip uninstall -y pip setuptools wheel
 USER todoh
 VOLUME /data
 EXPOSE 8000
