@@ -44,3 +44,25 @@ Environment: Python 3.14.8, the real Werkzeug server on a free port with tempora
 - Not attacked yet: polyglot audio fed to a real decoder, the guest CSV beyond the existing tests, the transcriber process, JSONL stores with hostile content on disk, symlink planting in the store directories, timing side channels, TLS and proxy configuration (nothing here terminates TLS), the CLI argument surface, the vendored JavaScript. A browser-level XSS pass was not done in this pass.
 - The vendor-email "stop" and bounce matching is documented as forgeable (ADR-049); not re-tested.
 - Real model behaviour was not exercised; every model-facing test uses a scripted fake.
+
+## Pass 2: 2026-11-01, branch `feature/workspaces` (shared mode: per-visitor workspaces, delete, export, import)
+
+Environment: the real Werkzeug server on a free port with the workspace registry, raw HTTP over sockets for the cookie and flood attacks, `_audit/redteam/attack_ws.py`; no outside network, model or mailbox.
+
+### Findings fixed
+| # | Attack or check | Result before | Fix | Test |
+|---|---|---|---|---|
+| R-8 | Delete a plan, then scan the workspace for its id, its ledger note, guest names and amounts | The id and the assistant's masked question and answer text stayed in `decisions` and `assistant_traces` (the plan's files were gone) | `delete_plan` removes the plan's lines from every log file, keeps the other lines, and writes a tombstone with only `{kind, id, deleted_at}`; the log entry about the deletion no longer carries the id | `tests/test_retention.py`, `tests/test_transfer.py` |
+| R-9 | A plan the caller does not own, over the real server | Correct (404, nothing leaked), but the plan-miss body was `{"error":"not found"}` while the workspace-level miss carried `code: not_found`: two shapes for one answer | one body for every miss | `tests/test_limits.py`, `tests/test_two_workspaces.py` |
+| R-10 | A flood of `GET /api/session` with no cookie, as an attacker rotating addresses would send, to fill every workspace slot | The cap held (503), but nothing ever freed the slots: empty throwaway workspaces stayed until the owner ran a command | the app sweeps empty workspaces idle for 6 hours (`EVENTMATE_WS_EMPTY_IDLE_HOURS`) every 10 minutes; one holding any data is never swept | `tests/test_workspaces.py` |
+| R-11 | The two-workspace sweep itself, made to fail on purpose by sharing one `EventMate` between workspaces | It failed on 33 routes, so it does detect broken isolation | none needed; kept as the evidence the sweep means something | the mutant is described in ADR-062 |
+
+### Defended
+Cross-workspace reads, writes, deletes and approvals over HTTP (A's plan, ledger, state; B's own CSRF value for A's routes: 403); hostile cookies (empty, 100 KB, 2,000 cookies, duplicates, CR/LF, Unicode, quotes, SQL text, path text, NUL): never a 5xx, never a new workspace, no cookie set on a miss; a workspace deleted while four threads use it (only 200 and 404, never 5xx); a credential rotated while four threads use it (only 200 and 404); a zip bomb, a truncated zip and a 25 MB upload through the real server (422, 422, 413); the import grammar tests (30 hostile archive shapes, nothing written for any of them, see `tests/test_transfer.py`).
+
+### Not fixed, honest gaps
+- **Slot pinning by a patient attacker.** Each throwaway workspace that also saves one tiny plan is never swept, and 60 new workspaces an hour in all (5 per address) fill 1,000 slots in about 17 hours. The limits slow this and `workspaces_total` on the owner status route shows it, but nothing stops it. Real fixes are owner decisions (idle expiry of workspaces that hold data, which needs a recovery route first; a proof of work or other check before a workspace is made; a higher cap).
+- **Cookie planting.** A site on a sibling name or a network attacker on plain HTTP could plant their own credential in a victim's browser, so the victim's data lands in the attacker's workspace. The cookie is `Secure`, `SameSite=Strict` and host-only, so only an attacker who controls a response over HTTPS for this host, or the browser, can do it; HSTS from the proxy matters (docs/HOSTING.md). Not tested.
+- **No recovery, no device sessions.** Clearing the browser loses the workspace unless the person exported first.
+- **Memory-only state** (pending proposals, voice sessions, the answer cache) is lost when a workspace is dropped from the 128-entry memory cache; durable approvals are the durability phase.
+- **The wall, a real browser, a real proxy, a real host and load** were not part of this pass.

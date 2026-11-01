@@ -21,7 +21,7 @@ from typing import Callable, Dict, List, Optional
 
 from eventmate.guestlist import GuestListStore, GuestPreview, check_against, parse_guest_csv, totals_of
 from eventmate.voice.notes import VoiceNoteStore
-from eventmate.retention import PlanBusy, delete_plan_files, purge_old_logs, report
+from eventmate.retention import PlanBusy, delete_plan_files, purge_old_logs, report, scrub_plan_from_logs, write_tombstone
 from eventmate.agents.budget import BudgetAgent, BudgetPolicy
 from eventmate.agents.explainer import ExplainerAgent, Explanation
 from eventmate.agents.guest import GuestAgent, GuestRepository
@@ -255,9 +255,11 @@ class EventMate:
         files = delete_plan_files(self.store.root, plan_id) + self.voice_notes.delete_plan(plan_id)
         jobs = self.jobs.store.delete_plan(plan_id) if (self.store.root / "jobs.db").exists() else 0
         versions = self.store.delete(plan_id)  # last: until it is gone the plan still lists, so a failed delete can simply be run again
+        lines = scrub_plan_from_logs(self.logs.decisions.log_dir, plan_id)  # its questions, answers and decisions go with it; only the tombstone keeps the id
+        write_tombstone(self.store.root / "tombstones.jsonl", "plan", plan_id)
         self.logs.decisions.log(
-            request_id="retention", agent=AgentName.MANAGER, decision_type=DecisionType.ASSESSMENT, summary=f"Plan {plan_id} deleted at the user's request",
-            justification=f"removed {versions} plan version(s), {files} message and ledger file(s), {jobs} job(s)", confidence=1.0, source="rule:retention",
+            request_id="retention", agent=AgentName.MANAGER, decision_type=DecisionType.ASSESSMENT, summary="A plan was deleted at the user's request",
+            justification=f"removed {versions} plan version(s), {files} message and ledger file(s), {jobs} job(s), {lines} log line(s); the tombstone records which plan and when", confidence=1.0, source="rule:retention",
         )
         return report(versions, files, jobs)
 

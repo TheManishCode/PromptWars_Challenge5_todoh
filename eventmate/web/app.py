@@ -26,12 +26,12 @@ import secrets
 import sys
 import threading
 import time
-from collections import defaultdict, deque
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Deque, Dict, List, Literal, Optional
+from typing import Callable, Dict, List, Literal, Optional
 
 from flask import Flask, Response, abort, g, jsonify, request
+from werkzeug.local import LocalProxy
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 
 from eventmate.planning import intake
@@ -52,7 +52,10 @@ from eventmate.agents.vendor import DataIntegrityError
 from eventmate.env import load_env
 from eventmate.integrations.explore import ExploreError, ExploreNotConfigured, route as explore_route
 from eventmate import consumption
-from eventmate.llm import LLMError, client_from_env
+from eventmate import transfer
+from eventmate.web import hosting, limits
+from eventmate.workspaces import COOKIE, COOKIE_MAX_AGE, Workspace, WorkspaceError, WorkspaceRegistry
+from eventmate.llm import METER, LLMError, client_from_env
 from eventmate.plan_store import PlanIntegrityError
 from eventmate.schemas import MAX_BUDGET_INR, CommunityDetails, DealQuery, TripRequest, MAX_MULTI_CITY_LEGS, Disruption, HiddenCost, LedgerKind, ObservationSource, TradeoffOption, VendorCategory
 from eventmate.integrations.discovery import DiscoveryError
@@ -89,6 +92,12 @@ LONG_CACHE = frozenset({"avatar.glb", "model-viewer.min.js", "cabinet.glb", "thr
 VENDOR_FILES = frozenset({"model-viewer.min.js", "three.min.js", "CopyShader.js", "LuminosityHighPassShader.js", "EffectComposer.js", "RenderPass.js", "ShaderPass.js", "MaskPass.js", "UnrealBloomPass.js", "GLTFLoader.js"})
 GZIP_MIN = 1024  # below this the header overhead outweighs the saving
 _gzip_cache: Dict[tuple, bytes] = {}  # (name, mtime_ns) -> compressed bytes; the file set is fixed and small
+WORKSPACE_EXEMPT = ("/api/owner/status", "/api/wall/")  # /api routes with their own authentication: no workspace is looked up or made for them
+# POST routes that send, or let something send later, through the owner's mailbox or gateway; refused for every guest workspace
+SENDING_ROUTES = re.compile(
+    r"/api/plans/[A-Za-z0-9_-]{1,64}/outreach/[A-Za-z0-9_-]{1,64}/(?:approve|followup)|/api/plans/[A-Za-z0-9_-]{1,64}/autoreply|/api/inbox/poll"
+    r"|/api/jobs/tick|/api/jobs/[A-Za-z0-9_-]{1,64}/approve-requests|/api/jobs/[A-Za-z0-9_-]{1,64}/items/[A-Za-z0-9_-]{1,64}/approve-nudge|/api/notify/(?:propose|confirm)"
+)
 LOOPBACK = {"127.0.0.1", "localhost", "[::1]", "::1"}
 CSP = (
     f"default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' '{VIEWER_STYLE_HASH}'; img-src 'self' data: blob:; "
@@ -104,6 +113,7 @@ UPLOAD_ROUTES = (
     (re.compile(r"/api/plans/[A-Za-z0-9_-]{1,64}/guests/preview"), GUEST_UPLOAD_LIMIT),
     (re.compile(r"/api/voice/transcribe"), AUDIO_UPLOAD_LIMIT),
     (re.compile(r"/api/plans/[A-Za-z0-9_-]{1,64}/voice-notes"), AUDIO_UPLOAD_LIMIT),
+    (re.compile(r"/api/workspace/import"), transfer.MAX_ARCHIVE + 256 * 1024),  # an archive plus the multipart wrapper; the importer enforces the real 20 MB
 )
 log = logging.getLogger("eventmate.web")
 
@@ -401,27 +411,48 @@ def create_app(
     poll_seconds: Optional[float] = None,
     voice: Optional[VoiceService] = None,
     transcriber: Optional[Transcriber] = None,
+    registry: Optional[WorkspaceRegistry] = None,
     wall_store: Optional[WallStore] = None,
     wall_limits: Optional[WallLimits] = None,
 ) -> Flask:
+    """Local mode (no ``registry``): one workspace, as before. Shared mode: ``registry`` gives every visitor a workspace of their own, found from a cookie."""
     app = Flask(__name__, static_folder=None)
     app.config["MAX_CONTENT_LENGTH"] = 64 * 1024
-    if em is None:
-        load_env()  # keys first, so the model client below can see them
-        em = EventMate(run_id=f"web-{date.today():%Y%m%d}", llm=client_from_env())
-    lock = threading.RLock()
-    assistant = assistant or Assistant.from_env(em)
-    voice_svc = voice or VoiceService(assistant, em)
-    transcriber = transcriber or Transcriber(engine_from_env(os.environ), em.store.root / "voice" / "tmp")
+    shared = registry is not None
+    local: Optional[Workspace] = None
+    if not shared:
+        if em is None:
+            load_env()  # keys first, so the model client below can see them
+            em = EventMate(run_id=f"web-{date.today():%Y%m%d}", llm=client_from_env())
+        assistant = assistant or Assistant.from_env(em)
+        local = Workspace("local", em, assistant, voice or VoiceService(assistant, em), threading.RLock(), principal, secrets.token_urlsafe(32), date.today().isoformat())
+    transcriber = transcriber or Transcriber(engine_from_env(os.environ), (registry.root if shared else em.store.root) / "voice" / "tmp")
     stream_slots = threading.BoundedSemaphore(VOICE_STREAMS_MAX)
-    csrf_token = secrets.token_urlsafe(32)
+    # What the routes below call ``em``, ``assistant``, ``voice_svc`` and ``lock`` is whatever belongs to the workspace of the request being served.
+    em = LocalProxy(lambda: g.ws.em)
+    assistant = LocalProxy(lambda: g.ws.assistant)
+    voice_svc = LocalProxy(lambda: g.ws.voice)
+    lock = LocalProxy(lambda: g.ws.lock)
+
+    def P() -> Principal:
+        """The asker, as a real object (never a proxy: a voice session keeps what it is given)."""
+        return g.ws.principal
     hosts = set(allowed_hosts) if allowed_hosts else set(LOOPBACK)
-    writes: Dict[str, Deque[float]] = defaultdict(deque)
+    proxies = limits.trusted_proxies()  # forwarded headers are read only from these (EVENTMATE_TRUSTED_PROXY); otherwise they are ignored
+    address_limit = limits.WindowLimiter(rate_limit_per_minute)  # writes per minute per caller address
+    workspace_limit = limits.WindowLimiter(rate_limit_per_minute * 2)  # and per workspace, so many addresses cannot add up to more than one visitor's share
+    heavy = limits.FairShare(HEAVY_MAX, HEAVY_MAX if hosting.mode(os.environ) == "local" else max(1, HEAVY_MAX // 2))  # shared mode: one workspace holds at most half of the slow-search slots; the lone local user may use them all
+    lookup_limit = limits.WindowLimiter(int(os.environ.get("EVENTMATE_WS_LOOKUPS_PER_HOUR", "60") or 60), 3600.0)  # outside lookups (places, search, weather, maps) per workspace per hour, shared mode only
+    started_at = time.time()
+    poll_state: Dict[str, object] = {"last": None, "failures": 0}  # for the owner status route: when the last background round finished, and how many failed
+
+    def caller() -> str:
+        return limits.client_address(request.remote_addr, request.headers.get("X-Forwarded-For"), proxies)
 
     # The wall: its own SQLite file next to (not inside) the plan directory, so deleting a plan can never touch it. EVENTMATE_WALL=off removes the routes.
     wall: Optional[Wall] = None
     if os.environ.get("EVENTMATE_WALL", "on").lower() != "off":
-        wall_db = Path(os.environ.get("EVENTMATE_WALL_DB") or em.store.root.parent / "wall_data" / "wall.sqlite3")
+        wall_db = Path(os.environ.get("EVENTMATE_WALL_DB") or (registry.root if shared else local.em.store.root.parent) / "wall_data" / "wall.sqlite3")
         bearer_on_wall = bool(api_token) and os.environ.get("EVENTMATE_WALL_BEARER") == "1"  # off by default: a public wall is exempt from the bearer token
         wall = Wall(app, wall_store or WallStore(wall_db, WallConfig.from_env(os.environ)), wall_limits,
                     bearer_check=(lambda req: hmac.compare_digest(req.headers.get("Authorization", ""), f"Bearer {api_token}")) if bearer_on_wall else None)
@@ -430,14 +461,31 @@ def create_app(
 
     # GET routes that spend a paid or rate-limited quota also need the CSRF header: a page on another site can fire a plain GET at a local
     # server (an image tag is enough) but cannot add a custom header without a CORS preflight that this server never grants.
+    csrf_gets = {"/api/workspace/export"}  # spends no quota, but hands over everything in the workspace, so a page on another site must not be able to fetch it
     quota_gets = {"/api/deals", "/api/explore", "/api/travel/flights", "/api/travel/multi-city", "/api/travel/trip", "/api/discover/venues", "/api/weather", "/api/places"}
 
     def spends_quota(path: str) -> bool:
         return path in quota_gets or (path.startswith("/api/plans/") and path.endswith(("/weather", "/weather-advice")))
 
-    @app.before_request
-    def bind_workspace():
-        g.workspace_token = consumption.bind(principal.user_id)  # model calls made for this request are charged to this workspace (Phase 4.7)
+    def resolve_workspace():
+        """Find the workspace of this request. Local mode has one. Shared mode reads the cookie; a missing, malformed, unknown or revoked credential gets the
+        same generic 404 as any miss and creates nothing, except on ``GET /api/session``, which makes a new empty workspace (bounded: see WorkspaceRegistry)."""
+        g.ws = local
+        if shared:
+            g.ws = None
+            if not request.path.startswith("/api/") or request.path.startswith(WORKSPACE_EXEMPT):
+                return None  # the page and its files, and routes that have their own authentication
+            g.ws = registry.open(request.cookies.get(COOKIE))
+            if g.ws is None:
+                if not (request.method == "GET" and request.path == "/api/session"):
+                    return _err(404, "not found", code="not_found")
+                try:
+                    g.ws, g.new_credential = registry.create(caller())
+                except WorkspaceError as exc:
+                    return _err(exc.status, str(exc), code=exc.code)
+        if g.ws is not None:
+            g.workspace_token = consumption.bind(g.ws.id)  # model calls made for this request are charged to this workspace (Phase 4.7)
+        return None
 
     @app.teardown_request
     def unbind_workspace(_exc):
@@ -459,11 +507,17 @@ def create_app(
                 return _err(401, "authentication required")
         if wall_path:
             return wall.unknown()  # an unlisted wall path gets no exemption: the bearer check above applied, and the answer is a plain 404
-        if request.method in ("GET", "HEAD") and spends_quota(request.path):
+        refused = resolve_workspace()
+        if refused is not None:
+            return refused
+        if shared and request.method == "POST" and SENDING_ROUTES.fullmatch(request.path):
+            return _err(403, "sending is not enabled for guest workspaces", code="sending_disabled")  # also no channel exists in a guest workspace: two layers
+        csrf_token = g.ws.csrf if g.ws is not None else None  # a route outside the workspaces (its own authentication) has no workspace CSRF value
+        if csrf_token is not None and request.method in ("GET", "HEAD") and (spends_quota(request.path) or request.path in csrf_gets):
             if not hmac.compare_digest(request.headers.get("X-EventMate-CSRF", ""), csrf_token):
                 return _err(403, "missing or invalid CSRF token")
         if request.method not in ("GET", "HEAD", "OPTIONS"):
-            if not hmac.compare_digest(request.headers.get("X-EventMate-CSRF", ""), csrf_token):
+            if csrf_token is not None and not hmac.compare_digest(request.headers.get("X-EventMate-CSRF", ""), csrf_token):
                 return _err(403, "missing or invalid CSRF token")
             origin = request.headers.get("Origin")
             if origin and origin.split("://", 1)[-1] != request.host:
@@ -471,32 +525,40 @@ def create_app(
             upload = next((limit for rx, limit in UPLOAD_ROUTES if request.method == "POST" and rx.fullmatch(request.path)), None)
             if upload:
                 request.max_content_length = upload
+                g.upload_limit = upload
+                if request.content_length is None:  # an upload must say how big it is, so the cap is checked before a byte is read (a chunked body is refused)
+                    return _err(411, "uploads must send a Content-Length", code="length_required")
             bodyless_delete = request.method == "DELETE" and not request.content_length  # a DELETE that carries nothing has nothing to type-check
             if request.mimetype != "application/json" and not bodyless_delete and not (upload and request.mimetype == "multipart/form-data"):
-                return _err(415, "JSON body required")
-            now, q = time.monotonic(), writes[request.remote_addr or "?"]
-            while q and now - q[0] > 60:
-                q.popleft()
-            if len(q) >= rate_limit_per_minute:
-                return _err(429, "too many requests")
-            q.append(now)
+                return _err(415, "JSON body required", **({"code": "unsupported_type"} if upload else {}))
+            if not address_limit.allow(caller()) or not workspace_limit.allow(consumption.current_workspace()):
+                return _err(429, "too many requests", code="rate_limited")
+            if shared and g.ws is not None and request.method in ("POST", "PUT", "PATCH"):
+                try:
+                    registry.check_write(g.ws.id, creating_plan=request.method == "POST" and request.path == "/api/plans")
+                except WorkspaceError as exc:
+                    return _err(exc.status, str(exc), code=exc.code)
+        if shared and g.ws is not None and spends_quota(request.path) and not lookup_limit.allow(g.ws.id):
+            return _err(429, "this workspace has used its lookups for the hour (the outside services behind them have free limits); try again later", code="lookup_quota")  # never a silent switch to another source
         return None
 
-    # Routes that wait on the network are limited to a few at a time, so a burst cannot pin every worker thread (ADR-037).
-    heavy = threading.BoundedSemaphore(HEAVY_MAX)
-
+    # Routes that wait on the network are limited to a few at a time, so a burst cannot pin every worker thread (ADR-037), and one workspace holds only part of them.
     @app.before_request
     def limit_heavy():
         if spends_quota(request.path):
-            if not heavy.acquire(blocking=False):
-                return _err(429, "the server is busy with other searches; try again in a moment")
-            g.heavy_permit = True
+            workspace = consumption.current_workspace()
+            why = heavy.acquire(workspace)
+            if why:
+                return _err(429, "the server is busy with other searches; try again in a moment" if why == "busy" else "this workspace already has its share of searches running; wait for one to finish",
+                            code="busy" if why == "busy" else "workspace_share")
+            g.heavy_permit = workspace
         return None
 
     @app.teardown_request
     def release_heavy(_exc):
-        if g.pop("heavy_permit", False):
-            heavy.release()
+        workspace = g.pop("heavy_permit", None)
+        if workspace is not None:
+            heavy.release(workspace)
 
     @app.after_request
     def headers(resp: Response) -> Response:
@@ -506,6 +568,11 @@ def create_app(
         resp.headers["X-Frame-Options"] = "DENY"
         if request.path.startswith("/api/") and not request.path.startswith("/api/wall/"):  # the wall sets its own: public reads are cacheable, private ones no-store
             resp.headers["Cache-Control"] = "no-store"
+        credential = g.get("new_credential") or (request.cookies.get(COOKIE) if shared and g.get("ws") is not None and request.path == "/api/session" else None)
+        if credential:  # a new workspace's cookie, or the renewal of the one the visitor already holds (each page load pushes the year forward)
+            resp.set_cookie(COOKIE, credential, max_age=COOKIE_MAX_AGE, httponly=True, samesite="Strict", secure=True, path="/")  # no Domain: the cookie belongs to this host only
+        if hosting.is_https(request.scheme, request.remote_addr, request.headers.get("X-Forwarded-Proto"), proxies):
+            resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"  # only over TLS, and only believed from a trusted proxy
         return resp
 
     def _err(status: int, message: str, **extra):
@@ -517,11 +584,11 @@ def create_app(
 
     @app.errorhandler(TranscribeError)
     def _transcribe_error(exc):
-        return _err(exc.status, str(exc)[:300])
+        return _err(exc.status, str(exc)[:300], code=exc.code)
 
     @app.errorhandler(voice_audio.AudioRejected)
     def _audio_rejected(exc):
-        return _err(exc.status, str(exc)[:300])
+        return _err(exc.status, str(exc)[:300], code={413: "audio_too_large", 415: "bad_audio_type"}.get(exc.status, "bad_audio"))
 
     @app.errorhandler(NotesDisabled)
     def _notes_disabled(exc):
@@ -529,7 +596,7 @@ def create_app(
 
     @app.errorhandler(GuestListTooLarge)
     def _guests_too_large(exc):
-        return _err(413, str(exc)[:200])
+        return _err(413, str(exc)[:200], code="too_large", limit_bytes=MAX_GUEST_BYTES, scope="payload")
 
     @app.errorhandler(StalePreview)
     def _stale_preview(exc):
@@ -602,7 +669,7 @@ def create_app(
 
     @app.errorhandler(FileNotFoundError)
     def _nf(exc):
-        return _err(404, "not found")
+        return _err(404, "not found", code="not_found")
 
     @app.errorhandler(PlanIntegrityError)
     def _integrity(exc):
@@ -611,7 +678,8 @@ def create_app(
 
     @app.errorhandler(413)
     def _too_big(exc):
-        return _err(413, "request too large")
+        limit = g.get("upload_limit") or 64 * 1024
+        return _err(413, "request too large", code="too_large", limit_bytes=limit, scope="envelope")  # the whole body, as opposed to the file inside it
 
     @app.errorhandler(405)
     def _method(exc):
@@ -619,7 +687,7 @@ def create_app(
 
     @app.errorhandler(404)
     def _404(exc):
-        return _err(404, "not found")
+        return _err(404, "not found", code="not_found")  # the one body every miss gets, so a hidden route cannot be told from an unknown one
 
     @app.errorhandler(NeedsAcknowledgement)
     def _needs_ack(exc):
@@ -691,7 +759,72 @@ def create_app(
 
     @app.get("/api/session")
     def session():
-        return jsonify({"csrf": csrf_token, "today": today_fn().isoformat(), "roles": [r.value for r in principal.roles], "guest_lists": list(em.manager.guest.repo.list_ids())})
+        return jsonify({"csrf": g.ws.csrf, "today": today_fn().isoformat(), "roles": [r.value for r in P().roles], "guest_lists": list(em.manager.guest.repo.list_ids()),
+                        "workspace": {"id": g.ws.id, "created": g.ws.created, "mode": "shared" if shared else "local"}})
+
+    class WorkspaceDeleteBody(_Strict):
+        confirm: Literal["delete"]
+
+    @app.errorhandler(transfer.TransferError)
+    def _transfer_error(exc):
+        return _err(exc.status, str(exc)[:300], code=exc.code)
+
+    @app.get("/api/workspace/export")
+    def workspace_export():
+        """Everything in this workspace as one zip (docs/WORKSPACES.md). Needs the CSRF header; spends no quota."""
+        with lock:
+            data = transfer.export_workspace(em)
+        return Response(data, mimetype="application/zip", headers={"Content-Disposition": 'attachment; filename="todoh-export.zip"'})
+
+    @app.post("/api/workspace/import")
+    def workspace_import():
+        """Put an export archive into this workspace. The archive is hostile input; imported outreach and jobs are history only and can never send."""
+        f = request.files.get("archive") if request.mimetype == "multipart/form-data" else None
+        if f is None or len(request.files) != 1:
+            raise ValueError("send exactly one file, in the field named archive")
+        data = f.stream.read(transfer.MAX_ARCHIVE + 1)
+        if shared:
+            try:
+                registry.check_write(g.ws.id)
+            except WorkspaceError as exc:
+                return _err(exc.status, str(exc), code=exc.code)
+        with lock:
+            report = transfer.import_archive(data, em)
+        return jsonify(report), 201
+
+    @app.delete("/api/workspace")
+    def workspace_delete():
+        """Delete this whole workspace (shared mode): the credential, every plan and everything under it. The cookie is cleared. Needs ``{"confirm": "delete"}``."""
+        if not shared:
+            return _err(404, "not found", code="not_found")  # on a local install the data is the person's own files; deleting them is not an API call
+        body(WorkspaceDeleteBody)
+        workspace_id = g.ws.id
+        with lock:
+            registry.delete(workspace_id)
+        resp = jsonify({"deleted": True})
+        resp.delete_cookie(COOKIE, path="/", secure=True, httponly=True, samesite="Strict")
+        return resp
+
+    @app.get("/healthz")
+    def healthz():
+        return jsonify({"ok": True})  # nothing else: no counts, no names, no version
+
+    @app.get("/api/owner/status")
+    def owner_status():
+        """Counts only, for the person who runs the server. Needs ``EVENTMATE_OWNER_TOKEN`` (at least 16 characters) in the ``X-EventMate-Owner`` header; a
+        workspace cookie or the API token is not enough. With no token set, or a wrong one, the answer is the same 404 as any unknown route."""
+        token = os.environ.get("EVENTMATE_OWNER_TOKEN", "")
+        if len(token) < 16 or not hmac.compare_digest(request.headers.get("X-EventMate-Owner", ""), token):
+            return _err(404, "not found", code="not_found")
+        pending = None  # a count across every workspace would mean opening each one's job database: not done on a status route
+        if not shared:
+            pending = sum(1 for j in (local.em.jobs.store.list() if (local.em.store.root / "jobs.db").exists() else []) if j.status not in ("done", "expired", "cancelled"))
+        used, total = heavy.status()
+        return jsonify({
+            "uptime_s": int(time.time() - started_at), "workspaces_total": registry.directory.count() if shared else 1, "workspaces_active_last_minute": workspace_limit.tracked(), "pending_jobs": pending,
+            "searches_in_flight": used, "searches_capacity": total, "last_poll": poll_state["last"], "poll_failures": poll_state["failures"],
+            "model_calls": {**METER.status(), **consumption.BUDGETS.status()},
+        })
 
     # --------------------------------------------------------------- api
 
@@ -726,25 +859,25 @@ def create_app(
     @app.post("/api/assistant/ask")
     def assistant_ask():
         b = body(AskBody)
-        return out(assistant.ask(b.question, b.plan_id, principal))  # no global lock: a slow model must not stall the app
+        return out(assistant.ask(b.question, b.plan_id, P()))  # no global lock: a slow model must not stall the app
 
     @app.get("/api/assistant/session")
     def assistant_session():
         """How much conversation the assistant is holding for you on this plan (your own only)."""
         plan_id = pid(request.args.get("plan_id", ""))
-        return jsonify({"plan_id": plan_id, "turns": assistant.sessions.turns(plan_id, principal.user_id)})
+        return jsonify({"plan_id": plan_id, "turns": assistant.sessions.turns(plan_id, P().user_id)})
 
     @app.post("/api/assistant/session/clear")
     def assistant_session_clear():
         b = body(SessionClearBody)
-        assistant.sessions.clear(b.plan_id, principal.user_id)
+        assistant.sessions.clear(b.plan_id, P().user_id)
         return jsonify({"plan_id": b.plan_id, "turns": 0})
 
     @app.get("/api/assistant/approvals")
     def assistant_approvals():
         plan_id = pid(request.args.get("plan_id", ""))
         em.store.latest(plan_id)
-        return jsonify([json.loads(p.model_dump_json()) for p in assistant.queue.pending(plan_id)] if principal.can(Perm.APPROVE) else [])
+        return jsonify([json.loads(p.model_dump_json()) for p in assistant.queue.pending(plan_id)] if P().can(Perm.APPROVE) else [])
 
     @app.post("/api/assistant/approvals/<proposal_id>/<verdict>")
     def assistant_decide(proposal_id, verdict):
@@ -752,19 +885,19 @@ def create_app(
             abort(404)
         body(EmptyBody)
         with lock:
-            p = assistant.decide(proposal_id, principal, verdict == "approve")
+            p = assistant.decide(proposal_id, P(), verdict == "approve")
         return out(p)
 
     @app.post("/api/assistant/traces/<trace_id>/feedback")
     def assistant_feedback(trace_id):
         b = body(FeedbackBody)
-        assistant.give_feedback(pid(trace_id), principal, b.value, b.comment)
+        assistant.give_feedback(pid(trace_id), P(), b.value, b.comment)
         return jsonify({"ok": True})
 
     @app.get("/api/assistant/annotations")
     def assistant_annotations():
         plan_id = pid(request.args.get("plan_id", ""))
-        if not principal.can(Perm.APPROVE):
+        if not P().can(Perm.APPROVE):
             return jsonify([])
         plan = em.store.latest(plan_id)
         state = f"{plan.version}:{len(em.ledger_entries(plan_id))}"
@@ -773,13 +906,13 @@ def create_app(
     @app.post("/api/assistant/annotations")
     def assistant_annotate():
         b = body(ApproveAnswerBody)
-        a = assistant.approve_answer(b.trace_id, principal, b.answer)
+        a = assistant.approve_answer(b.trace_id, P(), b.answer)
         return Response(a.model_dump_json(), 201, mimetype="application/json")
 
     @app.post("/api/assistant/annotations/<annotation_id>/delete")
     def assistant_unannotate(annotation_id):
         b = body(PlanRefBody)
-        if not principal.can(Perm.APPROVE):
+        if not P().can(Perm.APPROVE):
             return _err(403, "you are not allowed to remove approved answers")
         if not assistant.annotations.remove(pid(annotation_id), b.plan_id):
             abort(404)
@@ -787,7 +920,7 @@ def create_app(
 
     @app.get("/api/assistant/traces/<trace_id>")
     def assistant_trace(trace_id):
-        if not principal.can(Perm.TRACE_READ):
+        if not P().can(Perm.TRACE_READ):
             return _err(403, "you are not allowed to read traces")
         t = assistant.traces.find(pid(trace_id))
         if t is None:
@@ -1092,7 +1225,7 @@ def create_app(
         with lock:
             result = em.ideas.generate(em.store.latest(plan_id), b.preferences)
             for pref in b.preferences:  # a preference typed on the form is a user-stated fact, with its source
-                assistant.sessions.add_fact(plan_id, principal.user_id, pref, "form:ideas.preferences")
+                assistant.sessions.add_fact(plan_id, P().user_id, pref, "form:ideas.preferences")
         return out(result, 201)
 
     @app.post("/api/plans/<plan_id>/ideas/<idea_id>/pin")
@@ -1390,19 +1523,19 @@ def create_app(
     @app.post("/api/voice/sessions")
     def voice_session_open():
         b = body(VoiceSessionBody)
-        return jsonify(voice_svc.create_session(principal, b.plan_id)), 201
+        return jsonify(voice_svc.create_session(P(), b.plan_id)), 201
 
     @app.delete("/api/voice/sessions/<session_id>")
     def voice_session_close(session_id):
-        voice_svc.end_session(principal, session_id if VOICE_ID.fullmatch(session_id) else "")  # no body: the id in the path is all it needs
+        voice_svc.end_session(P(), session_id if VOICE_ID.fullmatch(session_id) else "")  # no body: the id in the path is all it needs
         return jsonify({"ended": True})
 
     @app.post("/api/voice/turns")
     def voice_turn():
         """One transcript through the same assistant pipeline as typed chat. Server-sent events when asked for (Accept: text/event-stream), else one JSON body."""
         b = body(VoiceTurnBody)
-        turn = voice_svc.start_turn(principal, b.session_id, b.turn_id, b.generation, b.text, b.input_mode, b.confidence, b.language)
-        events = voice_svc.run_turn(principal, b.session_id, turn)
+        turn = voice_svc.start_turn(P(), b.session_id, b.turn_id, b.generation, b.text, b.input_mode, b.confidence, b.language)
+        events = voice_svc.run_turn(P(), b.session_id, turn)
         if "text/event-stream" not in request.headers.get("Accept", ""):
             got = list(events)
             by = {e["event"]: e["data"] for e in got if e["event"] != "sentence"}
@@ -1426,7 +1559,7 @@ def create_app(
     def voice_turn_cancel(turn_id):
         """The user spoke over the answer or walked away. ``playback_chars`` is how much speech was played: an estimate, not proof of what was heard."""
         b = body(VoiceCancelBody)
-        return jsonify(voice_svc.cancel_turn(principal, b.session_id, turn_id if VOICE_ID.fullmatch(turn_id) else "", b.generation, b.playback_chars))
+        return jsonify(voice_svc.cancel_turn(P(), b.session_id, turn_id if VOICE_ID.fullmatch(turn_id) else "", b.generation, b.playback_chars))
 
     @app.post("/api/plans/<plan_id>/voice-notes")
     def voice_note_save(plan_id):
@@ -1728,18 +1861,40 @@ def create_app(
         return out(res, 200 if res.status == "replanned" else (409 if res.status == "needs_decision" else 422))
 
     # The agent's background loop: send what is approved and read replies. Off unless a channel is set up (or EVENTMATE_POLL_SECONDS says otherwise).
-    if poll_seconds is None:
+    if shared:
+        poll_seconds = 0.0  # visitors have no mailbox or gateway; there is nothing to poll or send
+
+        def sweep_round() -> int:
+            """Empty workspaces nobody has used for a few hours go, so a flood of throwaway workspaces cannot hold every slot. One that holds any data is never removed here."""
+            hours = max(1, int(os.environ.get("EVENTMATE_WS_EMPTY_IDLE_HOURS", "6") or 6))
+            return len(registry.sweep_idle_empty(hours * 3600))
+
+        app.config["WORKSPACE_SWEEP"] = sweep_round
+        sweep_every = float(os.environ.get("EVENTMATE_WS_SWEEP_SECONDS", "600") or 600)
+        if sweep_every > 0:
+            def sweep_loop():
+                while True:
+                    time.sleep(sweep_every)
+                    try:
+                        sweep_round()
+                    except Exception as exc:  # one failed sweep must not end the loop
+                        print(f"workspace sweep failed: {type(exc).__name__}", file=sys.stderr)
+
+            threading.Thread(target=sweep_loop, name="eventmate-workspace-sweep", daemon=True).start()
+    elif poll_seconds is None:
         raw = os.environ.get("EVENTMATE_POLL_SECONDS", "").strip()
-        ready = any(c.status().can_send or c.status().can_receive for c in em.conversations.channels.values())
+        ready = any(c.status().can_send or c.status().can_receive for c in local.em.conversations.channels.values())
         poll_seconds = float(raw) if raw.isdigit() else (60.0 if ready else 0.0)
     if poll_seconds > 0:
         stop = threading.Event()
 
         def poll_round():
             try:
-                with lock:
-                    em.background_round()
+                with local.lock:
+                    local.em.background_round()
+                poll_state["last"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
             except Exception as exc:  # one failed round must not end the agent; the next round retries
+                poll_state["failures"] += 1
                 print(f"conversation poll failed: {type(exc).__name__}", file=sys.stderr)
 
         def loop():

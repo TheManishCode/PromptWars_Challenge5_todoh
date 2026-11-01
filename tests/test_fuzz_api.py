@@ -103,7 +103,7 @@ def fill(rule, pid, r):
 
 
 def check(resp, label):
-    text = resp.get_data(as_text=True)
+    text = resp.get_data().decode("utf-8", "replace")  # a route may legitimately answer with a zip (the workspace export)
     assert resp.status_code < 500 or resp.status_code in ALLOWED_5XX, f"{label} -> {resp.status_code}: {text[:200]}"
     assert "Traceback" not in text and WX_KEY not in text, f"{label} leaked internals: {text[:200]}"
 
