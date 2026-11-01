@@ -104,6 +104,41 @@ def test_approving_twice_sends_once(em, pid, chans):
     assert again.status == "sent" and len(chans["email"].sent) == 1
 
 
+def _race(workers):
+    import threading
+
+    gate, results = threading.Barrier(len(workers)), []
+
+    def run(fn):
+        gate.wait()
+        try:
+            results.append(("ok", fn()))
+        except Exception as exc:  # a refused racer is the expected outcome for all but one
+            results.append(("refused", type(exc).__name__))
+
+    threads = [threading.Thread(target=run, args=(w,)) for w in workers]
+    [t.start() for t in threads]
+    [t.join(30) for t in threads]
+    return results
+
+
+def test_twelve_simultaneous_approvals_send_exactly_once(em, pid, chans):
+    """Verifier T6: the compare-and-set on the draft's state lets one racer through and refuses the rest."""
+    d = draft(em, pid)
+    results = _race([lambda: em.approve_outreach(pid, d.draft_id, d.content_hash)] * 12)
+    assert len(results) == 12 and len(chans["email"].sent) == 1
+    assert em.outreach(pid)[0].status == "sent"
+
+
+def test_approve_and_deny_racing_leave_one_consistent_state_and_a_denied_draft_never_sends(em, pid, chans):
+    """Verifier T7: six approvals against six denials. The final state is single and consistent; if it is denied, nothing was sent; if it is sent, exactly one message was."""
+    d = draft(em, pid)
+    _race([lambda: em.approve_outreach(pid, d.draft_id, d.content_hash)] * 6 + [lambda: em.deny_outreach(pid, d.draft_id)] * 6)
+    final = em.outreach(pid)[0].status
+    assert final in ("denied", "sent", "approved")
+    assert len(chans["email"].sent) == (1 if final == "sent" else 0)
+
+
 def test_an_expired_proposal_cannot_be_approved(em, pid, chans, clock):
     d = draft(em, pid)
     clock.advance(hours=25)

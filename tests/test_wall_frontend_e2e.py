@@ -481,6 +481,35 @@ def test_the_wall_can_be_reached_and_tapped_on_phones_and_tablets_in_either_orie
         browser.close()
 
 
+def test_rotating_the_screen_while_the_camera_is_still_moving_back_from_a_focus_view_lands_on_the_new_orientations_shot(world):
+    """Found by an outside verification run: the way back from a focus view used to be a fixed pose recorded when the view opened, so a rotation during that move left the lens
+    updated and the camera on the old orientation's pose, and the wall board off screen."""
+    base, _store = world
+    with pw.sync_playwright() as p:
+        browser = p.chromium.launch(executable_path=CHROMIUM, args=["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"])
+        page = browser.new_page(viewport={"width": 1300, "height": 900})
+        page.add_init_script(OBSERVE_THREE)
+        page.goto(base + "/")
+        until(page, "!!window.__scene && !!window.__cams", 30)
+        page.wait_for_timeout(2500)
+        for _ in range(5):
+            pt = page.evaluate(BOARD_POINT, None)
+            page.mouse.click(pt["x"], pt["y"])
+            page.wait_for_timeout(300)
+            if page.evaluate("document.body.classList.contains('wall-focus')"):
+                break
+        assert page.evaluate("document.body.classList.contains('wall-focus')")
+        page.wait_for_timeout(1500)
+        page.keyboard.press("Escape")
+        page.set_viewport_size({"width": 900, "height": 1300})  # straight away: the move back is still running
+        page.wait_for_timeout(3500)
+        pt = page.evaluate(BOARD_POINT, None)
+        cam = page.evaluate("(()=>{const c=window.__cams[0];return [c.position.y, c.position.z]})()")
+        assert pt and pt["onscreen"], f"the board is off screen after rotating mid-move: {pt}"
+        assert cam[1] > 9, f"the camera stayed on the landscape pose: {cam}"  # the portrait shot stands much further back (about 13) than the landscape one (about 8)
+        browser.close()
+
+
 def test_the_room_takes_touch_drags_itself_instead_of_leaving_them_to_the_browser(world):
     """Found on a real phone (Galaxy S23 FE, Chrome 156): with touch-action left at auto, a swipe on the room became a page gesture and the pointer was cancelled after one move,
     so the wall puzzle could never be solved by finger. A mouse never shows this, so a headless run cannot catch the symptom; this pins the cause."""

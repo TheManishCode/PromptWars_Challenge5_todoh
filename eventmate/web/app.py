@@ -745,6 +745,10 @@ def create_app(
     def _value(exc):
         return _err(400, str(exc)[:300])
 
+    @app.errorhandler(RecursionError)
+    def _too_deep(exc):
+        return _err(400, "the request is nested too deeply", code="bad_request")  # a body or value nested past the parser's limit is the caller's fault, never a 500
+
     @app.errorhandler(Exception)
     def _boom(exc):
         if hasattr(exc, "code") and isinstance(exc.code, int):

@@ -746,3 +746,30 @@ def test_deciding_on_a_proposal_that_does_not_exist_is_refused(em, pid):
         a.decide("nope", LOCAL_ORGANIZER, True)
     with pytest.raises(ApprovalError, match="unknown proposal"):
         a.queue.get("nope")
+
+
+def test_a_degraded_answer_is_words_not_raw_json(em, pid):
+    """An outside verifier saw live answers like 'Here is what I found: - {"passages": [...]}' and raw plan JSON. The evidence is now put into words."""
+    a, _ = make(em, tool("get_plan_summary"), "not json at all")
+    r = a.ask("compare the caterer options for me", pid, LOCAL_ORGANIZER)
+    assert r.outcome in ("degraded", "refused")
+    assert not any(ch in r.answer for ch in '{}[]"') or r.outcome == "refused", r.answer
+    kb, _ = make(em, tool("search_knowledge", query="vegetarian"), "not json")
+    r2 = kb.ask("what is the vegetarian caterer checklist", pid, LOCAL_ORGANIZER)
+    assert '{"' not in r2.answer and "passages" not in r2.answer and (r2.outcome == "refused" or ":" in r2.answer), r2.answer
+
+
+def test_an_empty_search_is_an_honest_no_not_an_empty_list(em, pid):
+    a, _ = make(em, tool("search_knowledge", query="zzqqxx nothing matches"), "not json")
+    r = a.ask("tell me about zzqqxx nothing matches please", pid, LOCAL_ORGANIZER)
+    assert "passages" not in r.answer and "[]" not in r.answer
+
+
+def test_readable_turns_tool_json_into_plain_text():
+    from eventmate.assistant.agent import _readable
+
+    assert _readable('{"passages": [{"id": "x", "title": "Halal", "text": "Check the kitchen.", "source": "doc:x"}]}') == "Halal: Check the kitchen."
+    assert _readable('{"passages": []}') == "" and _readable('{"error": "that tool is not available"}') == ""
+    out = _readable('{"event_type": "engagement_party", "city": "Pune", "guests": 120, "vendors": [{"category": "venue", "name": "Lakeside Lawns"}], "verified": true}')
+    assert "event type: engagement_party" in out and "guests: 120" in out and "category: venue" in out and "verified: yes" in out and not any(c in out for c in '{}[]"')
+    assert len(_readable('{"a": "' + "x" * 900 + '"}')) <= 300 and _readable("plain words") == "plain words"

@@ -180,7 +180,10 @@ class Wall:
 
     @staticmethod
     def _body(model: type) -> Any:
-        data = request.get_json(silent=True)
+        try:
+            data = request.get_json(silent=True)
+        except RecursionError:  # nesting deep enough to exhaust the parser: some Python versions raise this instead of returning None (found by an outside verifier on 3.10)
+            data = None
         if not isinstance(data, dict):
             raise WallError(400, "bad_request", "JSON object body required")
         try:

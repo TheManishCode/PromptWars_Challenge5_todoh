@@ -1226,7 +1226,7 @@ window.Arcade3D = (function () {
   function holoFocus() {
     const st = S.holo; if (!st || !st.unlocked || st.focused) return null;
     st.focused = true;
-    st.prevCam = { pos: S.camera.position.clone(), tgt: S.camTarget.clone() };
+    st.prevCam = snapPrev();
     S.zoomed = true;
     const pose = { pos: [HOLO_POS.x - 0.9, 2.95, HOLO_POS.z + 2.6], tgt: [HOLO_POS.x - 0.4, 1.62, HOLO_POS.z] }; // above the attendant, who now parks nearer the cabinet
     camTo(pose, 900);
@@ -1236,7 +1236,7 @@ window.Arcade3D = (function () {
     const st = S.holo; if (!st || !st.focused) return;
     st.focused = false;
     S.zoomed = false;
-    if (st.prevCam) camTo({ pos: st.prevCam.pos.toArray(), tgt: st.prevCam.tgt.toArray() }, 900);
+    if (st.prevCam) camTo(exitPose(st.prevCam), 900);
     else camTo(S.camWide, 900);
   }
   function mountHoloTable(sc) {
@@ -1334,7 +1334,7 @@ window.Arcade3D = (function () {
   function dossierFocus() {
     const st = S.dossier; if (!st || st.focused) return null;
     st.focused = true;
-    st.prevCam = { pos: S.camera.position.clone(), tgt: S.camTarget.clone() };
+    st.prevCam = snapPrev();
     S.zoomed = true;
     const pose = { pos: [DOSSIER_POS.x + 0.1, 0.5, DOSSIER_POS.z + 0.28], tgt: [DOSSIER_POS.x + 0.05, 0.1, DOSSIER_POS.z - 0.16] }; // tight on the risen note so the writing fills the frame
     camTo(pose, 800);
@@ -1346,7 +1346,7 @@ window.Arcade3D = (function () {
     st.focused = false;
     S.zoomed = false;
     dossierSetOpen(false);
-    if (st.prevCam) camTo({ pos: st.prevCam.pos.toArray(), tgt: st.prevCam.tgt.toArray() }, 800);
+    if (st.prevCam) camTo(exitPose(st.prevCam), 800);
     else camTo(S.camWide, 800);
   }
   function mountDossier(sc) {
@@ -1422,7 +1422,7 @@ window.Arcade3D = (function () {
   function vendFocus(i) {
     const v = (S.vend || [])[i]; if (!v || S.vendFocused != null) return null;
     S.vendFocused = i;
-    S.vendPrevCam = { pos: S.camera.position.clone(), tgt: S.camTarget.clone() };
+    S.vendPrevCam = snapPrev();
     S.zoomed = true;
     const pose = vendPose(v);
     camTo(pose, 850);
@@ -1431,7 +1431,7 @@ window.Arcade3D = (function () {
   function vendUnfocus() {
     if (S.vendFocused == null) return;
     S.vendFocused = null; S.zoomed = false;
-    if (S.vendPrevCam) camTo({ pos: S.vendPrevCam.pos.toArray(), tgt: S.vendPrevCam.tgt.toArray() }, 850);
+    if (S.vendPrevCam) camTo(exitPose(S.vendPrevCam), 850);
     else camTo(S.camWide, 850);
   }
   function wireVendTaps() {
@@ -1593,7 +1593,7 @@ window.Arcade3D = (function () {
   function wallFocus() {
     const st = S.wallb; if (!st || st.focused) return null;
     st.focused = true;
-    st.prevCam = { pos: S.camera.position.clone(), tgt: S.camTarget.clone() };
+    st.prevCam = snapPrev();
     S.zoomed = true;
     // fit the whole board in frame at any aspect: portrait phones need to be much farther back.
     // the board occupies the upper frame so the DOM panel below never covers cells;
@@ -1613,7 +1613,7 @@ window.Arcade3D = (function () {
     const st = S.wallb; if (!st || !st.focused) return;
     st.focused = false;
     S.zoomed = false;
-    if (st.prevCam) camTo({ pos: st.prevCam.pos.toArray(), tgt: st.prevCam.tgt.toArray() }, 850);
+    if (st.prevCam) camTo(exitPose(st.prevCam), 850);
     else camTo(S.camWide, 850);
   }
   function mountWallBoard(sc, wallL) {
@@ -2042,16 +2042,27 @@ window.Arcade3D = (function () {
   }
 
   /* ================= camera ================= */
+  // ``dst`` is a pose {pos, tgt} or a function returning one. A function is asked again on every frame, so a view that is on its way back to the wide shot lands on the
+  // wide shot of the screen as it is when the move ends: rotating a phone half-way through the move no longer leaves the camera on the old orientation's pose.
   function camTo(dst, durMs) {
     const c = S.camera;
     const p0 = c.position.clone();
     const t0 = S.camTarget ? S.camTarget.clone() : new THREE.Vector3(0, 1.5, 0);
-    const p1 = new THREE.Vector3(dst.pos[0], dst.pos[1], dst.pos[2]);
-    const t1 = new THREE.Vector3(dst.tgt[0], dst.tgt[1], dst.tgt[2]);
+    const p1 = new THREE.Vector3(), t1 = new THREE.Vector3();
     return tween(durMs, easeInOut, function (t) {
+      const d = typeof dst === "function" ? dst() : dst;
+      p1.set(d.pos[0], d.pos[1], d.pos[2]); t1.set(d.tgt[0], d.tgt[1], d.tgt[2]);
       c.position.lerpVectors(p0, p1, t);
       S.camTarget.lerpVectors(t0, t1, t);
     });
+  }
+  // where the camera was when a focus view opened, and whether that was the wide shot (then the way back is to the CURRENT wide shot, which a rotation may have changed)
+  function snapPrev() {
+    const here = S.camera.position;
+    return { pos: here.clone(), tgt: S.camTarget.clone(), wide: here.distanceTo(new THREE.Vector3(S.camWide.pos[0], S.camWide.pos[1], S.camWide.pos[2])) < 0.3 };
+  }
+  function exitPose(prev) {
+    return function () { return prev.wide ? S.camWide : { pos: prev.pos.toArray(), tgt: prev.tgt.toArray() }; };
   }
 
   /* ================= sequences (the choreography the user asked for) ================= */

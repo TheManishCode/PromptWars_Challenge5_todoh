@@ -287,9 +287,10 @@ class Assistant:
             return done(_render(r.tool, data), (r.tool,), "answered")
 
         def fallback(reason: str, outcome: str = "degraded") -> Tuple[AnswerResult, bool]:
-            if evidence:
-                return done("Here is what I found:\n" + "\n".join(f"- {t[:300]}" for t in evidence[-2:]), tuple(cited), outcome, reason)
-            return done(NO_EVIDENCE, (), "refused", reason)
+            lines = [x for x in (_readable(t) for t in evidence[-2:]) if x]
+            if lines:  # the tool results in words, never as raw JSON (an outside verifier saw '{"passages": [...]}' shown to a user)
+                return done("Here is what I found:\n" + "\n".join(f"- {x}" for x in lines), tuple(cited), outcome, reason)
+            return done(NO_EVIDENCE, (), "refused", reason)  # nothing readable was found (an empty search, say): the honest answer, not an empty list
 
         if not self.llms or self._over_budget(principal.user_id):  # no model, or this user's hourly allowance is spent: still useful, never invented
             text = call("search_knowledge", {"query": question})
@@ -359,6 +360,36 @@ class Assistant:
         names = guard.introduced_names(answer, joined, question)
         problem = guard.check_answer(answer, joined, question) or guard.policy_violation(answer, self.policy) or (f"names not in the evidence: {names[:5]}" if names else None)
         return problem, valid
+
+
+_PLAIN_KEY = re.compile(r"_+")
+
+
+def _readable(text: str, limit: int = 300) -> str:
+    """A tool result as plain words, or "" when it holds nothing to say. Passages become "Title: text"; anything else becomes "key: value" pairs. No braces, quotes or
+    JSON syntax reach the user, and nothing is added that the result did not hold."""
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return text.strip()[:limit]
+    if isinstance(data, dict) and "error" in data and len(data) == 1:
+        return ""
+
+    def words(v: Any, depth: int = 0) -> str:
+        if isinstance(v, dict):
+            parts = [f"{_PLAIN_KEY.sub(' ', str(k)).strip()}: {words(x, depth + 1)}" for k, x in v.items() if x not in (None, "", [], {})]
+            return "; ".join(p for p in parts if not p.endswith(": ")) if depth < 3 else ""
+        if isinstance(v, (list, tuple)):
+            items = [words(x, depth + 1) for x in v[:6]]
+            return ", ".join(i for i in items if i) + (f" and {len(v) - 6} more" if len(v) > 6 else "")
+        if isinstance(v, bool):
+            return "yes" if v else "no"
+        return str(v)
+
+    if isinstance(data, dict) and isinstance(data.get("passages"), list):
+        out = [f"{p.get('title', '').strip()}: {p.get('text', '').strip()}".strip(": ") for p in data["passages"][:2] if isinstance(p, dict)]
+        return " ".join(o for o in out if o)[:limit]
+    return words(data)[:limit]
 
 
 def _with_pending_notice(answer: str, proposals: Sequence[Proposal]) -> str:
