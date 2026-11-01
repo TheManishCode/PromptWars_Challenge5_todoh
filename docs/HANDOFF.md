@@ -1,0 +1,250 @@
+# to;doh-the event planner handoff
+
+Read this first, then `AI_CODING_RULES.md`, `DECISIONS.md`, `ROADMAP.md`. Update this file in the same
+change as any code or decision change, and at the end of every session. Stale handoff = unfinished work.
+
+Last updated: 2026-11-01
+Updated by: the maintainers (integration of threads B and C: ADR-059 to ADR-063)
+
+## Current state
+
+- Package: `eventmate/` (sibling of `src/llm_plan`, which is untouched). Python venv at `.venv`.
+- Tests (2026-11-01, branch `release/candidate`, Python 3.14.8, Fast Downward, VAL and Chromium present, machine at load 10 to 34 from three sessions): the non-browser suite (`pytest tests` with the four browser files ignored) gave **3,382 passed, 1 failed, 1 skipped** in 322 s; the failure (the per-workspace storage test, which did not know about the durable approvals file) was fixed and its file re-run: 34 passed. Browser tests after the final merge: 7 selected tests passed (room on, static allow-list, text-only); the full browser files (`test_a11y_e2e.py`, `test_wall_frontend_e2e.py`, `test_front_performance_e2e.py`, `test_arcade.py`) were NOT re-run after the last merge. The last COMPLETE run, before the durable-approvals merge and lane Y's last commit, was 3,390 passed, 1 failed (a timing test on a quadratic pattern, since fixed and re-tested directly), 1 skipped, 773 s. Coverage 96% (measured earlier on 3.14).
+- Git: this repository (`event-agent`) is the home of the code. Tests live in `tests/`; the package is grouped into `planning`, `pricing`, `messaging`, `followthrough`, `integrations`, `agents`, `assistant`, `web`.
+
+### Roadmap progress (rows count only with passing tests)
+
+| Item | State | Where |
+|---|---|---|
+| F1 Trade-off Negotiator | done | ADR-015, `agents/tradeoff.py` |
+| F2 Budget Reality Check | done | ADR-016, `reality.py`; UI card, API `reality`, CLI `plan` (stderr) |
+| F3 Budget ledger | done (backend, CLI, API, UI card) | ADR-017, `ledger.py`, `tests/test_ledger.py` |
+| F4 "Why?" panel | done | Vendors tab button; Playwright-tested |
+| F6 Locale layer | partial: pack v1 and the confirmation card done (chat intake, ADR-022); Hinglish open | ADR-019, ADR-022 |
+| F5 Scheduler | partial: multi-organizer done; zones, working hours, multi-day open | ADR-020 |
+| F7 Rule packs | partial: dietary checklists done (all unreviewed); traditions and accessibility open | ADR-021 |
+| F24 Assistant | v1 done: RAG, tools, RBAC, proposals, cache/router, traces, prompt lock; behavioral evals never run on a real model | ADR-023 |
+| Follow-through jobs | built: N quotes by a deadline across vendors, claims the user confirms, nudges, expiry, API, UI, CLI, worker; no outside notifications | ADR-044, `jobs.py`, `claims.py`, `worker.py`, `docs/JOBS_DESIGN.md` |
+| F11 Vendor conversations (email + WhatsApp) | built: draft, user approves exact text, agent sends (SMTP / WAHA), polls replies (IMAP / WAHA), inbox, analysis, follow-ups, limits, optional standing permission for automatic follow-up questions (ADR-043); **not run against real accounts** | ADR-042, `channels.py`, `conversations.py`, `outreach.py` |
+| F10 Vendor score | built (backend, API, CLI, Budget-tab card); thresholds unvalidated; needs 3 current quotes to score price | ADR-040, `vendorscore.py` |
+| F9 Observation ledger + quote intelligence | done for local use: store, report, quote-driven pricing, Quotes card, "confirmed by vendor" label, re-price repair | ADR-006, ADR-025/026/027 |
+| F8 | already built | |
+| Travel: flight fares/schedules (fli) | done, offline-tested plus one live run; multi-city composed from per-leg searches | ADR-028, `travel.py` |
+| Web deals agent (search, read, extract, rank) | built; live-tested for caterer/venue/photographer in Pune; venue coverage thin; leads only | ADR-031, `deals.py`, `web_access.py`, `websearch.py` |
+| Multi-city trip search | built, live-tested | ADR-030, `tripsearch.py` |
+| Venue discovery (Overpass) | built and fake-server tested; **not verified live** (public server was at capacity) | ADR-028, `discovery.py` |
+| Weather (OpenWeather) + `.env` loader | built; **live call returned 401** (key probably still activating); fake-server tested | ADR-029, `weather.py`, `env.py` |
+| Signature wall (v6 Phase 8) | backend built and tested solver-free; **frontend not integrated, nothing run on a device or behind a proxy**; the notice wording, host and recovery policy are the owner's | ADR-061, ADR-062, `eventmate/wall/`, `eventmate/wall_admin.py`, `docs/WALL.md`, `docs/WALL_PRIVACY.md` |
+| Red-team pass (attack, fix, record) | round 1 done: 9 findings, 8 fixed or mitigated, 1 handed to the Phase 4 thread; the register says what was and was not tested | ADR-063, `docs/SECURITY_FINDINGS.md`, `docs/REDTEAM.md`, `tests/pentest/` |
+| Production serving | waitress optional extra; a non-loopback bind refuses the built-in server; behaviour behind a real proxy not verified | ADR-063, `eventmate/web/serve.py`, `eventmate/web/server.py`, `tests/test_serve.py` |
+| F10-F23 | not started | `ROADMAP.md` |
+
+## Known limitations (what the roadmap fixes)
+
+Scheduler is single-organizer/local-time (F5, ADR-004) · parser is English/INR only (F6, ADR-005) ·
+vendor data is synthetic and confirmations are user-asserted (F9-F11, ADR-006) · web server is local single-user (F23, ADR-014).
+Budget rebalancing is no longer manual: F1 proposes verified options, the user applies one.
+
+## Next step (start here)
+
+00. **Run the whole live check**: add `NVIDIA_API_KEY` and/or `OPENROUTER_API_KEY` (and later `GOOGLE_PLACES_API_KEY`, `BRAVE_SEARCH_API_KEY`) to `MultiAgentPlanning/.env`, then
+   `python -m eventmate.smoke` (free) and `python -m eventmate.smoke --llm` (a few credits). Then, once, the assistant's behavioral evals:
+   `python -m eventmate.assistant.evals --behavioral --update-lock` (spends credits; until then `prompts/assistant.lock.json` says `not_run`).
+   Edit `eventmate/data/assistant_policy.json` (competitor and phrase deny lists; the shipped names are examples).
+
+0. **Add the facts the AI cannot collect yet**: sattvic/no-onion-garlic and allergen values (allergens as hard checks, kept separate from
+   diet preferences) and an accessibility pack. Schema change first, then `IntakeDraft`, the review-card toggles and tests.
+
+Phase 2 is done except the open parts listed in the table (IANA zones/working hours/multi-day, Hinglish, tradition packs).
+Those need either a design that is not blocked by missing data or outside reviewers, so move on:
+
+0b. **Verify the live integrations** once possible: run `python -m eventmate weather Pune <date within 5 days>` (a 401 means the key is not active yet or the value
+   in `.env` is not the OpenWeather key) and `python -m eventmate discover Pune` (retry later or set `EVENTMATE_OVERPASS_URL`). Then, if wanted: flights for out-of-town guests
+   in plans, weather into F18 re-timing, Foursquare/Duffel/Amadeus once the user supplies keys or accounts (ADR-028 item 5; add their names to `env.py` ALLOWED when used).
+2. Vendor messaging is built behind an approval gate (ADR-042). Voice, recording and any send without an approval stay blocked until the user reports the legal checks done (ADR-018).
+2b. **Try it for real**: set the `EVENTMATE_SMTP_*`/`IMAP_*` and/or `EVENTMATE_WAHA_*` names in `.env` (see `.env.example`), save a vendor contact on the Vendor chats tab, draft, approve, then `python -m eventmate inbox poll`. Report what broke: TLS, auth, WAHA chat ids and WhatsApp restrictions were never exercised live.
+3. F12/F13 wallet and approval queue can be built before F11, since they send nothing. Clone and read agent-vault (Apache-2.0) first and record the commit here.
+
+## Things to know
+
+- F1: moves are rebalance caps, drop optional service, shift date, raise budget; harm weights in `TradeoffPolicy`.
+  `EventRequest.cap_weights` is new; the Validator recomputes allocation; `BudgetPolicy` is shared via `to;doh-the event planner`.
+  Not done: tier/hours downgrades (no data), combined moves.
+- F2: floor = cheapest eligible vendor per service, labelled "Estimate, not a quote". The CLI printed nothing for it until this
+  session (gap found by running the CLI; fixed with a test).
+- F3: ledger files live in `<plan_dir>/ledger/`. They are **not** covered by the plan store's SHA/HMAC (ADR-017 consequence).
+  The ledger does not feed the Validator or the Replanner. A replan that drops a paid category shows the money as `orphaned_paid`.
+  Refunds above the amount paid are refused. No payment is ever initiated.
+- F5: `organizers` only raises the organizer capacity; the effect on the schedule is small (ADR-020). No UI control, set via request text.
+- F7: packs are data in `data/rule_packs.json`; a test fails if any pack claims `reviewed` (flip deliberately, with a named reviewer).
+- Process lesson: F2 was built in an earlier session but never logged, so the handoff was stale and the test count wrong (418 vs 430).
+  The memory-files rule exists for this; log in the same change.
+
+## Open questions for the user
+
+Answered 2026-10-30 (ADR-018): vendor city/language unspecified (voice stays deferred), no managed Postgres (SQLite first), the user checks the legal items.
+Still open:
+1. Which Google account/project will own OAuth app verification (F12)? (User said: keep for later.)
+2. When the user finishes the legal checks, tell me which of F11/voice/recording are cleared.
+3. Who can review tradition packs (rituals, timing, invitation wording)? Until someone is named, only the unreviewed dietary checklists ship (ADR-021).
+
+## References (ADR-013)
+
+Existing `../_refs/`: haystack (Apache-2.0, 4b5dd70), langfuse (MIT core, 5cb2047) and dify (f36f75a4) now used as pattern sources per ADR-024 (user owns the licence question; no source copied), portkey gateway (MIT, 669825c), guardrails-ai (Apache-2.0, 06d0ff2), all read 2026-10-30 for ADR-023/024; Agent-Oriented-Planning, MC-Planner, async_planning, Awesome-LLM-Planning, openmuse (CopilotKit, MIT, commit a4944f4, read 2026-10-30, ideas only: strict choice panels, approvals bound to reviewed content, per-feature data-disclosure notes, durable task leases and receipts for F15/F18).
+Roadmap-note repos were checked on 2026-10-30 through the GitHub API **metadata only**; none cloned and no code read yet:
+
+| Repo | Licence | Stars | Last push | Verdict |
+|---|---|---|---|---|
+| google/mcp | Apache-2.0 | 4669 | 2026-08-17 | usable reference for Workspace patterns (F12/F20) |
+| CrimsonWorks-Inc/agent-vault | Apache-2.0 | 0 | 2026-10-09 | licence ok, unproven; read before F12, reimplement rather than depend |
+| kh0pper/google-workspace-mcp | MIT | 0 | 2026-10-28 | unproven; reference only |
+| lukanlabs/lukan | MIT | 35 | 2026-08-22 | Rust; reference only |
+| Lev0n82/AutonomousBrowserAutomation | MIT | 0 | 2026-10-19 | unproven; reference for F19 only |
+| SophiaYifei/travel-agent-planner | MIT | 0 | 2026-04-09 | idea only (budget feasibility, already F2) |
+| Aayush99000/RAG-Travel-agent | MIT | 0 | 2026-05-02 | idea only (F22 deferred) |
+| VaradhKaushik/AI-Driven-Itinerary-Planner | MIT | 1 | 2024-07-30 | stale |
+| alulema/trip-planner, patel-ishaan/hitched, nicola-empower/wedding-planner | **none** | 0-2 | 2026 | **no licence = no copying code**; ideas only (already covered by F1/F3) |
+
+Nearly all have 0-2 stars, so none counts as proven; any borrowing needs a read-through and a licence check first.
+
+## Session log (newest first)
+
+- 2026-11-01: Room, lighting, vending corner, portrait camera, wall carving and low-compute work on `feature/room-vending-lighting` (ADR-068; from `integration/frontend-v20` d55671a; not pushed, not merged), at the owner's direction. Built: vending corner with tap-to-focus views, brighter wall-led lighting, taller mural, portrait diorama camera that keeps both walls, stone left wall with carved serif lettering (Part 1 of the strategy file), Tier 1 runtime items, two model sizes plus a manifest, a prioritised load order. Real-phone check: the board is on screen and a touch tap opens the wall view. Not done: per-pass device timing, draw-call reduction, KTX2/Draco, other phones. See ADR-068 and `tools/assets/README.md`.
+- 2026-11-01: Round-3 red team of the integrated branch `integration/frontend-v20` (docs/SECURITY_FINDINGS.md F-010 to F-021; local, not pushed). Fixed, each with a test that failed first: a hostile archive could import a fabricated plan as VERIFIED, leave half a plan behind, corrupt itself through a one-character id, and step over the quota (`transfer.py`); the arcade pulse leaked every visitor's last request text to every other visitor (per-workspace now); IPv6 visitors escaped the per-address limits (counted per /64); a workspace in use could be evicted and re-opened under a second lock; backups copied live WAL databases raw and trusted manifest paths and links; two servers could share one data directory (now refused); the wall counted the proxy's address, not the caller's; nginx in front of waitress refuses four request-smuggling shapes (tested, documented). The room (the only interface) was checked for DOM sinks and with hostile text on every sheet. Full suite on this branch: 3286 passed, 1 failed, 1 skipped (the one failure is `test_arcade.py::test_every_whitelisted_static_file_exists...`, red until the 13 GLB models arrive). Not done: import atomicity across a crash, the symbolic status of an imported plan, screens for the do-not-contact review, owner digest, explore/deals and approved answers, anything with the real models, a phone or a proxy other than nginx.
+
+- 2026-11-01: Frontend v20 and one interface (ADR-067; branch `integration/frontend-v20`, local only, not pushed). `todoh_frontend_integration_v20.zip` (no models in it; its patch does not apply to the newer backend, so its four static files were three-way merged against their v19 base and `app.py` was changed by hand). On the owner's instruction the arcade room is the only interface: `/` serves it directly on any host, `/arcade` redirects to `/`, and the classic page, its script and style, the model viewer and one CSP hash were deleted with the 22 browser tests that drove it. Measured on this branch before the last two small fixes: 3264 passed, 3 failed (the credit/model test that needs the missing GLBs, and two vendor-manifest tests that listed the removed viewer, since fixed), 1 skipped, 1 xfailed. Features that now have no screen (explore and deals, owner digest, do-not-contact and bounce review, approved answers) are listed in `docs/archive/FRONTEND_INTEGRATION.md`.
+- 2026-11-01: Durability on `feature/durability-b` (ADR-064, `docs/DURABILITY.md`; from `feature/production-hardening`; not pushed, not merged): schema versions and upgraders with v1 fixtures, `verify` and quarantine-style `repair`, a send and approval block while a money or send file is damaged, a plan hash chain with rollback detection, log rotation. New tests: `test_migrations.py` (19), `test_integrity.py` (25). Phase 1.1 (durable approvals) is the other thread's uncommitted work and is not here.
+
+- 2026-11-01: Production hardening on `feature/production-hardening` (ADR-066; from `feature/workspaces`; not pushed, not merged): request ids, structured access log with nothing sensitive, request counters on the owner status route, `/readyz`, JSON errors with `code` and `request_id`, 507 `storage_full`, orderly SIGTERM stop, backup/verify/restore with deletion-log replay (`eventmate/backup.py`, `python -m eventmate.workspaces_admin backup|verify-backup|restore`), `docs/RUNBOOK.md`, `docs/archive/PRODUCTION_READINESS.md`. New tests: `test_observability.py` (16), `test_backup.py` (8). Not built: scheduled or encrypted backups, metrics export, alerting, zero-downtime upgrades. The durability phase (approvals, upgraders, verify/repair, hash chain) is still unbuilt.
+
+- 2026-11-01: Thread C (wall and red team), branch `feature/wall-and-pentest` from 95aa06c (ADR-061 to ADR-063 after integration; not pushed, not merged; other threads: A durability on `fix/phase-0-1`, B LLM hardening on `fix/phase-4-llm-hardening`; notes between threads are in `../handoffs/` and `docs/archive/THREADS.md`). Built the wall (v6 Phase 8): its own SQLite file, cookie credential and CSRF value, 14 routes matched by exact rule, pre-moderation, slots that never move, rounds with a frozen snapshot, a monthly Hall, owner CLI with backup and restore, docs. Attacked the existing code and fixed what broke, each with a test that failed first (details and honest limits in `docs/SECURITY_FINDINGS.md`): F-003 the send caps could be exceeded by two dispatchers (count and claim now under the store's file lock; read that diff, it sits next to the Mandate code), F-005 guest-list formula check bypassed by zero-width and bidi characters, F-006 a WAV header could hide a long recording and a timed-out engine let work pile up, F-007 IPv6 forms carrying a private IPv4 passed the fetcher, F-008 one email with about 1,000 nested multiparts stopped every vendor reply from being read, F-009 the owner digest destination was never verified (mitigated with `EVENTMATE_OWNER_EMAILS`), F-002 no production server (waitress optional extra). Found while testing my own code: a refusal raised inside a transaction rolled back the state it had just set (stale round), a huge section id was a 500, refused retries grew a table, a digit-only name read as look-alike letters. Handed to thread B: F-001 (`_EMAIL` regex in `guard.py` is quadratic; an xfail test waits for the fix). Not done and not verified: anything on a real browser, phone, proxy, mailbox, model or host; the wall frontend; Phases 1 to 3 and 5 (other threads); the optional real voice engine. Throw-away probes are in `_audit/pentest/`.
+- 2026-11-01: Phases 2 and 3 of the v6 prompts on `feature/workspaces` (ADR-062; from 959bafa; not pushed, not merged), taken over by the second thread because the durability thread's tree had no activity for about 90 minutes. Built: `eventmate/workspaces.py` (credential directory, registry, quotas, delete), per-request resolution in `web/app.py`, shared-mode send gate, `eventmate/transfer.py` (export and hostile-archive import), `eventmate/workspaces_admin.py`, log scrubbing and tombstones for plan deletion (a gap found: a deleted plan's id and the assistant's masked questions stayed in the logs), `docs/WORKSPACES.md`, `docs/PRIVACY.md`. New tests: `test_workspaces.py` (32), `test_two_workspaces.py` (8, generated from the route table, 58 routes), `test_workspace_limits.py` (14), `test_transfer.py` (33), `test_workspaces_admin.py` (4), 2 in `test_retention.py`. Not built (owner decisions): recovery, device sessions, helper credential, idle expiry of non-empty workspaces, guest sending. Not in this branch: durable approvals, schema upgraders, JSONL repair, plan hash chain (thread A's Phase 1).
+
+- 2026-11-01: Phase 5.1 to 5.4 of the v6 prompts on `fix/phase-4-llm-hardening` (ADR-061): trusted-proxy client addresses, bounded rate limiter keyed by address and by workspace, per-workspace share of the slow-search pool, `/healthz`, owner-only counts-only status route, shared-mode start-up checks (refuses unconditionally until per-visitor workspaces exist: `hosting.WORKSPACES_IMPLEMENTED`), HSTS behind a trusted proxy, `docs/HOSTING.md`, upload error shapes (`code`, `limit_bytes`, `scope`, 411 without a Content-Length) with the JSON envelope measured. Not built (needs workspaces): per-workspace storage quotas, plans per day, caps on outside lookups, cookie `Secure` flag. New tests: `test_limits.py` (18), `test_hosting.py` (20), `test_upload_errors.py` (9). Audio "too long" stays 413 (the prompt lists 422; the page reads current statuses); only the code was added.
+
+- 2026-11-01: Red-team pass 1 on `fix/phase-4-llm-hardening` (ADR-060, `docs/REDTEAM.md`): attacked the real server, the inbound mail parser, every compiled regex, the CLI's terminal output, the model boundary and state races. Seven defects fixed with regression tests (poison nested-MIME email aborting the poll; ten-second HTML body; quadratic regexes including my own new one; unbounded half-open connections; terminal escape injection; key echoed into a log; false "done"). Left open and recorded: no identity or isolation (other thread's phase; do not expose the server to others yet), transcriber thread cannot be killed on timeout, planning CPU and reads have no concurrency cap. Test count on this branch is in the Phase 4 entry's family: run `python -m pytest tests` for the current number (last full run: 2590 passed, 1 skipped, plus one fixed sweep test).
+
+- 2026-11-01: Phase 4 of the v6 prompts (LLM hardening) on branch `fix/phase-4-llm-hardening`, from 95aa06c, by a second thread working beside the Phase 0-1 thread (ADR-059; not pushed, not merged; claims are in `docs/archive/THREADS.md`). Solver-free and solver-present run on this branch: 2569 passed, 1 skipped (baseline on 95aa06c was 2513 passed, 1 skipped; Python 3.14.8, Fast Downward and VAL present). Found and fixed: an obedient model could tell the user a proposal was already applied (no state changed, but the claim was false); a provider error that echoed a key could reach the explainer's LLM trace. Built: 16 boundary tests for 4.5 (`tests/test_llm_boundary.py`), per-workspace model limits (`eventmate/consumption.py`, 8 tests), one normalised form and safe names for untrusted text (`eventmate/untrusted.py`, 24 tests), key redaction (3 tests), hash-pinned `requirements.lock`, CI pinned to SHAs with a gitleaks step and report-only `pip-audit`, and a vendored-asset manifest with a test (4 tests). Not done or not verified: nothing was run on a real model; CI has not run on GitHub; the identity phase must call `consumption.bind` with its workspace id; blocking `pip-audit` is deferred; README/DEMO test counts were left to the Phase 0 thread. The injection patterns are visibility, not protection (docs/MODEL_INPUTS.md).
+
+- 2026-11-01: Phase R of the owner's v5 prompts, on branch `fix/phase-r-review` (ADR-058; not pushed, not merged). R1/R2: voice turns have one commit barrier, cancel after it is `already_final`, `withdraw` removed, `adopt` returns `(proposal, created)`. R3: the backend emits only the page's names (guest preview/commit, capabilities groups, cancel `{session_id, generation, playback_chars}` bound to its session, bodyless session DELETE). R4: vendor drafts record the plan version and a facts hash, go `stale` after a replan, and are refused at approve and at send; quote jobs re-run to say so. R5: `.coverage` untracked; the rename touched exactly six static files (29 lines) for the frontend to reconcile: `app.js`, `arcade.css`, `arcade.html`, `arcade.js`, `arcade3d.js`, `index.html`. Real-mailbox validation is still "not run" in `docs/EMAIL_VALIDATION.md`, `docs/EMAIL_SETUP.md` and the README. Phases 0 to 8 of the v5 prompts are not started; the wall (Phase 8) waits for the owner's answers.
+
+- 2026-11-01: Backend brief from the owner (`todoh-backend-prompt-eventstate-guests-voice-0ee1157b.md.txt`), first batch, on `feature/todoh-rename-and-backend` (ADR-053 to ADR-057; not pushed, not merged): plan-save failures (the audit trail now records a failed save; an explanation can no longer turn a saved plan into an error; found while checking the plan-store concern, 6 tests) and secret-handling docs; voice (`eventmate/voice/`: speech rewrite with a verifier, audio checks, bounded local transcriber that is off by default, sessions/turns/cancel with staged proposals, opt-in kept notes, docs/VOICE.md; the real engine has NOT been run; turn overhead about 6 ms with a fake model); guest-list import (`eventmate/guestlist.py`, preview/commit/get/delete routes, assistant tool `get_guest_counts`, docs/GUEST_IMPORT.md; 62 tests, mutation survivors 37 to 27 of 200; does not yet change a plan version); EventState (`eventmate/state.py`, `GET /api/plans/<id>/state`, assistant tool `get_event_state`, docs/EVENT_STATE.md; 32 tests, mutation survivors 40 to 6 of 137); DuckDuckGo search errors name the HTTP status; a vendor reply with instruction-like text is left to the user (no automatic follow-up); plan deletion (`delete-plan`, `DELETE /api/plans/<id>` with confirm, 409 while a send is in flight, deleted jobs unrecoverable from `jobs.db`), log expiry (`purge-logs`, 90 days default) and `docs/RETENTION.md`; README and DEMO point at this file for the test count. Not started from that brief, because each needs the owner: behavioural evals (an owner-provided key) and real-mailbox validation (an owner-approved recipient). Open question for the owner (ADR-057): a drafted message stays approvable after a replan drops its vendor.
+
+- 2026-11-01: Product name changed to "to;doh-the event planner" in every user-visible string, doc and comment (59 files). The 3D cabinet's fixed-size canvas marquees use the short mark TO;DOH. Not renamed, because they are code or wire identifiers and the name cannot be one: the `eventmate` package, the `EventMate` class, `EVENTMATE_*` environment variables, the `X-EventMate-CSRF` header, the `EventMate/0.1` User-Agent and `EventMateBot` robots token. `prompts/` is untouched (versioned and hash-locked; `assistant.system.v1.md` still says EventMate, change it only by adding a v2). The rename was done with a tokenizer-based script so only string and comment text changed.
+
+- 2026-11-01: Break-and-fix pass: injected small bugs (line-level mutants, `_audit/harness/mutate.py`) into the modules refactored last and the security guards, then wrote tests for what survived. Survivors out of 105-120 mutants: planner selection 52 to 20, `web_access` 43 to 31, idea guard 30 to 23. Two real defects found and fixed: host labels such as `-bad.example` were accepted by `check_url` (now RFC 1123), and the idea guard's booking-verb match was case-sensitive, so a sentence-initial `Hire Golden Palace` named an unknown business without being dropped (now caught; an idea that starts a sentence with Visit/Book/Hire/Call/Contact plus two capitalised words is now dropped, which fails closed). `Validator._schedule` was split into one method per check. New tests: `test_planner_select.py`, `test_url_guard.py`, `test_idea_guard.py`. Remaining survivors are mostly tuning constants, message text and fetcher plumbing; `deals.py` (44) and `followthrough/worker.py` (36) were measured but not yet worked on.
+
+- 2026-10-31: Quality, accessibility and performance pass on branch `improve/quality-a11y-perf` (no behaviour change): the decorative mascot is `inert` (axe now reports no violations on `/` or `/arcade`), text and model assets are gzipped on request, the cabinet's 2048 px metallic-roughness texture is resized to 1024 px (2.1 MB to 1.1 MB, pixel diff of the rendered page under 0.4 per channel, recorded in `docs/ATTRIBUTIONS.md`), third-party front-end files moved to `web/static/vendor/` behind the same `/static/<name>` URLs, every `urlopen` site carries a reasoned `nosec` (bandit: 0 medium, 0 high), and the worst functions were split (`JobWorker._run` 86, `parse_profiles` 55, `_volunteers` 43, `PlannerAgent._select` 40, `guard_idea` 39, `search_trip` 37, `check_url` 32, `DealAgent._rank` 31). `make check` and `.github/workflows/ci.yml` run lint, JS syntax, bandit and the tests; the CI workflow has not been run on GitHub. Still above complexity 30: `Validator._schedule`, `parse_request`, `_rule_draft`, `ExplainerAgent._render`, CLI `_run` and `_inbox`. A refactor of `_select` briefly broke the API fuzz test (a forced category with no shortlist); fixed and covered by that test.
+
+- 2026-10-31: Audit and avatar on `fix/context-pii-guards` (ADR-051, ADR-052; not pushed, not merged). Bugs fixed with regression tests: ended or past-deadline jobs approving (and then sending) their drafts, cancel leaving requests approvable, a blocked address aborting a job's approval half-way, send caps ignoring in-flight and unknown-outcome messages, a hostile email `Date` header stopping reply polling, the assistant link guard passing any URL, the reality check's minimum ignoring each service's fixed share, intake `source` 422 and unusable-reply retry, "40 friends", idea-guard false blocks and misses, `From:` lines cutting a vendor's price, small config and connection issues. Behaviour that was right but unpinned now has tests (validator boundaries, default caps, limits, normalisation, policy file, and more). Mutation testing: harness kept outside the repo (one change per mutant, sampled, same seed); first pass over 28 modules caught 69 percent of 1,942 mutants; after the new tests, the modules re-run on the same sample went from 37 to 16 survivors (validator), 40 to 22 (jobs), 15 to 2 (claims), 34 to 19 (outreach), 28 to 17 (intake), 18 to 9 (reality), 13 to 0 (session); suppression stayed at 13 (length caps). NOT mutation-tested: `web/app.py`, `agents/vendor.py`, `replanner.py`, `scheduler.py`, `tradeoff.py`, `planner.py`, `guest.py`, `explainer.py`, `integrations/*`, `llm.py`, `symbolic.py`, `schemas.py`, `plan_store.py`, `assistant/tools.py` and `router.py` (a first attempt picked the wrong tests), `__main__.py`. The avatar (Polytoria Pauly, CC BY 4.0, vendored `model-viewer`) is in the chat card; the CSP gained one style hash, `blob:` and `wasm-unsafe-eval` (docs/ATTRIBUTIONS.md). Open: see the audit report in the conversation for findings not fixed (plan store has no parent-hash chain, web API has no default token, relative dates in the rule parser, ideas never run on a real model).
+- 2026-10-31: ADR-050 on `fix/context-pii-guards` (from 5856879; not pushed, not merged): short assistant memory, contact placeholders before model prompts, precise idea guards, computed budget percentages, one-address recipient check in the channel. Not verified live: any real model or mailbox.
+- 2026-10-31: Review fixes on `feature/discovery-contacts` (ADR-049 amendment): bounce correlation requires a recorded Message-ID (recipient-only goes to review); the bounce reason is stored and must be acknowledged before an address is re-enabled (lift or re-confirm); stop and bounce matching is documented as not authenticated and forgeable.
+
+- 2026-10-31: Discovered vendors (ADR-049) on branch `feature/discovery-contacts` (not pushed, not merged): `ExternalBusiness` identity separate from seed vendors, contact extraction from a business's own pages with provenance, shortlist and search with explicit source coverage, user-confirmed addresses only, a do-not-contact list (matched stop requests, correlated permanent bounces, user), test vendors, a Find vendors UI. Found and fixed on the way: unmatched-sender stop requests could not be reviewed (they were dropped), a draft blocked by a suppression was silently skipped when a job was approved (now a job item). Not verified live: Places `websiteUri`, DSN parsing against a real mail server, any real fetch or send.
+
+- 2026-10-31: Review fixes (ADR-048): a required access need that is unknown now makes the plan provisional ("Needs verification: required accessibility unknown") in the header, chat, Overview, Community tab, trade-off cards, explanation, CLI validate, API and assistant tool; the test that said unknown never blocks was replaced. Profile cache keys on content. Demo gained a synthetic-data disclosure and the access walkthrough. Branch `cleanup/structure` was pushed for review; nothing is on `main` beyond 82c8d4f.
+
+- 2026-10-31: Reorganised the repository (no behaviour change): modules grouped into subpackages, tests moved to `tests/`, `pyproject.toml`, README rewritten, CONTRIBUTING and Makefile added, the package README folded into `docs/CONFIGURATION.md`. 1512 tests pass unchanged. Module paths in older ADRs were rewritten to the new layout; their prose is otherwise historical.
+
+- 2026-10-31: Implemented the brief-fit prompt: personalized ideas (ADR-045), community events as profile-driven type with hard checks, user-marked conditional items and an Ideas/Community UI (ADR-046), fake-SMTP/IMAP end-to-end email tests, owner digest and optional owner email copy, smoke_email, EMAIL_SETUP/VALIDATION and DEMO docs (ADR-047). Found and fixed: a worker item raised for replies the Mandate answered. Not run: any real mailbox (Task 4 is the user's). Not pushed: all of this is local only; the GitHub repo is at 24e6c48.
+
+- 2026-10-30: Reviewed an outside design and code slice for follow-through jobs and adopted it with nine changes (ADR-044): one permission instead of a second grant system, no assumed quote validity, a stricter amount check, a file lock after real concurrent processes double-claimed a send, aware timestamps, job-end veto, one claimant per outbound action, contact snapshot. Labelled set: 17 of 19 prices found, 0 wrong. Removed README notes the user objected to. The GitHub repo has the earlier code plus the README fix; the jobs work and the automatic follow-up permission are NOT pushed.
+
+- 2026-10-30: Automatic follow-up questions (ADR-043), at the user's request: a per-plan, time-boxed, capped, window-limited standing permission; fixed questions only; hands over on questions, refusals, attachments and stop requests; vendor is told it is automated; per-plan revoke and a global kill switch that also denies queued messages. 27 tests plus a browser test verified by mutation. Mistake caught on the way: my UI text promised the automatic-message disclosure before the code did it; I implemented and tested it. Pushed to GitHub earlier; this change is NOT pushed yet.
+
+- 2026-10-30: Vendor conversation agent (ADR-042), at the user's direction ("the agent should communicate and respond back, like OpenMuse"). Studied OpenMuse (it gates outbound actions behind hash-bound approvals; WhatsApp is not built there) and cloned WAHA (Apache-2.0, c42f68a). Built channels (SMTP/IMAP, WAHA), the approval gate and send claim, reply matching and analysis, limits, a background loop, CLI `inbox`, API, and a Vendor chats tab. 77 new tests, two browser tests, a real SMTP wire check. Bugs the tests found: the content hash treated a missing `kind` differently from "request" (every status change looked like tampering); saved WhatsApp contacts were fed back to the parser without their `+`; replies with equal timestamps were ordered by a random id; "booked on 12 Dec" was not recognised as unavailable (and bare "is booked" is deliberately not, because it can be a confirmation). Not verified live: real mail provider, real IMAP, any WAHA session.
+
+- 2026-10-30: Vendor scores card in the Budget tab (F10 UI): ranked vendors per category, weights, reasons, unscored list. One browser test.
+
+- 2026-10-30: Quote request drafts (ADR-041): email (mailto:) and WhatsApp click-to-chat (wa.me), no API, nothing sent; budget never in the text; Budget-tab card, API, CLI. 37 tests plus a browser test.
+
+- 2026-10-30: Vendor score (ADR-040, F10): price vs median, completeness, evidence, with weights and reasons; missing data is left out and `coverage` says so. 20 tests, API and CLI.
+
+- 2026-10-30: Weather advice (ADR-039): rain backup and heat suggestions from the forecast and the chosen venue's setting, in the Overview weather card. 8 tests.
+
+- 2026-10-30: Saved leads (ADR-038): bookmark an advertised price against a plan from Explore; listed in the Budget tab; never a quote, never prices anything. 17 tests plus a browser test.
+
+- 2026-10-30: Deals search now merges Brave and DuckDuckGo (`MergedSearch`, interleaved, de-duplicated, one provider failing is tolerated). Live: 10 offers from 5 sites (was 4 from 2 with Brave alone).
+  Brave quota use is unchanged (one call per query). 1015 tests pass.
+
+- 2026-10-30: Hardening pass (ADR-037) and hotels (ADR-036). Attacked every integration with probes, fuzzers, bandit, a secret-leak scan and the real model; fixed 11 problems (nested-JSON
+  crashes, http.client errors, slow-drip reads, hostile result URLs, far-future dates, BOM in .env, assert-based policy checks, CSRF on quota-spending GETs, concurrency cap, router model choice).
+  1012 tests pass, pyflakes clean. Live smoke --llm: flights, trip, deals (Brave), weather, places, NVIDIA ping and routing PASS; discover WARN (Overpass busy). Not verified: OpenRouter (no key),
+  Overpass, the assistant behavioral evals. Observation: the smoke "llm" ping returned 0 characters from gpt-oss-20b (it spends tokens reasoning); it counts as reachable, not as a quality check.
+  The five scraper repos from the user's list were vetted and not adopted (ADR-036). Machine note: another project's Playwright run was saturating the CPU (load ~36), which made one suite run take 4 minutes.
+
+- 2026-10-30: Keys arrived (NVIDIA, Google Places, Brave, Langfuse; OpenRouter still empty). `python -m eventmate.smoke --llm`: flights, trip, deals (via Brave), weather, places
+  (10 places, best rated 4.9), NVIDIA ping and free-text routing all PASS; discover WARN (Overpass unreachable). Model calls counted: 2. Added `LANGFUSE_BASE_URL` as an alias for
+  `LANGFUSE_HOST` (the user's `.env` used it, so export would have stayed silently off). Langfuse export is now ON for the assistant's masked traces (ADR-024). Observation: Brave returned
+  fewer pages than DuckDuckGo for the same deals query (4 offers/2 sites vs 10/5); merging both providers' results is an open option.
+
+- 2026-10-30: Completed the build end to end for the user's list: models moved to NVIDIA/OpenRouter with a credit guard and Anthropic removed (ADR-032); Google Places adapter and
+  Brave-then-DuckDuckGo search fallback (ADR-033); free-text front door and an Explore view (ADR-034); a one-command live smoke test (ADR-035). 966 tests pass, pyflakes clean.
+  First live smoke (free sources): flights, trip, deals, weather PASS; discover WARN (Overpass unreachable); places and models SKIP (no keys yet). Not verified live: NVIDIA/OpenRouter
+  calls, Places, Brave. Found by building it: the web app created its model client before `.env` loaded; a hostile city name passed the explore schema and only failed later.
+
+- 2026-10-30: Web deals agent (ADR-031): safe fetcher (SSRF, robots, pinned IP, caps), DuckDuckGo/Brave search, regex price extraction, cautious ranking, API `/api/deals`,
+  CLI `deals`, 72 new tests (874 total). Live runs worked; the first ranking put add-ons on top, so uncorroborated lows are now flagged and ranked last; venue coverage is thin.
+  The user pasted a partial Google key in chat; it was not stored. Next: Google Places adapter (ratings, reviews, price level) once the full key is in `.env`; a Deals UI tab.
+
+- 2026-10-30: Trip search (ADR-030): `tripsearch.py`, schemas, API `/api/travel/trip`, tool-call logging. 28 tests; live DEL/BOM/GOI run worked (12 searches, 4 s).
+  Open: UI form, LLM intake for trips, reviews/price sources for venues and catering (needs the user's go-ahead on sources and a Google Places key), CLI command.
+
+- 2026-10-30: Venue discovery (Overpass, ADR-028) and weather (OpenWeather, ADR-029) with a `.env` loader. 74 new tests (775 total, pyflakes clean).
+  Live checks: flights worked (see below); Overpass public server "at capacity" and mirrors timed out (unverified); OpenWeather answered 401 with the user's key.
+  Mistakes: (1) my first inspection of the user's `.env` tried to mask values but the file had no `NAME=` so the key was printed in full into the session
+  output (told the user, suggested rotating it); (2) a 503 "not configured" from the weather card broke four browser tests via console errors, fixed with a status endpoint;
+  (3) one test of mine used the wrong UTC hour. The user's `.env` was reformatted to `OPENWEATHER_API_KEY=...`, mode 600; `.env.example` added.
+
+- 2026-10-30: Flights (ADR-028), at the user's request. Cloned fli (MIT, 881aee5) to `_refs/`, installed it in its own venv and in `.venv`, reproduced the
+  multi-city failure (`SearchUnsupportedError`, upstream #223, by design), and built `travel.py` with multi-city composed from one-way searches.
+  Live run 2026-10-30: DEL-BOM 3 options from INR 6,688; DEL-BOM-GOI-DEL total INR 20,524 (cheapest per leg, not a multi-city fare).
+  701 tests pass, pyflakes clean. Found by a test: validation lived only in the fli adapter; moved it into the service. Not verified: other routes,
+  children/premium cabins, behaviour under Google rate limits, fli's terms of use (user's call).
+
+- 2026-10-30: Finished F9 part 3 (ADR-027): `quote_status`, API `/api/plans/<id>/quotes`, Budget-tab Quotes card with record form, stale-price banner and
+  Re-price button, "Confirmed by vendor" badge. 6 new tests plus an extended Chromium journey; 680 pass, pyflakes clean. Two e2e failures were my
+  test errors (form clears after save; re-pricing adds a version) and one real gap, the UI hid the API's validation detail, now shown.
+
+- 2026-10-30: Built F9 part 2 (ADR-026): `VendorRepository.price` is the single price path at all six former `cost_for` sites; valid quotes
+  reprice plans, expired ones fail `quote_valid` with a re-quote repair, public listings never price. 10 new tests; 674 pass, pyflakes clean.
+  Two of my first test failures were wrong expectations (a cheaper quote changes ranking; the service resets the clock from `today`).
+  Not verified: UI, real quotes, multi-user clock behaviour.
+
+- 2026-10-30: Built F9 part 1 (ADR-025): `QuoteObservation` schema, `ObservationStore` (append-only JSONL), deterministic quote report
+  (hidden costs, unquantified costs, missing/excluded checklist items, valid/expiring/expired), comparison, API `/api/observations/*`,
+  CLI `quotes`, `data/quote_checklists.json` (unreviewed). 26 new tests (hostile text, control characters, boundaries, corrupt file,
+  CSRF); 664 total pass, pyflakes clean. Not verified: any real quote data, UI, and **no plan uses these quotes yet**. Two failures
+  were my own test errors (a hostile string over the 80-char cap; the app's validation status is 422, not 400). Recording is API-only.
+
+- 2026-10-30: Added the langfuse and dify patterns (ADR-024), at the user's direction (they own the licence question; we copied no source):
+  opt-in masked trace and score export to Langfuse, thumbs feedback, approved answers (annotation reply), input moderation with a preset reply,
+  retrieval score threshold, suggested questions. 15 new tests plus a longer Chromium test; 638 total pass. Not verified: the Langfuse export
+  against a real server (only a fake endpoint), and approved-answer matching beyond word overlap.
+- 2026-10-30: Built the assistant (ADR-023, F24): `eventmate/assistant/` (identity, guard, knowledge/RAG, tools, approvals, router, cache, trace, agent, evals),
+  `prompts/assistant.system.v1.md` + lock, `data/knowledge/`, `data/assistant_policy.json`, API `/api/assistant/*`, Ask tab. Borrowed ideas from
+  guardrails-ai (re-ask, deny lists), portkey (retry, fallback, cost cap), haystack (recall/MRR evals); read langfuse and dify, built nothing from them.
+  79 assistant tests with scripted hostile models + a Chromium test; 623 total pass, pyflakes clean. Not verified: any real model run, real
+  logins or multi-user roles, cost numbers beyond estimates. Two failed tests were my own test errors (a wrong fence expectation, an exhausted script).
+- 2026-10-30: Built conversational intake (ADR-022): `intake.py`, `prompts/intake.extract.v1.md`, API `/api/intake` and `/api/intake/confirm`,
+  chat panel with a one-sentence editable review card and one-tap choices; classic form kept in a collapsed section. 49 new tests
+  (injection, malformed model output, ambiguity, approval receipt) and a Chromium test. 543 tests pass, pyflakes clean.
+  Not verified: a live LLM run (none was called; tests use a fake client), Hinglish input, mobile layout. A repo test banned the data-field
+  name `budget_total` in prompts, so the prompt uses `budget_inr` and the code maps it. Cloned and read openmuse for ideas.
+- 2026-10-30: Built F7 v1 (ADR-021): `rules.py`, `data/rule_packs.json` (5 diets, all unreviewed), API, Overview card, 14 tests + e2e step.
+  Chose not to write tradition/ritual content because I cannot verify it. 493 tests pass, pyflakes clean.
+- 2026-10-30: Built F5 part 1 (ADR-020): `EventRequest.organizers`, parser, scheduler capacity, Validator policy check, 11 tests
+  (old requests still load, tamper test, replan keeps it). Measured effect and recorded it as small. 479 tests pass, pyflakes clean.
+- 2026-10-30: Recorded the user's answers (ADR-018). Built F4 (Why? panel, e2e-tested). Probed the parser and found `₹ 2L` => INR 2
+  (silent wrong budget); built locale pack v1 (ADR-019): lakh letter, Indic digits, day-first numeric dates with ambiguity as error.
+  468 tests pass. Mishap: my new test constant `BASE` shadowed an existing one and broke 7 older tests until renamed `LOC_BASE`.
+  Not verified: Hinglish, non-INR currencies, real vendor-language input.
+- 2026-10-30: Found F2 already built but unlogged; wrote ADR-016. Gap fixed: CLI `plan` now prints the reality check on stderr.
+  Built F3 (ADR-017): `Ledger`, schemas, `EventMate.ledger_*`, CLI `ledger`, API GET/POST `/api/plans/<id>/ledger`, Budget-tab card,
+  Playwright step; fixed a money-hiding gap (`orphaned_paid`) with a test. Removed two pyflakes leftovers from F1.
+  Vetted roadmap repos via GitHub metadata (table above). 448 tests pass. Failure worth noting: my first e2e wait used string
+  `wait_for_function`, which the strict CSP blocks; replaced with a selector wait.
+- 2026-10-30: Built F1 (ADR-015): `agents/tradeoff.py`, `CapWeight`/`TradeoffOption`/`TradeoffReport` schemas, Manager dry-run
+  split, Validator allocation re-derivation, CLI/API/UI, 27 new tests. Ran the CLI end to end; fixed one bug it exposed.
+- 2026-10-30: Reviewed codebase and rules; ran tests (387 pass); wrote ADR-001..014, ROADMAP triage,
+  this handoff, the "Memory files" rule and `test_memory_files.py`. No product code changed.

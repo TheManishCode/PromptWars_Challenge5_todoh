@@ -1,0 +1,30 @@
+# secrets and local state: never commit
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+eventmate/logs/
+eventmate/plans/
+plans/
+logs/
+*.jsonl
+# test fixtures in the pre-versions file format are real inputs and must be committed
+!tests/fixtures/**/*.jsonl
+.coverage
+eventmate/wall_data/
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+.server.lock
+eventmate/workspaces/
+todoh-backup-*/
+deploy/prometheus/owner_token
+deploy/.env
+.hypothesis/
+.ruff_cache/

@@ -1,0 +1,8 @@
+Third-party files used only by the browser tests. They are never served to users (they are not in web/app.py STATIC_FILES) and never loaded by the page:
+the tests inject axe-core over the DevTools protocol, so the page's content-security-policy is unchanged.
+
+axe.min.js
+  Project: axe-core 4.14.0 (Deque Systems), https://github.com/dequelabs/axe-core
+  Licence: MPL-2.0 (axe.LICENSE.txt). Unmodified; fetched with `npm pack axe-core@4.14.0` and extracted.
+  SHA-256: 20c09fe157a8a34a30e241aaa1fcdade657734f08ab379ecfbeb7d45cc46e878
+  Checked by tests/browser_helpers.py before every run: a substituted copy fails the test.

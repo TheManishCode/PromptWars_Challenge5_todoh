@@ -1,0 +1,34 @@
+name: live-evals
+# Run by hand (Actions tab -> live-evals). Needs the repository secret OPENROUTER_API_KEY (and optionally NVIDIA_API_KEY). Writes the result as an artefact; it never changes the
+# prompt lock (that is a deliberate local step: python -m eventmate.assistant.evals --update-lock --behavioral).
+on: workflow_dispatch
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    env:
+      EVENTMATE_FD: ${{ github.workspace }}/solvers/downward/fast-downward.py
+      EVENTMATE_VAL: ${{ github.workspace }}/solvers/VAL/build/bin/Validate
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: {python-version: "3.14"}
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: solvers
+          key: solvers-fd-24.06.1-val-v1
+      - name: Build Fast Downward and VAL (when not cached)
+        run: |
+          if [ ! -f solvers/downward/fast-downward.py ]; then
+            sudo apt-get update && sudo apt-get install -y cmake g++ make flex bison
+            mkdir -p solvers && cd solvers
+            git clone --depth 1 --branch release-24.06.1 https://github.com/aibasel/downward.git && (cd downward && ./build.py)
+            git clone --depth 1 https://github.com/KCL-Planning/VAL.git && (cd VAL && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j"$(nproc)")
+          fi
+      - run: pip install --require-hashes -r requirements.lock && pip install --no-deps -e .
+      - name: Behavioural evals against the real model
+        run: python -m eventmate.assistant.evals --behavioral --require-behavioral | tee behavioral.txt  # 20 cases
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with: {name: live-eval-results, path: "*.txt"}

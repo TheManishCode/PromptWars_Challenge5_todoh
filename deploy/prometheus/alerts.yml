@@ -1,0 +1,37 @@
+groups:
+  - name: todoh
+    rules:
+      - alert: TodohDown
+        expr: up{job="todoh"} == 0
+        for: 2m
+        labels: {severity: page}
+        annotations: {summary: "to;doh is not answering scrapes", runbook: "docs/RUNBOOK.md#when-something-is-wrong"}
+      - alert: TodohHigh5xxRate
+        expr: sum(rate(eventmate_http_requests_total{status="5xx"}[5m])) / clamp_min(sum(rate(eventmate_http_requests_total[5m])), 0.01) > 0.02
+        for: 5m
+        labels: {severity: page}
+        annotations: {summary: "More than 2% of requests fail with a 5xx", runbook: "docs/RUNBOOK.md#when-something-is-wrong"}
+      - alert: TodohSlowRequests
+        expr: histogram_quantile(0.95, sum(rate(eventmate_http_request_duration_seconds_bucket[5m])) by (le)) > 2.5
+        for: 10m
+        labels: {severity: ticket}
+        annotations: {summary: "p95 request latency above 2.5 s for 10 minutes"}
+      - alert: TodohDiskLow
+        expr: eventmate_disk_free_bytes < 1073741824
+        for: 5m
+        labels: {severity: page}
+        annotations: {summary: "Less than 1 GiB free on the data volume (readiness fails at 50 MB)", runbook: "docs/RUNBOOK.md#backups"}
+      - alert: TodohBackgroundPollFailing
+        expr: increase(eventmate_poll_failures[30m]) > 3
+        labels: {severity: ticket}
+        annotations: {summary: "Background polling keeps failing (mail or outside services)"}
+      - alert: TodohSearchesSaturated
+        expr: eventmate_searches_in_flight >= eventmate_searches_capacity and eventmate_searches_capacity > 0
+        for: 10m
+        labels: {severity: ticket}
+        annotations: {summary: "All slow-search slots busy for 10 minutes"}
+      - alert: TodohRateLimitedSpike
+        expr: sum(rate(eventmate_http_requests_total{status="4xx"}[5m])) > 20
+        for: 10m
+        labels: {severity: ticket}
+        annotations: {summary: "Sustained 4xx rate (possible abuse or a broken client)"}

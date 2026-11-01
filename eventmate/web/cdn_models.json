@@ -1,0 +1,47 @@
+{
+  "alley_van": {
+    "file": "alley_van.a15ba38d14.glb",
+    "sha256": "a15ba38d14b069603a467d879192be1c58681857e2e4cae592002755019d1bbc",
+    "bytes": 1268492
+  },
+  "alley_dumpster": {
+    "file": "alley_dumpster.6aba287fa1.glb",
+    "sha256": "6aba287fa16868870a12e2754da6fbfb58b22320973ed376f4e820c8eae49ffe",
+    "bytes": 373624
+  },
+  "alley_candy": {
+    "file": "alley_candy.24118f8baa.glb",
+    "sha256": "24118f8baa626ece5adbfbf4eb784312e96781b95bcb8dd699e9b10bcf039845",
+    "bytes": 635732
+  },
+  "vend_nuka": {
+    "file": "vend_nuka.a88df882b0.glb",
+    "sha256": "a88df882b00daef90107ad026fc616c2af503b56f488f7afba6d597a36e6dbd5",
+    "bytes": 882916
+  },
+  "vend_retro": {
+    "file": "vend_retro.7f3670507c.glb",
+    "sha256": "7f3670507c1d406faa270ea3ae2f4ff84f64453afd7387202ff1b360f6795e74",
+    "bytes": 3890644
+  },
+  "wall_mural": {
+    "file": "wall_mural.79ebd6edef.glb",
+    "sha256": "79ebd6edef1225bb31e4671e79e1cad83921b1df7322403f257b1a632f8882cf",
+    "bytes": 1113288
+  },
+  "wall_posters": {
+    "file": "wall_posters.83a20928f8.glb",
+    "sha256": "83a20928f8a81fff283cfa0593f988036b03e79d52c168f874d87412b2b24a7c",
+    "bytes": 979324
+  },
+  "holo_table": {
+    "file": "holo_table.5af4d166ff.glb",
+    "sha256": "5af4d166ff620406a59a3197cc6df25bcf220e4966cbb0d552b5691700a6d363",
+    "bytes": 336616
+  },
+  "secret_dossier": {
+    "file": "secret_dossier.b2e6d2608f.glb",
+    "sha256": "b2e6d2608fba453b1a8e6a0f13701900a6d2d37c9f0d5c8a55c99702ed502f03",
+    "bytes": 157644
+  }
+}

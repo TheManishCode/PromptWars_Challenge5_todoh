@@ -1,0 +1,15 @@
+{
+  "prompt_id": "assistant.system",
+  "version": 1,
+  "sha256": "bbad78bcd6c0535d8b3de8ead4f3d05985d1a17be2580619c7577cb807bc1e85",
+  "static_evals": "passed",
+  "behavioral": {
+    "status": "not_run"
+  },
+  "other_prompts": {
+    "ideas.generate": {
+      "version": 1,
+      "sha256": "9dfce299a82a85eaf701f407994184f86949b472a02b3e5afa76c47108e55242"
+    }
+  }
+}
