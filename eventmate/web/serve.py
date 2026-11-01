@@ -14,7 +14,8 @@ from typing import Any
 
 # 6 MB: the largest upload route is audio (5 MB) plus a multipart envelope; every other route is held to 64 KB by the app itself
 MAX_REQUEST_BYTES = 6 * 1024 * 1024
-DEFAULTS = dict(threads=8, channel_timeout=30, connection_limit=200, cleanup_interval=5, max_request_body_size=MAX_REQUEST_BYTES, ident="to;doh")
+DEFAULTS = dict(threads=8, channel_timeout=30, connection_limit=200, cleanup_interval=5, max_request_body_size=MAX_REQUEST_BYTES, ident="to;doh",
+                clear_untrusted_proxy_headers=False)  # waitress otherwise DROPS X-Forwarded-For/-Proto when it has no trusted_proxy of its own: behind a proxy every visitor would then look like the proxy (one shared limit for all) and HTTPS would never be seen. The app believes those headers only from the peers in EVENTMATE_TRUSTED_PROXY (web/limits.py), so passing them through is safe.
 
 
 class ServerUnavailable(RuntimeError):
@@ -68,7 +69,7 @@ def run(app, host: str, port: int, requested: str = "auto", remote: bool = False
                 if not any(busy(c) for c in chans):
                     break
                 time.sleep(0.05)
-            wasyncore.close_all(server._map)
+            server.trigger.pull_trigger(lambda: wasyncore.close_all(server._map))  # in the loop's own thread, like the listener: closing under a running select() is EBADF
 
         def stop(_signum, _frame):
             # The listener is closed from inside the loop (the trigger runs the function in the loop's own thread): closing it here would pull a descriptor out from under a

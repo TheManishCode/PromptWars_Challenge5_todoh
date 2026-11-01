@@ -1,7 +1,7 @@
 # to;doh-the event planner runtime and test dependencies (tested versions, Python 3.14).
 # The package metadata lives in pyproject.toml; this file is the human-readable list of what the suite was last run with.
 # CI installs from requirements.lock (hash-pinned): regenerate it with
-#   uv pip compile pyproject.toml --extra dev --extra flights --generate-hashes --python-version 3.14 -o requirements.lock
+#   uv pip compile pyproject.toml --extra dev --extra flights --extra serve --generate-hashes --python-version 3.14 -o requirements.lock
 # and install with: pip install --require-hashes -r requirements.lock && pip install --no-deps -e .
 pydantic==2.14.2
 ortools==9.15.6755
@@ -13,3 +13,4 @@ playwright==1.64.1   # browser end-to-end tests (also needs a system chromium); 
 pyflakes             # lint
 bandit               # security lint
 # fli (MIT) supplies flight fares: pip install flights. Without it the travel commands fail with an install hint.
+# the container installs requirements-runtime.lock: uv pip compile pyproject.toml --extra serve --generate-hashes --python-version 3.14 -o requirements-runtime.lock

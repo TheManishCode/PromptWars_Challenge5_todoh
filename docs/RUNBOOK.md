@@ -36,5 +36,9 @@ For the person who operates the server. Local single-user use needs none of this
 | 500 with a `request_id` | a bug | find that id in the log; the traceback is next to it; report it with the id |
 | A model or outside service failing | provider outage or limit | the application degrades to its no-model answers and says so; nothing to do but wait |
 
+## Monitoring and alerts
+`/metrics` (Prometheus format) needs the owner token as `Authorization: Bearer` or `X-EventMate-Owner`; `deploy/docker-compose.yml` starts Prometheus (scraping it with the token from `deploy/prometheus/owner_token`) and Grafana (dashboard `to;doh`). Alerts (`deploy/prometheus/alerts.yml`): TodohDown, TodohHigh5xxRate, TodohSlowRequests, TodohDiskLow, TodohBackgroundPollFailing, TodohSearchesSaturated, TodohRateLimitedSpike. Wire Prometheus to an Alertmanager or your cloud's paging; none is bundled. Thresholds are first guesses: tune them after a week of real traffic.
+Before a release: `python tools/loadtest/soak.py --seconds 1800 --visitors 20` (needs the solvers); it fails on any 5xx, a slow p95 or growth in memory, files or threads.
+
 ## Not covered
-Zero-downtime upgrades, more than one server process on the same data, high availability, and any automated alerting: none exists. The app is one process on one disk; plan for a short restart and for the backup as the recovery path.
+Zero-downtime upgrades, more than one server process on the same data, high availability, and a bundled pager: alert rules exist (above) but nothing is wired to a person. The app is one process on one disk; plan for a short restart and for the backup as the recovery path.

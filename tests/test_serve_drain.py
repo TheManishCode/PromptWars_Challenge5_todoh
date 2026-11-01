@@ -81,3 +81,32 @@ def test_sigterm_on_an_idle_server_exits_promptly(tmp_path):
     started = time.time()
     proc.send_signal(signal.SIGTERM)
     assert proc.wait(15) == 0 and time.time() - started < 12
+
+
+def test_forwarded_headers_reach_the_app_so_a_proxys_visitors_are_not_all_one_address(tmp_path):
+    """Found by a load test: waitress silently dropped X-Forwarded-For and -Proto, so behind a proxy every visitor shared the proxy's address and the per-address limits (and the
+    HTTPS check) saw one caller. The app decides whom to believe (web/limits.py); the server must pass the headers on."""
+    from eventmate.web.serve import make_waitress
+
+    def app(environ, start_response):
+        start_response("200 OK", [("Content-Type", "text/plain")])
+        return [repr((environ.get("HTTP_X_FORWARDED_FOR"), environ.get("HTTP_X_FORWARDED_PROTO"))).encode()]
+
+    server = make_waitress(app, "127.0.0.1", 0)
+    threading.Thread(target=server.run, daemon=True).start()
+    c = http.client.HTTPConnection("127.0.0.1", server.effective_port, timeout=10)
+    c.request("GET", "/", headers={"X-Forwarded-For": "198.51.100.7", "X-Forwarded-Proto": "https"})
+    assert c.getresponse().read() == b"('198.51.100.7', 'https')"
+    server.close()
+
+
+def test_stopping_an_idle_server_many_times_never_ends_in_a_traceback(tmp_path):
+    """The first version closed every connection from a helper thread while the loop was in select(): an idle stop usually worked and sometimes ended in EBADF (seen as exit 1 from a
+    container). Ten stops, each with a connection just closed, must all be clean."""
+    for _ in range(10):
+        proc, port = start(tmp_path)
+        assert get(port, "/fast") == (200, b"done")
+        proc.send_signal(signal.SIGTERM)
+        code = proc.wait(15)
+        err = proc.stderr.read().decode()
+        assert code == 0 and "Traceback" not in err, (code, err[-400:])

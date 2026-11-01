@@ -4,8 +4,8 @@
 FROM python:3.14-slim-bookworm AS solvers
 RUN apt-get update && apt-get install -y --no-install-recommends cmake g++ make flex bison git ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
-RUN git clone --depth 1 --branch release-24.06.1 https://github.com/aibasel/downward.git && cd downward && python3 build.py \
- && git clone --depth 1 https://github.com/KCL-Planning/VAL.git && cd VAL && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j"$(nproc)"
+RUN git clone --depth 1 --branch release-24.06.1 https://github.com/aibasel/downward.git && cd downward && python3 build.py
+RUN git clone --depth 1 https://github.com/KCL-Planning/VAL.git && cd VAL && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j"$(nproc)"
 
 FROM python:3.14-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 EVENTMATE_FD=/opt/solvers/downward/fast-downward.py EVENTMATE_VAL=/opt/solvers/VAL/build/bin/Validate \
@@ -14,10 +14,10 @@ RUN useradd --system --uid 10001 --create-home todoh && mkdir /data && chown tod
 COPY --from=solvers /build/downward /opt/solvers/downward
 COPY --from=solvers /build/VAL/build/bin /opt/solvers/VAL/build/bin
 WORKDIR /app
-COPY requirements.lock pyproject.toml README.md ./
-RUN pip install --require-hashes -r requirements.lock
+COPY requirements-runtime.lock pyproject.toml README.md ./
 COPY eventmate ./eventmate
-RUN pip install --no-deps . && rm -rf /app/eventmate
+# The installer is not needed at run time and carries its own vendored copies of libraries (which scanners flag): it is removed once the install is done.
+RUN pip install --require-hashes -r requirements-runtime.lock && pip install --no-deps . && rm -rf /app/eventmate && pip uninstall -y pip setuptools wheel
 USER todoh
 VOLUME /data
 EXPOSE 8000
