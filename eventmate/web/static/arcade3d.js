@@ -2614,6 +2614,19 @@ window.Arcade3D = (function () {
       return false;
     },
     frameStats: function () { return S.frameStats ? S.frameStats() : null; },
+    /* where a vending machine sits in the picture right now, in normalised device coordinates (-1..1 each way; y up): read-only, for tests and the real-phone script */
+    vendFraming: function (i) {
+      const v = (S.vend || [])[i]; if (!v || !S.camera) return null;
+      S.camera.updateMatrixWorld(true);
+      const bx = new THREE.Box3().setFromObject(v.grp);
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, behind = false;
+      [bx.min.x, bx.max.x].forEach(function (x) { [bx.min.y, bx.max.y].forEach(function (y) { [bx.min.z, bx.max.z].forEach(function (z) {
+        const p = new THREE.Vector3(x, y, z).project(S.camera);
+        if (p.z > 1) behind = true;
+        x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
+      }); }); });
+      return { x0: x0, x1: x1, y0: y0, y1: y1, behind: behind, label: v.label };
+    },
     holoReady: function () { return !!(S.holo && S.holo.unlocked && S.holo.root); },
     onVendsChanged: function (cb) { S.vendChangedCb = cb; },
     wallLocked: function () { return !!(S.wallb && S.wallb.focused && S.wallb.data && S.wallb.data.mode === "locked"); },
@@ -2623,7 +2636,7 @@ window.Arcade3D = (function () {
   };
   /* No WebGL: the room cannot be drawn, but the planner must still work. Every scene method becomes a no-op (callers await some of them, and
      `await undefined` is fine); the few whose results are read keep a typed empty answer. isMuted, setMuted and init stay real. */
-  const EMPTY = { vendCount: 0, vendLabels: [], vendFocused: false, holoFocused: false, dossierFocused: false, dossierOpen: false, dossierReady: false, cabReady: false, wallFocused: false, lastSceneTap: 0, screenDebug: {}, openView: false, holoReady: false, wallLocked: false, wallNudge: false, wallCells: [], wallAlignOff: 0, frameStats: null };
+  const EMPTY = { vendCount: 0, vendLabels: [], vendFocused: false, holoFocused: false, dossierFocused: false, dossierOpen: false, dossierReady: false, cabReady: false, wallFocused: false, lastSceneTap: 0, screenDebug: {}, openView: false, holoReady: false, wallLocked: false, wallNudge: false, wallCells: [], wallAlignOff: 0, frameStats: null, vendFraming: null };
   api.disable = function () {
     Object.keys(api).forEach(function (k) {
       if (typeof api[k] !== "function" || k === "disable" || k === "init" || k === "isMuted" || k === "setMuted") return;
