@@ -9,7 +9,7 @@ Updated by: Claude (integration of threads B and C: ADR-059 to ADR-063)
 ## Current state
 
 - Package: `eventmate/` (sibling of `src/llm_plan`, which is untouched). Python venv at `.venv`.
-- Tests: `python -m pytest tests` → **3029 passed, 0 failed, 1 skipped, 4 xfailed** on branch `feature/wall-and-pentest` (the one skip is the opt-in real-engine voice test; the 4 xfails are the strict F-001 marks that thread B's fix removes) (Python 3.14.8, with Fast Downward, VAL and Chromium present; 2026-11-01, 302 s; includes the Chromium end-to-end tests). Without the solver variables most planning tests error, by design. Of these, 65 + 68 + 40 + 6 are the wall (names, store, API, admin), 5 serving and 336 under `tests/pentest/`.
+- Tests: `python -m pytest tests` → **3110 passed, 1 failed, 1 skipped** on branch `integration/c-plus-b` (threads B and C merged; commit e3a475e, 2026-11-01, 317 s; Python 3.14.8, Fast Downward, VAL and Chromium present). The one failure, `tests/test_ui_e2e.py::test_find_vendors_review_confirm_job_stop_request_and_test_vendor_in_the_browser`, failed once on the browser's `net::ERR_NETWORK_CHANGED` (environmental) and passes when run alone; it was not investigated further. The skip is the opt-in real-engine voice test.
 - Git: this repository (`event-agent`) is the home of the code. Tests live in `tests/`; the package is grouped into `planning`, `pricing`, `messaging`, `followthrough`, `integrations`, `agents`, `assistant`, `web`.
 
 ### Roadmap progress (rows count only with passing tests)
