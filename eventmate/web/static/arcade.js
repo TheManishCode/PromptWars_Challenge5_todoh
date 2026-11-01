@@ -585,8 +585,8 @@ function paperVendors(host, plan) {
     if (alts.length) {
       card.appendChild(el("h2", null, "ALTERNATIVES CONSIDERED (" + alts.length + ")"));
       alts.forEach(function (a) {
-        card.appendChild(el("p", "pv-alt", a.name + " - " + (a.eligible ? "eligible" : "rejected") +
-          (a.cost != null ? " · " + fmtINR(a.cost) : "") + (a.reason ? " · " + a.reason : "")));
+        card.appendChild(el("p", "pv-alt", a.option + " - " + a.outcome +
+          (a.reason_not_chosen ? " · " + a.reason_not_chosen : "")));
       });
     } else {
       card.appendChild(el("p", "pv-alt", "alternatives list is not part of the stored plan record yet"));

@@ -122,3 +122,16 @@ def test_the_room_is_the_only_interface_and_old_addresses_lead_to_it(client):
     assert old.status_code == 308 and old.headers["Location"].endswith("/")  # no second page: only a redirect for old links
     for gone in ("/classic", "/static/app.js", "/static/style.css", "/static/index.html", "/static/model-viewer.min.js"):
         assert client.get(gone).status_code == 404, gone
+
+
+def test_the_vendors_tab_reads_only_fields_the_alternative_record_has():
+    # Regression: paperVendors used to render a.name / a.eligible / a.cost / a.reason, none of which exist on
+    # Alternative (option / outcome / reason_not_chosen), so every alternative showed "undefined" in the VENDORS tab.
+    from eventmate.schemas import Alternative
+
+    src = (STATIC / "arcade.js").read_text()
+    loops = re.findall(r"alternatives\.forEach\(function \(a\) \{(.*?)\}\)", src, re.S)
+    loops += re.findall(r"alts\.forEach\(function \(a\) \{(.*?)\}\);", src, re.S)
+    assert loops, "no alternatives rendering loop found - this test must be updated with the page"
+    fields = {f for loop in loops for f in re.findall(r"\ba\.(\w+)", loop)}
+    assert fields <= set(Alternative.model_fields), f"frontend reads fields the record does not have: {fields - set(Alternative.model_fields)}"

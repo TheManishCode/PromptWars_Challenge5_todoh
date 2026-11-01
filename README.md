@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/assets/logo.svg" alt="to;doh the event planner" width="420"></p>
 
-<p align="center"><b>A constraint-verified planning copilot for weddings, birthdays and community events.</b></p>
+<p align="center"><b>A GenAI-powered planning assistant that helps users organise weddings, birthdays and community events with budgets, timelines, vendor checklists and personalised ideas, with every plan checked by solvers rather than trusted to a model.</b><br><a href="docs/PROBLEM_STATEMENT.md">Where each part of that sentence is implemented and tested</a></p>
 
 <p align="center">
 <a href="https://github.com/TheManishCode/to_doh_the_event_planner/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheManishCode/to_doh_the_event_planner/actions/workflows/ci.yml/badge.svg"></a>

@@ -444,3 +444,12 @@ def test_duckduckgo_network_failure_is_still_reported_as_unreachable():
 
     with pytest.raises(SearchError, match="could not be reached"):
         DuckDuckGoHtml(transport=down).search("x")
+
+
+def test_query_templates_are_event_type_neutral():
+    # Regression: templates hardcoded "wedding", so a birthday or community event searched the web with wedding queries.
+    from eventmate.integrations.deals import load_rules
+
+    for name, kind in load_rules()["kinds"].items():
+        for template in kind["queries"]:
+            assert "wedding" not in template.lower(), f"{name}: {template!r} assumes the event is a wedding"

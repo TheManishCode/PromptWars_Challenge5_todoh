@@ -27,7 +27,7 @@
   "kinds": {
     "caterer": {
       "queries": [
-        "wedding caterer in {city} price per plate",
+        "caterer in {city} price per plate",
         "{city} catering cost per plate buffet",
         "best catering packages {city} rates"
       ],
@@ -50,8 +50,8 @@
     },
     "venue": {
       "queries": [
-        "banquet hall in {city} wedding venue price",
-        "{city} wedding venue rental cost",
+        "banquet hall in {city} event price",
+        "{city} event venue rental cost",
         "best event venues {city} rates per day"
       ],
       "units": {
@@ -87,9 +87,9 @@
     },
     "photographer": {
       "queries": [
-        "wedding photographer in {city} price",
+        "event photographer in {city} price",
         "{city} event photography packages cost",
-        "best wedding photographers {city} rates"
+        "best event photographers {city} rates"
       ],
       "units": {
         "per_event": "per_event",
