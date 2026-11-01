@@ -38,7 +38,7 @@ _NUMBER_WORDS = re.compile(
     re.I,
 )
 _MARKUP = re.compile(r"<[A-Za-z/!][^>]*>|```|\]\(|javascript:", re.I)
-_LINK = re.compile(r"https?://|www\.|\b[\w.-]+@[\w.-]+\.\w+", re.I)
+_LINK = re.compile(r"https?://|www\.|\b[\w.-]{1,64}@[\w.-]{1,255}\.\w+", re.I)  # bounded: unbounded runs made this quadratic on a long hyphenated string (found by the regex timing test under load)
 # The whole of each link, address and bare domain, for comparing against evidence. _LINK above only finds that one exists; matching on it alone treats
 # "https://other.example" as present whenever the evidence holds any "https://".
 _LINK_FULL = re.compile(

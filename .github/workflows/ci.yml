@@ -68,7 +68,7 @@ jobs:
       - name: Test suite
         run: |
           if [ "${{ matrix.python }}" = "3.14" ]; then
-            python -m pytest -q --cov=eventmate --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=85
+            python -m pytest -q --cov=eventmate --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=94
           else
             python -m pytest -q
           fi
