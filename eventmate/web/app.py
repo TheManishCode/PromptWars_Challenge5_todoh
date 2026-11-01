@@ -422,7 +422,7 @@ def create_app(
     if os.environ.get("EVENTMATE_WALL", "on").lower() != "off":
         wall_db = Path(os.environ.get("EVENTMATE_WALL_DB") or em.store.root.parent / "wall_data" / "wall.sqlite3")
         bearer_on_wall = bool(api_token) and os.environ.get("EVENTMATE_WALL_BEARER") == "1"  # off by default: a public wall is exempt from the bearer token
-        wall = Wall(app, wall_store or WallStore(wall_db, WallConfig()), wall_limits,
+        wall = Wall(app, wall_store or WallStore(wall_db, WallConfig.from_env(os.environ)), wall_limits,
                     bearer_check=(lambda req: hmac.compare_digest(req.headers.get("Authorization", ""), f"Bearer {api_token}")) if bearer_on_wall else None)
 
     # ------------------------------------------------------------ guards

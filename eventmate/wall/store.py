@@ -11,14 +11,12 @@ import contextlib
 import json
 import os
 import random
-import re
 import secrets
 import sqlite3
-import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from eventmate.wall import layout
@@ -118,6 +116,26 @@ class WallConfig:
     unclaimed_ttl_days: int = 30
     round_retention_days: int = 30
     submission_ttl_hours: int = 24
+
+    @classmethod
+    def from_env(cls, environ: "Mapping[str, str]") -> "WallConfig":
+        """Settings the owner may change without code (docs/WALL.md). An unset name keeps the default; a bad value stops the app at start, not at the first visitor."""
+        ints = {"EVENTMATE_WALL_CAPACITY": "section_capacity", "EVENTMATE_WALL_DAILY_CAP": "daily_submission_cap", "EVENTMATE_WALL_TOTAL_CAP": "total_cap",
+                "EVENTMATE_WALL_PENDING_CAP": "pending_cap", "EVENTMATE_WALL_WINDOW_MS": "window_ms", "EVENTMATE_WALL_ALLOWANCE_MS": "allowance_ms",
+                "EVENTMATE_WALL_ROUNDS_PER_DAY": "rounds_per_day", "EVENTMATE_WALL_SPEED_FLOOR_MS": "speed_floor_ms"}
+        texts = {"EVENTMATE_WALL_MODERATION": "moderation", "EVENTMATE_WALL_ZONE": "hall_zone", "EVENTMATE_WALL_HALL_KIND": "hall_kind"}
+        values: Dict[str, Any] = {}
+        for name, field_name in ints.items():
+            raw = environ.get(name, "").strip()
+            if raw:
+                if not raw.isdigit():
+                    raise ValueError(f"{name} must be a whole number")
+                values[field_name] = int(raw)
+        for name, field_name in texts.items():
+            raw = environ.get(name, "").strip()
+            if raw:
+                values[field_name] = raw
+        return cls(**values)
 
     def __post_init__(self):
         if not 1 <= self.section_capacity <= HARD_MAX_CAPACITY:
@@ -499,15 +517,14 @@ class WallStore:
                 return {"entries": [{"mark_id": r["mark_id"], "name": r["display_name"], "elapsed_ms": r["best_elapsed_ms"], "rank": i + 1} for i, r in enumerate(rows)],
                         "next_cursor": None, "period": period}
             n = max(1, min(int(limit or 50), 100))
-            args: List[Any] = []
-            where = "m.hall = 1 AND m.status = 'visible' AND m.found_at IS NOT NULL"
+            base = ("SELECT m.mark_id, m.display_name, m.found_at, h.best_elapsed_ms FROM marks m LEFT JOIN hall_results h ON h.mark_id = m.mark_id AND h.period_id = ? "
+                    "WHERE m.hall = 1 AND m.status = 'visible' AND m.found_at IS NOT NULL ")
+            order = "ORDER BY m.found_at DESC, m.mark_id DESC LIMIT ?"
             if cursor:
                 fa, mid = self._decode_cursor(cursor)
-                where += " AND (m.found_at < ? OR (m.found_at = ? AND m.mark_id < ?))"
-                args += [fa, fa, mid]
-            rows = c.execute(
-                f"SELECT m.mark_id, m.display_name, m.found_at, h.best_elapsed_ms FROM marks m LEFT JOIN hall_results h ON h.mark_id = m.mark_id AND h.period_id = ? "
-                f"WHERE {where} ORDER BY m.found_at DESC, m.mark_id DESC LIMIT ?", [period["id"], *args, n + 1]).fetchall()
+                rows = c.execute(base + "AND (m.found_at < ? OR (m.found_at = ? AND m.mark_id < ?)) " + order, (period["id"], fa, fa, mid, n + 1)).fetchall()
+            else:
+                rows = c.execute(base + order, (period["id"], n + 1)).fetchall()
             more = len(rows) > n
             rows = rows[:n]
             return {"entries": [{"mark_id": r["mark_id"], "name": r["display_name"], "elapsed_ms": r["best_elapsed_ms"], "rank": None} for r in rows],

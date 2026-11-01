@@ -57,3 +57,14 @@ def test_a_custom_blocklist_can_be_supplied_and_an_unreadable_file_blocks_nothin
     f = tmp_path / "b.txt"
     f.write_text("# c\n\n~frag\nword\n")
     assert names._blocklist(f) == (("word",), ("frag",))
+
+
+@pytest.mark.parametrize("name", ["Visitor 1515 x", "1515 Maple", "Room 5ex"[:0] + "Ana 007", "Gate 1 3 4"])
+def test_a_number_is_not_read_as_look_alike_letters(name):
+    assert validate(name) == name  # "1515" would fold to "isis" if digits were always read as letters
+
+
+@pytest.mark.parametrize("bad", ["sh1t", "S3x", "s3x dick"])
+def test_look_alike_digits_inside_a_word_are_still_read_as_letters(bad):
+    with pytest.raises(InvalidName):
+        validate(bad)

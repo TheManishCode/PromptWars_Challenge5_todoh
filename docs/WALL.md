@@ -115,6 +115,26 @@ Server-side only: NFKC, control, zero-width and bidirectional characters removed
 - Limits are in memory and forgotten on restart (an address is personal data even when hashed, so none is stored): bootstrap 30 per address per hour and 2000 overall, 5 new names per address per hour, 10 failed recovery codes per address per hour and 100 overall, 60 wall writes per address per minute.
 - When deployed behind a proxy the address used for these limits is `request.remote_addr`; trusting a forwarded header needs the Phase 5 trusted-proxy setting, which is not built yet. Until then, behind a proxy every visitor shares one address and the per-address limits collapse into one shared budget: set the numbers deliberately.
 
+## Settings (environment)
+
+`EVENTMATE_WALL=off` removes the routes; `EVENTMATE_WALL_DB` the file; `EVENTMATE_WALL_BEARER=1` keeps the bearer token on wall routes. Numbers, all optional: `EVENTMATE_WALL_CAPACITY` (1 to 300, default 48), `EVENTMATE_WALL_MODERATION` (`pre` default, or `post`),
+`EVENTMATE_WALL_ZONE` (default `Asia/Calcutta`), `EVENTMATE_WALL_HALL_KIND` (`month` default, or `week`), `EVENTMATE_WALL_WINDOW_MS` (5000), `EVENTMATE_WALL_ALLOWANCE_MS` (1500), `EVENTMATE_WALL_ROUNDS_PER_DAY` (5),
+`EVENTMATE_WALL_SPEED_FLOOR_MS` (250), `EVENTMATE_WALL_DAILY_CAP` (200), `EVENTMATE_WALL_TOTAL_CAP` (10,000), `EVENTMATE_WALL_PENDING_CAP` (500). A bad value stops the app at start.
+
+## Status against the v6 spec (8.14)
+
+Built and tested (solver-free, offline): 8.3 data model and constraints, 8.4 names, 8.5 sessions, recovery and removal, 8.6 all 14 routes, 8.7 rounds with the frozen snapshot, 8.8 Hall and periods, 8.9 moderation CLI, backup and restore, 8.10 counting, 8.11 tests 1 to 14.
+Differs from the text, on purpose:
+- `meta` has three extra columns (`mod_seq`, `hall_period_id`, `last_sweep`) and `submissions` two (`http_status`, `body_json`) so a replay returns the original answer; a refused (409) attempt is **not** stored (an attack could fill the table, F-004).
+- `GET /api/wall/hall?limit=` above 100 is `400 bad_request`, not clamped. A per-visitor time is recorded for every found round and shown only for opted-in marks (so a visitor can opt in right after winning); `opt_in:false` deletes this period's row.
+- An untimed round closes 10 minutes after `ready` (a safety limit the spec leaves open). The recovery code is 26 base-32 characters in groups of four, accepted in any case with or without dashes or spaces.
+- Rate limits are in memory, not in a table (an address is personal data even when hashed). `recover` leaves the caller's own marked session alone if it had one; the browser's anonymous bootstrap session is deleted.
+Not built: the frontend, any trusted-proxy address handling (Phase 5, another thread), per-workspace anything (Phase 2), a tested restore on the real host, a scheduled backup.
+
+## Measured (this machine, one process, `synchronous=FULL`, 2026-11-01)
+
+10,000 approved marks written through the real code paths took 15.6 s (about 1.6 ms per mark including session, submit and approve); the database is 5.5 MB. Reads at that size: `meta` 1.5 ms, a 300-name section 0.9 ms (15 KB), the Hall 0.8 ms, `me` 1.0 ms (p50, in-process test client, no network). These are cached for 30 to 60 seconds by contract. Not measured: concurrent load, a real disk under fsync pressure, a CDN.
+
 ## Not verified
 
 Behaviour on a real phone, with the real frontend, behind a real proxy, on a real persistent disk; the backup schedule; the notice wording; the capacity of 48; the fairness of the 5 s window.

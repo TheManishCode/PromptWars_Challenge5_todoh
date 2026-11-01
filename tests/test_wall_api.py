@@ -2,7 +2,6 @@
 
 import json
 import re
-import sys
 import uuid
 from pathlib import Path
 
@@ -493,7 +492,6 @@ def test_deleting_a_plan_never_touches_the_wall_and_the_wall_file_is_outside_the
     em_root = tmp_path / "p"
     assert store.path.parent != em_root and em_root not in store.path.parents
     before = (store.list_marks("visible"), store.stats())
-    plan_id = app.test_client()  # a real plan through the real service
     from eventmate.service import EventMate
     em = EventMate(log_dir=tmp_path / "l", plan_dir=em_root, run_id="x")
     pid = em.plan(EXAMPLE, today=TODAY).plan.plan_id

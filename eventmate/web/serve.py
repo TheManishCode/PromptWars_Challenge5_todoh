@@ -7,7 +7,7 @@ configures; nothing here is on by default for a loopback bind.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 # 6 MB: the largest upload route is audio (5 MB) plus a multipart envelope; every other route is held to 64 KB by the app itself
 MAX_REQUEST_BYTES = 6 * 1024 * 1024
@@ -19,11 +19,9 @@ class ServerUnavailable(RuntimeError):
 
 
 def waitress_installed() -> bool:
-    try:
-        import waitress  # noqa: F401
-    except ImportError:
-        return False
-    return True
+    import importlib.util
+
+    return importlib.util.find_spec("waitress") is not None
 
 
 def choose(requested: str, remote: bool) -> str:

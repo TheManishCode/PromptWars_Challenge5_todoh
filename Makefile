@@ -1,4 +1,4 @@
-.PHONY: install test lint security check web
+.PHONY: install test lint security check web redteam
 install:
 	pip install -e ".[dev]"
 test:
@@ -13,3 +13,6 @@ security:
 check: lint security test
 web:
 	python -m eventmate.web
+
+redteam:
+	python -m pytest -q tests/pentest

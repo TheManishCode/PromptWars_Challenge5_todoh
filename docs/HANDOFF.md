@@ -4,7 +4,7 @@ Read this first, then `AI_CODING_RULES.md`, `DECISIONS.md`, `ROADMAP.md`. Update
 change as any code or decision change, and at the end of every session. Stale handoff = unfinished work.
 
 Last updated: 2026-11-01
-Updated by: Claude (audit with mutation testing, avatar: ADR-050, ADR-051, ADR-052)
+Updated by: Claude (thread C: the wall and a red-team pass: ADR-059, ADR-060, ADR-061)
 
 ## Current state
 
@@ -34,6 +34,9 @@ Updated by: Claude (audit with mutation testing, avatar: ADR-050, ADR-051, ADR-0
 | Multi-city trip search | built, live-tested | ADR-030, `tripsearch.py` |
 | Venue discovery (Overpass) | built and fake-server tested; **not verified live** (public server was at capacity) | ADR-028, `discovery.py` |
 | Weather (OpenWeather) + `.env` loader | built; **live call returned 401** (key probably still activating); fake-server tested | ADR-029, `weather.py`, `env.py` |
+| Signature wall (v6 Phase 8) | backend built and tested solver-free; **frontend not integrated, nothing run on a device or behind a proxy**; the notice wording, host and recovery policy are the owner's | ADR-059, ADR-060, `eventmate/wall/`, `eventmate/wall_admin.py`, `docs/WALL.md`, `docs/WALL_PRIVACY.md` |
+| Red-team pass (attack, fix, record) | round 1 done: 9 findings, 8 fixed or mitigated, 1 handed to the Phase 4 thread; the register says what was and was not tested | ADR-061, `docs/SECURITY_FINDINGS.md`, `tests/pentest/` |
+| Production serving | waitress optional extra; a non-loopback bind refuses the built-in server; behaviour behind a real proxy not verified | ADR-061, `eventmate/web/serve.py`, `tests/test_serve.py` |
 | F10-F23 | not started | `ROADMAP.md` |
 
 ## Known limitations (what the roadmap fixes)
@@ -105,6 +108,8 @@ Roadmap-note repos were checked on 2026-10-30 through the GitHub API **metadata 
 Nearly all have 0-2 stars, so none counts as proven; any borrowing needs a read-through and a licence check first.
 
 ## Session log (newest first)
+
+- 2026-11-01: Thread C (wall and red team), branch `feature/wall-and-pentest` from 95aa06c (ADR-059 to ADR-061; not pushed, not merged; other threads: A durability on `fix/phase-0-1`, B LLM hardening on `fix/phase-4-llm-hardening`; notes between threads are in `../handoffs/` and `docs/THREADS.md`). Built the wall (v6 Phase 8): its own SQLite file, cookie credential and CSRF value, 14 routes matched by exact rule, pre-moderation, slots that never move, rounds with a frozen snapshot, a monthly Hall, owner CLI with backup and restore, docs. Attacked the existing code and fixed what broke, each with a test that failed first (details and honest limits in `docs/SECURITY_FINDINGS.md`): F-003 the send caps could be exceeded by two dispatchers (count and claim now under the store's file lock; read that diff, it sits next to the Mandate code), F-005 guest-list formula check bypassed by zero-width and bidi characters, F-006 a WAV header could hide a long recording and a timed-out engine let work pile up, F-007 IPv6 forms carrying a private IPv4 passed the fetcher, F-008 one email with about 1,000 nested multiparts stopped every vendor reply from being read, F-009 the owner digest destination was never verified (mitigated with `EVENTMATE_OWNER_EMAILS`), F-002 no production server (waitress optional extra). Found while testing my own code: a refusal raised inside a transaction rolled back the state it had just set (stale round), a huge section id was a 500, refused retries grew a table, a digit-only name read as look-alike letters. Handed to thread B: F-001 (`_EMAIL` regex in `guard.py` is quadratic; an xfail test waits for the fix). Not done and not verified: anything on a real browser, phone, proxy, mailbox, model or host; the wall frontend; Phases 1 to 3 and 5 (other threads); the optional real voice engine. Throw-away probes are in `_audit/pentest/`.
 
 - 2026-11-01: Phase R of the owner's v5 prompts, on branch `fix/phase-r-review` (ADR-058; not pushed, not merged). R1/R2: voice turns have one commit barrier, cancel after it is `already_final`, `withdraw` removed, `adopt` returns `(proposal, created)`. R3: the backend emits only the page's names (guest preview/commit, capabilities groups, cancel `{session_id, generation, playback_chars}` bound to its session, bodyless session DELETE). R4: vendor drafts record the plan version and a facts hash, go `stale` after a replan, and are refused at approve and at send; quote jobs re-run to say so. R5: `.coverage` untracked; the rename touched exactly six static files (29 lines) for the frontend to reconcile: `app.js`, `arcade.css`, `arcade.html`, `arcade.js`, `arcade3d.js`, `index.html`. Real-mailbox validation is still "not run" in `docs/EMAIL_VALIDATION.md`, `docs/EMAIL_SETUP.md` and the README. Phases 0 to 8 of the v5 prompts are not started; the wall (Phase 8) waits for the owner's answers.
 

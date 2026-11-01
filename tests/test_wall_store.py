@@ -10,7 +10,7 @@ import pytest
 
 from eventmate.wall import layout
 from eventmate.wall.store import SCHEMA_VERSION, WallConfig, WallError, WallSchemaError, WallStore
-from tests.wall_helpers import Clock, make_wall
+from tests.wall_helpers import make_wall
 
 
 def h(n):
@@ -307,7 +307,7 @@ def test_recover_carries_rounds_and_submissions_to_the_new_credential(tmp_path):
 
 def test_remove_with_the_cookie_or_with_the_code(tmp_path):
     store, _ = make_wall(tmp_path)
-    a, b = visitor(store, 1, "Cookie"), visitor(store, 2, "Coded")
+    visitor(store, 1, "Cookie"), visitor(store, 2, "Coded")
     store.remove_mine(h(1))
     store.remove_mine(h(1))  # idempotent
     assert store.me(h(1))["mark"]["status"] == "removed" and store.me(h(1))["has_mark"] is True  # a removed credential still counts as marked
@@ -368,7 +368,6 @@ def test_never_a_hidden_marks_slot_and_removed_tombstones_are_valid_targets(tmp_
     store.remove(ids[4])
     seen = set()
     for k in range(40):
-        store, clock = store, None
         r = store.issue_round(h(30), "untimed")
         assert r["available"], r
         seen.add(r["to_slot"])
@@ -384,7 +383,7 @@ def test_available_false_reasons(tmp_path):
     assert store.issue_round(h(1), "timed") == {"available": False, "reason": "not_visible"}  # no mark
     visitor(store, 2, approve=False)
     assert store.issue_round(h(2), "timed")["reason"] == "not_visible"  # pending
-    m = visitor(store, 3)
+    visitor(store, 3)
     # capacity 3, slot 0 is the owner; neighbour 1 excluded; only slot 2 left: ok, then the daily limit and the open round
     first = store.issue_round(h(3), "timed")
     assert first["available"]
@@ -572,7 +571,7 @@ def test_a_win_under_the_floor_is_found_unranked_and_still_unlocks(tmp_path):
 def test_a_hide_restore_removal_or_layout_change_makes_ready_stale_without_counting(tmp_path):
     for action in ("hide", "restore", "remove", "layout"):
         store, clock = make_wall(tmp_path / action, section_capacity=10, rounds_per_day=1)
-        mine = visitor(store, 1)
+        visitor(store, 1)
         other = visitor(store, 2)
         if action == "restore":
             store.hide(other)
@@ -625,7 +624,7 @@ def test_the_snapshot_is_frozen_names_are_public_and_it_is_bounded(tmp_path):
     snap = r["snapshot"]
     assert [s["mark_id"] for s in snap["slots"]] == ids and len(snap["slots"]) <= snap["capacity"] == 300 and len(snap["slots"]) <= 300
     late = visitor(store, 500)  # approved after issue: not in the frozen view
-    pending = visitor(store, 501, approve=False)
+    visitor(store, 501, approve=False)
     store.hide(ids[2])  # a later hide cannot change what the client already holds (it is the client's copy), and ready then says stale
     assert late not in [s["mark_id"] for s in snap["slots"]] and ids[2] in [s["mark_id"] for s in snap["slots"]]
     assert all(set(s) == {"slot", "mark_id", "name"} for s in snap["slots"])
@@ -789,7 +788,8 @@ def test_sweep_purges_old_keys_rounds_and_sessions_but_never_a_mark(tmp_path):
 
 def test_backup_restore_round_trip_and_export_public(tmp_path):
     store, clock = make_wall(tmp_path, section_capacity=5)
-    a, b, c_ = visitor(store, 1, "Shown One"), visitor(store, 2, "Hidden One"), visitor(store, 3, "Removed One")
+    visitor(store, 1, "Shown One")
+    b, c_ = visitor(store, 2, "Hidden One"), visitor(store, 3, "Removed One")
     visitor(store, 4, "Pending One", approve=False)
     store.hide(b)
     store.remove(c_)
@@ -849,3 +849,17 @@ def test_admin_moderation_errors(tmp_path):
         store.approve(m)
     with pytest.raises(WallError):
         store.new_layout(77)
+
+
+def test_the_owner_can_change_the_main_settings_from_the_environment():
+    cfg = WallConfig.from_env({"EVENTMATE_WALL_CAPACITY": "24", "EVENTMATE_WALL_MODERATION": "post", "EVENTMATE_WALL_ZONE": "Europe/London", "EVENTMATE_WALL_HALL_KIND": "week",
+                               "EVENTMATE_WALL_WINDOW_MS": "4000", "EVENTMATE_WALL_ROUNDS_PER_DAY": "3", "EVENTMATE_WALL_DAILY_CAP": "50"})
+    assert (cfg.section_capacity, cfg.moderation, cfg.hall_zone, cfg.hall_kind, cfg.window_ms, cfg.rounds_per_day, cfg.daily_submission_cap) == (24, "post", "Europe/London", "week", 4000, 3, 50)
+    assert WallConfig.from_env({}) == WallConfig() and WallConfig.from_env({"EVENTMATE_WALL_CAPACITY": " "}) == WallConfig()
+
+
+@pytest.mark.parametrize("env", [{"EVENTMATE_WALL_CAPACITY": "301"}, {"EVENTMATE_WALL_CAPACITY": "0"}, {"EVENTMATE_WALL_CAPACITY": "-5"}, {"EVENTMATE_WALL_CAPACITY": "abc"}, {"EVENTMATE_WALL_MODERATION": "never"},
+                                 {"EVENTMATE_WALL_ZONE": "Mars/Base"}, {"EVENTMATE_WALL_HALL_KIND": "year"}])
+def test_a_bad_setting_stops_the_app_at_start(env):
+    with pytest.raises(Exception):
+        WallConfig.from_env(env)

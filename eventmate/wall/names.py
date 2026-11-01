@@ -55,7 +55,9 @@ def _script(ch: str) -> Optional[str]:
 
 def _folded(text: str) -> str:
     base = "".join(c for c in unicodedata.normalize("NFKD", text.casefold()) if not unicodedata.combining(c))
-    return re.sub(r"[^a-z0-9]", "", base.translate(_LEET))
+    if any(c.isalpha() for c in base):  # look-alike digits are only read as letters inside a word that has letters: "1515" is a number, "1s1s" is not
+        base = base.translate(_LEET)
+    return re.sub(r"[^a-z0-9]", "", base)
 
 
 def validate(raw: object, blocklist: Optional[Tuple[Tuple[str, ...], Tuple[str, ...]]] = None) -> str:

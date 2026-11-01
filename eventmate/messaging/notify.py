@@ -88,6 +88,9 @@ class OwnerNotifier:
         if not _EMAIL.fullmatch(destination):
             raise NotifyError("give one plain email address (no names, lists or extra parameters)")
         low = destination.casefold()
+        allowed = {a.strip().casefold() for a in os.environ.get("EVENTMATE_OWNER_EMAILS", "").split(",") if a.strip()}
+        if allowed and low not in allowed:  # the owner's own list, from the environment: whoever can reach the API cannot point the digest at an address of their choosing (F-009)
+            raise NotifyError("that address is not on this installation's list of owner addresses (EVENTMATE_OWNER_EMAILS)")
         if low in {a.casefold() for a in self._vendor_addresses()}:
             raise NotifyError("that address belongs to a vendor you contact; updates only go to you")
         if low in {a.casefold() for a in self._own_addresses()}:

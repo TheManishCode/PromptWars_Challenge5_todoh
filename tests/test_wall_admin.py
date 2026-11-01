@@ -3,9 +3,6 @@
 import json
 import multiprocessing as mp
 import sqlite3
-
-import pytest
-
 from dataclasses import replace
 
 from eventmate.wall.store import WallConfig, WallStore
@@ -46,7 +43,7 @@ def test_cli_errors_are_clean_exit_codes(tmp_path, capsys):
 
 def test_export_public_and_backup_commands(tmp_path, capsys):
     store, _ = make_wall(tmp_path)
-    a = visitor(store, 1, "Public One")
+    visitor(store, 1, "Public One")
     b = visitor(store, 2, "Hidden One")
     store.hide(b)
     out = tmp_path / "pub" / "wall.json"
