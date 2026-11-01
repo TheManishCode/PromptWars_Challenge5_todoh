@@ -37,3 +37,29 @@ To update either file: replace it, update the hash above, and re-run `tests/test
 - The attendant on that page is the same Pauly model as the chat avatar (`avatar.glb`, credited above); the patch shipped a byte-identical copy as `character.glb`, which was removed.
 - `three.min.js` (three.js r128, MIT, licence in `three.min.LICENSE.txt`) with the standard EffectComposer, bloom and GLTFLoader add-ons. SHA-256 of `three.min.js`: `9274bbcec8d96168626c732b5d31c775aa8cfb7eaa0599bec0c175908a2c1ce2`
 - Credit is shown at the bottom of the `/arcade` page and in `docs/ARCADE_UI.md`.
+
+## Back-alley dressing and road module (v9, user-supplied models)
+
+Placed in the `/arcade` room (exact Sketchfab pages are linked from the source
+files' listings; licences as declared by their authors):
+
+- `alley_van.glb`: "VANdalized" van by billionlioe, CC BY 4.0. Shown with the rear half intentionally out of frame.
+- `alley_dumpster.glb`: dumpster by DigitalBirb, CC BY 4.0.
+- `alley_candy.glb`: candy/gumball machine by Etman, CC BY 4.0.
+- `vend_nuka.glb`: Nuka Cola vending machine by gunduzhan, CC BY 4.0.
+- `vend_retro.glb`: retro vending machine by Minh Nguyen, CC BY-NC 4.0 (non-commercial use only).
+- `vend_cat.glb`: cat vending machine by Minh Nguyen, CC BY-NC-ND 4.0. Non-commercial, and the ND terms restrict sharing adapted copies, so the original 54.9 MB scan ships UNMODIFIED. Measured effect: this file freezes the software-GL (SwiftShader) preview and may stutter on low-end devices, so it is never auto-loaded - the visitor loads it explicitly via the "+ CAT 55MB" button (or `?cat=1`), with that warning on the button.
+- `wall_mural.glb`: scan by Guillermo of the "Native" girl mural after Tito Ferrara, CC BY-NC-SA 4.0. ADAPTED for this page: depth-flattened (z-scale 12%) and rescaled to cover the full back wall; torn edges retained. Share-alike obligations apply to the adapted render arrangement.
+- `wall_posters.glb`: missing-person poster decal by honky, CC BY 4.0. Shown only as cropped pieces layered over the generated graffiti, never as the raw decal wall.
+- `holo_table.glb`: sci-fi hologram table by irzafy, CC BY 4.0, https://sketchfab.com/3d-models/sci-fi-hologram-table-b1f81f7e06f74877ae34786142064a8d. Stock display plane and hologram content mesh hidden at runtime; the live Hall of Fame list is drawn as floating lettering inside the glow column.
+- `road.glb` / `car.glb` / `barrier.glb`: the CRT road theatre (10 module stops, gates, car) carried over from the user's own earlier arcade line; same internal asset provenance as that line.
+- Side-wall graffiti is original art generated in code at runtime (no third-party material). Neon signs removed per user request.
+
+### TOP SECRET dossier (easter egg clue prop)
+- "Worm Dossier M.E.G Game Ready" by NightmareBunny (@NightMareBunny_Officiel), CC-BY-4.0
+  https://sketchfab.com/3d-models/worm-dossier-meg-game-ready-e94be6e9166440e69bbfd58be613957e
+  Lies by the gumball machine as the easter-egg clue prop; the cover is a single
+  mesh, so the paper and sticky note rise out on click instead of a hinge fold.
+  The author's own description notes the note is "textured separately for easy
+  customization of the contents": the sticky-note writing is drawn at runtime on
+  a canvas card riding the note mesh. The source model is shipped UNMODIFIED.

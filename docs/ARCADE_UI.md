@@ -116,3 +116,10 @@ rupees, catering and photography". An infeasible brief (e.g. 20000 rupees for
 
 
 Credits: cabinet model by Snji, attendant by dantheman, both CC BY 4.0 (see ATTRIBUTIONS.md); artwork and animation rigging by to;doh-the event planner.
+
+## v9 updates (back-alley composition + opt-in heavy asset)
+
+- Composition (user-directed): cabinet pulled back against the mural wall; the back wall carries ONLY the full-wall girl mural (adapted scan, see ATTRIBUTIONS); van in the left foreground with its rear half intentionally out of frame, nose toward the cabinet; both neon signs removed; side walls are generated graffiti + cropped poster pieces.
+- The big cat vending machine (54.9 MB, CC BY-NC-ND, original bytes) is OPT-IN via the "+ CAT 55MB" HUD button: measured to freeze the software-rendered preview; no auto-load, no real-GPU performance claims.
+- Zoomed CRT view frames the screen into the visible band above the persistent bottom bar so the 10-stop progress strip stays readable.
+- The CRT runs the road/car module theatre (10 stops, gates, stop labels) on top of the 355ee57 backend and pulse semantics.

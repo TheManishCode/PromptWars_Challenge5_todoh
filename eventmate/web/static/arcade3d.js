@@ -11,12 +11,11 @@
  * and a hand-held camera sway. Falls back to a plain fast path (?lowfx=1 or
  * auto-degrade) that skips bloom and halves the pixel ratio.
  *
- * The cabinet screen shows the REAL pipeline as a water-cooling loop:
- * each module is a block, rigid glass tubes with metal elbow fittings connect
- * them in pipeline order, and a continuous volume of blue liquid fills each
- * tube as work passes to the next stage. Nothing here invents state: arcade.js
- * drives every light from /api/arcade/pulse (the recorded timings of the run,
- * replayed slowed and labelled).
+ * The cabinet screen shows the REAL pipeline as a night road: one stop per
+ * module, a boom barrier past each stop, and a car that waits at a stop while
+ * that module's real work runs, then drives on when it clears. Nothing here
+ * invents state: arcade.js drives every light from /api/arcade/pulse (the
+ * recorded timings of the run, replayed slowed and labelled).
  */
 /* global THREE */
 "use strict";
@@ -30,7 +29,7 @@ window.Arcade3D = (function () {
     screenMesh: null, glassMesh: null, screenLight: null, lever: null, tray: null,
     attendant: null, attBody: null, attHead: null, coin: null, sheets: [], flySheet: null,
     audio: null, master: null, slotGlow: null,
-    camWide: { pos: [0, 2.5, 7.3], tgt: [0, 1.72, 0] },
+    camWide: { pos: [0, 2.35, 6.4], tgt: [0, 1.72, 0] },
     camZoom: { pos: [0.02, 1.74, 1.95], tgt: [0.02, 1.72, 0.45] },
     powered: false, shaking: 0, zoomed: false, camImpulse: 0,
     swayPrev: new THREE.Vector3(),
@@ -325,7 +324,17 @@ window.Arcade3D = (function () {
     });
   }
 
-  /* ================= the workflow screen (water-cooling loop) ================= */
+  /* ================= the workflow screen (module road) =================
+   * The CRT shows the real pipeline as a night road: one stop per module,
+   * a boom barrier just past each stop, and a car that waits at a stop
+   * while that module's real work runs, then drives on when it clears.
+   * Same honesty rule as before: states change only from /api/arcade/pulse
+   * data or the slowed replay of this run's recorded timings; the car never
+   * moves on its own timer. Assets (all Sketchfab, CC-BY 4.0): car "2024
+   * Porsche 992 GT3 R" by Dave Love SketchFab, road pieces "Road Modular"
+   * by mortalityrexotable, barrier "Road Barrier" by Sousinho. Textures
+   * downscaled and car geometry decimated for page weight.
+   */
   const STAGE_ORDER = ["parse", "decompose", "budget", "guests", "vendors",
     "select", "schedule", "symbolic", "validate", "store"];
   const STAGE_LABEL = { parse: "PARSE", decompose: "DECOMPOSE", budget: "BUDGET", guests: "GUESTS",
@@ -334,14 +343,247 @@ window.Arcade3D = (function () {
   const SW = 2048, SH = 1280, SC = 2.0;
   const scr = { // everything drawn on the cabinet CRT
     canvas: null, ctx: null, tex: null, scan: null,
-    crt: "STANDBY", nodes: {}, tubes: [], dirty: true,
+    crt: "STANDBY", nodes: {}, dirty: true,
   };
-  // snake layout: row 1 left→right, drop at the far right, row 2 right→left
-  const NODE_POS = {
-    parse: [120, 210], decompose: [305, 210], budget: [490, 210], guests: [675, 210], vendors: [860, 210],
-    select: [860, 452], schedule: [675, 452], symbolic: [490, 452], validate: [305, 452], store: [120, 452],
+  // the 3D road viewport inside the CRT's logical 1024x640 space
+  const TV = { x: 26, y: 74, w: 972, h: 488 };
+  const STATE_COL = { waiting: "#2b3846", active: "#3fd2ff", done: "#35b57f", failed: "#ff5a5a" };
+
+  /* -------- the road scene: own small renderer, composited into the CRT -------- */
+  const TRK = {
+    ok: false, error: null,
+    renderer: null, scene: null, cam: null,
+    car: null, brakeMats: [], stops: [],
+    pieceLen: 8, spacing: 5.2, startX: -4.4,
+    carX: -4.4, prevX: -4.4, targetX: -4.4, camX: -4.4,
+    drive: null,
   };
-  const NODE_W = 138, NODE_H = 78;
+
+  function groundCenter(obj, baseY) {
+    const b = new THREE.Box3().setFromObject(obj);
+    const c = b.getCenter(new THREE.Vector3());
+    obj.position.x -= c.x; obj.position.z -= c.z;
+    obj.position.y -= b.min.y - (baseY || 0);
+  }
+
+  function trackSetup() {
+    const c = document.createElement("canvas");
+    const ss = S.lowFx ? 1 : 1.5; // supersample: the CRT magnifies this
+    c.width = Math.round(TV.w * ss); c.height = Math.round(TV.h * ss);
+    try { TRK.renderer = new THREE.WebGLRenderer({ canvas: c, antialias: true }); }
+    catch (e) {
+      try { TRK.renderer = new THREE.WebGLRenderer({ canvas: c, antialias: false }); }
+      catch (e2) { TRK.error = "this browser refused a second WebGL context"; return; }
+    }
+    const sc = TRK.scene = new THREE.Scene();
+    sc.background = new THREE.Color(0x070b13);
+    sc.fog = new THREE.Fog(0x070b13, 24, 64);
+    TRK.cam = new THREE.PerspectiveCamera(38, TV.w / TV.h, 0.1, 200);
+    sc.add(new THREE.HemisphereLight(0xaecbe8, 0x241c14, 1.25));
+    const moon = new THREE.DirectionalLight(0xcfe2ff, 0.95);
+    moon.position.set(-6, 12, 7); sc.add(moon);
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 120),
+      new THREE.MeshStandardMaterial({ color: 0x0b0e14, roughness: 0.95 }));
+    ground.rotation.x = -Math.PI / 2; ground.position.y = -0.08;
+    sc.add(ground);
+    const loader = new THREE.GLTFLoader();
+    const load = (url) => new Promise((res, rej) => loader.load(url, res, undefined,
+      () => rej(new Error(url + " failed to load"))));
+    Promise.all([load("/static/road.glb"), load("/static/car.glb"), load("/static/barrier.glb")])
+      .then(function (g) {
+        try { trackBuild(g[0], g[1], g[2]); TRK.ok = true; }
+        catch (e) { TRK.error = String((e && e.message) || e); }
+        scr.dirty = true;
+      })
+      .catch(function (e) { TRK.error = String((e && e.message) || e); scr.dirty = true; });
+  }
+
+  function trackBuild(gRoad, gCar, gBar) {
+    const sc = TRK.scene;
+    /* road: the straight dual-carriageway piece from the modular kit, tiled */
+    const kit = gRoad.scene;
+    const piece = kit.getObjectByName("Double_road_36_7") ||
+      kit.getObjectByName("Double_road_start_43_5") || kit;
+    const proto = new THREE.Group();
+    proto.add(piece.clone(true));
+    groundCenter(proto.children[0], 0);
+    let pb = new THREE.Box3().setFromObject(proto);
+    let ps = pb.getSize(new THREE.Vector3());
+    if (ps.z > ps.x) { proto.rotation.y = Math.PI / 2; pb.setFromObject(proto); ps = pb.getSize(new THREE.Vector3()); }
+    proto.scale.setScalar(6.2 / ps.z);
+    pb.setFromObject(proto); ps = pb.getSize(new THREE.Vector3());
+    TRK.pieceLen = ps.x;
+    TRK.spacing = 7.6;
+    TRK.startX = -TRK.spacing * 0.85;
+    TRK.carX = TRK.prevX = TRK.targetX = TRK.camX = TRK.startX;
+    pb.setFromObject(proto);
+    const roadTop = pb.max.y;
+    const xEnd = (STAGE_ORDER.length - 1) * TRK.spacing + TRK.pieceLen * 1.8;
+    for (let x = TRK.startX - TRK.pieceLen * 1.2; x < xEnd; x += TRK.pieceLen) {
+      const inst = proto.clone(true);
+      inst.position.x = x + TRK.pieceLen / 2;
+      inst.position.y -= roadTop; // asphalt surface at y=0
+      sc.add(inst);
+    }
+    /* night lighting: simple lamp posts (the kit's pole meshes ship lying
+       flat, so posts are procedural: bulb + real point light every 2 stops) */
+    for (let i = 0; i < STAGE_ORDER.length; i += 2) {
+      const px = i * TRK.spacing + TRK.spacing / 2;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 4.6, 8),
+        new THREE.MeshStandardMaterial({ color: 0x2a3440, roughness: 0.6, metalness: 0.6 }));
+      post.position.set(px, 2.3, -3.4);
+      sc.add(post);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8),
+        new THREE.MeshBasicMaterial({ color: 0xd8ecff }));
+      bulb.position.set(px, 4.65, -3.4);
+      sc.add(bulb);
+      const lamp = new THREE.PointLight(0xbfd8ff, 1.0, 18);
+      lamp.position.set(px, 4.5, -2.2);
+      sc.add(lamp);
+    }
+    /* one stop per module: sign + status lamp at the stop, barrier at its exit */
+    const signSrc = kit.getObjectByName("Stop_sign_45_87") || kit.getObjectByName("Stop_sign001_23_83");
+    const barSrc = gBar.scene;
+    STAGE_ORDER.forEach(function (name, i) {
+      const st = { name: name, x: i * TRK.spacing, state: "waiting", sign: null, lamp: null, gate: null };
+      if (signSrc) {
+        const g = new THREE.Group();
+        g.add(signSrc.clone(true));
+        let b = new THREE.Box3().setFromObject(g);
+        g.scale.setScalar(2.1 / b.getSize(new THREE.Vector3()).y);
+        g.position.set(st.x, 0, 3.0);
+        sc.add(g);
+        g.updateMatrixWorld(true);
+        b.setFromObject(g);
+        g.position.y -= b.min.y; // base on the asphalt
+        g.position.x -= b.getCenter(new THREE.Vector3()).x - st.x;
+        st.sign = g;
+      }
+      const lampMat = new THREE.MeshBasicMaterial({ color: STATE_COL.waiting });
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), lampMat);
+      lamp.position.set(st.x, 2.45, 3.0);
+      sc.add(lamp);
+      st.lamp = lamp;
+      const bg = new THREE.Group();
+      bg.add(barSrc.clone(true));
+      let b = new THREE.Box3().setFromObject(bg);
+      let s = b.getSize(new THREE.Vector3());
+      if (s.x > s.z) bg.rotation.y = Math.PI / 2; // pole spans the carriageway
+      b.setFromObject(bg); s = b.getSize(new THREE.Vector3());
+      bg.scale.setScalar(4.6 / s.z);
+      bg.position.set(st.x + TRK.spacing * 0.5, 0, 0);
+      sc.add(bg);
+      bg.updateMatrixWorld(true);
+      b.setFromObject(bg);
+      const bc = b.getCenter(new THREE.Vector3());
+      bg.position.y -= b.min.y; // stands on the asphalt
+      bg.position.x -= bc.x - (st.x + TRK.spacing * 0.5);
+      bg.position.z -= bc.z; // centered across the carriageway
+      const pole = bg.getObjectByName("pole");
+      st.gate = { root: bg, pole: pole, baseQ: pole ? pole.quaternion.clone() : null, open: 0, openT: 0 };
+      TRK.stops.push(st);
+    });
+    /* the car: normalized length, nose pointed at +X via its own light meshes */
+    const car = gCar.scene;
+    const carG = new THREE.Group();
+    carG.add(car);
+    let cb = new THREE.Box3().setFromObject(carG);
+    let cs = cb.getSize(new THREE.Vector3());
+    if (cs.z > cs.x) { carG.rotation.y = Math.PI / 2; cb.setFromObject(carG); cs = cb.getSize(new THREE.Vector3()); }
+    carG.scale.setScalar(3.9 / cs.x);
+    const front = new THREE.Vector3(), rear = new THREE.Vector3();
+    let nf = 0, nr = 0;
+    carG.traverse(function (o) {
+      if (!o.isMesh) return;
+      const mn = ((o.material && o.material.name) || "") + " " + (o.name || "");
+      const p = new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3());
+      if (/Light_Front/i.test(mn)) { front.add(p); nf++; }
+      if (/Light_Rear/i.test(mn)) { rear.add(p); nr++; }
+      if (/Emissive_Light_Rear/i.test(o.material && o.material.name || "") && o.material.emissive) {
+        TRK.brakeMats.push(o.material);
+      }
+    });
+    if (nf && nr) {
+      front.multiplyScalar(1 / nf); rear.multiplyScalar(1 / nr);
+      if (Math.abs(front.x - rear.x) >= Math.abs(front.z - rear.z)) {
+        if (front.x < rear.x) carG.rotation.y += Math.PI;
+      } else if (front.z < rear.z) { carG.rotation.y += Math.PI; }
+    }
+    /* place at the very end, in world space on the root group */
+    carG.updateMatrixWorld(true);
+    cb.setFromObject(carG);
+    const cc = cb.getCenter(new THREE.Vector3());
+    carG.position.set(TRK.startX - cc.x, 0.03 - cb.min.y, -cc.z);
+    /* headlight: one real spot so the road ahead of the car reads at night */
+    const head = new THREE.SpotLight(0xd8ecff, 1.4, 16, 0.62, 0.5, 1);
+    head.position.set(cc.x + cs.x * 0.45, 0.7, cc.z);
+    head.target.position.set(cc.x + cs.x * 0.45 + 7, 0.1, cc.z);
+    carG.add(head); carG.add(head.target);
+    sc.add(carG);
+    TRK.car = carG;
+  }
+
+  function stopState(idx, state) {
+    const st = TRK.stops[idx];
+    if (!st) return;
+    st.state = state;
+    if (st.lamp) st.lamp.material.color.set(STATE_COL[state] || STATE_COL.waiting);
+  }
+
+  function gateSet(idx, open, instant) {
+    const st = TRK.stops[idx];
+    if (!st || !st.gate) return;
+    st.gate.openT = open ? 1 : 0;
+    if (instant || S.reduced) st.gate.open = st.gate.openT;
+  }
+
+  function trackDriveTo(x, durMs) {
+    return new Promise(function (resolve) {
+      if (S.reduced || durMs <= 0 || !TRK.car) {
+        TRK.carX = TRK.targetX = TRK.prevX = x; resolve(); return;
+      }
+      TRK.targetX = x;
+      TRK.drive = { from: TRK.carX, to: x, t0: performance.now(), dur: durMs, resolve: resolve };
+    });
+  }
+
+  const _qx = new THREE.Quaternion(), _ax = new THREE.Vector3(1, 0, 0);
+  function trackUpdate(dt, t) {
+    if (!TRK.ok) return;
+    if (TRK.drive) {
+      const d = TRK.drive;
+      const k = Math.min(1, (performance.now() - d.t0) / d.dur);
+      TRK.carX = d.from + (d.to - d.from) * easeInOut(k);
+      if (k >= 1) { TRK.drive = null; d.resolve(); }
+    } else {
+      const dx = TRK.targetX - TRK.carX;
+      if (Math.abs(dx) > 0.004) TRK.carX += dx * Math.min(1, dt * 5);
+    }
+    TRK.car.position.x = TRK.carX;
+    TRK.prevX = TRK.carX;
+    /* barriers ease toward their commanded position around the authored axis */
+    for (const st of TRK.stops) {
+      const g = st.gate;
+      if (!g || !g.pole || g.open === g.openT) continue;
+      const step = Math.min(Math.abs(g.openT - g.open), dt * 1.6);
+      g.open += (g.openT > g.open ? step : -step);
+      _qx.setFromAxisAngle(_ax, -g.open * 1.22);
+      g.pole.quaternion.copy(g.baseQ).multiply(_qx);
+    }
+    /* camera tracks the car, slightly ahead of it */
+    TRK.camX += (TRK.carX - TRK.camX) * Math.min(1, dt * 3.2);
+    TRK.cam.position.set(TRK.camX + 0.4, 3.1, 9.6);
+    TRK.cam.lookAt(TRK.camX + 1.2, 0.6, 0);
+    /* failed stop: brake lights pulse */
+    const anyFailed = STAGE_ORDER.some(function (n) { return scr.nodes[n] && scr.nodes[n].state === "failed"; });
+    for (const m of TRK.brakeMats) {
+      m.emissiveIntensity = anyFailed ? 1.6 + 1.4 * Math.sin(t / 90) : 1;
+    }
+  }
+
+  function trackRender() {
+    if (TRK.ok) TRK.renderer.render(TRK.scene, TRK.cam);
+  }
 
   function buildScreenModel() {
     scr.canvas = document.createElement("canvas");
@@ -349,26 +591,6 @@ window.Arcade3D = (function () {
     scr.ctx = scr.canvas.getContext("2d");
     scr.ctx.scale(SC, SC);
     STAGE_ORDER.forEach((n) => { scr.nodes[n] = { state: "waiting", ms: null }; });
-    // tubes connect consecutive stages; each gets its own elbow route (unique, rigid-pipe style)
-    const P = NODE_POS, hw = NODE_W / 2;
-    const routes = [
-      [[P.parse[0] + hw, 210], [170, 210], [170, 246], [220, 246], [220, 210], [P.decompose[0] - hw, 210]],
-      [[P.decompose[0] + hw, 210], [400, 210], [400, 178], [428, 178], [428, 210], [P.budget[0] - hw, 210]],
-      [[P.budget[0] + hw, 210], [560, 210], [560, 252], [596, 252], [596, 210], [P.guests[0] - hw, 210]],
-      [[P.guests[0] + hw, 210], [768, 210], [768, 186], [790, 186], [790, 210], [P.vendors[0] - hw, 210]],
-      [[P.vendors[0] + hw, 210], [968, 210], [968, 452], [P.select[0] + hw, 452]],
-      [[P.select[0] - hw, 452], [790, 452], [790, 416], [762, 416], [762, 452], [P.schedule[0] + hw, 452]],
-      [[P.schedule[0] - hw, 452], [600, 452], [600, 486], [570, 486], [570, 452], [P.symbolic[0] + hw, 452]],
-      [[P.symbolic[0] - hw, 452], [410, 452], [410, 424], [382, 424], [382, 452], [P.validate[0] + hw, 452]],
-      [[P.validate[0] - hw, 452], [225, 452], [225, 490], [196, 490], [196, 452], [P.store[0] + hw, 452]],
-    ];
-    scr.tubes = routes.map((pts) => {
-      let len = 0;
-      for (let i = 1; i < pts.length; i++) {
-        len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-      }
-      return { pts, len, fill: 0 };
-    });
     // scanline pattern, drawn once
     scr.scan = document.createElement("canvas");
     scr.scan.width = SW; scr.scan.height = SH;
@@ -377,123 +599,60 @@ window.Arcade3D = (function () {
     for (let y = 0; y < SH; y += 12) sx.fillRect(0, y, SW, 5);
     scr.tex = new THREE.CanvasTexture(scr.canvas);
     scr.tex.minFilter = THREE.LinearFilter;
+    trackSetup();
   }
 
-  function fitting(x, px, py, r) {
-    x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2);
-    x.fillStyle = "#2c3644"; x.fill();
-    x.strokeStyle = "#5a6c80"; x.lineWidth = 2; x.stroke();
-    x.save(); x.translate(px, py);
-    x.strokeStyle = "rgba(160,180,200,.55)"; x.lineWidth = 1.4;
-    for (let i = 0; i < 8; i++) {
-      x.rotate(Math.PI / 4);
-      x.beginPath(); x.moveTo(r - 3, 0); x.lineTo(r, 0); x.stroke();
-    }
-    x.restore();
+  const _pv = new THREE.Vector3();
+  function drawStopLabels(x) {
+    TRK.stops.forEach(function (st) {
+      _pv.set(st.x, 3.2, 0).project(TRK.cam);
+      if (_pv.z > 1 || _pv.x < -1.04 || _pv.x > 1.04) return;
+      const px = TV.x + (_pv.x + 1) / 2 * TV.w;
+      const py = TV.y + (1 - (_pv.y + 1) / 2) * TV.h;
+      const n = scr.nodes[st.name];
+      x.textAlign = "center"; x.textBaseline = "alphabetic";
+      x.font = "bold 22px ui-monospace, Menlo, Consolas, monospace";
+      x.fillStyle = n.state === "waiting" ? "#7d90a6" : (n.state === "failed" ? "#ffb0b0" : "#e4f4ff");
+      x.shadowColor = "rgba(0,0,0,.9)"; x.shadowBlur = 5;
+      x.fillText(STAGE_LABEL[st.name], px, py);
+      const sub = n.state === "done" && n.ms !== null ? n.ms + " ms"
+        : n.state === "failed" ? "FAILED" : n.state === "active" ? "RUNNING" : "";
+      if (sub) {
+        x.font = "16px ui-monospace, Menlo, Consolas, monospace";
+        x.fillStyle = n.state === "failed" ? "#ff8a8a" : "#8fb4d4";
+        x.fillText(sub, px, py + 20);
+      }
+      x.shadowBlur = 0;
+    });
   }
 
-  function drawTube(x, tb) {
-    const pts = tb.pts;
-    const path = () => {
-      x.beginPath(); x.moveTo(pts[0][0], pts[0][1]);
-      for (let i = 1; i < pts.length; i++) x.lineTo(pts[i][0], pts[i][1]);
-    };
-    // glass body
-    path(); x.strokeStyle = "rgba(120,170,205,.28)"; x.lineWidth = 13; x.lineCap = "round"; x.stroke();
-    path(); x.strokeStyle = "rgba(10,16,24,.55)"; x.lineWidth = 9; x.stroke();
-    // continuous liquid volume: one solid fill front, never packets
-    if (tb.fill > 0) {
-      const fl = tb.len * Math.min(1, tb.fill);
-      x.save();
-      x.shadowColor = "rgba(50,190,255,.8)"; x.shadowBlur = 12;
-      path(); x.setLineDash([fl, tb.len + 1]);
-      x.strokeStyle = "#1e9fe0"; x.lineWidth = 7; x.stroke();
-      path(); x.strokeStyle = "#7fe4ff"; x.lineWidth = 2.6; x.stroke();
-      x.restore();
-      x.setLineDash([]);
-    }
-    // glass highlight
-    path(); x.strokeStyle = "rgba(200,230,250,.14)"; x.lineWidth = 2; x.stroke();
-    // metal elbow fittings at every joint
-    for (let i = 1; i < pts.length - 1; i++) fitting(x, pts[i][0], pts[i][1], 10);
-    fitting(x, pts[0][0], pts[0][1], 9);
-    fitting(x, pts[pts.length - 1][0], pts[pts.length - 1][1], 9);
-  }
-
-  function drawNode(x, name, t) {
-    const n = scr.nodes[name];
-    const [cx, cy] = NODE_POS[name];
-    const w = NODE_W, h = NODE_H, lx = cx - w / 2, ly = cy - h / 2;
-    const col = { waiting: "#26313e", active: "#3fd2ff", done: "#1f7ea8", failed: "#ff5a5a" }[n.state];
-    x.save();
-    if (n.state === "active") {
-      const pulse = 0.7 + 0.3 * Math.sin(t / 130);
-      x.shadowColor = "rgba(63,210,255," + (0.85 * pulse) + ")";
-      x.shadowBlur = 26 * pulse;
-    } else if (n.state === "failed") {
-      x.shadowColor = "rgba(255,90,90,.8)"; x.shadowBlur = 20;
-    }
-    // waterblock body
-    x.fillStyle = n.state === "waiting" ? "#0b1119" : "#0e1622";
-    x.strokeStyle = col; x.lineWidth = n.state === "waiting" ? 1.5 : 2.5;
-    x.beginPath();
-    if (x.roundRect) x.roundRect(lx, ly, w, h, 8); else x.rect(lx, ly, w, h);
-    x.fill(); x.stroke();
-    x.restore();
-    // acrylic top window
-    x.fillStyle = n.state === "waiting" ? "rgba(40,60,80,.25)" :
-      (n.state === "failed" ? "rgba(255,90,90,.22)" : "rgba(63,210,255,.30)");
-    x.fillRect(lx + 6, ly + 6, w - 12, 12);
-    // port fittings where tubes attach (visual anchors)
-    x.fillStyle = "#2c3644";
-    x.beginPath(); x.arc(lx, cy, 6, 0, Math.PI * 2); x.fill();
-    x.beginPath(); x.arc(lx + w, cy, 6, 0, Math.PI * 2); x.fill();
-    // label + timing
-    x.textAlign = "center"; x.textBaseline = "middle";
-    x.font = "bold 25px ui-monospace, Menlo, Consolas, monospace";
-    x.fillStyle = n.state === "waiting" ? "#6b7f96" : (n.state === "failed" ? "#ffb0b0" : "#cfeaff");
-    x.fillText(STAGE_LABEL[name], cx, cy + 8);
-    x.font = "16px ui-monospace, Menlo, Consolas, monospace";
-    x.fillStyle = "#5f7d9c";
-    if (n.state === "done" && n.ms !== null) x.fillText(n.ms + " ms", cx, cy + 29);
-    else if (n.state === "failed") x.fillText("FAILED", cx, cy + 29);
-    else if (n.state === "active") x.fillText("RUNNING", cx, cy + 29);
-  }
-
-  function drawReservoir(x, doneCount) {
-    const rx = 8, ry = 150, rw = 36, rh = 380;
-    x.fillStyle = "#0b1119"; x.strokeStyle = "#2c3f52"; x.lineWidth = 2;
-    x.beginPath();
-    if (x.roundRect) x.roundRect(rx, ry, rw, rh, 12); else x.rect(rx, ry, rw, rh);
-    x.fill(); x.stroke();
-    const level = Math.max(0.12, 1 - doneCount / STAGE_ORDER.length * 0.85);
-    const lh = (rh - 16) * level;
-    x.save();
-    x.shadowColor = "rgba(50,190,255,.7)"; x.shadowBlur = 10;
-    x.fillStyle = "#1e9fe0";
-    x.fillRect(rx + 6, ry + rh - 8 - lh, rw - 12, lh);
-    x.fillStyle = "#7fe4ff"; x.fillRect(rx + 6, ry + rh - 8 - lh, rw - 12, 3);
-    x.restore();
-    x.fillStyle = "#4d6a84"; x.font = "14px ui-monospace, Menlo, Consolas, monospace";
-    x.textAlign = "center";
-    x.fillText("BRIEF", rx + rw / 2, ry - 10);
-    // feed pipe: reservoir -> first block, always primed once powered
-    x.strokeStyle = "rgba(120,170,205,.28)"; x.lineWidth = 13; x.lineCap = "round";
-    x.beginPath(); x.moveTo(rx + rw, 210); x.lineTo(51, 210); x.stroke();
-    x.save(); x.shadowColor = "rgba(50,190,255,.7)"; x.shadowBlur = 8;
-    x.strokeStyle = "#1e9fe0"; x.lineWidth = 7;
-    x.beginPath(); x.moveTo(rx + rw, 210); x.lineTo(51, 210); x.stroke(); x.restore();
+  function drawProgressStrip(x, t) {
+    const y = 592, x0 = 150, x1 = 874; // keep labels off the curved glass edges: the screen rolls away at the canvas extremes and silhouettes whatever sits there
+    const step = (x1 - x0) / (STAGE_ORDER.length - 1);
+    x.strokeStyle = "#223042"; x.lineWidth = 2;
+    x.beginPath(); x.moveTo(x0, y); x.lineTo(x1, y); x.stroke();
+    x.textAlign = "center"; x.textBaseline = "alphabetic";
+    STAGE_ORDER.forEach(function (n, i) {
+      const cx = x0 + i * step;
+      const st = scr.nodes[n].state;
+      x.fillStyle = STATE_COL[st] || STATE_COL.waiting;
+      if (st === "active") {
+        const pulse = 0.7 + 0.3 * Math.sin(t / 130);
+        x.save(); x.shadowColor = "rgba(63,210,255," + 0.85 * pulse + ")"; x.shadowBlur = 12 * pulse;
+      }
+      x.beginPath(); x.arc(cx, y, 6.5, 0, Math.PI * 2); x.fill();
+      if (st === "active") x.restore();
+      x.font = "12px ui-monospace, Menlo, Consolas, monospace";
+      x.fillStyle = st === "waiting" ? "#54677e" : "#9db8d0";
+      x.fillText(STAGE_LABEL[n], cx, y + 20);
+    });
   }
 
   function drawScreen(t) {
     const x = scr.ctx;
     const g = x.createLinearGradient(0, 0, 0, SH);
-    g.addColorStop(0, "#05090f"); g.addColorStop(1, "#03060a");
+    g.addColorStop(0, "#0b1424"); g.addColorStop(1, "#070d18");
     x.fillStyle = g; x.fillRect(0, 0, SW, SH);
-    // faint PCB-ish grid
-    x.strokeStyle = "rgba(40,60,84,.12)"; x.lineWidth = 1;
-    for (let gy = 40; gy < SH; gy += 40) { x.beginPath(); x.moveTo(0, gy); x.lineTo(SW, gy); x.stroke(); }
-    for (let gx = 40; gx < SW; gx += 40) { x.beginPath(); x.moveTo(gx, 0); x.lineTo(gx, SH); x.stroke(); }
     // header
     x.textAlign = "left"; x.textBaseline = "alphabetic";
     x.font = "bold 27px ui-monospace, Menlo, Consolas, monospace";
@@ -507,15 +666,32 @@ window.Arcade3D = (function () {
     x.fillText(scr.crt, SW - 28, 48);
     x.strokeStyle = "#1d2836"; x.beginPath(); x.moveTo(28, 62); x.lineTo(SW - 28, 62); x.stroke();
 
-    const doneCount = STAGE_ORDER.filter((n) => scr.nodes[n].state === "done").length;
-    scr.tubes.forEach((tb) => drawTube(x, tb));
-    STAGE_ORDER.forEach((n) => drawNode(x, n, t));
-    drawReservoir(x, doneCount);
+    if (TRK.ok) {
+      trackRender();
+      x.drawImage(TRK.renderer.domElement, TV.x, TV.y, TV.w, TV.h);
+      x.strokeStyle = "#1d2836"; x.lineWidth = 2;
+      x.strokeRect(TV.x - 1, TV.y - 1, TV.w + 2, TV.h + 2);
+      drawStopLabels(x);
+    } else {
+      x.fillStyle = "#0a101a"; x.fillRect(TV.x, TV.y, TV.w, TV.h);
+      x.strokeStyle = "#1d2836"; x.lineWidth = 2; x.strokeRect(TV.x, TV.y, TV.w, TV.h);
+      x.textAlign = "center";
+      x.font = "bold 26px ui-monospace, Menlo, Consolas, monospace";
+      x.fillStyle = "#3a4a5c";
+      x.fillText(TRK.error ? "ROAD ASSETS FAILED TO LOAD" : "WARMING UP THE ROAD…",
+        TV.x + TV.w / 2, TV.y + TV.h / 2 - 6);
+      if (TRK.error) {
+        x.font = "17px ui-monospace, Menlo, Consolas, monospace";
+        x.fillStyle = "#ff8a8a";
+        x.fillText(String(TRK.error).slice(0, 90), TV.x + TV.w / 2, TV.y + TV.h / 2 + 24);
+      }
+    }
+    drawProgressStrip(x, t);
 
     x.drawImage(scr.scan, 0, 0, 1024, 640);
     // vignette
     const v = x.createRadialGradient(SW / 2, SH / 2, SH / 3, SW / 2, SH / 2, SH);
-    v.addColorStop(0, "rgba(0,0,0,0)"); v.addColorStop(1, "rgba(0,0,0,.45)");
+    v.addColorStop(0, "rgba(0,0,0,0)"); v.addColorStop(1, "rgba(0,0,0,.28)");
     x.fillStyle = v; x.fillRect(0, 0, SW, SH);
     scr.tex.needsUpdate = true;
   }
@@ -530,10 +706,56 @@ window.Arcade3D = (function () {
     map, color: new THREE.Color(boost || 1.6, boost || 1.6, boost || 1.6),
   });
 
+  const CAB_Z = -3.25; // cabinet centred, pulled closer to the mural wall (user, 01:18)
+
   function shadowed(mesh, cast, receive) {
     mesh.castShadow = cast !== false;
     mesh.receiveShadow = !!receive;
     return mesh;
+  }
+
+  /* generated spray-tag graffiti for the side walls: original art drawn in
+     code, dark base with layered neon strokes so no bare wall shows through */
+  function graffitiTexture() {
+    const c = document.createElement("canvas");
+    c.width = 1024; c.height = 512;
+    const x = c.getContext("2d");
+    x.fillStyle = "#0b0e15"; x.fillRect(0, 0, 1024, 512);
+    // grime streaks
+    for (let i = 0; i < 90; i++) {
+      x.fillStyle = "rgba(" + (10 + rnd() * 30 | 0) + "," + (12 + rnd() * 26 | 0) + "," + (18 + rnd() * 30 | 0) + "," + (0.12 + rnd() * 0.2) + ")";
+      x.fillRect(rnd() * 1024, rnd() * 512, 20 + rnd() * 120, 2 + rnd() * 26);
+    }
+    // layered spray strokes: wide faded throws under thin sharp tags
+    const cols = ["#ff3d7f", "#3fd2ff", "#ffb35c", "#7de08a", "#c88bff", "#f4efe3"];
+    for (let i = 0; i < 46; i++) {
+      const col = cols[(rnd() * cols.length) | 0];
+      x.strokeStyle = col; x.globalAlpha = 0.05 + rnd() * 0.10;
+      x.lineWidth = 12 + rnd() * 30; x.lineCap = "round";
+      x.shadowColor = col; x.shadowBlur = 18;
+      x.beginPath();
+      const px = rnd() * 1024, py = 60 + rnd() * 400;
+      x.moveTo(px, py);
+      x.bezierCurveTo(px + (rnd() - 0.5) * 320, py + (rnd() - 0.5) * 200,
+        px + (rnd() - 0.5) * 320, py + (rnd() - 0.5) * 200,
+        px + (rnd() - 0.5) * 420, py + (rnd() - 0.5) * 240);
+      x.stroke();
+    }
+    for (let i = 0; i < 26; i++) {
+      const col = cols[(rnd() * cols.length) | 0];
+      x.strokeStyle = col; x.globalAlpha = 0.30 + rnd() * 0.35;
+      x.lineWidth = 2 + rnd() * 4; x.shadowBlur = 6; x.shadowColor = col;
+      x.beginPath();
+      const px = rnd() * 1024, py = 80 + rnd() * 360;
+      x.moveTo(px, py);
+      for (let j = 0; j < 4; j++) x.lineTo(px + (rnd() - 0.5) * 260 * (j + 1) / 4, py + (rnd() - 0.5) * 130);
+      x.stroke();
+    }
+    x.globalAlpha = 1; x.shadowBlur = 0;
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
   }
 
   function buildRoom(sc) {
@@ -554,11 +776,12 @@ window.Arcade3D = (function () {
     const wallTex = wallTexture(); wallTex.repeat.set(7, 1.6);
     const wall = new THREE.Mesh(new THREE.PlaneGeometry(40, 12),
       new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.92, envMapIntensity: 0.25 }));
-    wall.position.set(0, 6, -5); sc.add(wall);
+    wall.position.set(0, 6, -4.6); sc.add(wall);
+    const grafTex = graffitiTexture(); grafTex.repeat.set(3.2, 1.5);
     const wallL = new THREE.Mesh(new THREE.PlaneGeometry(30, 12),
-      new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.92, envMapIntensity: 0.25 }));
-    wallL.rotation.y = Math.PI / 2; wallL.position.set(-9, 6, 5); sc.add(wallL);
-    const wallR = wallL.clone(); wallR.rotation.y = -Math.PI / 2; wallR.position.x = 9; sc.add(wallR);
+      new THREE.MeshStandardMaterial({ map: grafTex, roughness: 0.92, envMapIntensity: 0.25 }));
+    wallL.rotation.y = Math.PI / 2; wallL.position.set(-5.6, 6, 5); sc.add(wallL);
+    const wallR = wallL.clone(); wallR.rotation.y = -Math.PI / 2; wallR.position.x = 5.6; sc.add(wallR);
     [[-2.8, -3.6, 0.7], [2.2, -3.9, 0.95]].forEach(([cx, cz, drop]) => {
       const pts = [new THREE.Vector3(cx, 5.2, cz), new THREE.Vector3(cx + 0.35, 5.2 - drop, cz + 0.15),
         new THREE.Vector3(cx - 0.15, 5.2 - drop * 1.35, cz + 0.4)];
@@ -575,27 +798,28 @@ window.Arcade3D = (function () {
     S.tubeLight = new THREE.PointLight(0xa8d4f5, 1.5, 20);
     S.tubeLight.position.set(0, 4.3, -1.2); sc.add(S.tubeLight);
     const glowDot = glowDotTexture();
-    const addNeon = (txt, opt, pos, ry, glowCol) => {
+    // off = outward-from-wall direction for the glow decal and light
+    const addNeon = (txt, opt, pos, ry, glowCol, off) => {
       const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.5), glowMat(textTexture(txt, opt), 1.9));
       sign.position.set(pos[0], pos[1], pos[2]); sign.rotation.y = ry; sc.add(sign);
       const decal = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.6),
         new THREE.MeshBasicMaterial({ map: glowDot, color: glowCol, transparent: true,
           opacity: 0.30, blending: THREE.AdditiveBlending, depthWrite: false }));
-      decal.position.set(pos[0], pos[1], pos[2] - 0.06); decal.rotation.y = ry; sc.add(decal);
+      decal.position.set(pos[0] - off[0] * 0.06, pos[1], pos[2] - off[2] * 0.06); decal.rotation.y = ry; sc.add(decal);
       const l = new THREE.PointLight(glowCol, 0.9, 9);
-      l.position.set(pos[0], pos[1], pos[2] + 0.5); sc.add(l);
+      l.position.set(pos[0] + off[0] * 0.5, pos[1], pos[2] + off[2] * 0.5); sc.add(l);
     };
-    addNeon("プラン", { fg: "#ff3d7f", size: 72 }, [-4.4, 2.6, -3.2], 0.5, 0xff3d7f);
-    addNeon("EVENT 夢", { fg: "#3fd2ff", size: 56 }, [4.4, 2.7, -3.2], -0.5, 0x3fd2ff);
+    // neon lives on the SIDE walls now: the back wall carries only the girl mural
+    // neon signs removed on the user's instruction (00:07): bare graffiti + posters only
     [[-3.4, -1.6, 0.35], [-4.6, -2.4, 0.5], [3.4, -1.6, -0.35], [4.6, -2.4, -0.5]].forEach(([x, z, ry]) => {
       const cab = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.9, 0.8),
         new THREE.MeshStandardMaterial({ map: laminateTexture(), color: 0x59606e, roughness: 0.85, envMapIntensity: 0.12 }));
       cab.position.set(x, 0.95, z); cab.rotation.y = ry;
-      shadowed(cab); sc.add(cab);
+      shadowed(cab); sc.add(cab); (S.roomCabs = S.roomCabs || []).push(cab);
       const scrn = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.4),
         mat(0x0a141c, 0.4, 0, 0x06121a));
       scrn.position.set(x + Math.sin(ry) * 0.42, 1.25, z + Math.cos(ry) * 0.42);
-      scrn.rotation.y = ry; sc.add(scrn);
+      scrn.rotation.y = ry; sc.add(scrn); (S.roomCabs = S.roomCabs || []).push(scrn);
     });
     sc.add(new THREE.AmbientLight(0x36486a, 1.3));
     const frontFill = new THREE.PointLight(0xa8c4e8, 0.55, 14);
@@ -813,13 +1037,576 @@ window.Arcade3D = (function () {
     trayLabel.position.set(-0.25, 0.12, 0.45); cab.add(trayLabel);
     const out = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.04, 0.06), mat(0x000000, 0.5));
     out.position.set(-0.25, 0.44, 0.46); cab.add(out);
-    S.paperSlotPos = new THREE.Vector3(-0.25, 0.44, 0.52);
+    S.paperSlotPos = new THREE.Vector3(-0.25, 0.44, 0.52 + CAB_Z);
 
     sc.add(cab);
+    cab.position.z = CAB_Z; // centred, close to the mural wall (user, 01:18)
     S.cabinet = cab;
     S.bay = bay; S.marqueeFrame = marqueeFrame; S.marqueeGlass = marqueeGlass;
     S.trayFrame = trayFrame; S.trayLabel = trayLabel; S.outStrip = out;
     mountGLBCabinet(sc);
+  }
+
+  /* ================= back-alley dressing (v7, user's own models) =================
+     van "VANdalized" by billionlioe (CC-BY-4.0), dumpster by DigitalBirb (CC-BY-4.0),
+     candy machine by Etman (CC-BY-4.0), Nuka Cola machine by gunduzhan (CC-BY-4.0),
+     retro machine by Minh Nguyen (CC-BY-NC-4.0), cat machine by Minh Nguyen
+     (CC-BY-NC-ND-4.0), girl mural scan by Guillermo after Tito Ferrara's "Native"
+     (CC-BY-NC-SA-4.0), missing-person poster decal by honky (CC-BY-4.0),
+     Textures <=2K, geometry quantized;
+     the r128 loader reads all of them without extra decoders. */
+  function propPrep(root, opts) {
+    root.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    const box = new THREE.Box3().setFromObject(root);
+    const size = box.getSize(new THREE.Vector3());
+    const ctr = box.getCenter(new THREE.Vector3());
+    let k = 1;
+    if (opts.len) k = opts.len / Math.max(size.x, size.z);
+    else if (opts.h) k = opts.h / size.y;
+    else if (opts.w) k = opts.w / size.x;
+    root.scale.setScalar(k);
+    root.position.set(-ctr.x * k, -box.min.y * k, -ctr.z * k);
+    const g2 = new THREE.Group();
+    g2.add(root);
+    g2.rotation.y = opts.rotY || 0;
+    g2.position.set(opts.pos[0], opts.y || 0, opts.pos[1]);
+    return g2;
+  }
+
+  /* ---------------- holographic Hall of Fame table ----------------
+     "sci-fi hologram table" by irzafy (CC-BY-4.0), docs/ATTRIBUTIONS.md.
+     The stock display plane (Object_8) and hologram content mesh (Object_10)
+     are hidden at load; the live top-five list is drawn as holographic
+     lettering (transparent carrier, additive glow) inside the glow column.
+     The whole table stays hidden until the wall's first completion sets
+     meta.hall_unlocked (global reveal, never re-locks - owner's answer). */
+  const HOLO_POS = { x: 2.5, z: -2.1, s: 0.65, rot: -0.25 }; // right-back Hall zone (operating-table spot freed for it), inside the vending sightline, facing the wide camera
+  function holoFmtMs(ms) {
+    if (ms == null) return "";
+    const m = Math.floor(ms / 60000), sec = Math.floor((ms % 60000) / 1000), mm = ms % 1000;
+    return (m > 0 ? m + ":" + String(sec).padStart(2, "0") : sec + "") + "." + String(mm).padStart(3, "0") + (m > 0 ? "" : "s");
+  }
+  function drawHoloList() {
+    const st = S.holo; if (!st || !st.cv) return;
+    const resetLine = st.period && st.period.ends_at ? "TIMES RESET " + new Date(st.period.ends_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }).toUpperCase() : "";
+    const c2 = st.cv.getContext("2d");
+    c2.clearRect(0, 0, 768, 480);
+    c2.shadowColor = "rgba(86,220,255,0.85)"; c2.shadowBlur = 18;
+    c2.fillStyle = "rgba(158,236,255,0.96)";
+    c2.strokeStyle = "rgba(2,10,16,0.92)"; c2.lineWidth = 7; c2.lineJoin = "round";
+    c2.font = "bold 38px monospace"; c2.textAlign = "center";
+    c2.strokeText("HALL OF FAME", 384, 58); c2.fillText("HALL OF FAME", 384, 58);
+    c2.font = "30px monospace";
+    const rows = (st.entries || []).slice(0, 5);
+    if (!rows.length) {
+      c2.strokeText("NO RANKED RUNS YET", 384, 236); c2.fillText("NO RANKED RUNS YET", 384, 236);
+      c2.shadowBlur = 8; c2.font = "21px monospace"; c2.fillStyle = "rgba(125,232,255,0.6)";
+      c2.fillText("beat the wall challenge to appear here", 384, 284);
+    } else {
+      rows.forEach(function (r, i) {
+        const y = 100 + i * 64; // rows sit high: the pedestal rim only ever covers empty canvas below
+        const rank = (r.rank != null ? r.rank : i + 1) + ".";
+        const nm = (r.name || "?").slice(0, 14);
+        const tm = holoFmtMs(r.elapsed_ms);
+        c2.textAlign = "left"; c2.strokeText(rank, 66, y); c2.fillText(rank, 66, y);
+        c2.strokeText(nm, 156, y); c2.fillText(nm, 156, y);
+        c2.textAlign = "right"; c2.strokeText(tm, 702, y); c2.fillText(tm, 702, y);
+      });
+    }
+    const foot = [resetLine, rows.some(function (r) { return r && r.fixture; }) ? "SAMPLE DATA" : ""].filter(Boolean).join("  \u00b7  ");
+    if (foot) { // period reset + fixture honesty, never implied permanent
+      c2.shadowBlur = 6; c2.font = "17px monospace"; c2.textAlign = "center"; c2.fillStyle = "rgba(125,232,255,0.55)";
+      c2.fillText(foot, 384, 462);
+    }
+    if (st.tex) st.tex.needsUpdate = true;
+  }
+  function holoSetVisible(v) {
+    const st = S.holo; if (!st) return;
+    st.unlocked = v;
+    ["root", "list", "light"].forEach(function (k) { if (st[k]) st[k].visible = v; });
+    if (!v && st.focused) holoUnfocus();
+  }
+  function holoFocus() {
+    const st = S.holo; if (!st || !st.unlocked || st.focused) return null;
+    st.focused = true;
+    st.prevCam = { pos: S.camera.position.clone(), tgt: S.camTarget.clone() };
+    S.zoomed = true;
+    const pose = { pos: [HOLO_POS.x - 0.9, 2.95, HOLO_POS.z + 2.6], tgt: [HOLO_POS.x - 0.4, 1.62, HOLO_POS.z] }; // above the attendant, who now parks nearer the cabinet
+    camTo(pose, 900);
+    return pose;
+  }
+  function holoUnfocus() {
+    const st = S.holo; if (!st || !st.focused) return;
+    st.focused = false;
+    S.zoomed = false;
+    if (st.prevCam) camTo({ pos: st.prevCam.pos.toArray(), tgt: st.prevCam.tgt.toArray() }, 900);
+    else camTo(S.camWide, 900);
+  }
+  function mountHoloTable(sc) {
+    if (!THREE.GLTFLoader) return;
+    const st = { unlocked: false, entries: [], root: null, list: null, light: null, cv: null, tex: null, focused: false, prevCam: null };
+    S.holo = st;
+    new THREE.GLTFLoader().load("/static/holo_table.glb", function (g) {
+      const root = g.scene;
+      root.scale.setScalar(HOLO_POS.s);
+      root.position.set(HOLO_POS.x, 0, HOLO_POS.z);
+      root.rotation.y = HOLO_POS.rot;
+      root.traverse(function (o) {
+        if (!o.isMesh) return;
+        o.castShadow = true; o.receiveShadow = true;
+        if (o.name === "Object_8" || o.name === "Object_10") o.visible = false; // replaced by the live list
+      });
+      root.visible = false;
+      sc.add(root); st.root = root;
+      const cv = document.createElement("canvas"); cv.width = 768; cv.height = 480;
+      st.cv = cv;
+      const tex = new THREE.CanvasTexture(cv); st.tex = tex;
+      const list = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.7 * HOLO_POS.s, 1.69 * HOLO_POS.s),
+        new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, toneMapped: false, depthWrite: false, blending: THREE.AdditiveBlending }));
+      list.position.set(HOLO_POS.x - 0.4, 2.62 * HOLO_POS.s, HOLO_POS.z); // up-left of the pedestal: every glyph sits over the dark mural, fully clear of the disc rim
+      list.rotation.y = -0.24; // faces the wide and focus cameras head-on (nearly collinear from this spot) - an angled board foreshortens the times column away
+      list.visible = false;
+      sc.add(list); st.list = list;
+      const gl = new THREE.PointLight(0x56dcff, 0.9, 4.5);
+      gl.position.set(HOLO_POS.x, 1.4 * HOLO_POS.s, HOLO_POS.z); gl.visible = false;
+      sc.add(gl); st.light = gl;
+      drawHoloList();
+      holoSetVisible(st.unlocked);
+    }, undefined, function () { /* asset missing: the Hall has no physical display, data still reachable via the API */ });
+    // click / tap the table for a clean board view; arcade.js owns the DOM side (chat hide + back control)
+    const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+    S.renderer.domElement.addEventListener("pointerdown", function (ev) {
+      const st2 = S.holo;
+      if (!st2 || !st2.unlocked || !st2.root || st2.focused) return;
+      if (S.wallb && S.wallb.focused) return;
+      ptr.x = (ev.clientX / window.innerWidth) * 2 - 1;
+      ptr.y = -(ev.clientY / window.innerHeight) * 2 + 1;
+      ray.setFromCamera(ptr, S.camera);
+      const hits = ray.intersectObjects([st2.root, st2.list].filter(Boolean), true);
+      if (hits.length && S.holoFocusCb) S.holoFocusCb();
+    });
+  }
+
+
+  /* ---------------- TOP SECRET dossier (easter egg) ----------------
+     User-supplied folder model - source and license still to be
+     confirmed by the owner (docs/ATTRIBUTIONS.md). Lies on the floor
+     beside the gumball machine, TOP SECRET stamp face up. Clicking it
+     focuses the camera; the paper and sticky note rise out of the
+     folder. The cover is one solid mesh with no hinge pivot, so a
+     fold-open would distort the model - the lift-out is the faithful
+     reveal. The note's source texture is blank, so the handwriting is
+     drawn at runtime on a canvas card riding the note mesh.
+     Clue honesty: the note points at the hidden left-wall secret and
+     the return challenge; the monthly Hall of Fame is earned by the
+     timed run, never promised for signing alone. */
+  const DOSSIER_POS = { x: -2.35, z: -2.45, len: 0.55, rotY: 0.65 };
+  const DOSSIER_NOTE_LINES = [
+    "AGENT'S NOTE -",
+    "the LEFT WALL keeps secrets.",
+    "Sign it, then look closer:",
+    "what hides in the paint leads",
+    "to the real challenge.",
+    "Beat the clock and the",
+    "HALL OF FAME opens a slot -",
+    "new round every month.  - E.",
+  ];
+  function drawDossierNote(cv) {
+    const c2 = cv.getContext("2d");
+    c2.fillStyle = "#b5a670"; // kept under the bloom threshold (0.8): a bright note whites out
+    c2.fillRect(0, 0, cv.width, cv.height);
+    c2.strokeStyle = "rgba(60,45,10,0.55)"; c2.lineWidth = 6;
+    c2.strokeRect(3, 3, cv.width - 6, cv.height - 6);
+    c2.fillStyle = "#1c1c2c"; c2.textAlign = "left";
+    c2.font = "26px 'Comic Sans MS', 'Segoe Print', cursive";
+    DOSSIER_NOTE_LINES.forEach(function (ln, i) { c2.fillText(ln, 22, 52 + i * 40); });
+  }
+  function dossierSetOpen(open) {
+    const st = S.dossier; if (!st || !st.paper || !st.note || st.open === open) return;
+    st.open = open;
+    const k = st.root.scale.x || 1;
+    const pTo = open ? st.paperHome.clone().add(new THREE.Vector3(-0.06 / k, 0.03 / k, 0.02 / k)) : st.paperHome;
+    const nTo = open ? st.noteHome.clone().add(new THREE.Vector3(0.04 / k, 0.115 / k, 0.06 / k)) : st.noteHome;
+    const p0 = st.paper.position.clone(), n0 = st.note.position.clone();
+    tween(650, easeInOut, function (t) {
+      st.paper.position.lerpVectors(p0, pTo, t);
+      st.note.position.lerpVectors(n0, nTo, t);
+    }); // tween jumps to the end state when prefers-reduced-motion is set
+  }
+  function dossierFocus() {
+    const st = S.dossier; if (!st || st.focused) return null;
+    st.focused = true;
+    st.prevCam = { pos: S.camera.position.clone(), tgt: S.camTarget.clone() };
+    S.zoomed = true;
+    const pose = { pos: [DOSSIER_POS.x + 0.1, 0.5, DOSSIER_POS.z + 0.28], tgt: [DOSSIER_POS.x + 0.05, 0.1, DOSSIER_POS.z - 0.16] }; // tight on the risen note so the writing fills the frame
+    camTo(pose, 800);
+    dossierSetOpen(true);
+    return pose;
+  }
+  function dossierUnfocus() {
+    const st = S.dossier; if (!st || !st.focused) return;
+    st.focused = false;
+    S.zoomed = false;
+    dossierSetOpen(false);
+    if (st.prevCam) camTo({ pos: st.prevCam.pos.toArray(), tgt: st.prevCam.tgt.toArray() }, 800);
+    else camTo(S.camWide, 800);
+  }
+  function mountDossier(sc) {
+    if (!THREE.GLTFLoader) return;
+    new THREE.GLTFLoader().load("/static/secret_dossier.glb", function (g) {
+     try {
+      const root = g.scene;
+      const grp = propPrep(root, { len: DOSSIER_POS.len, pos: [DOSSIER_POS.x, DOSSIER_POS.z], rotY: DOSSIER_POS.rotY });
+      sc.add(grp);
+      const st = { root: root, grp: grp, paper: null, note: null, card: null, open: false, focused: false, prevCam: null };
+      S.dossier = st;
+      root.traverse(function (o) {
+        if (/^SM_Paper/.test(o.name)) st.paper = o;
+        if (/^SM_Note/.test(o.name)) st.note = o;
+      });
+      // the paper and note materials ship white-on-white and blow out under the
+      // room's bloom pass; tame their color/emissive at load so the reveal and
+      // the writing stay readable (the source file itself is not modified)
+      [st.paper, st.note].forEach(function (nd) {
+        if (!nd) return;
+        nd.traverse(function (o) {
+          if (!o.isMesh || !o.material) return;
+          if (o.material.color) o.material.color.setRGB(0.2, 0.18, 0.13); // dim manila: pure-white albedo under ~2.7 irradiance sails past the 0.8 bloom threshold and whites out
+          if (o.material.emissive) o.material.emissive.setScalar(0);
+          if ("metalness" in o.material) o.material.metalness = 0;
+          if ("specularIntensity" in o.material) o.material.specularIntensity = 0;
+        });
+      });
+      sc.updateMatrixWorld(true);
+      const k = root.scale.x || 1;
+      if (st.note) {
+        const cv = document.createElement("canvas"); cv.width = 512; cv.height = 384;
+        drawDossierNote(cv);
+        const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+        const nb = new THREE.Box3().setFromObject(st.note);
+        const card = new THREE.Mesh(
+          new THREE.PlaneGeometry(((nb.max.x - nb.min.x) * 0.94) / k, ((nb.max.z - nb.min.z) * 0.94) / k),
+          new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }));
+        card.material.toneMapped = true;
+        card.position.copy(st.note.worldToLocal(new THREE.Vector3((nb.min.x + nb.max.x) / 2, nb.max.y + 0.002, (nb.min.z + nb.max.z) / 2)));
+        card.quaternion.copy(st.note.getWorldQuaternion(new THREE.Quaternion()).invert());
+        card.rotateX(-Math.PI / 2); // plane faces +Y in world: readable from above
+        card.renderOrder = 3;
+        st.note.add(card);
+        st.card = card;
+      }
+      if (st.paper) st.paperHome = st.paper.position.clone();
+      if (st.note) st.noteHome = st.note.position.clone();
+      const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+      S.renderer.domElement.addEventListener("pointerdown", function (ev) {
+        const st2 = S.dossier;
+        if (!st2 || st2.focused) return;
+        if (S.holo && S.holo.focused) return;
+        if (S.wallb && S.wallb.focused) return;
+        ptr.x = (ev.clientX / window.innerWidth) * 2 - 1;
+        ptr.y = -(ev.clientY / window.innerHeight) * 2 + 1;
+        ray.setFromCamera(ptr, S.camera);
+        if (ray.intersectObject(grp, true).length && S.dossierFocusCb) S.dossierFocusCb();
+      });
+     } catch (err) { console.error('dossier model:', err); }
+    }, undefined, function (err) { console.error('dossier model load:', err && err.message || err); });
+  }
+
+
+  /* ---------------- the signature wall (I WAS HERE) ----------------
+     Contract 8.6: one permanent name per visitor scratched on the left
+     wall, a return-visit challenge (a name secretly moves; find where),
+     Hall opt-in on a found round. The board is a transparent canvas
+     plane on the wall; its content always mirrors the real backend
+     state: sleeping (backend absent), blank, a section page, or the
+     frozen round view drawn ONLY from the round's snapshot (never the
+     live list) with the move/swap applied. */
+  const WALLB = { x: -5.56, y: 1.62, z: -2.35, w: 3.0, h: 1.95 };
+  function wallDraw() {
+    const st = S.wallb; if (!st || !st.cv) return;
+    const c2 = st.cv.getContext("2d");
+    const W = st.cv.width, H = st.cv.height;
+    c2.clearRect(0, 0, W, H);
+    const d = st.data || { mode: "sleep" };
+    const chalk = "rgba(232,226,208,0.94)";
+    const faint = "rgba(232,226,208,0.30)";
+    const mine = "rgba(125,232,255,0.96)";
+    const scratch = function (txt, x, y, font, col) {
+      c2.font = font; c2.textAlign = "center";
+      c2.save(); c2.translate(x, y); c2.rotate(((Math.abs(x * 7 + y * 13) | 0) % 11 - 5) * 0.009);
+      c2.strokeStyle = "rgba(6,8,12,0.85)"; c2.lineWidth = 6; c2.lineJoin = "round";
+      c2.strokeText(txt, 0, 0);
+      c2.fillStyle = col || chalk; c2.fillText(txt, 0, 0);
+      c2.restore();
+    };
+    c2.fillStyle = "rgba(6,8,12,0.62)";
+    c2.fillRect(46, 22, W - 92, H - 52); // dim the posters behind the board: the names must read
+    if (d.mode === "locked") { // the entry puzzle: torn halves line up only at off = 0
+      const off = st.alignOff == null ? 120 : st.alignOff;
+      const titleY = H * 0.44, font = "bold 76px monospace";
+      c2.save(); c2.beginPath(); c2.rect(0, 0, W, titleY); c2.clip();
+      scratch("I  W A S  H E R E", W / 2 + off, titleY + 24, font); c2.restore();
+      c2.save(); c2.beginPath(); c2.rect(0, titleY, W, 78); c2.clip();
+      scratch("I  W A S  H E R E", W / 2 - off * 0.8, titleY + 24, font); c2.restore();
+      c2.strokeStyle = "rgba(232,226,208,0.45)"; c2.lineWidth = 3;
+      for (let k = 0; k < 7; k++) {
+        const sx = 140 + k * 118 + ((k % 2) ? off : -off * 0.8);
+        const sy = H * 0.62 + ((k * 37) % 90);
+        c2.beginPath(); c2.moveTo(sx, sy); c2.lineTo(sx + 42, sy + ((k % 2) ? 26 : -20)); c2.stroke();
+      }
+      scratch("the scratches refuse to sit still", W / 2, H - 96, "bold 24px monospace", "rgba(232,226,208,0.85)");
+      scratch("drag the view sideways until the lines sit true", W / 2, H - 58, "bold 24px monospace", "rgba(125,232,255,0.9)");
+      if (st.tex) st.tex.needsUpdate = true;
+      return;
+    }
+    scratch("I  W A S  H E R E", W / 2, 58, "bold 42px monospace");
+    c2.strokeStyle = "rgba(232,226,208,0.5)"; c2.lineWidth = 3;
+    c2.beginPath(); c2.moveTo(200, 82); c2.lineTo(W - 200, 86); c2.stroke();
+    st.cells = [];
+    if (d.mode === "sleep") {
+      c2.fillStyle = "rgba(6,8,12,0.78)";
+      c2.fillRect(60, H / 2 - 58, W - 120, 118); // solid backing: the sleep copy must read over any poster
+      scratch("the wall sleeps - its backend is not built yet", W / 2, H / 2 - 8, "25px monospace", "rgba(232,226,208,0.92)");
+      scratch("names stay here permanently once it wakes", W / 2, H / 2 + 36, "19px monospace", "rgba(232,226,208,0.72)");
+      if (st.tex) st.tex.needsUpdate = true;
+      return;
+    }
+    if (d.mode === "blank") {
+      scratch("no names yet", W / 2, H / 2 - 8, "30px monospace", faint);
+      scratch("be the first to sign", W / 2, H / 2 + 36, "22px monospace", faint);
+      if (st.tex) st.tex.needsUpdate = true;
+      return;
+    }
+    // section or round: build the drawn view (round = frozen snapshot + move/swap applied)
+    let cap, view;
+    if (d.mode === "round") {
+      cap = d.snapshot.capacity;
+      view = new Array(cap).fill(null);
+      (d.snapshot.slots || []).forEach(function (m) { if (m.slot >= 0 && m.slot < cap) view[m.slot] = m; });
+      const mineM = view[d.from_slot] && view[d.from_slot].mark_id === d.my_mark_id ? view[d.from_slot] : null;
+      if (mineM) {
+        const other = view[d.to_slot] || null;
+        view[d.to_slot] = mineM;        // the secret move
+        view[d.from_slot] = other;      // swap back, or empty
+      }
+    } else {
+      cap = d.capacity || 12;
+      view = new Array(cap).fill(null);
+      (d.slots || []).forEach(function (m) { if (m.slot >= 0 && m.slot < cap) view[m.slot] = m; });
+    }
+    const cols = cap <= 12 ? 4 : 6, rows = Math.ceil(cap / cols);
+    const mx = 70, top = 116, cw = (W - 2 * mx) / cols, ch = (H - top - 30) / rows;
+    for (let i = 0; i < cap; i++) {
+      const cx = mx + (i % cols) * cw + cw / 2, cy = top + Math.floor(i / cols) * ch + ch / 2;
+      const m = view[i];
+      const cell = { slot: i, mark_id: m ? m.mark_id : null, name: m ? m.name : null,
+        x0: cx - cw / 2, y0: cy - ch / 2, x1: cx + cw / 2, y1: cy + ch / 2 };
+      st.cells.push(cell);
+      if (m) {
+        const liveSearch = d.mode === "round" && !d.result; // pre-reveal every name looks alike
+        const isMine = !liveSearch && d.my_mark_id != null && m.mark_id === d.my_mark_id;
+        scratch(String(m.name || "?").slice(0, 12), cx, cy + 12, "bold " + (cols === 4 ? 38 : 26) + "px monospace", isMine ? mine : chalk);
+        if (isMine) {
+          c2.strokeStyle = "rgba(125,232,255,0.75)"; c2.lineWidth = 3;
+          c2.beginPath(); c2.moveTo(cx - 60, cy + 26); c2.lineTo(cx + 60, cy + 28); c2.stroke();
+        }
+      } else {
+        c2.save();
+        c2.setLineDash([7, 9]);
+        c2.strokeStyle = "rgba(232,226,208,0.16)"; c2.lineWidth = 2;
+        c2.strokeRect(cx - cw / 2 + 14, cy - ch / 2 + 10, cw - 28, ch - 20);
+        c2.restore();
+        if (d.mode === "round") scratch(String(i), cx, cy + 8, "20px monospace", "rgba(232,226,208,0.35)"); // tap reference
+      }
+    }
+    if (d.mode === "round" && d.result) { // reveal: circle the true destination
+      const c0 = st.cells[d.to_slot];
+      if (c0) {
+        c2.strokeStyle = d.result === "found" ? "rgba(89,214,143,0.95)" : "rgba(255,90,90,0.95)";
+        c2.lineWidth = 5;
+        c2.strokeRect(c0.x0 + 8, c0.y0 + 6, c0.x1 - c0.x0 - 16, c0.y1 - c0.y0 - 12);
+      }
+    }
+    if (st.tex) st.tex.needsUpdate = true;
+  }
+  function wallFocus() {
+    const st = S.wallb; if (!st || st.focused) return null;
+    st.focused = true;
+    st.prevCam = { pos: S.camera.position.clone(), tgt: S.camTarget.clone() };
+    S.zoomed = true;
+    // fit the whole board in frame at any aspect: portrait phones need to be much farther back.
+    // the board occupies the upper frame so the DOM panel below never covers cells;
+    // past the cabinet (x ~ -1) the camera shifts toward +z so the cabinet no longer
+    // sits between it and the board's right columns.
+    const halfFov = (S.camera.fov || 55) * Math.PI / 360;
+    const tan = Math.tan(halfFov);
+    const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+    const dist = Math.max(3.1, 1.9 / (tan * aspect), 1.95 / (2 * tan * 0.58));
+    const zOff = Math.max(0, dist - 4.0) * 0.3;
+    const drop = 0.10 * 2 * tan * dist;
+    const pose = { pos: [WALLB.x + dist, WALLB.y + 0.02, WALLB.z + zOff], tgt: [WALLB.x, WALLB.y - drop, WALLB.z] };
+    camTo(pose, 850);
+    return pose;
+  }
+  function wallUnfocus() {
+    const st = S.wallb; if (!st || !st.focused) return;
+    st.focused = false;
+    S.zoomed = false;
+    if (st.prevCam) camTo({ pos: st.prevCam.pos.toArray(), tgt: st.prevCam.tgt.toArray() }, 850);
+    else camTo(S.camWide, 850);
+  }
+  function mountWallBoard(sc, wallL) {
+    const cv = document.createElement("canvas"); cv.width = 1024; cv.height = 640;
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(WALLB.w, WALLB.h),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.FrontSide, toneMapped: false, depthWrite: false }));
+    mesh.position.set(wallL + 0.11, WALLB.y, WALLB.z); // in front of the poster decals at +0.05: no occlusion
+    mesh.renderOrder = 3; // poster decals are renderOrder 2, transparent, depthWrite off: the board must paint after them or they cover the names
+    mesh.rotation.y = Math.PI / 2; // faces into the room
+    sc.add(mesh);
+    S.wallb = { cv: cv, tex: tex, mesh: mesh, data: null, cells: [], focused: false, prevCam: null, alignOff: null };
+    wallDraw(); // starts in the honest "sleeping" state until the backend answers
+    let dragX = null;
+    S.renderer.domElement.addEventListener("pointerdown", function (ev) {
+      if (S.wallb.focused && S.wallb.data && S.wallb.data.mode === "locked") dragX = ev.clientX;
+    });
+    window.addEventListener("pointermove", function (ev) {
+      if (dragX == null || !S.wallb.focused) return;
+      const dx = ev.clientX - dragX; dragX = ev.clientX;
+      const scale = cv.width / (S.renderer.domElement.clientWidth || window.innerWidth || 1);
+      let off = S.wallb.alignOff == null ? 120 : S.wallb.alignOff;
+      off -= dx * scale;
+      if (off > 260) off = 260; if (off < -260) off = -260;
+      if (Math.abs(off) <= 14) {
+        S.wallb.alignOff = 0; dragX = null; wallDraw();
+        if (S.wallSolveCb) S.wallSolveCb();
+        return;
+      }
+      S.wallb.alignOff = off; wallDraw();
+    });
+    window.addEventListener("pointerup", function () { dragX = null; });
+    const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+    S.renderer.domElement.addEventListener("pointerdown", function (ev) {
+      const st = S.wallb; if (!st) return;
+      ptr.x = (ev.clientX / window.innerWidth) * 2 - 1;
+      ptr.y = -(ev.clientY / window.innerHeight) * 2 + 1;
+      ray.setFromCamera(ptr, S.camera);
+      const hits = ray.intersectObject(mesh, false);
+      if (!hits.length) return;
+      if (!st.focused) {
+        if ((S.holo && S.holo.focused) || (S.dossier && S.dossier.focused)) return;
+        if (S.wallFocusCb) S.wallFocusCb();
+        return;
+      }
+      // focused: a tap lands on a cell (the challenge's answer)
+      const uv = hits[0].uv; if (!uv) return;
+      const px = uv.x * cv.width, py = (1 - uv.y) * cv.height;
+      const cell = (st.cells || []).find(function (c) { return px >= c.x0 && px <= c.x1 && py >= c.y0 && py <= c.y1; });
+      if (cell && S.wallTapCb) S.wallTapCb(cell);
+    });
+  }
+
+  function mountAlley(sc, wallBack, wallL, wallR) {
+    if (!THREE.GLTFLoader) return;
+    const loader = new THREE.GLTFLoader();
+    const put = function (url, opts, onPlaced) {
+      loader.load(url, function (g) { sc.add(propPrep(g.scene, opts)); if (onPlaced) onPlaced(false); }, undefined,
+        function () { /* prop missing: the den still works */ if (onPlaced) onPlaced(true); });
+    };
+    // the procedural filler cabinets step aside for the user's real props
+    (S.roomCabs || []).forEach(function (c) { c.visible = false; });
+    // graffiti van pulled up close to the camera, nose angled toward the cabinet;
+    // only its front half stays in frame - the rear hangs out of view on purpose
+    put('/static/alley_van.glb', { len: 3.8, pos: [-3.35, 3.05], rotY: 2.05 });
+    put('/static/alley_dumpster.glb', { h: 1.42, pos: [2.6, 4.5], rotY: -0.5 }); // front floor, out of every hologram sightline (user)
+    // vending row along the right wall, fronts angled into the room
+    // vending row along the FRONT right wall: never the hologram's backdrop (user)
+    put('/static/vend_nuka.glb', { h: 1.85, pos: [4.9, 1.5], rotY: -1.45 });
+    put('/static/vend_retro.glb', { h: 1.78, pos: [4.9, 2.85], rotY: -1.62 });
+    // the big cat vending machine is OPT-IN, never auto-loaded: its CC-BY-NC-ND
+    // license restricts sharing adapted copies, so the original 55 MB scan ships
+    // unmodified - and measured testing shows that file freezes the software-GL
+    // preview (and may stutter on low-end devices). The visitor loads it
+    // explicitly via the CAT button (or ?cat=1), with the warning on the button
+    // itself. Its slot stays empty until then.
+    const catBtn = document.getElementById('cat-load');
+    const loadCat = function () {
+      if (catBtn) { catBtn.disabled = true; catBtn.classList.add('done'); catBtn.title = 'cat vending machine loading\u2026'; }
+      put('/static/vend_cat.glb', { h: 1.82, pos: [4.9, 4.2], rotY: -1.75 }, function (failed) {
+        if (catBtn) {
+          catBtn.classList.toggle('failed', !!failed);
+          catBtn.classList.toggle('done', !failed);
+          catBtn.title = failed ? 'cat vending machine unavailable' : 'cat vending machine loaded';
+          catBtn.setAttribute('aria-label', catBtn.title);
+        }
+      });
+    };
+    if (catBtn) catBtn.addEventListener('click', loadCat);
+    if (new URLSearchParams(location.search).has('cat')) loadCat();
+    // gumball machine near the front-left corner, out of the attendant's path
+    put('/static/alley_candy.glb', { h: 1.3, pos: [-1.45, -3.05], rotY: 0.12 }); // directly LEFT of the cabinet (user)
+
+    // THE wall behind the cabinet: only the girl mural, nothing else
+    loader.load('/static/wall_mural.glb', function (g) {
+      const root = g.scene;
+      root.traverse(function (o) { if (o.isMesh) o.receiveShadow = true; });
+      const box = new THREE.Box3().setFromObject(root);
+      const size = box.getSize(new THREE.Vector3());
+      const ctr = box.getCenter(new THREE.Vector3());
+      // full back-wall coverage: floor to above the camera's sightline at the wall;
+      // the horizontal spill hides behind the two side walls
+      const k = 7.2 / size.y;
+      // the scan's art slab sits near model z -0.55 with street junk out to +0.7;
+      // flatten depth to 12% so the slab hugs the wall and the junk reads as shallow relief
+      root.scale.set(k, k, k * 0.12);
+      root.position.set(-ctr.x * k, -box.min.y * k - 0.04, wallBack + 0.30 + 0.55 * k * 0.12);
+      console.log('PROBE mural k=' + k + ' rootz=' + root.position.z + ' wallBack=' + wallBack);
+      if (new URLSearchParams(location.search).has('muraldebug')) {
+        root.traverse(function (o) { if (o.isMesh) o.material = new THREE.MeshBasicMaterial({ color: 0xff2222 }); });
+      }
+      sc.updateMatrixWorld(true);
+      const wb = new THREE.Box3().setFromObject(root);
+      console.log('PROBE mural world=' + JSON.stringify({ min: wb.min, max: wb.max }));
+      sc.add(root);
+      const muralLight = new THREE.PointLight(0xffd9b0, 1.05, 7);
+      muralLight.position.set(0, 2.7, wallBack + 2.1); sc.add(muralLight);
+    }, undefined, function () { });
+    // missing-person poster decal by honky (CC-BY-4.0): cropped pieces of the
+    // source overlay, layered over the generated graffiti - never the raw wall
+    const posterCrop = function (img, sx, sy, sw, sh, x, y, z, faceLeft, w, tilt) {
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(2, Math.round(sw)); cv.height = Math.max(2, Math.round(sh));
+      cv.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const hgt = w * (cv.height / cv.width);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, hgt),
+        new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+      m.rotation.y = faceLeft ? Math.PI / 2 : -Math.PI / 2;
+      m.rotation.z = tilt + Math.PI; // source overlay is upside-down; flip in-plane
+      m.position.set(x, y, z);
+      m.renderOrder = 2;
+      sc.add(m);
+    };
+    loader.load('/static/wall_posters.glb', function (g) {
+      let img = null;
+      g.scene.traverse(function (o) { if (!img && o.isMesh && o.material && o.material.map && o.material.map.image) img = o.material.map.image; });
+      if (!img) return;
+      const iw = img.width, ih = img.height;
+      // right wall: three cropped clusters at different heights and tilts
+      posterCrop(img, 0, 0, iw * 0.52, ih * 0.58, wallR - 0.05, 2.75, -2.6, false, 2.5, 0.03);
+      posterCrop(img, iw * 0.45, ih * 0.30, iw * 0.55, ih * 0.62, wallR - 0.05, 2.15, -0.4, false, 2.1, -0.04);
+      posterCrop(img, iw * 0.10, ih * 0.55, iw * 0.45, ih * 0.45, wallR - 0.05, 3.15, 0.9, false, 1.6, 0.06);
+      // left wall: different crops so the two walls do not mirror each other
+      posterCrop(img, iw * 0.30, ih * 0.05, iw * 0.55, ih * 0.60, wallL + 0.05, 2.55, -2.9, true, 2.3, -0.03);
+      posterCrop(img, 0, ih * 0.35, iw * 0.48, ih * 0.60, wallL + 0.05, 2.05, -0.9, true, 2.0, 0.05);
+      posterCrop(img, iw * 0.55, ih * 0.50, iw * 0.42, ih * 0.48, wallL + 0.05, 3.25, 0.5, true, 1.5, -0.06);
+    }, undefined, function () { });
+    // a little warm life over the vending row
+    const rowGlow = new THREE.PointLight(0xffb35c, 0.55, 6.5);
+    rowGlow.position.set(4.2, 2.7, -0.8); sc.add(rowGlow);
   }
 
   // If the user-selected CC-BY model ships as /static/cabinet.glb, mount it as
@@ -829,37 +1616,59 @@ window.Arcade3D = (function () {
     if (!THREE.GLTFLoader) return;
     new THREE.GLTFLoader().load('/static/cabinet.glb', function (g) {
       const root = g.scene;
+      let glbScreen = null;
       root.traverse(function (o) {
         if (o.isMesh) {
           o.castShadow = true; o.receiveShadow = true;
-          if (o.material) { o.material.emissiveIntensity = 0.05; o.material.envMapIntensity = 0.7; o.material.needsUpdate = true; }
+          if (o.material && o.material.name === 'Arcade_Screen') {
+            glbScreen = o; // the cabinet's own CRT: wired to the live road canvas below
+          } else if (o.material) {
+            o.material.emissiveIntensity = 0.05; o.material.envMapIntensity = 0.7; o.material.needsUpdate = true;
+          }
         }
       });
       let box = new THREE.Box3().setFromObject(root);
       const size = box.getSize(new THREE.Vector3());
       const k = 2.52 / size.y;
       root.scale.setScalar(k);
-      root.rotation.y = Math.PI / 2; // model front faces +x as shipped; bring it to +z
+      root.rotation.y = 0; // model screen normal is +z (measured from GLB): front already faces the room
       box = new THREE.Box3().setFromObject(root);
       const ctr = box.getCenter(new THREE.Vector3());
-      root.position.set(-ctr.x, -box.min.y, -ctr.z);
+      root.position.set(-ctr.x, -box.min.y, -ctr.z + CAB_Z); // same wall pull as the cabinet
       sc.add(root); S.cabGLB = root;
+      // hide the procedural stand-in entirely; the GLB is the whole cabinet now
       S.cabinet.children.forEach(function (ch) { ch.visible = false; });
-      [S.bay, S.trayFrame, S.tray, S.trayLabel,
-       S.outStrip, S.slotGlow, S.lever, S.screenLight, S.marqueeLight, S.marquee].forEach(function (o) { if (o) o.visible = true; });
-      S.marquee.scale.set(0.72, 0.85, 1);
-      S.marquee.position.set(0, 2.27, 0.40);
-      S.marquee.rotation.x = -0.49;
-      S.bay.scale.setScalar(0.52); S.bay.position.set(0, 1.56, 0.30);
-      S.marqueeFrame.scale.set(0.72, 0.85, 1); S.marqueeFrame.position.set(0, 2.26, 0.30);
-      S.marquee.scale.set(0.72, 0.85, 1); S.marquee.position.set(0, 2.26, 0.335);
-      S.marqueeGlass.scale.set(0.72, 0.85, 1); S.marqueeGlass.position.set(0, 2.26, 0.345);
-      S.lever.position.set(0.55, 1.02, 0.42);
-      S.trayFrame.position.set(-0.1, 0.28, 0.50); S.tray.position.set(-0.1, 0.24, 0.58);
-      S.trayLabel.position.set(-0.1, 0.12, 0.51); S.outStrip.position.set(-0.1, 0.44, 0.52);
-      S.paperSlotPos.set(-0.1, 0.44, 0.58);
-      S.coinSlotPos.set(0.15, 0.62, 0.55);
-      S.slotGlow.position.set(0.15, 0.62, 0.55);
+      // world-space front face of the mounted cabinet (for slot targets + glow light)
+      const wbox = new THREE.Box3().setFromObject(root);
+      const frontZ = wbox.max.z;
+      if (glbScreen) {
+        // live road module on the cabinet's own screen; basic material + no tone
+        // mapping so it reads clean and moderately brighter than the old dim CRT.
+        // measured GLB screen UVs are canonical (U+ with +X, V+ with +Y): no mirroring
+        glbScreen.material = new THREE.MeshBasicMaterial({ map: scr.tex, toneMapped: false });
+        glbScreen.material.color.setScalar(1.15);
+        S.screenMesh = glbScreen; // fitZoom and focus shots track this mesh
+        // measured world normal of the GLB screen (tilts up ~57deg): fitZoom must
+        // sit along THIS axis, not the old procedural cabinet's shallow tilt
+        const na = glbScreen.geometry.attributes.normal;
+        if (na) {
+          // average ALL vertex normals: the screen is curved, so any single
+          // edge vertex points sideways and pushes the zoom camera off-axis
+          const wn = new THREE.Vector3();
+          for (let vi = 0; vi < na.count; vi++) {
+            wn.x += na.getX(vi); wn.y += na.getY(vi); wn.z += na.getZ(vi);
+          }
+          wn.normalize();
+          glbScreen.updateWorldMatrix(true, false);
+          wn.transformDirection(glbScreen.matrixWorld);
+          if (wn.z < 0) wn.negate();
+          S.screenN = wn;
+        }
+      }
+      // CRT glow light survives (it is a light child of the hidden procedural group)
+      if (S.screenLight) { S.screenLight.visible = true; S.screenLight.position.set(0, 1.6, frontZ + 2.6 + 0.6); }
+      S.paperSlotPos.set(-0.1, 0.44, frontZ + 0.06);
+      S.coinSlotPos.set(0.15, 0.62, frontZ + 0.05);
       fitZoom();
     }, undefined, function () { /* no GLB shipped: keep the procedural cabinet */ });
   }
@@ -1075,8 +1884,8 @@ window.Arcade3D = (function () {
     if (S.powered) return;
     S.powered = true;
     S.attChest.material.color.setRGB(0.35, 1.5, 1.9);
-    await glideTo(1.35, 1.1, 1100);
-    faceTo(1.0, 0.1);
+    await glideTo(1.35, 1.1 + CAB_Z, 1100);
+    faceTo(1.0, 0.1 + CAB_Z);
     await raiseArm(-1.9, -0.4, 420);
     snd.clunk();
     const l0 = S.lever.rotation.z;
@@ -1094,14 +1903,14 @@ window.Arcade3D = (function () {
     S.screenLight.intensity = 1.2;
     scr.crt = "INSERT COIN"; scr.dirty = true;
     await raiseArm(0, 0, 350);
-    await glideTo(-2.6, 0.6, 1000);
+    await glideTo(1.35, 0.0, 1000); // park nearer the cabinet, out of the Hall zone (user)
     faceTo(0, 0);
   }
 
   // 2. coin: attendant carries it to the door, the coin arcs into the slot
   async function coinInsert() {
-    await glideTo(0.85, 1.35, 900);
-    faceTo(0.22, 0.4);
+    await glideTo(0.85, 1.35 + CAB_Z, 900);
+    faceTo(0.22, 0.4 + CAB_Z);
     await raiseArm(-2.1, -0.5, 420);
     const clawPos = new THREE.Vector3();
     S.attArm.claw.getWorldPosition(clawPos);
@@ -1120,30 +1929,45 @@ window.Arcade3D = (function () {
     S.coin.visible = false; S.coin.scale.set(1, 1, 1);
     scr.crt = "RUNNING"; scr.dirty = true;
     await raiseArm(0, 0, 350);
-    await glideTo(-2.5, 0.8, 800);
+    await glideTo(1.35, 0.0, 800); // same cabinet-side park spot
   }
 
-  // 3. one stage of the slowed replay: block works, then liquid fills its out-tube
+  // 3. one stage of the slowed replay: the car drives to this module's stop,
+  //    waits while its recorded work time passes, then the barrier lifts
   async function stageRun(name, showMs, endState) {
     const idx = STAGE_ORDER.indexOf(name);
     const node = scr.nodes[name];
     if (!node) return;
+    if (!TRK.ok) { // road assets unavailable: state only, no theatre
+      node.state = "active";
+      await wait(showMs * 0.8);
+      node.state = endState === "failed" ? "failed" : "done";
+      if (endState === "failed") { scr.crt = "JAMMED"; scr.dirty = true; }
+      return;
+    }
+    const stop = TRK.stops[idx];
+    const driveMs = Math.max(320, Math.min(1700, showMs * 0.5));
+    const gateMs = 320;
     node.state = "active";
-    const workMs = showMs * 0.55, fillMs = showMs * 0.45;
-    await wait(workMs);
+    stopState(idx, "active");
+    await trackDriveTo(stop.x, driveMs);
+    await wait(Math.max(60, showMs - driveMs - gateMs)); // parked at the stop: the real work
     if (endState === "failed") {
       node.state = "failed";
+      stopState(idx, "failed");
       scr.crt = "JAMMED"; scr.dirty = true;
       return;
     }
     node.state = "done";
-    const tb = scr.tubes[idx]; // tube leaving this stage toward the next
-    if (tb && idx < STAGE_ORDER.length - 1) {
-      await tween(fillMs, easeInOut, function (t) { tb.fill = t; });
-    }
+    stopState(idx, "done");
+    snd.servo();
+    gateSet(idx, true); // barrier lifts: this module cleared the car
+    await wait(gateMs);
   }
 
-  // instant state set from a live pulse snapshot (no animation, mid-run)
+  // instant state set from a live pulse snapshot (no theatre, mid-run):
+  // stops take the real states and the car parks at the furthest stage
+  // the run has actually reached
   function livePulse(stages) {
     for (const st of stages) {
       const node = scr.nodes[st.name];
@@ -1151,11 +1975,30 @@ window.Arcade3D = (function () {
       if (node.state === "done" || node.state === "failed") continue;
       node.state = st.state === "waiting" ? "waiting" : st.state;
       node.ms = st.ms;
+      const idx = STAGE_ORDER.indexOf(st.name);
+      if (idx >= 0) stopState(idx, node.state);
+    }
+    if (!TRK.ok) return;
+    let furthest = -1;
+    STAGE_ORDER.forEach(function (n, i) { if (scr.nodes[n].state !== "waiting") furthest = i; });
+    if (furthest >= 0) {
+      TRK.targetX = TRK.stops[furthest].x;
+      for (let i = 0; i < furthest; i++) {
+        if (scr.nodes[STAGE_ORDER[i]].state === "done") gateSet(i, true, true);
+      }
     }
   }
   function resetWorkflow() {
     STAGE_ORDER.forEach(function (n) { scr.nodes[n] = { state: "waiting", ms: null }; });
-    scr.tubes.forEach(function (tb) { tb.fill = 0; });
+    if (!TRK.ok) return;
+    TRK.stops.forEach(function (st, i) {
+      stopState(i, "waiting");
+      if (st.gate) { st.gate.open = 0; st.gate.openT = 0;
+        if (st.gate.pole) st.gate.pole.quaternion.copy(st.gate.baseQ); }
+    });
+    TRK.drive = null;
+    TRK.carX = TRK.prevX = TRK.targetX = TRK.camX = TRK.startX;
+    if (TRK.car) TRK.car.position.x = TRK.startX;
   }
 
   // 4. completion: camera pulls back, cabinet shudders hard, sheets drop,
@@ -1190,8 +2033,8 @@ window.Arcade3D = (function () {
         sh.rotation.z = (i - 1) * 0.12 + Math.sin(t * 9) * 0.08 * (1 - t);
       });
     }
-    await glideTo(0.55, 1.15, 900);
-    faceTo(-0.25, 0.45);
+    await glideTo(0.55, 1.15 + CAB_Z, 900);
+    faceTo(-0.25, 0.45 + CAB_Z);
     await raiseArm(-1.7, -0.6, 500);
     snd.flutter();
     const sheet = S.sheets[ok ? S.sheets.length - 1 : 0];
@@ -1222,15 +2065,82 @@ window.Arcade3D = (function () {
 
   /* ================= init + render loop ================= */
   function fitZoom() {
-    // frame the real screen-mesh bounds with 8% padding on both dimensions
+    if (!S.screenMesh || !S.camera) return;
+    // Fit the REAL screen bounds by projecting its corners: the tilted screen's
+    // near edge is much closer to the zoom camera than its far edge, so a
+    // center-distance fit under-sizes the near half (the stop strip slipped
+    // behind the chat bar that way). Iterate: grow distance until every
+    // corner clears the HUD/composer bands, then recenter inside the band.
     S.scene.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(S.screenMesh);
     const c = box.getCenter(new THREE.Vector3());
-    const wdt = box.max.x - box.min.x, hgt = box.max.y - box.min.y;
-    const t = Math.tan(THREE.MathUtils.degToRad(S.camera.fov / 2));
-    const d = Math.max((wdt * 1.08) / (2 * t * S.camera.aspect), (hgt * 1.08) / (2 * t));
-    const dir = new THREE.Vector3(0, 0.157, 1).normalize(); // screen faces slightly up (tilt)
-    S.camZoom = { pos: [c.x + dir.x * d, c.y + dir.y * d, c.z + dir.z * d + 0.05], tgt: [c.x, c.y, c.z] };
+    // fit the ACTUAL canvas quad (the mesh's UV corners in world space), not
+    // the axis-aligned Box3: the box overhangs the tilted, curved surface and
+    // the slack it leaves is exactly where the marquee bled into frame
+    const corners = [];
+    const posA = S.screenMesh.geometry.attributes.position, uvA = S.screenMesh.geometry.attributes.uv;
+    if (uvA && posA) {
+      S.screenMesh.updateWorldMatrix(true, false);
+      [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(function (t2) {
+        let bi = 0, bd = 1e9;
+        for (let i = 0; i < uvA.count; i++) {
+          const du = uvA.getX(i) - t2[0], dv = uvA.getY(i) - t2[1], dd = du * du + dv * dv;
+          if (dd < bd) { bd = dd; bi = i; }
+        }
+        corners.push(new THREE.Vector3().fromBufferAttribute(posA, bi).applyMatrix4(S.screenMesh.matrixWorld));
+      });
+    } else {
+      [box.min.x, box.max.x].forEach(function (x2) {
+        [box.min.y, box.max.y].forEach(function (y2) {
+          [box.min.z, box.max.z].forEach(function (z2) { corners.push(new THREE.Vector3(x2, y2, z2)); });
+        });
+      });
+    }
+    const dir = (S.screenN ? S.screenN.clone() : new THREE.Vector3(0, 0.157, 1)).normalize();
+    const upVec = new THREE.Vector3(0, dir.z, -dir.y); // level camera up, dir lives in the y-z plane
+    const W = window.innerWidth, H = window.innerHeight;
+    // occlusion bands measured from the live DOM: the whole bottom chat panel
+    // (header row sits above the composer) plus the replay banner up top,
+    // which is always reserved so live and replay share one framing
+    const chat = document.getElementById('chat');
+    const chatTop = chat ? chat.getBoundingClientRect().top : H;
+    const botPx = Math.max(0, H - chatTop) + 8;
+    const topPx = 56; // replay banner pill + margin
+    const padXpx = Math.round(W * 0.025);
+    const xLim = 1 - 2 * padXpx / W;
+    const yTop = 1 - 2 * topPx / H, yBot = -1 + 2 * botPx / H;
+    const availMid = (yTop + yBot) / 2, availHalf = Math.max(0.05, (yTop - yBot) / 2);
+    const cam = S.camera;
+    const t = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+    let d = Math.max(0.45, (box.max.x - box.min.x) / (2 * t * cam.aspect * xLim));
+    let lift = 0;
+    const keepPos = cam.position.clone(), keepTgt = S.camTarget.clone();
+    const v = new THREE.Vector3();
+    for (let i = 0; i < 10; i++) {
+      cam.position.set(c.x + dir.x * d - upVec.x * lift, c.y + dir.y * d - upVec.y * lift, c.z + dir.z * d - upVec.z * lift + 0.05);
+      cam.lookAt(c.x - upVec.x * lift, c.y - upVec.y * lift, c.z - upVec.z * lift);
+      cam.updateMatrixWorld(true);
+      let maxX = 0, maxY = -2, minY = 2;
+      corners.forEach(function (p) {
+        v.copy(p).project(cam);
+        maxX = Math.max(maxX, Math.abs(v.x));
+        maxY = Math.max(maxY, v.y); minY = Math.min(minY, v.y);
+      });
+      const midY = (maxY + minY) / 2, halfR = Math.max(1e-4, (maxY - minY) / 2);
+      // s is the exact scale the CURRENT framing is off by: >1 too big, <1 too
+      // small. Move d both ways (perspective makes this nonlinear, so iterate)
+      // and re-center every pass - growing only would overshoot and stick.
+      const s = Math.max(maxX / xLim, halfR / availHalf);
+      const deltaNdc = midY - availMid; // >0: content sits too high in the band
+      lift -= deltaNdc * t * d * 0.9; // rig down pushes content up
+      if (Math.abs(s - 1) < 0.02 && Math.abs(deltaNdc) < 0.01) break;
+      d = Math.max(0.3, d * s * 1.01);
+    }
+    cam.position.copy(keepPos); cam.lookAt(keepTgt); cam.updateMatrixWorld(true);
+    S.camZoom = {
+      pos: [c.x + dir.x * d - upVec.x * lift, c.y + dir.y * d - upVec.y * lift, c.z + dir.z * d - upVec.z * lift + 0.05],
+      tgt: [c.x - upVec.x * lift, c.y - upVec.y * lift, c.z - upVec.z * lift]
+    };
   }
 
   function resize() {
@@ -1240,7 +2150,7 @@ window.Arcade3D = (function () {
     S.camera.updateProjectionMatrix();
     S.renderer.setSize(w, h, false);
     if (S.composer) S.composer.setSize(w, h);
-    S.camWide.pos = aspect < 0.75 ? [0, 2.8, 9.8] : [0, 2.5, 7.3];
+    S.camWide.pos = aspect < 0.75 ? [0, 2.9, 9.6] : [0, 2.35, 6.4];
     fitZoom();
   }
 
@@ -1270,7 +2180,7 @@ window.Arcade3D = (function () {
       try {
         S.renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
       } catch (e2) {
-        window.__glError = String(e2 && e2.message || e2) + " || first: " + String(e && e.message || e);
+        console.error('webgl:', e2 && e2.message || e2, '| first:', e && e.message || e);
         return false;
       }
     }
@@ -1291,11 +2201,15 @@ window.Arcade3D = (function () {
       pmrem.compileEquirectangularShader();
       S.scene.environment = pmrem.fromEquirectangular(envTex).texture;
       buildRoom(S.scene);
+      mountAlley(S.scene, -4.6, -5.6, 5.6); // back wall / left wall / right wall planes
+      mountHoloTable(S.scene); // holographic Hall of Fame table (hidden until hall_unlocked)
+      mountDossier(S.scene); // TOP SECRET dossier easter egg by the gumball machine
+      mountWallBoard(S.scene, -5.6); // the I WAS HERE signature wall (left wall)
       buildCabinet(S.scene);
       buildAttendant(S.scene);
       buildProps(S.scene);
     } catch (e) {
-      window.__glError = "scene: " + String(e && e.message || e);
+      console.error('scene:', e && e.message || e);
       return false;
     }
     // bloom on the emissive parts; skipped entirely on the light path
@@ -1316,7 +2230,6 @@ window.Arcade3D = (function () {
     resize();
     window.addEventListener("resize", resize);
     filmOverlay();
-    window.__arcade = S; // debug/capture hook
 
     let frameNo = 0;
     const frameTimes = [];
@@ -1347,6 +2260,7 @@ window.Arcade3D = (function () {
       const dt = S.clock.getDelta();
       const t = S.clock.elapsedTime * 1000;
       if (S.mixer) S.mixer.update(dt || 0.016);
+      trackUpdate(dt || 0.016, t);
       // standby screen is static: redraw only when something changed
       if (!S.powered && !scr.dirty) { /* skip CRT redraw */ }
       else if (!S.lowFx || frameNo % 3 === 0) { drawScreen(t); scr.dirty = false; }
@@ -1395,6 +2309,31 @@ window.Arcade3D = (function () {
     setCRT: function (t) { scr.crt = t; scr.dirty = true; },
     setStageMs: function (name, ms) { const n = scr.nodes[name]; if (n) n.ms = ms; },
     zoomIn: function () { S.zoomed = true; fitZoom(); return camTo(S.camZoom, 1400); },
+    holoSetUnlocked: function (v) { holoSetVisible(!!v); },
+    holoSetHall: function (entries) { if (!S.holo) return; S.holo.entries = Array.isArray(entries) ? entries : []; drawHoloList(); },
+    holoSetPeriod: function (period) { if (!S.holo) return; S.holo.period = period || null; drawHoloList(); },
+    holoFocus: function () { return holoFocus(); },
+    holoUnfocus: function () { holoUnfocus(); },
+    holoFocused: function () { return !!(S.holo && S.holo.focused); },
+    onHoloFocus: function (cb) { S.holoFocusCb = cb; },
+    dossierFocus: function () { return dossierFocus(); },
+    dossierUnfocus: function () { dossierUnfocus(); },
+    dossierFocused: function () { return !!(S.dossier && S.dossier.focused); },
+    dossierOpen: function () { return !!(S.dossier && S.dossier.open); },
+    dossierReady: function () { return !!(S.dossier && S.dossier.grp); },
+    cabReady: function () { return !!S.cabGLB; },
+    screenDebug: function () {
+      const m = S.screenMesh;
+      return { cabGLB: !!S.cabGLB, screenMesh: !!m, screenIsCRT: !!(m && m.material && m.material.map === scr.tex) };
+    },
+    onDossierFocus: function (cb) { S.dossierFocusCb = cb; },
+    wallSetData: function (d) { if (!S.wallb) return; S.wallb.data = d; wallDraw(); },
+    wallFocus: function () { return wallFocus(); },
+    wallUnfocus: function () { wallUnfocus(); },
+    wallFocused: function () { return !!(S.wallb && S.wallb.focused); },
+    onWallFocus: function (cb) { S.wallFocusCb = cb; },
+    onWallTap: function (cb) { S.wallTapCb = cb; },
+    onWallSolve: function (cb) { S.wallSolveCb = cb; },
     zoomOut: function () { S.zoomed = false; return camTo(S.camWide, 1100); },
     setMuted: function (m) {
       S.muted = m;
