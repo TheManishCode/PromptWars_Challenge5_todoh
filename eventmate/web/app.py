@@ -16,6 +16,7 @@ for concurrent mutation of the same plan.
 
 from __future__ import annotations
 
+import errno
 import gzip
 import hmac
 import json
@@ -23,7 +24,9 @@ import logging
 import os
 import re
 import secrets
+import shutil
 import sys
+import tempfile
 import threading
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -53,7 +56,7 @@ from eventmate.env import load_env
 from eventmate.integrations.explore import ExploreError, ExploreNotConfigured, route as explore_route
 from eventmate import consumption
 from eventmate import transfer
-from eventmate.web import hosting, limits
+from eventmate.web import hosting, limits, observe
 from eventmate.workspaces import COOKIE, COOKIE_MAX_AGE, Workspace, WorkspaceError, WorkspaceRegistry
 from eventmate.llm import METER, LLMError, client_from_env
 from eventmate.plan_store import PlanIntegrityError
@@ -446,6 +449,26 @@ def create_app(
     started_at = time.time()
     poll_state: Dict[str, object] = {"last": None, "failures": 0}  # for the owner status route: when the last background round finished, and how many failed
 
+    metrics = observe.Metrics()
+    observe.configure_access_log(os.environ.get("EVENTMATE_ACCESS_LOG", "stderr" if shared else "off").strip().lower())
+
+    @app.before_request
+    def begin_request():
+        g.rid = observe.new_request_id(request.headers.get("X-Request-Id"))
+        g.t0 = time.perf_counter()
+        metrics.begin()
+
+    @app.after_request
+    def finish_request(resp: Response) -> Response:
+        ms = (time.perf_counter() - g.get("t0", time.perf_counter())) * 1000
+        rid = g.get("rid") or observe.new_request_id()
+        resp.headers["X-Request-Id"] = rid
+        if g.get("t0") is not None:
+            metrics.end(resp.status_code, ms)
+            if request.path not in ("/healthz", "/readyz"):  # a probe every few seconds would drown the log
+                observe.log_request(rid, request.method, request.url_rule.rule if request.url_rule else None, resp.status_code, ms, g.ws.id if g.get("ws") is not None and shared else None)
+        return resp
+
     def caller() -> str:
         return limits.client_address(request.remote_addr, request.headers.get("X-Forwarded-For"), proxies)
 
@@ -705,8 +728,12 @@ def create_app(
     def _boom(exc):
         if hasattr(exc, "code") and isinstance(exc.code, int):
             return _err(exc.code, getattr(exc, "name", "error"))
-        log.exception("unhandled error")
-        return _err(500, "internal error")
+        rid = g.get("rid", "-")
+        if isinstance(exc, OSError) and exc.errno in (errno.ENOSPC, errno.EDQUOT):
+            log.error("storage full (request %s): %s", rid, type(exc).__name__)
+            return _err(507, "the server has no room to save this; nothing was lost and the owner has been told by the log", code="storage_full", request_id=rid)
+        log.exception("unhandled error (request %s)", rid)  # the traceback goes to the server's own log only; the answer names the request and nothing else
+        return _err(500, "internal error", code="internal", request_id=rid)
 
     def body(model):
         try:
@@ -809,6 +836,27 @@ def create_app(
     def healthz():
         return jsonify({"ok": True})  # nothing else: no counts, no names, no version
 
+    @app.get("/readyz")
+    def readyz():
+        """Ready to take traffic: the data directory is writable, the workspace database opens, and some disk is free. ``/healthz`` only says the process is up."""
+        problems = []
+        root = Path(registry.root if shared else local.em.store.root)
+        try:
+            with tempfile.NamedTemporaryFile(dir=root, prefix=".ready-") as probe:
+                probe.write(b"x")
+                probe.flush()
+                os.fsync(probe.fileno())
+            if shutil.disk_usage(root).free < 50 * 1024 * 1024:
+                problems.append("less than 50 MB of disk is free")
+        except OSError:
+            problems.append("storage is not writable")
+        if shared:
+            try:
+                registry.directory.count()
+            except Exception:  # sqlite3.Error and anything else: the cause is in the server log, not in this answer
+                problems.append("the workspace database cannot be opened")
+        return jsonify({"ready": not problems, **({"problems": problems} if problems else {})}), (200 if not problems else 503)
+
     @app.get("/api/owner/status")
     def owner_status():
         """Counts only, for the person who runs the server. Needs ``EVENTMATE_OWNER_TOKEN`` (at least 16 characters) in the ``X-EventMate-Owner`` header; a
@@ -823,7 +871,7 @@ def create_app(
         return jsonify({
             "uptime_s": int(time.time() - started_at), "workspaces_total": registry.directory.count() if shared else 1, "workspaces_active_last_minute": workspace_limit.tracked(), "pending_jobs": pending,
             "searches_in_flight": used, "searches_capacity": total, "last_poll": poll_state["last"], "poll_failures": poll_state["failures"],
-            "model_calls": {**METER.status(), **consumption.BUDGETS.status()},
+            "model_calls": {**METER.status(), **consumption.BUDGETS.status()}, "requests": metrics.snapshot(),
         })
 
     # --------------------------------------------------------------- api
@@ -1098,6 +1146,8 @@ def create_app(
         with lock:
             removed = em.delete_plan(plan_id)
             assistant.forget_plan(plan_id)
+            if shared:
+                registry.record_plan_deletion(g.ws.id, plan_id)
         return jsonify({"deleted": plan_id, "removed": removed})
 
     @app.post("/api/plans/<plan_id>/autoreply")

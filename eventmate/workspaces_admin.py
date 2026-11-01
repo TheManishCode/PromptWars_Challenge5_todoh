@@ -7,6 +7,9 @@ Reads ``EVENTMATE_DATA_DIR`` and ``EVENTMATE_SECRET`` from the environment (the 
   revoke ID                   no credential opens ID any more (its data stays until it is deleted)
   delete ID --confirm ID      remove ID and everything in it, leaving a tombstone
   sweep --idle-days N         remove workspaces that never saved anything and have been idle for N days
+  backup --to DIR             write a verified copy of the data directory into DIR (outside the data directory) while the server runs
+  verify-backup PATH          check a backup against its manifest
+  restore PATH --into DIR [--deletion-log FILE]   restore into an EMPTY directory, then re-apply deletions made after the backup (use the server's current tombstones.jsonl)
   import-legacy ID --plan-dir DIR   bring the plans of an existing single-user install into workspace ID (hash-checked, ids that collide are replaced); never automatic
 """
 
@@ -41,6 +44,13 @@ def main(argv=None) -> int:
     d.add_argument("--confirm", required=True)
     sw = sub.add_parser("sweep")
     sw.add_argument("--idle-days", type=int, required=True)
+    bk = sub.add_parser("backup")
+    bk.add_argument("--to", required=True)
+    sub.add_parser("verify-backup").add_argument("path")
+    rs = sub.add_parser("restore")
+    rs.add_argument("path")
+    rs.add_argument("--into", required=True)
+    rs.add_argument("--deletion-log")
     il = sub.add_parser("import-legacy")
     il.add_argument("id")
     il.add_argument("--plan-dir", required=True)
@@ -48,6 +58,8 @@ def main(argv=None) -> int:
     if hasattr(a, "id") and not ID.fullmatch(a.id):
         print("that is not a workspace id", file=sys.stderr)
         return 2
+    if a.cmd in ("verify-backup", "restore", "backup"):
+        return _backup_command(a)
     reg = _registry()
     if a.cmd == "new":
         ws, credential = reg.create("admin")
@@ -85,6 +97,29 @@ def main(argv=None) -> int:
             print(f"not imported: {exc}", file=sys.stderr)
             return 1
         print(f"imported {report['imported']['plans']} plan(s) into {a.id}; remapped ids: {report['remapped'] or 'none'}. The old files were copied, not moved.")
+    return 0
+
+
+def _backup_command(a) -> int:
+    from eventmate import backup
+
+    try:
+        if a.cmd == "backup":
+            data_dir = os.environ.get("EVENTMATE_DATA_DIR", "")
+            if not data_dir:
+                raise SystemExit("set EVENTMATE_DATA_DIR first")
+            out = backup.make_backup(Path(data_dir), Path(a.to))
+            print(f"backup written to {out} ({len(backup.verify_backup(out))} problems)")
+        elif a.cmd == "verify-backup":
+            problems = backup.verify_backup(Path(a.path))
+            print("ok" if not problems else "\n".join(problems))
+            return 0 if not problems else 1
+        else:
+            report = backup.restore_backup(Path(a.path), Path(a.into), Path(a.deletion_log) if a.deletion_log else None)
+            print(f"restored {report['restored_files']} file(s); {report['tombstones_applied']} deletion(s) re-applied")
+    except backup.BackupError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 

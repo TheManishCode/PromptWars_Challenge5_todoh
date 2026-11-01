@@ -8,6 +8,7 @@ configures; nothing here is on by default for a loopback bind.
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 # 6 MB: the largest upload route is audio (5 MB) plus a multipart envelope; every other route is held to 64 KB by the app itself
@@ -51,5 +52,6 @@ def run(app, host: str, port: int, requested: str = "auto", remote: bool = False
     else:
         from eventmate.web.server import make_bounded_server  # the built-in server with an idle timeout and a connection cap (thread B's R-6)
 
-        make_bounded_server(app, host, port).serve_forever()
+        clean = make_bounded_server(app, host, port).serve_until_signalled()  # SIGTERM or SIGINT: stop accepting, let running requests finish, then exit
+        print("stopped" if clean else "stopped; some requests were still running and were abandoned", file=sys.stderr)
     return kind
