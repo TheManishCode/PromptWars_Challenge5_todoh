@@ -101,7 +101,7 @@ def register(app, k):
         try:
             day = date.fromisoformat(raw)
         except ValueError:
-            raise ValueError("date must be YYYY-MM-DD")
+            raise ValueError("date must be YYYY-MM-DD") from None
         check_date(day, today_fn())
         return out(em.weather_forecast(request.args.get("city", ""), day))
 
@@ -121,7 +121,7 @@ def register(app, k):
         try:
             limit = int(request.args.get("limit", "20"))
         except ValueError:
-            raise ValueError("limit must be a whole number")
+            raise ValueError("limit must be a whole number") from None
         res = em.discover_venues(city, kind, limit)  # no app-wide lock: a slow public server must not block other requests
         return out(res)
 
