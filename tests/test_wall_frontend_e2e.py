@@ -399,3 +399,52 @@ def test_shared_mode_a_lost_workspace_cookie_shows_a_clear_state_not_a_silent_fa
     if not any(w in log_text.lower() for w in ("failed", "try again", "reload", "session", "refused", "expired", "lost")):
         # KNOWN GAP (reported, not hidden): the backend answers the generic 404 and the page prints it as "not found". The contract (v6 A5) wants one GET /api/session and a visible retry choice.
         pytest.xfail(f"the person sees only {log_text.splitlines()[-1]!r} after the workspace cookie is lost; calls: {after}")
+
+
+def test_hostile_text_in_stored_records_never_runs_in_the_room(world):
+    """With one interface left, the room's own JavaScript is the only thing between third-party text and the page. A real plan's name, label, note, reason and warning fields are
+    replaced by hostile markup and every sheet that draws them is rendered: the text must appear (as text), nothing may execute, and no element may carry a handler or a script."""
+    from tests.conftest import EXAMPLE
+
+    base, _store = world
+    payload = "<img src=x onerror=window.__xss=1><script>window.__xss=2</script>\"'><svg onload=window.__xss=3>"
+    with pw.sync_playwright() as p:
+        browser = p.chromium.launch(executable_path=CHROMIUM, args=["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"])
+        page = browser.new_page(viewport={"width": 1300, "height": 900})
+        dialogs = []
+        page.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
+        page.goto(base + "/")
+        page.wait_for_selector("#msg", timeout=20000)
+        page.fill("#msg", EXAMPLE)
+        page.press("#msg", "Enter")
+        page.wait_for_selector("#review:not([hidden])", timeout=30000)
+        page.click("#build")
+        page.wait_for_selector("#paper .stamp", timeout=90000)
+        plan_id = page.evaluate("state.lastPayload.plan.plan_id")
+        # the server's plan, with the text fields a third party can influence (vendor and place names, notes, reasons, warnings, labels) replaced by hostile strings, drawn by every renderer
+        page.evaluate("""(payload) => {
+            const keys = new Set(["name", "label", "city", "change_reason", "detail", "title", "message", "reason", "why", "text", "note", "notes", "source", "description", "summary", "evidence", "vendor_name", "area", "address", "venue", "owner", "phone", "contact"]);
+            const walk = (o) => {
+                if (Array.isArray(o)) return o.map((x) => typeof x === "string" ? x + " " + payload : walk(x));
+                if (o && typeof o === "object") { const r = {}; for (const [k, v] of Object.entries(o)) r[k] = typeof v === "string" && keys.has(k) ? v + " " + payload : (k === "warnings" || k === "unverified" ? walk(v) : walk(v)); return r; }
+                return o;
+            };
+            state.lastPayload = walk(state.lastPayload);
+        }""", payload)
+        shown_as_text = []
+        for view in ("plan", "overview", "timeline", "vendors", "budget", "audit", "plan"):
+            page.evaluate("v => renderPaperView(v)", view)
+            page.wait_for_timeout(900)
+            if page.evaluate("document.querySelector('#paper-inner').innerText.includes('onerror=window.__xss')"):
+                shown_as_text.append(view)
+        budget_text = page.inner_text("#paper-inner")[-300:]
+        verdict = page.evaluate("""() => ({
+            xss: window.__xss === undefined ? null : window.__xss,
+            handlers: Array.from(document.querySelectorAll('*')).filter(e => Array.from(e.attributes).some(a => a.name.startsWith('on'))).length,
+            scripts: Array.from(document.querySelectorAll('script:not([src])')).length,
+            imgs: document.querySelectorAll('img[src="x"]').length,
+            text: document.body.innerText.includes('onerror=window.__xss')
+        })""")
+        browser.close()
+    assert shown_as_text, f"the hostile text never reached a sheet, so this test proved nothing; budget sheet said: {budget_text!r}"  # it must be on screen, as inert text
+    assert verdict["xss"] is None and verdict["handlers"] == 0 and verdict["scripts"] == 0 and verdict["imgs"] == 0 and dialogs == [], (verdict, dialogs)
