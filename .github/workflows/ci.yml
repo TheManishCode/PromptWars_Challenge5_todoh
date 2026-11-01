@@ -21,7 +21,7 @@ jobs:
       - run: make security
       - name: Dependency vulnerabilities (blocking; a known vulnerability in a locked package fails the build)
         run: |
-          for i in 1 2 3; do pip-audit -r requirements.lock --require-hashes --no-deps --disable-pip && exit 0; code=$?; [ $code -ne 1 ] || exit 1; sleep 20; done; exit 1
+          for _ in 1 2 3; do pip-audit -r requirements.lock --require-hashes --no-deps --disable-pip && exit 0; code=$?; [ $code -ne 1 ] || exit 1; sleep 20; done; exit 1
       - name: Runtime lock is in step with pyproject (a drifted lock would ship a different set of packages than was tested)
         run: |
           pip install uv && uv pip compile pyproject.toml --extra serve --generate-hashes --python-version 3.14 -o /tmp/runtime.lock >/dev/null
@@ -111,9 +111,9 @@ jobs:
       - run: docker build -t todoh:ci .
       - name: Start in shared mode and check readiness, metrics and shutdown
         run: |
-          docker run -d --name todoh -p 8000:8000 -e EVENTMATE_SECRET=$(head -c 48 /dev/urandom | base64 | tr -d '\n=+/') -e EVENTMATE_PUBLIC_URL=https://todoh.test \
+          docker run -d --name todoh -p 8000:8000 -e EVENTMATE_SECRET="$(head -c 48 /dev/urandom | base64 | tr -d '\n=+/')" -e EVENTMATE_PUBLIC_URL=https://todoh.test \
             -e EVENTMATE_ALLOWED_HOSTS=todoh.test -e EVENTMATE_TRUSTED_PROXY=172.16.0.0/12 -e EVENTMATE_OWNER_TOKEN=ci-owner-token-0123456789 todoh:ci
-          for i in $(seq 1 40); do curl -fsS -H "Host: todoh.test" http://127.0.0.1:8000/readyz && break; sleep 1; done
+          for _ in $(seq 1 40); do curl -fsS -H "Host: todoh.test" http://127.0.0.1:8000/readyz && break; sleep 1; done
           curl -fsS -H "Host: todoh.test" http://127.0.0.1:8000/readyz
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: todoh.test' http://127.0.0.1:8000/metrics)" = 404
           curl -fsS -H "Host: todoh.test" -H "Authorization: Bearer ci-owner-token-0123456789" http://127.0.0.1:8000/metrics | grep -q eventmate_uptime_seconds

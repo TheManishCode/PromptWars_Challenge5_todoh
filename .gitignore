@@ -24,3 +24,5 @@ eventmate/wall_data/
 .server.lock
 eventmate/workspaces/
 todoh-backup-*/
+deploy/prometheus/owner_token
+deploy/.env
