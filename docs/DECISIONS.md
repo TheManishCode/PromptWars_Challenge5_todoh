@@ -974,3 +974,28 @@ Context: a proposal the assistant filed (a payment to record, a booking to confi
 Decision: `ApprovalQueue` keeps proposals in `assistant_approvals.db` (SQLite, WAL, one immediate transaction per compare-and-set). A decision is recorded before the action runs (`approving`); if the process dies in between, the proposal becomes `outcome_unknown` after a lease and is never applied again by the queue (the same at-most-once rule as the vendor outbox); a pending proposal expires after seven days; two processes deciding the same proposal race on one compare-and-set. Deleting a plan removes its proposals. The voice turn's private staging queue stays in memory. `eventmate/backup.py` now copies every `.db` inside a workspace with SQLite's online backup into a single file (no `-wal` sidecar); a test restores a backup that contained a pending approval and finds it pending.
 Not chosen: replaying the JSONL proposal log on start (a second source of truth that can disagree with the decision); copying the `-wal` and `-shm` files along with the database (consistent only if nothing writes during the copy).
 Honest limits: the content-hash binding and the stale-plan check are unchanged and still the authority; an approval tampered with in the database is refused by the hash check (tested), but anyone who can write the file can also delete proposals. Held proposals are per workspace and are lost with it on delete, by design.
+
+## ADR-075: The canvas gets a keyboard twin of real controls; nothing about the look changes (2026-11-01, thread Y)
+
+Status: Accepted (`release/candidate`, lane Y; drafted in `decisions/Y-001`)
+Owner rule: no redesign. Decision: every view a tap opens (wall, Hall table, each vending machine, dossier) has a real button in `#room-nav`, visible only while the keyboard is on it; the wall gate has arrow keys (the same movement as the drag); a round's spots are real buttons in the canvas's order; wall sections have PREV/NEXT; one polite live region announces. Escape/Back return focus to the opener.
+Why not an overlay of invisible buttons over the canvas: hit-testing a camera that glides is fragile and screen readers read it as noise. Why a list of names in a round is not a shortcut: it is exactly what the board shows; before the reveal every name looks alike and the list is the only list.
+Proof: `tests/test_a11y_e2e.py` drives it with a real keyboard. Not done: a human screen-reader pass.
+
+
+## ADR-076: Contrast is measured from pixels, and axe-core is a test tool, not a served file (2026-11-01, thread Y)
+
+Status: Accepted (`release/candidate`, lane Y; drafted in `decisions/Y-002`)
+axe reports "incomplete" for text over a canvas or a gradient, which is most of this page. `tests/browser_helpers.py` hides each element's own ink, screenshots, and compares the element colour with the pixels behind it (3rd percentile, so a bright speck is not hidden by the average). Its blind spots are documented there (rotated stamp, clipped rows, covered text). axe-core 4.14.0 sits in `tests/vendor/` with a hash manifest, is injected over the DevTools protocol (the CSP is untouched) and is not in `STATIC_FILES`. Two defects in the meter itself were found by checking its worst readings against screenshots before any CSS was changed to satisfy it.
+
+
+## ADR-077: The chat is wired before the room is built; the quality ladder judges p95; the road theatre is opt-in (2026-11-01, thread Y)
+
+Status: Accepted (`release/candidate`, lane Y; drafted in `decisions/Y-003`)
+Building the room first left the composer dead for seconds on a slow device (Enter reloaded the page). Two phases now, with `todoh:ui-ready` and `todoh:room-ready` marks; `build()` awaits the room. The ladder acts on the 95th-percentile frame (a stuttering device averages well) and re-checks when a heavy prop lands. The road theatre created a second WebGL context for models that are not shipped: it is now switched on by `<html data-road-assets="1">`. No real-phone figure is claimed (none was attached); the tests prove invariants, not timings.
+
+
+## ADR-078: No WebGL means text-only mode, in the page itself (2026-11-01, thread Y)
+
+Status: Accepted (`release/candidate`, lane Y; drafted in `decisions/Y-004`)
+`Arcade3D.disable()` turns every scene call into a no-op, so the same intake, review, BUILD and dossier work with no room. The notice is a banner; it no longer links to the classic page (ADR-067 removed it). One page, one code path, one set of tests.
