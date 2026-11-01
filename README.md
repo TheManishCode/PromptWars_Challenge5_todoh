@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/assets/logo.svg" alt="to;doh the event planner" width="520"></p>
 
-<h3 align="center">A GenAI-powered planning assistant for weddings, birthdays and community events.<br>Budgets, timelines, vendor checklists and personalised ideas, with every plan checked by solvers instead of trusted to a model.</h3>
+<p align="center"><b>Tell it about your event. Get a plan you can trust.</b><br>A GenAI-powered planning assistant for weddings, birthdays and community events: budgets, timelines, vendor checklists and personalised ideas, checked by solvers instead of guessed by a model.</p>
 
 <p align="center">
 <a href="https://github.com/TheManishCode/to_doh_the_event_planner/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheManishCode/to_doh_the_event_planner/actions/workflows/ci.yml/badge.svg"></a>
@@ -9,114 +9,70 @@
 <img alt="Accessibility" src="https://img.shields.io/badge/axe--core-0%20violations-8b5cf6">
 </p>
 
-<p align="center"><a href="https://todoh.manishp.dev">Live demo</a> · <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="docs/DEMO.md">5-minute tour</a> · <a href="docs/PROBLEM_STATEMENT.md">Problem-statement map</a></p>
+<p align="center"><a href="https://todoh.manishp.dev"><b>Live demo</b></a> &nbsp;·&nbsp; <a href="#try-it-in-60-seconds">Quick start</a> &nbsp;·&nbsp; <a href="#how-it-works">How it works</a> &nbsp;·&nbsp; <a href="docs/DEMO.md">5-minute tour</a> &nbsp;·&nbsp; <a href="docs/PROBLEM_STATEMENT.md">Problem-statement map</a></p>
 
----
+<p align="center"><img src="docs/assets/room.jpg" alt="The to;doh arcade room: a 3D back-alley arcade where the attendant takes your brief and the cabinet runs the planning engine" width="860"></p>
 
-## The idea
+## Why to;doh
 
-Planning an event means juggling a budget, a schedule, a pile of vendors and a hundred small decisions, and a chatbot that confidently invents prices does not help. **to;doh** lets you describe the event in plain words. A language model helps with *wording* (reading your brief, suggesting ideas, explaining the result). **Facts and feasibility come from code**: a constraint solver builds the schedule, a second validator re-derives every claim from the database, and nothing is sent to a vendor without your approval.
+Asking a chatbot to plan a wedding gets you confident prices that do not exist and a budget that does not add up. **to;doh** splits the job the way a good planner would:
 
-> *"Plan a 120-person engagement party in Pune on December 12 under INR 200,000. Vegetarian catering, indoor venue, photographer."*
-> → a validated plan with a budget split, a timeline, a vendor checklist with reasons, alternatives, and ideas to make it yours.
+- **The model talks.** It reads your messy brief, suggests ideas that fit *your* event, and explains the result in plain words.
+- **The software decides.** A constraint solver builds the schedule, a second validator re-derives every fact from the vendor database, and a plan that fails a hard rule is never shown. It comes back with the rule it broke and how to fix it.
+- **You stay in control.** Nothing is sent to a vendor until you approve the exact text.
 
-## What you get
+## What it does
 
-| You ask for | You get |
+|  |  |
 |---|---|
-| **Budgets** | An allocation with a contingency reserve, an up-front reality check, a live ledger, and ranked trade-off options when money is tight |
-| **Timelines** | A CP-SAT schedule with buffers, cross-checked symbolically (Fast Downward + VAL) |
-| **Vendor checklists** | A shortlist per category with every hard constraint and reason shown; vendor outreach you approve word for word |
-| **Personalised ideas** | Themes, activities and menu notes from the facts of *your* event, labelled as suggestions and never as verified offers |
-| **Weddings, birthdays, community events** | Event-type profiles; community events add attendance, funding, volunteer, permit and accessibility checks |
-| **Change of plans** | Cancel a vendor or change the budget, guest count or date: a new plan version and a diff, with confirmed bookings preserved |
+| 💸 **Budgets** | A split with a contingency reserve, a reality check before you start, and ranked trade-offs when money is tight |
+| 🗓️ **Timelines** | A schedule with buffers, built by CP-SAT and cross-checked symbolically with Fast Downward and VAL |
+| ✅ **Vendor checklists** | A shortlist per category with the reason behind every pick, and outreach you approve word for word |
+| ✨ **Personalised ideas** | Themes, activities and menu notes drawn from your event's facts, labelled as suggestions, never as verified offers |
+| 🎉 **Weddings, birthdays, community events** | Each has its own profile. Community events add attendance, funding, volunteer, permit and accessibility checks |
+| 🔁 **When plans change** | Cancel a vendor or change the budget, guest count or date: you get a new version and a diff, and confirmed bookings are kept |
 
-## How it works
-
-```mermaid
-flowchart LR
-    A([Your brief]) --> B["Intake<br/>LLM reads it, you confirm"]
-    B --> C["Vendor shortlist<br/>hard constraints + reasons"]
-    C --> D["Scheduler<br/>CP-SAT timeline + budget caps"]
-    D --> E["Symbolic check<br/>Fast Downward + VAL"]
-    E --> F{"Validator<br/>re-derives every fact"}
-    F -- fails --> G["Named violation<br/>+ concrete repair"]
-    F -- passes --> H[("Immutable plan version")]
-    H --> I[Explainer<br/>plain words, same facts]
-    H --> J[Ideas<br/>guarded suggestions]
-    H --> K["Outreach<br/>you approve exact text"]
-    L([Disruption]) --> M[Replanner] --> H
-```
-
-### Architecture
-
-```mermaid
-flowchart TB
-    subgraph UI[Interfaces]
-        W[3D arcade web room]:::ui
-        R[REST API]:::ui
-        CLI[CLI]:::ui
-    end
-    subgraph CORE["Verified core: no model has authority here"]
-        SVC[Service facade]
-        AG["Agents: Manager, Budget, Vendor, Planner,<br/>Scheduler, Validator, Replanner, Trade-off, Guest"]
-        SOL["OR-Tools CP-SAT · Fast Downward · VAL"]
-        ST[("Hash-checked plan store<br/>per-workspace")]
-    end
-    subgraph GEN["GenAI layer: wording only"]
-        LLM["Intake · Ideas · Explainer · Assistant · Explore"]
-        GD["Guards: no invented prices, vendors or availability"]
-    end
-    subgraph OUT[Follow-through]
-        AP[Approvals bound to a content hash]
-        JOB["Background jobs: quotes, nudges, digests"]
-        CH[Email / WhatsApp channels]
-    end
-    UI --> SVC --> AG --> SOL
-    AG --> ST
-    SVC --> GD --> LLM
-    AG --> AP --> CH
-    JOB --> AP
-    classDef ui fill:#1e1b4b,stroke:#8b5cf6,color:#fff
-```
-
-Where the model sits, what it may see and what stops it going wrong: [docs/GENAI.md](docs/GENAI.md). Every design decision: [docs/DECISIONS.md](docs/DECISIONS.md).
-
-## Guarantees
-
-Each of these is enforced in code and covered by tests.
-
-- **No invented facts.** Prices, capacities, diets and booking status come from the database, you, or a tool. A model may phrase or propose; it never sources a fact.
-- **Validated or not shown.** A plan version cannot exist unless every hard constraint passed an independent re-check, and a failure names the constraint and a repair.
-- **Nothing leaves without approval.** Vendor messages are bound to a hash of their exact text; replies are treated as untrusted data.
-- **Stop requests are honoured, but not authenticated.** A stop request or a permanent delivery failure that names a message we sent puts an address on a do-not-contact list that only you can lift. That matching relies on mail headers that can be forged, so a forgery can only stop us writing to an address we already wrote to, and a bounced address shows why it failed before you can re-enable it. to;doh does not check anti-spam or privacy law: check the rules that apply to you before contacting businesses.
-- **Nothing is overwritten.** Every replan writes a new immutable version and a diff.
-- **Honest about gaps.** A need that cannot be checked from data is marked *Needs verification*, never called verified.
-
-## Quick start
-
-Requires Python 3.12+.
+## Try it in 60 seconds
 
 ```sh
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env && chmod 600 .env     # optional: add a model key (NVIDIA / OpenRouter) for the GenAI features
-python -m eventmate.web                    # http://127.0.0.1:8765
+cp .env.example .env && chmod 600 .env      # optional: add a model key for the GenAI features
+python -m eventmate.web                     # open http://127.0.0.1:8765
 ```
 
-Or from the command line:
+Then type something like *"120-person engagement party in Pune on December 12, under INR 200,000, vegetarian catering, indoor venue, photographer."* Prefer a terminal?
 
 ```sh
-python -m eventmate plan "Plan a 120-person engagement party in Pune on December 12 under INR 200,000. Vegetarian catering, indoor venue, photographer."
+python -m eventmate plan "120-person engagement party in Pune on December 12 under INR 200,000. Vegetarian catering, indoor venue, photographer."
 python -m eventmate show <plan_id>
 python -m eventmate replan <plan_id> --cancel-vendor cat-pune-rasoi
 ```
 
-The symbolic timeline check needs [Fast Downward](https://www.fast-downward.org/) and [VAL](https://github.com/KCL-Planning/VAL) (`EVENTMATE_FD`, `EVENTMATE_VAL`; see [docs/CONFIGURATION.md](docs/CONFIGURATION.md)). Without them plans still build, and the check is shown as unavailable rather than faked. With no model key, intake, ideas and explanations fall back to deterministic versions. The full-quality 3D models can be served from a bucket with `EVENTMATE_ASSET_BASE`; without it the room uses the light models in the repository.
+Requires Python 3.12+. The symbolic timeline check uses [Fast Downward](https://www.fast-downward.org/) and [VAL](https://github.com/KCL-Planning/VAL) (`EVENTMATE_FD`, `EVENTMATE_VAL`, see [configuration](docs/CONFIGURATION.md)); without them plans still build and that check is shown as unavailable, never faked. With no model key, intake, ideas and explanations fall back to deterministic versions.
+
+## How it works
+
+<p align="center"><img src="docs/assets/plan-flow.svg" alt="From a brief through intake, vendor shortlist, schedule and budget, symbolic check and validator to an immutable plan version" width="900"></p>
+
+<p align="center"><img src="docs/assets/architecture.svg" alt="Architecture: interfaces, verified core, GenAI layer, follow-through" width="900"></p>
+
+Where the model sits, what it may see and what stops it going wrong: [docs/GENAI.md](docs/GENAI.md). Every design decision is recorded in [docs/DECISIONS.md](docs/DECISIONS.md).
+
+## Built with
+
+Python · Flask · Pydantic · Google OR-Tools (CP-SAT) · Fast Downward · VAL · three.js · NVIDIA and OpenRouter hosted models · Langfuse · Prometheus and Grafana · Docker.
+
+## Trust, in four lines
+
+- **No invented facts.** Prices, capacities, diets and booking status come from the database, from you, or from a tool.
+- **Validated or not shown.** A plan version cannot exist unless every hard constraint passed an independent re-check.
+- **Nothing leaves without approval.** Messages are bound to a hash of their exact text, and vendor replies are treated as untrusted data.
+- **Stop requests are honoured, but not authenticated.** A stop request or a permanent delivery failure naming a message we sent puts an address on a do-not-contact list that only you can lift. That matching relies on mail headers that can be forged, so a forgery can only stop us writing to an address we already wrote to, and a bounced address shows why it failed before you can re-enable it. to;doh does not check anti-spam or privacy law: check the rules that apply to you before contacting businesses.
 
 ## Status
 
-A working prototype, built for a hackathon. Vendor data is synthetic seed data (nine cities), and email has been tested against fake SMTP/IMAP only. The 3D room is the front end; the REST API and CLI expose the same engine.
+A working prototype built for a hackathon. Vendor data is synthetic seed data for nine cities, and email has been tested against fake SMTP and IMAP only. The 3D room is the front end; the REST API and CLI drive the same engine.
 
 ## Documentation
 
