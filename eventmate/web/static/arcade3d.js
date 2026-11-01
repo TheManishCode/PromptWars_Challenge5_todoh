@@ -811,38 +811,8 @@ window.Arcade3D = (function () {
     return tex;
   }
 
-  /* A weathered stone wall for the left side, where the visitor's name is cut (docs: wall carving strategy). Procedural, no asset, no licence surface:
-     a mid-grey mottled base with faint block seams and damp streaks. The mottling is small-scale and low-alpha on purpose: it ages the stone without becoming a pattern. */
-  function plasterTexture() {
-    const c = document.createElement("canvas"); c.width = 1024; c.height = 512;
-    const x = c.getContext("2d");
-    x.fillStyle = "#3b3b40"; x.fillRect(0, 0, 1024, 512);
-    let seed = 90210; const r = function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    for (let i = 0; i < 9000; i++) { // fine mottling: many tiny, faint marks, so the surface is aged and never shows a pattern
-      const g = (r() * 60 - 30) | 0, a = 0.015 + r() * 0.025, rad = 0.8 + r() * 3.2;
-      x.fillStyle = g > 0 ? "rgba(" + (150 + g) + "," + (155 + g) + "," + (165 + g) + "," + a + ")" : "rgba(20,24,34," + a + ")";
-      x.beginPath(); x.arc(r() * 1024, r() * 512, rad, 0, 6.283); x.fill();
-    }
-    x.strokeStyle = "rgba(14,18,26,0.28)"; x.lineWidth = 2; // block seams
-    for (let row = 0; row < 4; row++) {
-      const y = row * 128 + 4; x.beginPath(); x.moveTo(0, y); x.lineTo(1024, y + (r() * 3 - 1.5)); x.stroke();
-      for (let col = 0; col < 5; col++) { const bx = ((col * 205 + (row % 2) * 102) % 1024); x.beginPath(); x.moveTo(bx, y); x.lineTo(bx + (r() * 3 - 1.5), y + 128); x.stroke(); }
-    }
-    for (let i = 0; i < 14; i++) { // damp streaks running down from the top
-      const sx = r() * 1024, len = 120 + r() * 300, g = x.createLinearGradient(0, 0, 0, len);
-      g.addColorStop(0, "rgba(12,16,24,0.20)"); g.addColorStop(1, "rgba(12,16,24,0)");
-      x.fillStyle = g; x.fillRect(sx, 0, 6 + r() * 26, len);
-    }
-    for (let i = 0; i < 9; i++) { // lichen: a few pale, greenish patches
-      x.fillStyle = "rgba(150,170,130," + (0.04 + r() * 0.04) + ")"; x.beginPath(); x.ellipse(r() * 1024, r() * 512, 6 + r() * 18, 4 + r() * 10, r() * 3, 0, 6.283); x.fill();
-    }
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    return tex;
-  }
-
   function buildRoom(sc) {
-    sc.fog = new THREE.FogExp2(0x070b18, 0.03); // thinner than before and re-scaled in resize(): a camera that backs off for a tall screen must not drown the room in fog
+    sc.fog = new THREE.FogExp2(0x04060b, 0.045); // thinner than before and re-scaled in resize(): a camera that backs off for a tall screen must not drown the room in fog
     sc.background = new THREE.Color(0x030509);
     const floorTex = floorTexture();
     floorTex.repeat.set(6, 6);
@@ -864,8 +834,6 @@ window.Arcade3D = (function () {
     const wallL = new THREE.Mesh(new THREE.PlaneGeometry(30, 12),
       new THREE.MeshStandardMaterial({ map: grafTex, roughness: 0.92, envMapIntensity: 0.25 }));
     wallL.rotation.y = Math.PI / 2; wallL.position.set(-5.6, 6, 5); sc.add(wallL);
-    const stoneTex = plasterTexture(); stoneTex.repeat.set(7, 3.5);
-    wallL.material = new THREE.MeshStandardMaterial({ map: stoneTex, color: 0x8a847a, roughness: 0.96, envMapIntensity: 0.1 }); // the left wall is plain weathered stone: the name is cut into it
     const wallR = wallL.clone(); wallR.material = new THREE.MeshStandardMaterial({ map: grafTex, roughness: 0.92, envMapIntensity: 0.25 }); wallR.rotation.y = -Math.PI / 2; wallR.position.x = 5.6; sc.add(wallR);
     [[-2.8, -3.6, 0.7], [2.2, -3.9, 0.95]].forEach(([cx, cz, drop]) => {
       const pts = [new THREE.Vector3(cx, 5.2, cz), new THREE.Vector3(cx + 0.35, 5.2 - drop, cz + 0.15),
@@ -906,7 +874,7 @@ window.Arcade3D = (function () {
       scrn.position.set(x + Math.sin(ry) * 0.42, 1.25, z + Math.cos(ry) * 0.42);
       scrn.rotation.y = ry; sc.add(scrn); (S.roomCabs = S.roomCabs || []).push(scrn);
     });
-    sc.add(new THREE.AmbientLight(0x4a5f9a, 1.75));
+    sc.add(new THREE.AmbientLight(0x36486a, 1.3));
     const frontFill = new THREE.PointLight(0xa8c4e8, 0.55, 14);
     frontFill.position.set(0.6, 2.1, 4.6); sc.add(frontFill);
     const rim = new THREE.PointLight(0x6fa8ff, 0.55, 9);
@@ -926,9 +894,7 @@ window.Arcade3D = (function () {
     const floorFill = new THREE.PointLight(0x8fb4ff, 0.9, 10); floorFill.position.set(0, 3.2, 3.4); sc.add(floorFill); // soft light on the foreground floor (the floor is matte now, so it glows rather than glares)
     const washL = new THREE.PointLight(0xff4fb8, 1.5, 11); washL.position.set(-1.6, 4.0, -3.0); sc.add(washL);
     const washR = new THREE.PointLight(0x35d6ff, 1.5, 11); washR.position.set(1.6, 4.0, -2.4); sc.add(washR);
-    [wallR].forEach(function (w) { w.material.emissiveMap = w.material.map; w.material.emissive = new THREE.Color(0xffffff); w.material.emissiveIntensity = 0.38; }); // the graffiti wall glows; the stone wall does not
-    const ring = new THREE.Mesh(new THREE.RingGeometry(1.22, 1.3, 64), new THREE.MeshBasicMaterial({ color: 0x35d6ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
-    ring.rotation.x = -Math.PI / 2; ring.position.set(0, 0.012, 2.6); sc.add(ring); // a lit edge round the rug: the floor in front of the cabinet is no longer a dark hole
+    [wallL, wallR].forEach(function (w) { w.material.emissiveMap = w.material.map; w.material.emissive = new THREE.Color(0xffffff); w.material.emissiveIntensity = 0.4; }); // both graffiti walls glow: the room is lit by its neon
     const n = 140, pos = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
       pos[i * 3] = (rnd() - 0.5) * 9;
@@ -1514,7 +1480,7 @@ window.Arcade3D = (function () {
       if (st.tex) st.tex.needsUpdate = true;
       return;
     }
-    wash(W / 2, H / 2, W * 0.5, H * 0.5, 0.22);
+    wash(W / 2, H / 2, W * 0.62, H * 0.62, 0.82); // the posters and neon behind the board are dimmed under it, so the cut names read
     if (d.mode === "locked") { // the entry puzzle: torn halves line up only at off = 0
       const off = st.alignOff == null ? 120 : st.alignOff;
       const titleY = H * 0.44, font = "bold 80px " + SERIF;
@@ -1747,7 +1713,7 @@ window.Arcade3D = (function () {
       const ctr = box.getCenter(new THREE.Vector3());
       // full back-wall coverage: floor to above the camera's sightline at the wall;
       // the horizontal spill hides behind the two side walls
-      const k = 9.4 / size.y; // taller (user, 15:30): the art runs up toward the ceiling instead of stopping short of a bare wall above it
+      const k = 7.2 / size.y;
       // the scan's art slab sits near model z -0.55 with street junk out to +0.7;
       // flatten depth to 12% so the slab hugs the wall and the junk reads as shallow relief
       root.scale.set(k, k, k * 0.12);
@@ -1787,7 +1753,10 @@ window.Arcade3D = (function () {
       posterCrop(img, 0, 0, iw * 0.52, ih * 0.58, wallR - 0.05, 2.75, -2.6, false, 2.5, 0.03);
       posterCrop(img, iw * 0.45, ih * 0.30, iw * 0.55, ih * 0.62, wallR - 0.05, 2.15, -0.4, false, 2.1, -0.04);
       posterCrop(img, iw * 0.10, ih * 0.55, iw * 0.45, ih * 0.45, wallR - 0.05, 3.15, 0.9, false, 1.6, 0.06);
-      // the left wall carries no posters: it is plain stone for the carved name
+      // left wall: different crops so the two walls do not mirror each other
+      posterCrop(img, iw * 0.30, ih * 0.05, iw * 0.55, ih * 0.60, wallL + 0.05, 2.55, -2.9, true, 2.3, -0.03);
+      posterCrop(img, 0, ih * 0.35, iw * 0.48, ih * 0.60, wallL + 0.05, 2.05, -0.9, true, 2.0, 0.05);
+      posterCrop(img, iw * 0.55, ih * 0.50, iw * 0.42, ih * 0.48, wallL + 0.05, 3.25, 0.5, true, 1.5, -0.06);
     }, undefined, function () { }); });
     // a little warm life over the vending row
     const rowGlow = new THREE.PointLight(0xffb35c, 0.3, 6.5);
@@ -2362,7 +2331,7 @@ window.Arcade3D = (function () {
     S.camWide.pos = [REF.pos[0], REF.tgt[1] + (REF.pos[1] - REF.tgt[1]) * back + 3.4 * tall, REF.tgt[2] + (REF.pos[2] - REF.tgt[2]) * back];
     S.camera.fov = fov;
     S.camera.updateProjectionMatrix();
-    if (S.scene && S.scene.fog) S.scene.fog.density = 0.03 / back; // the same amount of air between the viewer and the wall at every screen size
+    if (S.scene && S.scene.fog) S.scene.fog.density = 0.045 / back; // the same amount of air between the viewer and the wall at every screen size
     const idleNow = !S.zoomed && !(S.wallb && S.wallb.focused) && !(S.holo && S.holo.focused) && !(S.dossier && S.dossier.focused);
     if (idleNow) {
       S.camera.position.set(S.camWide.pos[0], S.camWide.pos[1], S.camWide.pos[2]);
