@@ -322,6 +322,35 @@ def test_the_wall_gate_round_and_sections_work_by_keyboard(world):
     assert pg.unexpected() == [], pg.unexpected()
 
 
+@pytest.mark.parametrize("viewport", [LAPTOP, PHONE], ids=["laptop", "phone"])
+def test_each_vending_machine_view_frames_the_whole_machine_at_a_useful_size(world, viewport):
+    """Open each machine by keyboard; once the camera has settled, the machine is wholly in the picture and fills a real share of its height (laptop composition on a phone)."""
+    base, _ = world
+    with pw.sync_playwright() as p:
+        pg = Page(p, base, gl=True, viewport=viewport, touch=viewport is PHONE).open()
+        page = pg.page
+        until(page, "document.querySelectorAll('#room-nav-vend button').length >= 2", 90)
+        shots = []
+        for i in range(2):
+            page.focus(f'#room-nav-vend button[data-i="{i}"]')
+            page.keyboard.press("Enter")
+            until(page, "document.body.classList.contains('vend-focus')", 10)
+            # the final state, not a timing: wait (software GL on a loaded machine is slow) until the machine fills a real share of the picture, then check it is whole
+            try:
+                until(page, f"(() => {{ const f = Arcade3D.vendFraming({i}); return !!f && (f.y1 - f.y0) / 2 >= 0.30; }})()", 120)
+            except AssertionError:
+                raise AssertionError(f"the camera never framed machine {i}: {page.evaluate(f'Arcade3D.vendFraming({i})')}; stats {page.evaluate('Arcade3D.frameStats()')}") from None
+            f = page.evaluate(f"Arcade3D.vendFraming({i})")
+            shots.append(f)
+            assert not f["behind"], f
+            assert -1.0 <= f["x0"] and f["x1"] <= 1.0 and -1.0 <= f["y0"] and f["y1"] <= 1.0, f  # wholly in the picture
+            page.keyboard.press("Escape")
+            until(page, "!document.body.classList.contains('vend-focus')", 10)
+            page.wait_for_timeout(1500)
+        pg.close()
+    assert len({s["label"] for s in shots}) == 2, shots  # two different machines, not the same one twice
+
+
 # ----------------------------------------------------------------------------------------------- contrast
 
 
