@@ -227,3 +227,19 @@ def test_the_app_sweeps_empty_idle_workspaces_by_itself_and_never_one_with_data(
     now[0] += 2 * 3600
     assert app.config["WORKSPACE_SWEEP"]() == 1
     assert not registry.directory.exists(throwaway.id) and registry.directory.exists(kept.id)
+
+
+def test_no_workspace_directory_is_readable_by_other_users_even_under_a_permissive_umask(tmp_path):
+    """Found by a canary sweep over a real server: 'workspaces/' and each 'workspaces/ws-.../' were 0755, so any local user could list every workspace id."""
+    import os
+    import stat
+
+    old = os.umask(0o022)
+    try:
+        r = WorkspaceRegistry(tmp_path / "d", SECRET, create_per_address_per_hour=1000, create_per_hour=1000)
+        ws, _ = r.create("a")
+        ws.em.plan  # the workspace's own stores exist
+    finally:
+        os.umask(old)
+    bad = [str(p.relative_to(tmp_path)) for p in (tmp_path / "d").rglob("*") if p.is_dir() and stat.S_IMODE(p.stat().st_mode) & 0o077]
+    assert bad == [], bad

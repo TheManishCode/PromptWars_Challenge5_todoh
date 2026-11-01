@@ -205,7 +205,11 @@ class WorkspaceRegistry:
             if workspace_id in self._live:
                 self._live.move_to_end(workspace_id)
                 return self._live[workspace_id]
-            em, assistant, voice = self._factory(workspace_id, self.home(workspace_id))
+            home = self.home(workspace_id)
+            for d in (home.parent, home):  # mkdir(parents=True, mode=0o700) applies the mode to the last directory only: the ones above it would be 0755 and list every workspace id
+                d.mkdir(exist_ok=True, mode=0o700)
+                d.chmod(0o700)
+            em, assistant, voice = self._factory(workspace_id, home)
             info = self.directory.info(workspace_id) or {"created": self._clock()}
             ws = Workspace(workspace_id, em, assistant, voice, threading.RLock(), Principal(user_id=workspace_id, roles=(Role.ORGANIZER,)), csrf_for(self.secret, workspace_id),
                            time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(info["created"])))
