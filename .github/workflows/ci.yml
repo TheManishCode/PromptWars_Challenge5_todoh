@@ -28,7 +28,7 @@ jobs:
           diff <(grep -E "^[a-z0-9_.-]+==" requirements-runtime.lock | sort) <(grep -E "^[a-z0-9_.-]+==" /tmp/runtime.lock | sort)
       - name: Software bill of materials (CycloneDX) for the locked dependencies
         run: pip-audit -r requirements-runtime.lock --require-hashes --no-deps --disable-pip -f cyclonedx-json -o sbom.json || true
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: {name: sbom, path: sbom.json, if-no-files-found: ignore}
       - name: Secret scan over the whole history (gitleaks, pinned release, checksum verified)
         run: |
@@ -78,7 +78,7 @@ jobs:
             python -m pytest -q
           fi
       - if: matrix.python == '3.14'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: {name: coverage, path: coverage.xml}
 
   soak:
@@ -99,7 +99,7 @@ jobs:
       - run: pip install --require-hashes -r requirements.lock && pip install --no-deps -e .
       - run: python tools/loadtest/soak.py --seconds 60 --visitors 20 --report soak.json
       - if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: {name: soak-report, path: soak.json}
 
   container:
