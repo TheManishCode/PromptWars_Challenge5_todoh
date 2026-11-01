@@ -2182,7 +2182,24 @@ window.Arcade3D = (function () {
     S.camera.updateProjectionMatrix();
     S.renderer.setSize(w, h, false);
     if (S.composer) S.composer.setSize(w, h);
-    S.camWide.pos = aspect < 0.75 ? [0, 2.9, 9.6] : [0, 2.35, 6.4];
+    if (aspect < 0.95) {
+      // portrait: the fixed wide shot crops the left wall out entirely, so the
+      // signature board can never be tapped. Reframe: step back/right, yaw
+      // toward the wall, widen the lens a touch. Desktop/landscape unchanged.
+      S.camWide.pos = [2.2, 3.8, 12.5];
+      S.camWide.tgt = [-2.0, 1.6, -0.4];
+      S.camera.fov = 65;
+    } else {
+      S.camWide.pos = [0, 2.35, 6.4];
+      S.camWide.tgt = [0, 1.72, 0];
+      S.camera.fov = 55;
+    }
+    S.camera.updateProjectionMatrix();
+    const idleNow = !S.zoomed && !(S.wallb && S.wallb.focused) && !(S.holo && S.holo.focused) && !(S.dossier && S.dossier.focused);
+    if (idleNow) {
+      S.camera.position.set(S.camWide.pos[0], S.camWide.pos[1], S.camWide.pos[2]);
+      S.camTarget.set(S.camWide.tgt[0], S.camWide.tgt[1], S.camWide.tgt[2]);
+    }
     fitZoom();
   }
 

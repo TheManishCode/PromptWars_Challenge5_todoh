@@ -44,7 +44,7 @@ BOARD_POINT = """
   let mesh = null;
   scene.traverse((o) => { if (o.isMesh && o.renderOrder === 3 && o.material && o.material.map && o.material.map.image && o.material.map.image.width === 1024 && o.material.map.image.height === 640) mesh = o; });
   if (!mesh) return null;
-  const cam2 = (window.__cams || []).find((c) => c.fov === 55) || cam; mesh.updateWorldMatrix(true, false); cam2.updateMatrixWorld(true);
+  const cam2 = (window.__cams || []).find((c) => c.fov === 55 || c.fov === 65) || cam; mesh.updateWorldMatrix(true, false); cam2.updateMatrixWorld(true);
   const W = 1024, H = 640;
   let u, v;
   if (slot === null) { u = 0.5; v = 0.5; }
@@ -447,3 +447,34 @@ def test_hostile_text_in_stored_records_never_runs_in_the_room(world):
         browser.close()
     assert shown_as_text, f"the hostile text never reached a sheet, so this test proved nothing; budget sheet said: {budget_text!r}"  # it must be on screen, as inert text
     assert verdict["xss"] is None and verdict["handlers"] == 0 and verdict["scripts"] == 0 and verdict["imgs"] == 0 and dialogs == [], (verdict, dialogs)
+
+
+@pytest.mark.parametrize("viewport,portrait", [({"width": 390, "height": 844}, True), ({"width": 768, "height": 1024}, True), ({"width": 1300, "height": 900}, False), ({"width": 844, "height": 390}, False)])
+def test_the_wall_can_be_reached_and_tapped_on_phones_and_tablets_in_either_orientation(world, viewport, portrait):
+    """The fixed wide shot used to crop the left wall out of a portrait screen, so the board could never be tapped there (mobile_portrait_wall_access.patch)."""
+    base, _store = world
+    with pw.sync_playwright() as p:
+        browser = p.chromium.launch(executable_path=CHROMIUM, args=["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"])
+        page = browser.new_page(viewport=viewport)
+        page.add_init_script(OBSERVE_THREE)
+        page.goto(base + "/")
+        until(page, "!!window.__scene && !!window.__cams", 30)
+        page.wait_for_timeout(2500)
+        pt = page.evaluate(BOARD_POINT, None)
+        assert pt and pt["onscreen"], f"the wall board is off screen at {viewport}: {pt}"
+        assert page.evaluate("(window.__cams || [])[0].fov") == (65 if portrait else 55)
+        for _ in range(5):
+            pt = page.evaluate(BOARD_POINT, None)
+            page.mouse.click(pt["x"], pt["y"])
+            page.wait_for_timeout(300)
+            if page.evaluate("document.body.classList.contains('wall-focus')"):
+                break
+        assert page.evaluate("document.body.classList.contains('wall-focus')"), f"tapping the wall did nothing at {viewport}"
+        # rotating the phone while focused, then leaving, must land back on a framing that shows the wall
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(1500)
+        page.set_viewport_size({"width": viewport["height"], "height": viewport["width"]})
+        page.wait_for_timeout(800)
+        again = page.evaluate(BOARD_POINT, None)
+        assert again and again["onscreen"], f"after rotating, the board is off screen: {again}"
+        browser.close()
