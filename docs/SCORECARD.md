@@ -2,7 +2,7 @@
 
 Scored by the builders (thread B and thread Y) as a strict judge would, from evidence that exists in this repository. A score is a judgement, not a measurement: each row says what supports it and what keeps it from being higher. The owner asked for more than 9 on each; **three parameters are at or above 9 only where evidence exists, and the table says plainly where it does not.**
 
-Test evidence for this commit: see "Final run" at the bottom.
+Test evidence: see "Final run" at the bottom.
 
 | Parameter | Before (judge) | Now | What supports it | What stops a 9+ (and the cheapest way there) |
 |---|---|---|---|---|
@@ -18,3 +18,9 @@ Four of the gaps are not code: a real screen reader, a real phone, a real model 
 
 ## Stage
 Release candidate. Built, tested, containerised, monitored, with CI that has been linted but not yet run on GitHub. Not deployed. Owner decisions before going public: licences of three models, secrets, TLS proxy, alert routing (`docs/RELEASE.md`).
+
+## Final run (2026-11-01, `release/candidate`)
+- Non-browser suite: 3,382 passed, 1 failed, 1 skipped (322 s). The failure was the per-workspace storage test (durable approvals add one 16 KB SQLite file per workspace); the test now states that cost and its file passes (34 passed).
+- Browser: 7 selected tests passed (room on, static allow-list, text-only mode). The full browser files were not re-run after the last merge; the last complete run (3,390 passed, 1 failed, 1 skipped) predates the durable-approvals merge and lane Y's last commit.
+- Container: image built, Trivy clean at HIGH/CRITICAL, healthy, stops with exit 0; compose stack run with Prometheus scraping (`up`); promtool and actionlint clean. GitHub-hosted CI has not run.
+- Soak: 25 visitors for 60 s, 919 requests, no errors, memory/files/threads flat.
