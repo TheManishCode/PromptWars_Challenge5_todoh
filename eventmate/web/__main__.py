@@ -24,6 +24,7 @@ def main(argv=None) -> int:
     ap.add_argument("--allowed-host", action="append", default=[])
     ap.add_argument("--server", choices=["auto", "dev", "waitress"], default="auto", help="auto: waitress if installed, else the built-in server (loopback only)")
     a = ap.parse_args(argv)
+    a.allowed_host += [h.strip() for h in os.environ.get("EVENTMATE_ALLOWED_HOSTS", "").split(",") if h.strip()]  # the same list for a container, where the command line is fixed
     try:
         run_mode = hosting.mode(os.environ)
     except ValueError as exc:

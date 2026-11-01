@@ -117,3 +117,16 @@ def test_a_second_server_process_on_the_same_data_directory_is_refused(tmp_path)
     assert oct((tmp_path / ".server.lock").stat().st_mode & 0o777) == "0o600" and (tmp_path / ".server.lock").read_text().strip() == str(os.getpid())
     os.close(first)  # the lock is released when the holder goes away
     os.close(hosting.acquire_server_lock(tmp_path))
+
+
+def test_allowed_hosts_can_come_from_the_environment_for_a_container(monkeypatch, capsys):
+    """A container's command line is fixed, so EVENTMATE_ALLOWED_HOSTS (comma separated) is read as well as --allowed-host."""
+    for k, v in {**GOOD, "EVENTMATE_SECRET": "short"}.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.delenv("EVENTMATE_ALLOWED_HOSTS", raising=False)
+    assert main(["--host", "0.0.0.0", "--allow-remote"]) == 2
+    without = capsys.readouterr().err
+    monkeypatch.setenv("EVENTMATE_ALLOWED_HOSTS", "todoh.example, other.example")
+    assert main(["--host", "0.0.0.0", "--allow-remote"]) == 2
+    with_env = capsys.readouterr().err
+    assert "allowed" in without.lower() and "allowed" not in with_env.lower() and "EVENTMATE_SECRET" in with_env

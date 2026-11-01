@@ -106,7 +106,7 @@ VENDOR_FILES = frozenset({"three.min.js", "CopyShader.js", "LuminosityHighPassSh
 GZIP_MIN = 1024  # below this the header overhead outweighs the saving
 GZIP_MAX = 3 * 1024 * 1024  # above this (the scene models) a file is sent as it is: already compressed, and compressing 50 MB in the request would stall it and sit in memory
 _gzip_cache: Dict[tuple, bytes] = {}  # (name, mtime_ns) -> compressed bytes; the file set is fixed and small
-WORKSPACE_EXEMPT = ("/api/owner/status", "/api/wall/")  # /api routes with their own authentication: no workspace is looked up or made for them
+WORKSPACE_EXEMPT = ("/api/owner/status", "/metrics", "/api/wall/")  # /api routes with their own authentication: no workspace is looked up or made for them
 # POST routes that send, or let something send later, through the owner's mailbox or gateway; refused for every guest workspace
 SENDING_ROUTES = re.compile(
     r"/api/plans/[A-Za-z0-9_-]{1,64}/outreach/[A-Za-z0-9_-]{1,64}/(?:approve|followup)|/api/plans/[A-Za-z0-9_-]{1,64}/autoreply|/api/inbox/poll"
@@ -475,7 +475,7 @@ def create_app(
         rid = g.get("rid") or observe.new_request_id()
         resp.headers["X-Request-Id"] = rid
         if g.get("t0") is not None:
-            metrics.end(resp.status_code, ms)
+            metrics.end(resp.status_code, ms, request.url_rule.rule if request.url_rule else None)
             if request.path not in ("/healthz", "/readyz"):  # a probe every few seconds would drown the log
                 observe.log_request(rid, request.method, request.url_rule.rule if request.url_rule else None, resp.status_code, ms, g.ws.id if g.get("ws") is not None and shared else None)
         return resp
@@ -923,6 +923,20 @@ def create_app(
             except Exception:  # sqlite3.Error and anything else: the cause is in the server log, not in this answer
                 problems.append("the workspace database cannot be opened")
         return jsonify({"ready": not problems, **({"problems": problems} if problems else {})}), (200 if not problems else 503)
+
+    @app.get("/metrics")
+    def prometheus_metrics():
+        """Prometheus scrape target. Same credential as the owner status route (the ``X-EventMate-Owner`` header, or ``Authorization: Bearer`` for scrapers that can only
+        send that); anything else is the same 404 as an unknown route. Counters and gauges only: no content, ids or addresses."""
+        token = os.environ.get("EVENTMATE_OWNER_TOKEN", "")
+        supplied = request.headers.get("X-EventMate-Owner", "") or request.headers.get("Authorization", "").removeprefix("Bearer ")
+        if len(token) < 16 or not hmac.compare_digest(supplied, token):
+            return _err(404, "not found", code="not_found")
+        root = Path(registry.root if shared else local.em.store.root)
+        used, total = heavy.status()
+        gauges = {"uptime_seconds": int(time.time() - started_at), "workspaces": registry.directory.count() if shared else 1, "workspaces_active_last_minute": workspace_limit.tracked(),
+                  "searches_in_flight": used, "searches_capacity": total, "poll_failures": poll_state["failures"], "disk_free_bytes": shutil.disk_usage(root).free}
+        return Response(observe.prometheus(metrics, gauges, {k: v for k, v in METER.status().items() if isinstance(v, int)}), mimetype="text/plain; version=0.0.4")
 
     @app.get("/api/owner/status")
     def owner_status():

@@ -32,13 +32,22 @@ class Metrics:
         self._latency: Counter = Counter()
         self.in_flight = 0
         self.total = 0
+        self._routes: Counter = Counter()  # (route template, status class): a bounded set, the templates are fixed by the code
+        self._hist: Counter = Counter()  # cumulative-bucket counts for the Prometheus histogram
+        self._sum_s = 0.0
 
     def begin(self) -> None:
         with self._lock:
             self.in_flight += 1
 
-    def end(self, status: int, ms: float) -> None:
+    def end(self, status: int, ms: float, route: Optional[str] = None) -> None:
         with self._lock:
+            self._sum_s += ms / 1000
+            for b in PROM_BUCKETS_S:
+                if ms / 1000 <= b:
+                    self._hist[b] += 1
+            if len(self._routes) < 600 or (route or "unmatched", f"{status // 100}xx") in self._routes:
+                self._routes[(route or "unmatched", f"{status // 100}xx")] += 1
             self.in_flight = max(0, self.in_flight - 1)
             self.total += 1
             self._by_class[f"{status // 100}xx"] += 1
@@ -48,6 +57,33 @@ class Metrics:
         with self._lock:
             return {"total": self.total, "in_flight": self.in_flight, "by_status_class": dict(sorted(self._by_class.items())),
                     "latency": {k: self._latency.get(k, 0) for k in [f"<{b}ms" for b in BUCKETS_MS] + [f">={BUCKETS_MS[-1]}ms"]}}
+
+
+PROM_BUCKETS_S = (0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10)
+
+
+def _label(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+
+
+def prometheus(metrics: "Metrics", gauges: Dict[str, float], model_calls: Dict[str, int]) -> str:
+    """The counters in the Prometheus text format (version 0.0.4): totals by route template and status class, a latency histogram, and the gauges the server hands in.
+    Labels are route templates and status classes only: no ids, no addresses, no content."""
+    with metrics._lock:
+        routes, hist, total, ssum, inflight = dict(metrics._routes), dict(metrics._hist), metrics.total, metrics._sum_s, metrics.in_flight
+    out = ["# HELP eventmate_http_requests_total Requests by route template and status class.", "# TYPE eventmate_http_requests_total counter"]
+    for (route, klass), n in sorted(routes.items()):
+        out.append(f'eventmate_http_requests_total{{route="{_label(route)}",status="{klass}"}} {n}')
+    out += ["# HELP eventmate_http_request_duration_seconds Request latency.", "# TYPE eventmate_http_request_duration_seconds histogram"]
+    for b in PROM_BUCKETS_S:
+        out.append(f'eventmate_http_request_duration_seconds_bucket{{le="{b}"}} {hist.get(b, 0)}')
+    out += [f'eventmate_http_request_duration_seconds_bucket{{le="+Inf"}} {total}', f"eventmate_http_request_duration_seconds_sum {ssum:.6f}", f"eventmate_http_request_duration_seconds_count {total}",
+            "# TYPE eventmate_http_requests_in_flight gauge", f"eventmate_http_requests_in_flight {inflight}"]
+    for name, value in sorted(gauges.items()):
+        out += [f"# TYPE eventmate_{name} gauge", f"eventmate_{name} {value}"]
+    for name, value in sorted(model_calls.items()):
+        out += [f"# TYPE eventmate_model_{name} counter", f"eventmate_model_{name} {value}"]
+    return "\n".join(out) + "\n"
 
 
 def log_request(rid: str, method: str, route: Optional[str], status: int, ms: float, workspace: Optional[str]) -> None:
