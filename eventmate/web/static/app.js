@@ -48,7 +48,7 @@
     headers["X-EventMate-CSRF"] = state.csrf;
     if (opts.body !== undefined) { headers["Content-Type"] = "application/json"; init.body = JSON.stringify(opts.body); }
     let res;
-    try { res = await fetch(path, init); } catch (e) { throw new Error("Cannot reach the EventMate server."); }
+    try { res = await fetch(path, init); } catch (e) { throw new Error("Cannot reach the todoh server."); }
     let data = null;
     try { data = await res.json(); } catch (e) { /* non-JSON error body */ }
     return { status: res.status, ok: res.ok, data };
@@ -272,7 +272,7 @@
     const log = (state.ask[state.planId] = state.ask[state.planId] || []);
     const thread = el("div", { class: "ask-thread", role: "log", "aria-live": "polite" });
     const pending = el("section", { class: "card", id: "pending-approvals", hidden: true }, el("h2", { text: "Waiting for your approval" }));
-    const input = el("input", { class: "input", id: "ask-input", type: "text", maxlength: "1000", placeholder: "Ask about this plan: budget, vendors, dietary needs, how EventMate works" });
+    const input = el("input", { class: "input", id: "ask-input", type: "text", maxlength: "1000", placeholder: "Ask about this plan: budget, vendors, dietary needs, how todoh works" });
     const send = el("button", { class: "btn primary", type: "submit", text: "Ask" });
     const form = el("form", { class: "chat-form", autocomplete: "off", on: { submit: async (ev) => {
       ev.preventDefault(); const q = input.value.trim(); if (!q) return; input.value = ""; send.disabled = true;
@@ -284,8 +284,8 @@
     } } }, el("label", { class: "sr", for: "ask-input", text: "Ask the assistant" }), input, send);
     const ideas = el("div", { class: "chips" }, ...(state.roles.includes("organizer") ? SUGGESTED.organizer : SUGGESTED.other).map((q) => el("button", { class: "chip", type: "button", text: q, on: { click: () => { input.value = q; input.focus(); } } })));
     const approved = el("section", { class: "card", id: "approved-answers", hidden: true }, el("h2", { text: "Approved answers" }));
-    root.append(el("section", { class: "card" }, el("h2", { text: "Ask EventMate" }),
-      el("p", { class: "muted", text: "Answers use only this plan and EventMate's own documents, and say where they came from. Nothing changes unless you approve it." }), thread, form, ideas), pending, approved);
+    root.append(el("section", { class: "card" }, el("h2", { text: "Ask todoh" }),
+      el("p", { class: "muted", text: "Answers use only this plan and todoh's own documents, and say where they came from. Nothing changes unless you approve it." }), thread, form, ideas), pending, approved);
     drawAsk(thread, log); loadPending(pending); loadApproved(approved);
   }
 
@@ -641,7 +641,7 @@
 
     // ---- conditional requirements: only you can mark them
     card.append(el("h3", { text: "Things to check with others" }),
-      el("p", { class: "muted", text: "Shown because of your answers. EventMate does not know the rules where you live and does not verify any of these: each says who to check with, and only you can mark it." }));
+      el("p", { class: "muted", text: "Shown because of your answers. todoh does not know the rules where you live and does not verify any of these: each says who to check with, and only you can mark it." }));
     if (!d.items.length) card.append(el("p", { class: "muted", id: "c-no-items", text: "No conditional items apply to your answers." }));
     for (const i of d.items) {
       const who = el("input", { class: "input", maxlength: "60", placeholder: "Your name", "aria-label": "Your name", value: state.senderName || "" });
@@ -861,7 +861,7 @@
     }
 
     card.append(
-      el("p", { class: "muted", text: "EventMate writes to your vendors and reads what they answer. Every message waits for your approval of its exact text, goes out through your own email or WhatsApp gateway, and never contains your budget. Replies are shown as the vendor's own words; nothing becomes a quote until you record it." }),
+      el("p", { class: "muted", text: "todoh writes to your vendors and reads what they answer. Every message waits for your approval of its exact text, goes out through your own email or WhatsApp gateway, and never contains your budget. Replies are shown as the vendor's own words; nothing becomes a quote until you record it." }),
       strip,
       inbox.channels.some((c) => !c.can_send) ? el("p", { class: "muted", text: "A channel that is not ready can still be used by hand: open the link on a draft, send it yourself, then press I sent it. WhatsApp through an unofficial gateway can get the number restricted by WhatsApp, so use a number you can afford to lose." }) : null,
       autoBox,
@@ -892,7 +892,7 @@
   // Discovered businesses (ADR-049): found by a search, public contact read from their own pages, each address confirmed by you before anything is written to it.
   const ORIGIN_LABEL = { discovered: "discovered", test: "TEST VENDOR" };
   const SOURCE_LABEL = { osm: "OpenStreetMap", gplaces: "Google Places", test: "your own test address" };
-  const BLOCK_NOTE = "Check the anti-spam and privacy rules that apply to you before contacting businesses. EventMate does not verify them.";
+  const BLOCK_NOTE = "Check the anti-spam and privacy rules that apply to you before contacting businesses. todoh does not verify them.";
 
   function findVendorsView(items, labels, ctx) {
     const { planBase, again, fail, needName } = ctx;
@@ -1046,7 +1046,7 @@
         } } }));
       } } });
       const confirmBox = el("div", { id: "notify-confirm-box" });
-      sec.append(el("p", { class: "muted", text: "Off. If you turn it on, EventMate emails you job updates, only to the address you confirm here, only between 09:00 and 20:00 IST, and never your budget. You choose what an email may contain; by default it is status and counts only." }),
+      sec.append(el("p", { class: "muted", text: "Off. If you turn it on, todoh emails you job updates, only to the address you confirm here, only between 09:00 and 20:00 IST, and never your budget. You choose what an email may contain; by default it is status and counts only." }),
         el("div", { class: "actions" }, to, ...opts.map((o) => el("label", { class: "muted" }, o.box, " " + o.t + " ")), review), confirmBox);
     }
     box.append(sec, msg);
@@ -1229,7 +1229,7 @@
       el("div", { class: "actions" }, f.by, f.evidence, f.hidden, f.hiddenAmt, add), msg);
   }
 
-  // Money the user reports. EventMate records it; it never pays anything.
+  // Money the user reports. todoh records it; it never pays anything.
   async function renderLedger(card) {
     const r = await api(`/api/plans/${state.planId}/ledger`);
     for (const n of [...card.children].slice(1)) n.remove();
@@ -1249,7 +1249,7 @@
       if (res.ok) renderLedger(card); else msg.textContent = (res.data && res.data.error) || "That entry was refused.";
     } } });
     card.append(
-      el("p", { class: "muted", text: "Amounts you report. EventMate records them and never makes a payment. The latest quote replaces the planned figure." }),
+      el("p", { class: "muted", text: "Amounts you report. todoh records them and never makes a payment. The latest quote replaces the planned figure." }),
       el("table", { class: "tbl" }, el("thead", {}, el("tr", {}, el("th", { text: "Category" }), el("th", { class: "num", text: "Planned" }), el("th", { class: "num", text: "Quoted" }), el("th", { class: "num", text: "Paid" }), el("th", { class: "num", text: "Pending" }), el("th", { class: "num", text: "Variance" }))), el("tbody", {}, ...rows),
         el("tfoot", {}, el("tr", {}, el("th", { text: "Total" }), el("th", { class: "num", text: inr(s.planned_total) }), el("th", { class: "num", text: inr(s.quoted_total) }), el("th", { class: "num", id: "l-paid-total", text: inr(s.paid_total) }), el("th", { class: "num", text: inr(s.pending_total) }), el("th", { class: "num", text: (s.variance_total > 0 ? "+" : "") + inr(s.variance_total) })))),
       el("p", { class: s.headroom < 0 ? "bad" : "muted", text: `Committed ${inr(s.committed_total)} of ${inr(s.budget_total)}; ${s.headroom < 0 ? "over budget by " + inr(-s.headroom) : "headroom " + inr(s.headroom)}.` }),
@@ -1547,7 +1547,7 @@
     const card = (title, ...kids) => el("section", { class: "card" }, el("h2", { text: title }), ...kids);
     host.append(
       el("h1", { text: "Explore deals, places and trips" }),
-      el("p", { class: "muted", text: "Advertised prices and fares are leads from public sources, not quotes. EventMate never books or pays." }),
+      el("p", { class: "muted", text: "Advertised prices and fares are leads from public sources, not quotes. todoh never books or pays." }),
       card("Ask in your own words", freeForm, status), msg, out,
       card("Best deals on the web", el("div", { class: "actions" }, dKind, dCity, dGuests, dNights, dBudget, dGo)),
       card("Best-rated places (Google)", el("div", { class: "actions" }, pKind, pCity, pRev, pGo)),

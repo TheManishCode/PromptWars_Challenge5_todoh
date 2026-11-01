@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EventMate — Arcade</title>
+<title>todoh — Arcade</title>
 <link rel="stylesheet" href="/static/arcade.css">
 <link rel="icon" href="/static/favicon.svg">
 </head>
@@ -22,11 +22,12 @@
 <!-- ======================= normal chat (foreground layer) ======================= -->
 <main id="chat">
   <header>
-    <h1>EVENTMATE<span class="dot">·</span>ARCADE</h1>
+    <h1>TODOH<span class="dot">·</span>ARCADE</h1>
     <div class="head-right">
-      <div id="conn" title="server">…</div>
-      <button id="sound-toggle" type="button" title="machine sounds on/off">SOUND ON</button>
-      <button id="chat-toggle" type="button" title="hide the chat to see the whole machine">HIDE</button>
+      <div id="conn" title="connecting" role="status" aria-label="connection status"></div>
+      <button id="sound-toggle" type="button" title="machine sounds on/off" aria-label="machine sounds on or off" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg></button>
+      <button id="chat-toggle" type="button" title="hide the conversation to see the whole machine" aria-label="show or hide the conversation" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></button>
+      <button id="cat-load" type="button" title="optional: load the big cat vending machine - the original 55 MB scan, kept unmodified; measured to freeze this software-rendered preview and may stutter on low-end devices" aria-label="load the optional 55 MB cat vending machine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3-9-7.56c0-1.25.5-2.4 1-3.44 0 0-1.89-6.42-.5-7 1.39-.58 4.72.23 6.5 2.23A9.04 9.04 0 0 1 12 5Z"/><path d="M8 14v.5"/><path d="M16 14v.5"/><path d="M11.25 16.25h1.5L12 17l-.75-.75Z"/></svg></button>
     </div>
   </header>
   <div id="log" aria-live="polite"></div>
@@ -40,13 +41,54 @@
     <p class="review-note">The coin drops only when you press this. Nothing is planned before you confirm.</p>
   </section>
 
+  <section id="voice-panel" hidden aria-live="polite"></section>
   <form id="composer" autocomplete="off">
+    <button id="attach-btn" type="button"
+            title="Attach a guest-list CSV - previewed in this browser first; importing saves to your built plan when the backend guest routes exist"
+            aria-label="Attach a guest-list CSV"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.4 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 1 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
     <input id="msg" maxlength="2000" placeholder="Describe your event… (guests, city, date, budget)"
            aria-label="Describe your event">
-    <button type="submit">SEND</button>
+    <button id="mic-btn" type="button"
+            title="Record a voice note - listen back and approve the text before anything is sent"
+            aria-label="Record a voice note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v4"/><path d="M8 23h8"/></svg></button>
+    <button id="live-btn" type="button"
+            title="Live voice conversation - starts only when the backend voice service exists"
+            aria-label="Live voice conversation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M4.9 19.1a10 10 0 0 1 0-14.2"/><path d="M19.1 4.9a10 10 0 0 1 0 14.2"/></svg></button>
+    <button type="submit" aria-label="Send message" title="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
   </form>
+  <input type="file" id="attach-file" accept=".csv,text/csv" hidden>
   <p id="hint">Verified-planning engine behind the glass · nothing is booked, sent or paid</p>
 </main>
+<button id="holo-back" class="holo-back" hidden>BACK TO THE ROOM</button>
+
+<!-- signature wall panel: only visible while the wall is focused -->
+<section id="wall-panel" hidden aria-label="signature wall">
+  <p id="wall-status" role="status"></p>
+  <div id="wall-signbox">
+    <input id="wall-name" type="text" placeholder="your name for the wall" autocomplete="off" maxlength="24" aria-label="your name for the wall" />
+    <button id="wall-sign-btn" type="button">SIGN</button>
+  </div>
+  <p id="wall-minebox" hidden><span id="wall-mine"></span></p>
+  <div id="wall-challenge" hidden>
+    <div id="wall-startrow">
+      <button id="wall-start-timed" type="button" title="find your moved name before the clock runs out - ranked">TIMED</button>
+      <button id="wall-start-untimed" type="button" title="find your moved name, no clock - unranked">NO CLOCK</button>
+    </div>
+    <button id="wall-readybtn" type="button" hidden>READY</button>
+    <p id="wall-waitline" hidden>tap the board - <span id="wall-countdown"></span></p>
+    <div id="wall-resultrow" hidden>
+      <p id="wall-result"></p>
+      <button id="wall-newround" type="button">NEW ROUND</button>
+    </div>
+    <div id="wall-halloffer" hidden>
+      <p>Join the Hall of Fame? Ranked times reset monthly; your wall name is permanent.</p>
+      <button id="wall-hall-yes" type="button">JOIN THE HALL</button>
+      <button id="wall-hall-no" type="button">NO THANKS</button>
+    </div>
+    <p id="wall-hallstate"></p>
+  </div>
+</section>
+<ol id="hall-list" class="sr-only" aria-live="polite" aria-label="Hall of Fame fastest five"></ol>
 
 <!-- ======================= result layer ======================= -->
 <div id="flight-layer" hidden>
@@ -68,6 +110,10 @@
 <script src="/static/GLTFLoader.js"></script>
 <script src="/static/arcade3d.js"></script>
 <script src="/static/arcade.js"></script>
-  <footer class="arcade-credits">Cabinet model: <a href="https://sketchfab.com/3d-models/game-ready-arcade-machine-25fb590707034cff8b555953d66a0f7b" target="_blank" rel="noopener noreferrer">Game-ready arcade machine</a> by <a href="https://sketchfab.com/snji_" target="_blank" rel="noopener noreferrer">Snji</a> (texture resized); attendant: <a href="https://sketchfab.com/3d-models/polytoria-avatar-v3-pauly-2c1fbaf2dec1411ca1ae5bfd0afaaa9e" target="_blank" rel="noopener noreferrer">Polytoria Avatar V3 Pauly</a> by <a href="https://sketchfab.com/beachr267" target="_blank" rel="noopener noreferrer">dantheman</a>; both <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. Cabinet artwork is EventMate's own. 3D library: three.js, MIT.</footer>
+  <footer class="arcade-credits">
+    <button id="credits-toggle" type="button" aria-expanded="false">CREDITS &amp; LICENSES</button>
+    <span class="credits-line">Cabinet: PacMan Arcade Machine (CC BY 4.0) &middot; attendant: Polytoria Avatar V3 Pauly (CC BY 4.0) &middot; 3D: three.js (MIT)</span>
+  </footer>
+    <div id="credits-panel" hidden>Cabinet: <a href="https://sketchfab.com/3d-models/pacman-arcade-machine-297816a91a0947fb9dc917741d4c0be4" target="_blank" rel="noopener noreferrer">PacMan Arcade Machine</a> by <a href="https://sketchfab.com/matthew.leiher" target="_blank" rel="noopener noreferrer">Matthew</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> (side and kick-plate wordmark lettered TODOH; screen shows a todoh pipeline visualization); attendant: <a href="https://sketchfab.com/3d-models/polytoria-avatar-v3-pauly-2c1fbaf2dec1411ca1ae5bfd0afaaa9e" target="_blank" rel="noopener noreferrer">Polytoria Avatar V3 Pauly</a> by <a href="https://sketchfab.com/beachr267" target="_blank" rel="noopener noreferrer">dantheman</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. 3D library: three.js, MIT.</div>
 </body>
 </html>

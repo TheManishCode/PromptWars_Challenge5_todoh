@@ -68,12 +68,18 @@ STATIC_FILES = {
     "LuminosityHighPassShader.js": "text/javascript; charset=utf-8", "EffectComposer.js": "text/javascript; charset=utf-8", "RenderPass.js": "text/javascript; charset=utf-8",
     "ShaderPass.js": "text/javascript; charset=utf-8", "MaskPass.js": "text/javascript; charset=utf-8", "UnrealBloomPass.js": "text/javascript; charset=utf-8",
     "GLTFLoader.js": "text/javascript; charset=utf-8",
+    # back-alley dressing for the /arcade room (attribution + licenses: docs/ATTRIBUTIONS.md)
+    "alley_van.glb": "model/gltf-binary", "alley_dumpster.glb": "model/gltf-binary", "alley_candy.glb": "model/gltf-binary",
+    "vend_nuka.glb": "model/gltf-binary", "vend_retro.glb": "model/gltf-binary",
+    "vend_cat.glb": "model/gltf-binary", "wall_mural.glb": "model/gltf-binary", "wall_posters.glb": "model/gltf-binary",
+    # the cabinet CRT's night road (car/road/barrier - attribution in docs/ATTRIBUTIONS.md)
+    "holo_table.glb": "model/gltf-binary", "secret_dossier.glb": "model/gltf-binary", "road.glb": "model/gltf-binary", "car.glb": "model/gltf-binary", "barrier.glb": "model/gltf-binary",
 }
 # The avatar viewer injects one fixed <style> block, reads the model's textures from blob: URLs that its own script creates, and compiles a small WebAssembly decoder.
 # Each is allowed as narrowly as possible: one exact hash instead of unsafe-inline, blob: (which only same-origin script can mint) instead of any external source,
 # and wasm-unsafe-eval, which permits WebAssembly compilation only and never string eval.
 VIEWER_STYLE_HASH = "sha256-PXtZZkJMMyc18o/DN1ZEFOJ2qEGq95IQbVaJFMOXOb0="
-LONG_CACHE = frozenset({"avatar.glb", "model-viewer.min.js", "cabinet.glb", "three.min.js"})  # large and unchanging: not re-sent on every page load
+LONG_CACHE = frozenset({"avatar.glb", "model-viewer.min.js", "cabinet.glb", "three.min.js", "alley_van.glb", "alley_dumpster.glb", "alley_candy.glb", "vend_nuka.glb", "vend_retro.glb", "vend_cat.glb", "wall_mural.glb", "wall_posters.glb", "road.glb", "car.glb", "barrier.glb", "holo_table.glb", "secret_dossier.glb"})  # large and unchanging: not re-sent on every page load
 # third-party files live in static/vendor/ but are served from the same flat /static/<name> URLs
 VENDOR_FILES = frozenset({"model-viewer.min.js", "three.min.js", "CopyShader.js", "LuminosityHighPassShader.js", "EffectComposer.js", "RenderPass.js", "ShaderPass.js", "MaskPass.js", "UnrealBloomPass.js", "GLTFLoader.js"})
 GZIP_MIN = 1024  # below this the header overhead outweighs the saving
