@@ -26,7 +26,7 @@ body {
 }
 
 /* ============================ 3D layer ============================ */
-#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: var(--bg); }
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: var(--bg); touch-action: none; } /* the room is full-screen and handles its own drags: without this a phone treats a swipe as a page gesture and cancels the pointer after one move (found on a real phone: the wall puzzle could not be solved by touch) */
 
 #gl-fallback {
   position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;

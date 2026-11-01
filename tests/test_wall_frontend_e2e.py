@@ -478,3 +478,16 @@ def test_the_wall_can_be_reached_and_tapped_on_phones_and_tablets_in_either_orie
         again = page.evaluate(BOARD_POINT, None)
         assert again and again["onscreen"], f"after rotating, the board is off screen: {again}"
         browser.close()
+
+
+def test_the_room_takes_touch_drags_itself_instead_of_leaving_them_to_the_browser(world):
+    """Found on a real phone (Galaxy S23 FE, Chrome 156): with touch-action left at auto, a swipe on the room became a page gesture and the pointer was cancelled after one move,
+    so the wall puzzle could never be solved by finger. A mouse never shows this, so a headless run cannot catch the symptom; this pins the cause."""
+    base, _store = world
+    with pw.sync_playwright() as p:
+        browser = p.chromium.launch(executable_path=CHROMIUM, args=["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"])
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        page.goto(base + "/")
+        page.wait_for_selector("#gl", state="attached", timeout=20000)
+        assert page.evaluate("getComputedStyle(document.querySelector('#gl')).touchAction") == "none"
+        browser.close()
