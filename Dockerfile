@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # to;doh-the event planner: one image, shared (multi-visitor) mode capable. Build: docker build -t todoh .
 # Stage 1 builds the two planning tools (Fast Downward, VAL) the way CI does; stage 2 is the small runtime, running as an unprivileged user.
-FROM python:3.14-slim-bookworm AS solvers
+FROM python:3.15-slim-bookworm AS solvers
 RUN apt-get update && apt-get install -y --no-install-recommends cmake g++ make flex bison git ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 RUN git clone --depth 1 --branch release-24.06.1 https://github.com/aibasel/downward.git && cd downward && python3 build.py
@@ -10,7 +10,7 @@ RUN git clone --depth 1 https://github.com/KCL-Planning/VAL.git && cd VAL && mkd
 # What the planner needs at run time is the translate script and the stripped search binary; the compile tree (about 400 MB of object files), the sources and the git history are not.
 RUN cd downward && strip builds/release/bin/downward && rm -rf builds/release/search builds/release/CMakeFiles src misc .git
 
-FROM python:3.14-slim-bookworm AS runtime
+FROM python:3.15-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 EVENTMATE_FD=/opt/solvers/downward/fast-downward.py EVENTMATE_VAL=/opt/solvers/VAL/build/bin/Validate \
     EVENTMATE_DATA_DIR=/data EVENTMATE_MODE=shared EVENTMATE_ACCESS_LOG=stderr
 RUN useradd --system --uid 10001 --create-home todoh && mkdir /data && chown todoh /data && chmod 700 /data
