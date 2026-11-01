@@ -58,7 +58,8 @@ def plan_root_files(em):
 
 
 def mentions(em, needle):
-    return [str(p.relative_to(em.store.root)) for p in plan_root_files(em) if needle.encode() in p.name.encode() + p.read_bytes()]
+    """Files that name or contain ``needle``, apart from the tombstone, which is the one place the id of a deleted plan is allowed to remain."""
+    return [str(p.relative_to(em.store.root)) for p in plan_root_files(em) if p.name != "tombstones.jsonl" and needle.encode() in p.name.encode() + p.read_bytes()]
 
 
 def test_deleting_a_plan_leaves_nothing_readable_and_does_not_touch_another_plan(em, chans, clock):
@@ -222,4 +223,28 @@ def test_the_deletion_is_recorded_without_the_plan_contents(em):
     pid = em.plan(EXAMPLE, today=TODAY).plan.plan_id
     em.delete_plan(pid)
     last = [e for e in em.logs.decisions.read() if e.request_id == "retention"][-1]
-    assert pid in last.summary and "plan version" in last.justification and EXAMPLE[:20] not in last.summary + last.justification
+    assert pid not in last.summary + last.justification and "plan version" in last.justification and EXAMPLE[:20] not in last.summary + last.justification  # the id lives only in the tombstone
+    assert '"kind": "plan"' in (em.store.root / "tombstones.jsonl").read_text() and pid in (em.store.root / "tombstones.jsonl").read_text()
+
+
+def test_the_tombstone_holds_only_the_kind_the_id_and_the_time(em):
+    import json as _json
+
+    pid = em.plan(EXAMPLE, today=TODAY).plan.plan_id
+    em.ledger_add(pid, "payment", C.VENUE, 4321, "SECRET-NOTE-QQ")
+    em.delete_plan(pid)
+    lines = [_json.loads(x) for x in (em.store.root / "tombstones.jsonl").read_text().splitlines()]
+    assert len(lines) == 1 and set(lines[0]) == {"kind", "id", "deleted_at"} and lines[0]["kind"] == "plan" and lines[0]["id"] == pid
+    text = (em.store.root / "tombstones.jsonl").read_text()
+    assert "SECRET-NOTE-QQ" not in text and "4321" not in text and EXAMPLE[:20] not in text
+
+
+def test_deleting_a_plan_also_removes_its_lines_from_the_logs_and_keeps_the_others(em):
+    a = em.plan(EXAMPLE, today=TODAY).plan.plan_id
+    b = em.plan(EXAMPLE, today=TODAY).plan.plan_id
+    log_dir = em.logs.decisions.log_dir
+    assert any(a.encode() in p.read_bytes() for p in log_dir.glob("*.jsonl"))
+    em.delete_plan(a)
+    assert not any(a.encode() in p.read_bytes() for p in log_dir.glob("*.jsonl"))
+    assert any(b.encode() in p.read_bytes() for p in log_dir.glob("*.jsonl"))  # the other plan's history is intact
+    assert all(oct(p.stat().st_mode & 0o777) == "0o600" for p in log_dir.glob("*.jsonl"))

@@ -16,6 +16,11 @@ GOOD = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _data_dir(tmp_path):
+    GOOD["EVENTMATE_DATA_DIR"] = str(tmp_path)  # an existing absolute directory, as a real setup has
+
+
 def problems(env=None, hosts=("todoh.example",), env_file=None, workspaces=True):
     return hosting.shared_mode_problems({**GOOD, **(env or {})}, hosts, env_file, workspaces_implemented=workspaces)
 
@@ -40,6 +45,9 @@ def test_a_complete_shared_setup_has_no_problems():
         ({"EVENTMATE_PUBLIC_URL": "http://todoh.example"}, "https://"),
         ({"EVENTMATE_PUBLIC_URL": ""}, "https://"),
         ({"EVENTMATE_OWNER_TOKEN": "short"}, "OWNER_TOKEN"),
+        ({"EVENTMATE_DATA_DIR": ""}, "DATA_DIR"),
+        ({"EVENTMATE_DATA_DIR": "relative/path"}, "DATA_DIR"),
+        ({"EVENTMATE_DATA_DIR": "/nonexistent/for/sure"}, "DATA_DIR"),
     ],
 )
 def test_each_missing_setting_is_named(change, needle):
@@ -58,18 +66,17 @@ def test_a_dotenv_file_is_refused_in_shared_mode(tmp_path):
     assert any(".env" in p for p in problems(env_file=env_file)) and problems(env_file=tmp_path / "absent") == []
 
 
-def test_shared_mode_refuses_until_workspaces_exist():
-    assert hosting.WORKSPACES_IMPLEMENTED is False
+def test_a_build_without_workspaces_would_refuse_shared_mode_and_this_build_has_them():
+    assert hosting.WORKSPACES_IMPLEMENTED is True
     assert any("separate workspace" in p for p in problems(workspaces=False))
 
 
 def test_the_server_command_refuses_to_start_in_shared_mode_with_the_reasons(monkeypatch, capsys):
     for k, v in {**GOOD, "EVENTMATE_SECRET": "short"}.items():
         monkeypatch.setenv(k, v)
-    monkeypatch.setenv("EVENTMATE_WEB_TOKEN", "t" * 24)
     assert main(["--host", "0.0.0.0", "--allow-remote", "--allowed-host", "todoh.example"]) == 2
     err = capsys.readouterr().err
-    assert "refusing to start in shared mode" in err and "EVENTMATE_SECRET" in err and "separate workspace" in err
+    assert "refusing to start in shared mode" in err and "EVENTMATE_SECRET" in err
 
 
 def test_an_unknown_mode_refuses_to_start(monkeypatch, capsys):

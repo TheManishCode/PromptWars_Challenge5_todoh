@@ -1,8 +1,8 @@
 """Start-up checks for shared (hosted) mode (Phase 5.2). Local mode is the default and needs none of this.
 
 Shared mode means people other than the owner can reach the server. It refuses to start unless every condition below holds; each failure is named so
-the owner can fix it. It never starts "mostly safe". ``WORKSPACES_IMPLEMENTED`` is False until the workspace phase (own data per visitor) exists:
-without it shared mode would show one visitor's plans to the next, so it refuses unconditionally.
+the owner can fix it. It never starts "mostly safe". ``WORKSPACES_IMPLEMENTED`` says per-visitor workspaces exist: without them shared mode would show
+one visitor's plans to the next, so a build without them refuses unconditionally.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import List, Mapping, Optional, Sequence
 
 from eventmate.web import limits
 
-WORKSPACES_IMPLEMENTED = False  # flipped by the identity and isolation phase when per-visitor workspaces exist and are tested
+WORKSPACES_IMPLEMENTED = True  # per-visitor workspaces exist (eventmate/workspaces.py) and the two-workspace suite covers every plan-scoped route
 MODES = ("local", "shared")
 LOOPBACK_NAMES = {"127.0.0.1", "localhost", "[::1]", "::1"}
 MIN_SECRET = 32
@@ -33,6 +33,9 @@ def shared_mode_problems(environ: Mapping[str, str], allowed_hosts: Sequence[str
         problems.append("shared mode needs a separate workspace for each visitor, and this build does not have them yet: visitors would see each other's plans")
     if not any(h.strip().lower() not in LOOPBACK_NAMES for h in allowed_hosts):
         problems.append("name the host you serve under with --allowed-host (loopback names alone are not a hosted setup)")
+    data_dir = environ.get("EVENTMATE_DATA_DIR", "")
+    if not data_dir or not Path(data_dir).is_absolute() or not Path(data_dir).is_dir():
+        problems.append("set EVENTMATE_DATA_DIR to an existing absolute directory on a persistent disk: every visitor's workspace is stored under it")
     if len(environ.get("EVENTMATE_SECRET", "")) < MIN_SECRET:
         problems.append(f"set EVENTMATE_SECRET to at least {MIN_SECRET} random characters (it derives each workspace's CSRF value)")
     if not limits.trusted_proxies(environ):

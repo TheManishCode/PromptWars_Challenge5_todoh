@@ -8,9 +8,11 @@ messaged again), discovered businesses, and vendor price observations (market fa
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -74,6 +76,43 @@ def purge_old_logs(log_dir: Path, max_age_days: Optional[int] = None, now: Optio
         if LOG_FILE.fullmatch(p.name) and not p.is_symlink() and p.is_file() and p.stat().st_mtime < cutoff:
             _unlink(p)
             removed.append(p.name)
+    return removed
+
+
+def write_tombstone(path: Path, kind: str, ident: str, now: Optional[datetime] = None) -> None:
+    """One line saying that something was deleted and when: ``{kind, id, deleted_at}`` and nothing else, so the deletion is provable and no content survives in it."""
+    line = json.dumps({"kind": kind, "id": ident, "deleted_at": (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")}, sort_keys=True) + "\n"
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        os.write(fd, line.encode("utf-8"))
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def scrub_plan_from_logs(log_dir: Path, plan_id: str) -> int:
+    """Remove every log line that mentions a deleted plan (its questions, answers, decisions and traces). The other lines stay, in order. Each file is
+    rewritten to a temporary file and moved into place, owner-only. A line appended by another thread during the rewrite of that one file could be lost;
+    the lines of a plan being deleted are the ones that matter, and the plan is already gone. Returns how many lines were removed."""
+    if not PLAN_ID.fullmatch(plan_id):
+        raise ValueError("invalid plan id")
+    needle, removed = plan_id.encode("utf-8"), 0
+    for path in sorted(Path(log_dir).iterdir()):
+        if not LOG_FILE.fullmatch(path.name) or path.is_symlink() or not path.is_file():
+            continue
+        data = path.read_bytes()
+        if needle not in data:
+            continue
+        kept = [line for line in data.splitlines(keepends=True) if needle not in line]
+        removed += len(data.splitlines()) - len(kept)
+        tmp = path.with_name(f".scrub-{os.getpid()}-{path.name}")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, b"".join(kept))
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(tmp, path)
     return removed
 
 

@@ -257,21 +257,29 @@ class GuestListStore:
             if held is None or held[0] != plan_id or held[2] <= now or held[1] != self._generation.get(plan_id, 0):
                 raise StalePreview("that preview is no longer valid; preview the file again")
             guests = held[3]
-            self.dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-            doc = {"schema_version": 1, "plan_id": plan_id, "committed_at": datetime.now(timezone.utc).isoformat(), "guests": [json.loads(g.model_dump_json()) for g in guests]}
-            tmp = self.dir / f".tmp-{secrets.token_hex(8)}"
-            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                    json.dump(doc, fh)
-                    fh.flush()
-                    os.fsync(fh.fileno())
-                os.replace(tmp, self._path(plan_id))
-            finally:
-                if tmp.exists():
-                    tmp.unlink()
-            self._generation[plan_id] = self._generation.get(plan_id, 0) + 1
+            self._write(plan_id, guests)
             return guests
+
+    def _write(self, plan_id: str, guests: Tuple[Guest, ...]) -> None:
+        self.dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        doc = {"schema_version": 1, "plan_id": plan_id, "committed_at": datetime.now(timezone.utc).isoformat(), "guests": [json.loads(g.model_dump_json()) for g in guests]}
+        tmp = self.dir / f".tmp-{secrets.token_hex(8)}"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(doc, fh)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, self._path(plan_id))
+        finally:
+            if tmp.exists():
+                tmp.unlink()
+        self._generation[plan_id] = self._generation.get(plan_id, 0) + 1
+
+    def restore(self, plan_id: str, guests: Tuple[Guest, ...]) -> None:
+        """Put back a list that was exported (workspace import). The caller has already validated every guest; no preview or token is involved."""
+        with self._lock:
+            self._write(plan_id, tuple(guests))
 
     def load(self, plan_id: str) -> Optional[Tuple[Guest, ...]]:
         path = self._path(plan_id)
