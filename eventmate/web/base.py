@@ -53,7 +53,7 @@ LONG_CACHE = frozenset({"avatar.glb", "cabinet.glb", "three.min.js", "alley_van.
 # third-party files live in static/vendor/ but are served from the same flat /static/<name> URLs
 VENDOR_FILES = frozenset({"three.min.js", "CopyShader.js", "LuminosityHighPassShader.js", "EffectComposer.js", "RenderPass.js", "ShaderPass.js", "MaskPass.js", "UnrealBloomPass.js", "GLTFLoader.js"})
 GZIP_MIN = 1024  # below this the header overhead outweighs the saving
-GZIP_MAX = 3 * 1024 * 1024  # above this (the scene models) a file is sent as it is: already compressed, and compressing 50 MB in the request would stall it and sit in memory
+GZIP_MAX = 6 * 1024 * 1024  # above this a file is sent as it is: the 55 MB cat machine would stall the request and sit in memory. Measured: the 3.6 MB mural shrinks 44% (3.6 -> 2.0 MB), the Hall table 50%; compression is done once per file and cached
 _gzip_cache: Dict[tuple, bytes] = {}  # (name, mtime_ns) -> compressed bytes; the file set is fixed and small
 WORKSPACE_EXEMPT = ("/api/owner/status", "/metrics", "/api/wall/")  # /api routes with their own authentication: no workspace is looked up or made for them
 # POST routes that send, or let something send later, through the owner's mailbox or gateway; refused for every guest workspace

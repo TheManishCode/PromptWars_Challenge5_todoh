@@ -40,5 +40,8 @@ For the person who operates the server. Local single-user use needs none of this
 `/metrics` (Prometheus format) needs the owner token as `Authorization: Bearer` or `X-EventMate-Owner`; `deploy/docker-compose.yml` starts Prometheus (scraping it with the token from `deploy/prometheus/owner_token`) and Grafana (dashboard `to;doh`). Alerts (`deploy/prometheus/alerts.yml`): TodohDown, TodohHigh5xxRate, TodohSlowRequests, TodohDiskLow, TodohBackgroundPollFailing, TodohSearchesSaturated, TodohRateLimitedSpike. Wire Prometheus to an Alertmanager or your cloud's paging; none is bundled. Thresholds are first guesses: tune them after a week of real traffic.
 Before a release: `python tools/loadtest/soak.py --seconds 1800 --visitors 20` (needs the solvers); it fails on any 5xx, a slow p95 or growth in memory, files or threads.
 
+## Langfuse tracing (optional)
+Set `LANGFUSE_HOST` (or `LANGFUSE_BASE_URL`), `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` in `deploy/.env`: all three or none, and the host must be https or loopback. The assistant then exports masked questions and answers (emails, phone numbers and card-like numbers are masked and vendor reply text is never sent, but a guest's name that someone types into a question is not masked; see `docs/MODEL_INPUTS.md`) to that host; a failing export never slows or breaks an answer. In shared mode this sends visitors' masked questions off the machine, so say so in your privacy notice.
+
 ## Not covered
 Zero-downtime upgrades, more than one server process on the same data, high availability, and a bundled pager: alert rules exist (above) but nothing is wired to a person. The app is one process on one disk; plan for a short restart and for the backup as the recovery path.
