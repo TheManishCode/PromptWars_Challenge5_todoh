@@ -7,6 +7,9 @@ WORKDIR /build
 RUN git clone --depth 1 --branch release-24.06.1 https://github.com/aibasel/downward.git && cd downward && python3 build.py
 RUN git clone --depth 1 https://github.com/KCL-Planning/VAL.git && cd VAL && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j"$(nproc)"
 
+# What the planner needs at run time is the translate script and the stripped search binary; the compile tree (about 400 MB of object files), the sources and the git history are not.
+RUN cd downward && strip builds/release/bin/downward && rm -rf builds/release/search builds/release/CMakeFiles src misc .git
+
 FROM python:3.14-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 EVENTMATE_FD=/opt/solvers/downward/fast-downward.py EVENTMATE_VAL=/opt/solvers/VAL/build/bin/Validate \
     EVENTMATE_DATA_DIR=/data EVENTMATE_MODE=shared EVENTMATE_ACCESS_LOG=stderr
