@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from eventmate.assistant.guard import scan as scan_instructions
+from eventmate.integrity import StoreDamaged
 from eventmate.sourcing.suppression import SuppressionStore, UnmatchedStore, normalise_address
 from eventmate.messaging.channels import Channel, ChannelError, Inbound, KnownThread, OutcomeUnknown, ThreadRef
 from eventmate.integrations.deals import extract_mentions
@@ -108,6 +109,7 @@ class ConversationService:
         self.suppressions: Optional[SuppressionStore] = None  # set by to;doh-the event planner: the do-not-contact list, checked at approval and again when a message is about to be sent
         self.unmatched: Optional[UnmatchedStore] = None  # set by to;doh-the event planner: stop-like mail and bounces that are not tied to anything we sent, for the user to review
         self.guards: List[Callable[[OutreachDraft], Optional[str]]] = []  # each may veto an automatic send at dispatch time (for example: its job was cancelled)
+        self.health: Optional[Callable[[], Optional[str]]] = None  # set by to;doh-the event planner: why nothing may be sent or approved right now (a damaged record file), or None
 
     # ------------------------------------------------------------ approval
 
@@ -150,6 +152,7 @@ class ConversationService:
 
     def approve(self, plan_id: str, draft_id: str, content_hash: str) -> OutreachDraft:
         """Approve exactly the content the user saw. The send happens now if the limits allow, otherwise on the next dispatch."""
+        self._require_healthy()
         d = self.store.get(plan_id, draft_id)
         if d is None:
             raise ValueError(f"unknown draft {draft_id!r}")
@@ -199,6 +202,9 @@ class ConversationService:
 
     def dispatch(self) -> Tuple[int, List[str]]:
         """Send what the user approved, within the limits. Returns (sent, reasons something is still waiting)."""
+        stopped = self.health() if self.health else None
+        if stopped:
+            return 0, [stopped]  # a damaged record file may hold send history this process cannot see: nothing goes out until the owner has repaired it
         now, sent, waiting = self.now(), 0, []
         day = now - timedelta(days=1)
         for pid in self.store.plan_ids():
@@ -388,7 +394,13 @@ class ConversationService:
 
     # ------------------------------------------------------------ standing permission (ADR-043)
 
+    def _require_healthy(self) -> None:
+        reason = self.health() if self.health else None
+        if reason:
+            raise StoreDamaged(reason)
+
     def grant_autoreply(self, plan_id: str, sender_name: str, hours: int = 72, max_per_thread: int = 3, max_total: int = 10) -> Mandate:
+        self._require_healthy()
         self.plan_lookup(plan_id)
         if self.store.killed:
             raise ValueError("the kill switch is on; resume automatic replies first")

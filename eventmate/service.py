@@ -21,6 +21,8 @@ from typing import Callable, Dict, List, Optional
 
 from eventmate.guestlist import GuestListStore, GuestPreview, check_against, parse_guest_csv, totals_of
 from eventmate.voice.notes import VoiceNoteStore
+from eventmate import migrations
+from eventmate.integrity import Guard
 from eventmate.retention import PlanBusy, delete_plan_files, purge_old_logs, report, scrub_plan_from_logs, write_tombstone
 from eventmate.agents.budget import BudgetAgent, BudgetPolicy
 from eventmate.agents.explainer import ExplainerAgent, Explanation
@@ -125,6 +127,8 @@ class EventMate:
         self._job_store: Optional[JobStore] = None
         self.digest_store = DigestStore(self.store.root)
         self.conversations = ConversationService(self.outreach_store, channels or channels_from_env(os.environ), self.store.latest)
+        self.integrity = Guard(self.store.root)  # while an authoritative record file is damaged, nothing is sent or approved (docs/DURABILITY.md)
+        self.conversations.health = self.integrity.blocker
         self.conversations.guards.append(self._job_guard)
         self.conversations.suppressions, self.conversations.unmatched = self.suppressions, self.unmatched
         self.notifier = OwnerNotifier(
@@ -733,14 +737,14 @@ class EventMate:
         """Decision-log entries recorded while this plan version was produced (any run's log file)."""
         wanted = set(plan.decision_entry_ids)
         found = []
-        files = sorted(self.logs.decisions.log_dir.glob("decisions-*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)[:max_files]
+        files = sorted(self.logs.decisions.log_dir.glob("decisions-*.jsonl*"), key=lambda p: p.stat().st_mtime, reverse=True)[:max_files]  # the active logs and the rotated ones
         for path in files:
             if path.stat().st_size > 20_000_000:
                 continue
             with open(path, "r", encoding="utf-8") as fh:
                 for line in fh:
                     if any(i in line for i in wanted):
-                        entry = DecisionLogEntry.model_validate_json(line)
+                        entry = DecisionLogEntry.model_validate(migrations.parse_line("decisions", line, path.name, 0))
                         if entry.entry_id in wanted:
                             found.append(entry)
         return sorted(found, key=lambda e: e.timestamp)

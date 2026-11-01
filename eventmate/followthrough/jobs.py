@@ -20,6 +20,8 @@ from typing import Dict, Iterator, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from eventmate import migrations
+
 JobStatus = Literal["active", "waiting_vendor", "waiting_user", "blocked", "done", "expired", "cancelled"]
 TERMINAL = ("done", "expired", "cancelled")
 VendorState = Literal["drafted", "asked", "replied", "unavailable", "unresponsive"]
@@ -114,6 +116,11 @@ class StaleJob(Exception):
     """Someone else changed this job first. Reload and decide again."""
 
 
+def _load_job(raw: str) -> "Job":
+    """A job row, upgraded in memory to the current schema (a row written before schema versions existed is version 1)."""
+    return Job.model_validate(migrations.parse_line("job", raw, "jobs.db", 0))
+
+
 class JobStore:
     def __init__(self, root: Path):
         self.path = Path(root) / "jobs.db"
@@ -141,7 +148,7 @@ class JobStore:
 
     def create(self, job: Job, now: datetime) -> Job:
         with self._lock, self._db() as db:
-            db.execute("INSERT INTO jobs VALUES (?,?,?,?,?)", (job.job_id, job.status, self._iso(job.wake_at), job.version, job.model_dump_json()))
+            db.execute("INSERT INTO jobs VALUES (?,?,?,?,?)", (job.job_id, job.status, self._iso(job.wake_at), job.version, migrations.stamp("job", job.model_dump_json())))
             db.execute("INSERT INTO events (job_id, ts, actor, event, detail) VALUES (?,?,?,?,?)", (job.job_id, self._iso(now), "system", "created", json.dumps({"goal": job.goal})))
         return job
 
@@ -163,12 +170,12 @@ class JobStore:
             row = db.execute("SELECT data FROM jobs WHERE job_id=?", (job_id,)).fetchone()
         if row is None:
             raise ValueError(f"unknown job {job_id!r}")
-        return Job.model_validate_json(row[0])
+        return _load_job(row[0])
 
     def list(self, plan_id: Optional[str] = None) -> List[Job]:
         with self._db() as db:
             rows = db.execute("SELECT data FROM jobs ORDER BY rowid").fetchall()
-        jobs = [Job.model_validate_json(r[0]) for r in rows]
+        jobs = [_load_job(r[0]) for r in rows]
         return [j for j in jobs if plan_id is None or j.plan_id == plan_id]
 
     def due(self, now: datetime, limit: int = 20) -> List[Job]:
@@ -177,7 +184,7 @@ class JobStore:
                 "SELECT data FROM jobs WHERE status NOT IN ('done','expired','cancelled') AND wake_at IS NOT NULL AND wake_at <= ? ORDER BY wake_at LIMIT ?",
                 (self._iso(now), limit),
             ).fetchall()
-        return [Job.model_validate_json(r[0]) for r in rows]
+        return [_load_job(r[0]) for r in rows]
 
     def save(self, job: Job, actor: str, event: str, now: datetime, detail: Optional[dict] = None) -> Job:
         """Compare-and-swap on ``version``: only the writer who read the latest version wins. Illegal status changes are refused."""
@@ -195,7 +202,7 @@ class JobStore:
                 db.execute("ROLLBACK")
                 raise ValueError(f"illegal job transition {old_status} -> {job.status}")
             new = job.model_copy(update={"version": job.version + 1})
-            db.execute("UPDATE jobs SET status=?, wake_at=?, version=?, data=? WHERE job_id=?", (new.status, self._iso(new.wake_at), new.version, new.model_dump_json(), new.job_id))
+            db.execute("UPDATE jobs SET status=?, wake_at=?, version=?, data=? WHERE job_id=?", (new.status, self._iso(new.wake_at), new.version, migrations.stamp("job", new.model_dump_json()), new.job_id))
             body = dict(detail or {})
             if new.status != old_status:
                 body["from"], body["to"] = old_status, new.status

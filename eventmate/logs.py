@@ -70,6 +70,7 @@ def _sha(text: str) -> str:
 
 class ToolCallLog(JsonlLog[ToolCallEntry]):
     channel = "tool_calls"
+    rotates = True
     model = ToolCallEntry
 
     def log(self, *, request_id: str, **fields) -> ToolCallEntry:
@@ -80,6 +81,7 @@ class ToolCallLog(JsonlLog[ToolCallEntry]):
 
 class LLMTraceLog(JsonlLog[LLMTraceEntry]):
     channel = "llm_traces"
+    rotates = True
     model = LLMTraceEntry
 
     def __init__(self, *args, store_text: bool = False, **kwargs):
@@ -106,6 +108,7 @@ class LLMTraceLog(JsonlLog[LLMTraceEntry]):
 
 class ValidationFailureLog(JsonlLog[ValidationFailureEntry]):
     channel = "validation_failures"
+    rotates = True
     model = ValidationFailureEntry
 
     def log(self, *, request_id: str, **fields) -> ValidationFailureEntry:

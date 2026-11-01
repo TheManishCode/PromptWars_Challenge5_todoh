@@ -45,7 +45,7 @@ from eventmate.integrations.discovery import DiscoveryError
 from eventmate.integrations.travel import TravelError, check_date
 from eventmate.integrations.weather import WeatherError
 
-COMMANDS = {"delete-plan", "purge-logs", "testvendor", "jobs", "inbox", "outreach", "plan", "confirm", "replan", "show", "diff", "validate", "list", "intake", "tradeoffs", "ledger", "quotes", "flights", "multicity", "discover", "weather", "deals"}
+COMMANDS = {"verify", "repair", "delete-plan", "purge-logs", "testvendor", "jobs", "inbox", "outreach", "plan", "confirm", "replan", "show", "diff", "validate", "list", "intake", "tradeoffs", "ledger", "quotes", "flights", "multicity", "discover", "weather", "deals"}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -157,6 +157,14 @@ def _parser() -> argparse.ArgumentParser:
     p = sub.add_parser("delete-plan", help="forget a plan and everything it owns (versions, ledger, messages, jobs, ideas); see docs/RETENTION.md")
     p.add_argument("plan_id")
     p.add_argument("--confirm", required=True, metavar="PLAN_ID", help="repeat the plan id to confirm")
+    p = sub.add_parser("verify", help="read every store and report what is unreadable, altered, missing or orphaned; changes nothing; exits 1 on damage (docs/DURABILITY.md)")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("repair", help="never in place: --quarantine copies a damaged file aside and writes a candidate; --apply swaps a candidate in after you type the number of dropped lines")
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--quarantine", nargs="*", metavar="FILE", help="damaged files to set aside (default: every damaged file)")
+    g.add_argument("--apply", metavar="CANDIDATE", help="a *.repaired-<time> file made by --quarantine")
+    g.add_argument("--reset-derived", metavar="FILE", help="start a derived store (traces, digests, ideas...) afresh; refused for money and send state")
+    p.add_argument("--confirm", type=int, metavar="N", help="the number of lines --apply will drop (printed by --quarantine); asked for if you are at a terminal")
     p = sub.add_parser("purge-logs", help="delete run logs older than the retention period (default 90 days, EVENTMATE_LOG_RETENTION_DAYS)")
     p.add_argument("--days", type=int)
     p = sub.add_parser("show")
@@ -231,6 +239,49 @@ def main(argv=None) -> int:
         return 2
 
 
+def _verify(em: EventMate, a) -> int:
+    from eventmate import integrity
+
+    report = integrity.scan(em.store.root, em.logs.decisions.log_dir)
+    if a.json:
+        print(json.dumps({"ok": report.ok, "files_checked": report.files_checked, "damaged": [d.__dict__ for d in report.damaged], "plan_problems": report.plan_problems, "orphans": report.orphans}, indent=2))
+    else:
+        print("\n".join(report.lines()))
+        if report.authoritative_damage:
+            print("Sending and approving are stopped while a money or send-state file is damaged. See docs/DURABILITY.md.", file=sys.stderr)
+    return 0 if report.ok else 1
+
+
+def _repair(em: EventMate, a) -> int:
+    from eventmate import integrity
+
+    if a.reset_derived:
+        print(f"set aside as {integrity.reset_derived(Path(a.reset_derived)).name}; the store starts empty")
+        return 0
+    if a.quarantine is not None:
+        log_dir = em.logs.decisions.log_dir
+        targets = [Path(f) for f in a.quarantine] or sorted({(em.store.root / d.path) if (em.store.root / d.path).exists() else (log_dir / d.path) for d in integrity.scan(em.store.root, log_dir).damaged if d.line})
+        if not targets:
+            print("nothing to repair")
+            return 0
+        for target in targets:
+            q = integrity.quarantine(target)
+            print(f"{q.source.name}: kept {q.kept} line(s), set aside {len(q.dropped)}; damaged original kept read-only as {q.damaged_copy.name}; candidate {q.candidate.name}")
+            for n, why in q.dropped:
+                print(f"  dropped line {n}: {why}")
+        print("Nothing was swapped in. To use a candidate: python -m eventmate repair --apply CANDIDATE --confirm N  (N = the number of dropped lines above)")
+        return 0
+    n = a.confirm
+    if n is None and sys.stdin.isatty():
+        meta = json.loads(Path(str(a.apply) + ".json").read_text())
+        n = int(input(f"this replaces {meta['source']} and drops {len(meta['dropped'])} line(s); type that number to confirm: ").strip() or -1)
+    if n is None:
+        print("give --confirm N (the number of lines the candidate drops)", file=sys.stderr)
+        return 2
+    print(f"{integrity.apply_repair(Path(a.apply), n).name} replaced; run verify to check")
+    return 0
+
+
 def _run(em: EventMate, a) -> int:
     if a.command == "intake":
         res = em.manager.run_intake(a.request, today=a.today, guest_list_id=a.guest_list)
@@ -267,6 +318,10 @@ def _run(em: EventMate, a) -> int:
             return 2
         print(json.dumps(em.delete_plan(a.plan_id)))
         return 0
+    if a.command == "verify":
+        return _verify(em, a)
+    if a.command == "repair":
+        return _repair(em, a)
     if a.command == "purge-logs":
         removed = em.purge_logs(a.days)
         print(f"removed {len(removed)} log file(s)")

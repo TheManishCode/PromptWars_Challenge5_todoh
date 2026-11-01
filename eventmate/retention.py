@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 PLAN_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
-LOG_FILE = re.compile(r"(?:decisions|tool_calls|llm_traces|validation_failures|assistant_[a-z]+)-[A-Za-z0-9_-]{1,64}\.jsonl")
+LOG_FILE = re.compile(r"(?:decisions|tool_calls|llm_traces|validation_failures|assistant_[a-z]+)-[A-Za-z0-9_-]{1,64}\.jsonl(?:\.\d{8}T\d{6}Z-\d{1,4})?")  # a rotated log is still a log
 DEFAULT_LOG_RETENTION_DAYS = 90
 
 # (directory under the plan root, JsonlLog channel): the files keyed by plan id.
