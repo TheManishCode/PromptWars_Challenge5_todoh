@@ -110,6 +110,7 @@ class SchedulingAgent:
         self._add_pre_event(graph, request, has, now, day0)
         setups = self._add_setups(graph, has, day0)
         self._add_event_day(graph, request, setups, event_minutes, event_start)
+        self._add_extra_tasks(graph, request, now, day0)
         tasks, deps = self._apply_fixed(graph, fixed_starts)
 
         program = request.community.program if request.community else ()
@@ -188,6 +189,23 @@ class SchedulingAgent:
                 g.dep(f"activity_{a.after}", f"activity_{a.activity_id}")
         g.task("teardown", "Teardown", p.teardown_minutes, resource="venue", **day)
         g.dep("event", "teardown")
+
+    def _add_extra_tasks(self, g: _TaskGraph, request: EventRequest, now: int, day0: int) -> None:
+        """Steps the organiser added: placed on their own day (or before the event starts), after the tasks they name."""
+        p = self.policy
+        for x in request.extra_tasks:
+            known = {t.id for t in g.tasks}
+            for a in x.after:
+                if a not in known:
+                    raise ValueError(f"the step {x.name!r} comes after {a!r}, which is not a task of this plan")
+            if x.days_before_event:
+                day_start = day0 - x.days_before_event * DAY
+                g.task(x.task_id, x.name, x.duration_minutes, group="pre_event", earliest_start=max(now, day_start + p.work_start_hour * 60), deadline_end=day_start + DAY, prefer="early", resource="organizer")
+            else:
+                g.task(x.task_id, x.name, x.duration_minutes, group="event_day", earliest_start=max(now, day0), prefer="late", resource="organizer")
+                g.dep(x.task_id, "event", p.setup_buffer_minutes)
+            for a in x.after:
+                g.dep(a, x.task_id)
 
     @staticmethod
     def _apply_fixed(g: _TaskGraph, fixed_starts: dict[str, int] | None) -> tuple[list[ScheduleTask], list[ScheduleDependency]]:

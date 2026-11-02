@@ -233,7 +233,8 @@ class Assistant:
             client = self.llms[tier]
             for attempt in range(self.policy["retries"] + 1):
                 try:
-                    reply = client.complete("You are a careful assistant. Reply with one JSON object only.", prompt, _MAX_TOKENS)
+                    with consumption.stage("assistant"):
+                        reply = client.complete("You are a careful assistant. Reply with one JSON object only.", prompt, _MAX_TOKENS)
                     self._spend[user_id].append((time.monotonic(), tokens(prompt) + tokens(reply)))
                     return reply, getattr(client, "name", "unknown"), tier
                 except consumption.ConsumptionError:

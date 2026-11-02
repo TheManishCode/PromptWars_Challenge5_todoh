@@ -26,6 +26,7 @@ from eventmate.sourcing.suppression import NeedsAcknowledgement
 from eventmate.integrations.websearch import SearchError
 from eventmate.integrations.travel import TravelError
 from eventmate.web.base import (
+    NotOnSharedHost,
     log,
 )
 
@@ -151,6 +152,10 @@ def register(app, k):
     @app.errorhandler(StaleJob)
     def _stale(exc):
         return _err(409, "this job changed while you were looking at it; reload and try again")
+
+    @app.errorhandler(NotOnSharedHost)
+    def _not_shared(exc):
+        return _err(403, str(exc)[:200])
 
     @app.errorhandler(ValueError)
     def _value(exc):

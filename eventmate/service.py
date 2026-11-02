@@ -47,6 +47,8 @@ from eventmate.followthrough.worker import JobWorker
 from eventmate.followthrough.jobs import JobStore
 from eventmate.sourcing.contacts import find_contacts
 from eventmate.sourcing.externals import ExternalStore, ResolvedVendor, clean_email, slug
+from eventmate.evidence.ledger import EvidenceLedger, FactState
+from eventmate.followthrough.watches import WatchRunner, WatchStore
 from eventmate.sourcing.search import VendorSearch, clean_name
 from eventmate.sourcing.suppression import NeedsAcknowledgement, SuppressionStore, UnmatchedStore, domain_note
 from eventmate.sourcing.shortlist import ShortlistStore
@@ -109,8 +111,11 @@ class EventMate:
         self.deals_factory = lambda on_call: DealAgent(default_provider(), SafeFetcher(), on_call=on_call)
         self.observations = ObservationStore(self.store.root, self.repo)
         self.repo.quotes = self.observations
-        self.externals = ExternalStore(self.store.root)
-        self.shortlist = ShortlistStore(self.store.root)
+        self.evidence = EvidenceLedger(self.store.root)
+        self.watches = WatchStore(self.store.root)  # makes no file until the first watch
+        self.last_watch_report: dict = {}
+        self.externals = ExternalStore(self.store.root, evidence=self.evidence)
+        self.shortlist = ShortlistStore(self.store.root, evidence=self.evidence)
         self.observations.external_lookup = self.externals.get
         self.suppressions = SuppressionStore(self.store.root)
         self.unmatched = UnmatchedStore(self.store.root)
@@ -386,10 +391,34 @@ class EventMate:
         return out
 
     def background_round(self):
-        """One round of the agent's background work: the job worker if any job exists (it polls conversations itself), otherwise just the conversations."""
-        if (self.store.root / "jobs.db").exists():
-            return self.jobs.tick()
-        return self.poll_conversations()
+        """One round of the agent's background work: the job worker if any job exists (it polls conversations itself), otherwise just the conversations,
+        then any page watches that are due (they only read public pages; the owner's kill switch stops them too)."""
+        report = self.jobs.tick() if (self.store.root / "jobs.db").exists() else self.poll_conversations()
+        if self.watches.exists():
+            self.last_watch_report = self.watch_runner().tick()  # kept here as well: the round's own result may not be a dict, and a watch's errors must not vanish
+            if isinstance(report, dict):
+                report["watches"] = self.last_watch_report
+        return report
+
+    # ------------------------------------------------------------ page watches
+
+    def watch_runner(self) -> WatchRunner:
+        return WatchRunner(self.watches, self.contact_fetcher, self.evidence, killed=lambda: self.outreach_store.killed, now=lambda: self.outreach_store.now())  # one clock for adding and checking
+
+    def add_watch(self, subject: str, url: str, condition: str, text: str | None = None, amount_inr: int | None = None, interval_minutes: int = 1440):
+        """Watch one public page for the owner. The subject must be something this workspace knows (a plan, a discovered business or a vendor)."""
+        known = (
+            subject in self.store.list_plans()
+            or self.externals.get(subject) is not None
+            or any(self.repo.get(c, subject) for c in VendorCategory)
+        )
+        if not known:
+            raise ValueError("unknown subject: use a plan id or a vendor id from this workspace")
+        return self.watches.add(subject, url, condition, self.outreach_store.now(), text, amount_inr, interval_minutes)
+
+    def resume_watch(self, watch_id: str):
+        w = self.watches.get(watch_id)
+        return self.watches.save(w.model_copy(update={"status": "active", "failures": 0, "last_error": "", "next_check_at": self.outreach_store.now()}))
 
     def draft_outreach(self, plan_id: str, category: VendorCategory, channel: str, recipient: str, sender_name: str, vendor_id: str | None = None):
         """Write a quote request for a vendor in the plan, or for another vendor of the category when ``vendor_id`` is given (to compare quotes).
@@ -613,6 +642,7 @@ class EventMate:
         contact = self.outreach_store.set_contact_record(VendorContact(
             vendor_id=vendor_id, email=value, preferred="email", updated_at=now, origin="discovered", source_url=cand.source_url,
             confirmed_by=by.strip(), confirmed_at=now, edited_by_user=edited))
+        self.evidence.record(vendor_id, "email", value, FactState.USER_CONFIRMED, "user_input", cand.source_url)
         self.shortlist.update(candidate_id, status="confirmed", confirmed_by=by.strip(), confirmed_at=now, confirmed_value=value if edited else None)
         self.suppressions.lift_bad_address("email", value, by.strip(), "address re-confirmed by the user", acknowledge_bounce)  # a bad address is cleared by editing or re-confirming; a stop request never is
         return contact
@@ -697,6 +727,31 @@ class EventMate:
     def replan(self, plan_id: str, disruption: Disruption, today: date | None = None) -> ReplanOutcome:
         self._clock(today)
         outcome = self.replanner.replan(plan_id, disruption, today)
+        self._after_new_version(plan_id)
+        return outcome
+
+    def change_turn(self, plan_id: str, message: str, today: date | None = None):
+        """The user's words about a change, as a delta to confirm and the questions still open. Nothing is changed."""
+        from eventmate.planning import delta as change
+
+        return change.formalize_delta(message, self.store.latest(plan_id), today or date.today(), self.llm, logs=self.logs)
+
+    def apply_change(self, plan_id: str, delta, done=(), in_flight=None, today: date | None = None) -> ReplanOutcome:
+        """Apply a delta the user confirmed. ``done`` are tasks the user says are finished and ``in_flight`` maps tasks under way to the minutes they have left;
+        the times are taken from the plan and from today, never from the caller."""
+        from eventmate.planning.exec_state import ExecState
+
+        today = today or date.today()
+        parent = self.store.latest(plan_id)
+        now = self.replanner.now_offset(parent, today)
+        ends = {i.task_id: int((i.end - parent.origin).total_seconds() // 60) for i in parent.items}
+        state = ExecState(now=now, done={t: min(ends.get(t, 0), now) for t in done}, in_flight=dict(in_flight or {}))
+        return self.repair(plan_id, delta, state, today)
+
+    def repair(self, plan_id: str, delta, state, today: date | None = None) -> ReplanOutcome:
+        """Apply a confirmed change delta over the execution state as one new version (architecture L5)."""
+        self._clock(today)
+        outcome = self.replanner.repair(plan_id, delta, state, today)
         self._after_new_version(plan_id)
         return outcome
 

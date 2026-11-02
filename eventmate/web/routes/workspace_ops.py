@@ -17,6 +17,7 @@ from eventmate.web import observe
 from eventmate.workspaces import COOKIE, WorkspaceError
 from eventmate.llm import METER
 from eventmate.web.base import (
+    EmptyBody,
     _Strict,
     log,
 )
@@ -90,6 +91,44 @@ def register(app, k):
         resp = jsonify({"deleted": True})
         resp.delete_cookie(COOKIE, path="/", secure=True, httponly=True, samesite="Strict")
         return resp
+
+    class RecoverBody(_Strict):
+        phrase: str
+
+    @app.get("/api/workspace/recovery")
+    def recovery_status():
+        """Whether this workspace has a recovery phrase. The phrase itself is never kept, so it cannot be shown again."""
+        if not shared:
+            return _err(404, "not found", code="not_found")  # a local install has no cookie to lose
+        return jsonify({"has_phrase": registry.directory.has_recovery(g.ws.id)})
+
+    @app.post("/api/workspace/recovery")
+    def recovery_create():
+        """Make a recovery phrase and show it once (a new one replaces the old). It opens this workspace from another browser if the cookie is lost."""
+        if not shared:
+            return _err(404, "not found", code="not_found")
+        body(EmptyBody)
+        phrase = registry.set_recovery(g.ws.id)
+        if phrase is None:
+            return _err(404, "not found", code="not_found")
+        return jsonify({"phrase": phrase, "shown_once": True})
+
+    @app.post("/api/workspace/recover")
+    def recovery_use():
+        """Open an earlier workspace with its phrase, from a browser that holds only an empty one. A new cookie and a new phrase are issued; the old cookie and the used phrase stop working."""
+        if not shared:
+            return _err(404, "not found", code="not_found")
+        b = body(RecoverBody)
+        if registry.has_data(g.ws.id):
+            return _err(409, "this browser already holds a workspace with plans in it; export or delete that first", code="workspace_has_data")
+        try:
+            workspace_id, credential, fresh = registry.recover(k.caller(), b.phrase)
+        except WorkspaceError as exc:
+            return _err(exc.status, str(exc), code=exc.code)
+        if workspace_id != g.ws.id:
+            registry.discard_empty(g.ws.id)  # the empty one this visitor was handed a moment ago
+        g.new_credential = credential  # the response sets the cookie
+        return jsonify({"recovered": True, "phrase": fresh, "shown_once": True})
 
     @app.get("/healthz")
     def healthz():

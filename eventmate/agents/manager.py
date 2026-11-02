@@ -19,6 +19,7 @@ from collections.abc import Iterable, Sequence
 
 from pydantic import ValidationError
 
+from eventmate.planning import cities as city_aliases
 from eventmate.planning.community import load_profiles, match_subtype
 from eventmate.agents.budget import BudgetAgent
 from eventmate.agents.guest import GuestAgent, GuestRepository
@@ -96,7 +97,7 @@ _GUESTS = [
     re.compile(r"\bguests?(?:\s+count)?\s*(?:of|:|=)\s*(\d{1,12})\b", re.I | re.A),
 ]
 # Used only when no explicit "guests / people / pax" count exists, so "2 kids and 40 guests" is never read as a conflict.
-_GUESTS_GROUP = re.compile(r"(?<![\d,.])(\d{1,12})\s*-?\s*(?:friends|relatives|invitees?|colleagues|coworkers|classmates)\b", re.I | re.A)
+_GUESTS_GROUP = re.compile(r"(?<![\d,.])(\d{1,12})\s*-?\s*(?:friends|relatives|invitees?|colleagues|coworkers|classmates|students|members|residents)\b", re.I | re.A)
 _CITY_FALLBACK = re.compile(r"\b(?:in|at|near)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\b", re.A)
 _NOT_CITIES = frozenset({"rs", "inr", "the", "this", "our", "my", "a", "an"})
 _NEGATION = re.compile(r"\b(?:no|not|without|skip|exclude|excluding|never|don't|dont)\b", re.I | re.A)
@@ -282,7 +283,7 @@ def _parse_guests(text: str, problems: list[str]) -> int | None:
 
 def _parse_city(text: str, known: Iterable[str], problems: list[str]) -> str | None:
     cities = sorted({c for c in known if c}, key=lambda c: (-len(c), c))
-    found = set()
+    found = {m.group(1) for m in city_aliases.AFTER_PREPOSITION.finditer(text)}  # "Bangalore", "Bengaluru" and "BLR" are one place
     for city in cities:
         if re.search(rf"\b(?:in|at|near)\s+{re.escape(city)}\b", text, re.I | re.A):
             found.add(city)
@@ -296,10 +297,12 @@ def _parse_city(text: str, known: Iterable[str], problems: list[str]) -> str | N
     if not found:
         problems.append("city not found (e.g. 'in Pune')")
         return None
-    if len(found) > 1:
+    spellings = {city_aliases.canonical(c) for c in found}
+    if len(spellings) > 1:
         problems.append("multiple cities found: " + ", ".join(sorted(found)))
         return None
-    return next(iter(found))
+    (one,) = spellings
+    return next((c for c in cities if city_aliases.canonical(c) == one), one)  # the spelling the vendor data uses, when it has the city
 
 
 def _parse_event_type(text: str, assumptions: list[str]) -> tuple[EventType, CommunityDetails | None]:

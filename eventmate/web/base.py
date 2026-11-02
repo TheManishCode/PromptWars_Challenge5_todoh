@@ -22,8 +22,9 @@ import re
 from datetime import date
 from pathlib import Path
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 from eventmate.planning import intake
+from eventmate.planning.delta import EventDelta
 from eventmate.voice import audio as voice_audio
 from eventmate import transfer
 from eventmate.schemas import MAX_BUDGET_INR, MAX_MULTI_CITY_LEGS, HiddenCost, LedgerKind, ObservationSource, TradeoffOption, VendorCategory
@@ -100,6 +101,10 @@ UPLOAD_ROUTES = (
     (re.compile(r"/api/workspace/import"), transfer.MAX_ARCHIVE + 256 * 1024),  # an archive plus the multipart wrapper; the importer enforces the real 20 MB
 )
 log = logging.getLogger("eventmate.web")
+
+
+class NotOnSharedHost(Exception):
+    """A feature that makes the server act on an address or a mailbox the caller chose: only the owner of a local server may use it."""
 
 
 class _Strict(BaseModel):
@@ -378,6 +383,48 @@ class MultiCityBody(_Strict):
     cabin: Literal[CABINS] = "economy"
     max_stops: int | None = Field(default=None, ge=0, le=2)
     limit: int = Field(default=5, ge=1, le=10)
+
+
+class MissionStartBody(_Strict):
+    brief: str = Field(min_length=1, max_length=4000)
+    sender_name: str = Field(min_length=1, max_length=60)
+    categories: list[str] = Field(min_length=1, max_length=10)
+    source: str | None = Field(default=None, max_length=40)
+    limit: int = Field(default=10, ge=1, le=25)
+
+
+class ChangeBody(_Strict):
+    message: str = Field(min_length=1, max_length=2000)
+
+
+class ChangeApplyBody(_Strict):
+    delta: EventDelta
+    done: tuple[str, ...] = Field(default=(), max_length=20)  # tasks the user says are finished
+    in_flight: dict[str, int] = Field(default={}, max_length=20)  # tasks under way: minutes left
+
+    @field_validator("done")
+    @classmethod
+    def _done_ids(cls, v):
+        if not all(re.fullmatch(r"[a-z0-9_]{1,64}", t) for t in v):
+            raise ValueError("task ids are lowercase letters, digits and '_'")
+        return v
+
+    @field_validator("in_flight")
+    @classmethod
+    def _in_flight(cls, v):
+        for t, left in v.items():
+            if not re.fullmatch(r"[a-z0-9_]{1,64}", t) or isinstance(left, bool) or not 1 <= left <= 525_600:
+                raise ValueError("in_flight maps a task id to 1 to 525600 minutes left")
+        return v
+
+
+class WatchBody(_Strict):
+    subject: str = Field(pattern=r"^[A-Za-z0-9_:.-]{1,64}$")
+    url: str = Field(min_length=8, max_length=2048)
+    condition: Literal["change", "contains", "price_below"]
+    text: str | None = Field(default=None, min_length=1, max_length=80)
+    amount_inr: int | None = Field(default=None, ge=1, le=MAX_BUDGET_INR)
+    interval_minutes: int = Field(default=1440, ge=60, le=10_080)
 
 
 class ConfirmBody(_Strict):

@@ -33,7 +33,7 @@ def store(tmp_path):
     with sqlite3.connect(jobs.path) as db:
         for line in (FIXTURES / "jobs-v1.jsonl").read_text().splitlines():
             row = json.loads(line)
-            db.execute("INSERT INTO jobs VALUES (?,?,?,?,?)", (row["job_id"], row["status"], None, row["version"], line))
+            db.execute("INSERT INTO jobs (job_id, status, wake_at, version, data) VALUES (?,?,?,?,?)", (row["job_id"], row["status"], None, row["version"], line))
     return root
 
 

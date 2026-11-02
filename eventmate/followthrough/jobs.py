@@ -14,7 +14,8 @@ import json
 import os
 import sqlite3
 import threading
-from datetime import datetime, UTC
+import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 from collections.abc import Iterator
@@ -131,6 +132,10 @@ class JobStore:
         with self._db() as db:
             db.execute("CREATE TABLE IF NOT EXISTS jobs (job_id TEXT PRIMARY KEY, status TEXT NOT NULL, wake_at TEXT, version INTEGER NOT NULL, data TEXT NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, ts TEXT NOT NULL, actor TEXT NOT NULL, event TEXT NOT NULL, detail TEXT NOT NULL)")
+            have = {r[1] for r in db.execute("PRAGMA table_info(jobs)")}
+            for column in ("lease_id", "lease_until"):  # added to a database made before leases existed; the Job record itself is unchanged
+                if column not in have:
+                    db.execute(f"ALTER TABLE jobs ADD COLUMN {column} TEXT")
         for suffix in ("", "-wal", "-shm"):  # the job file holds vendor contacts and quotes: owner only
             with contextlib.suppress(OSError):
                 os.chmod(str(self.path) + suffix, 0o600)
@@ -150,7 +155,7 @@ class JobStore:
 
     def create(self, job: Job, now: datetime) -> Job:
         with self._lock, self._db() as db:
-            db.execute("INSERT INTO jobs VALUES (?,?,?,?,?)", (job.job_id, job.status, self._iso(job.wake_at), job.version, migrations.stamp("job", job.model_dump_json())))
+            db.execute("INSERT INTO jobs (job_id, status, wake_at, version, data) VALUES (?,?,?,?,?)", (job.job_id, job.status, self._iso(job.wake_at), job.version, migrations.stamp("job", job.model_dump_json())))
             db.execute("INSERT INTO events (job_id, ts, actor, event, detail) VALUES (?,?,?,?,?)", (job.job_id, self._iso(now), "system", "created", json.dumps({"goal": job.goal})))
         return job
 
@@ -187,6 +192,36 @@ class JobStore:
                 (self._iso(now), limit),
             ).fetchall()
         return [_load_job(r[0]) for r in rows]
+
+    # A lease says "one worker is running this job until ``lease_until``". It is separate from ``version`` (which guards what is written) because it guards what is
+    # done before the write: two workers that both read a job and both act on it would each queue a follow-up, and only the second save would be refused.
+    # Follows openmuse's worker (MIT): claim by compare-and-set on the lease, renew while working, release when done, and take over only when it has expired.
+
+    def claim(self, job_id: str, now: datetime, lease_s: float) -> str | None:
+        """Take the job if nobody holds it or the holder's lease has run out. Returns the lease id, or None when another worker has it."""
+        lease_id = uuid.uuid4().hex
+        with self._lock, self._db() as db:
+            cur = db.execute(
+                "UPDATE jobs SET lease_id=?, lease_until=? WHERE job_id=? AND status NOT IN ('done','expired','cancelled') AND (lease_id IS NULL OR lease_until IS NULL OR lease_until <= ?)",
+                (lease_id, self._iso(now + timedelta(seconds=lease_s)), job_id, self._iso(now)),
+            )
+            return lease_id if cur.rowcount == 1 else None
+
+    def renew(self, job_id: str, lease_id: str, now: datetime, lease_s: float) -> bool:
+        """Push the lease out, only while it is still ours (False means another worker took the job over: stop)."""
+        with self._lock, self._db() as db:
+            cur = db.execute("UPDATE jobs SET lease_until=? WHERE job_id=? AND lease_id=?", (self._iso(now + timedelta(seconds=lease_s)), job_id, lease_id))
+            return cur.rowcount == 1
+
+    def release(self, job_id: str, lease_id: str) -> bool:
+        with self._lock, self._db() as db:
+            cur = db.execute("UPDATE jobs SET lease_id=NULL, lease_until=NULL WHERE job_id=? AND lease_id=?", (job_id, lease_id))
+            return cur.rowcount == 1
+
+    def lease_of(self, job_id: str) -> tuple[str | None, str | None]:
+        with self._db() as db:
+            row = db.execute("SELECT lease_id, lease_until FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+        return (row[0], row[1]) if row else (None, None)
 
     def save(self, job: Job, actor: str, event: str, now: datetime, detail: dict | None = None) -> Job:
         """Compare-and-swap on ``version``: only the writer who read the latest version wins. Illegal status changes are refused."""

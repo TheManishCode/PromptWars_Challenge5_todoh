@@ -6,6 +6,8 @@
 pydantic==2.14.2
 ortools==9.15.6755
 flask==3.1.3
+langgraph==1.2.19  # MIT; the mission controller (ADR-059)
+langgraph-checkpoint-sqlite==3.1.3  # MIT; durable mission state
 pytest==9.1.1  # 8.4.1 has PYSEC-2026-1845 (fixed in 9.0.3); the suite runs on 9.1.1
 
 # optional

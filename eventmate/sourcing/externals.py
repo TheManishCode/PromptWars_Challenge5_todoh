@@ -12,6 +12,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 from collections.abc import Callable
 
+from eventmate.evidence.ledger import FactState
 from eventmate.jsonl import InterProcessLock, JsonlLog
 from eventmate.schemas import ExternalBusiness, VendorCategory, VendorRef, external_vendor_id, _EMAIL
 
@@ -35,9 +36,10 @@ def slug(text: str) -> str:
 
 
 class ExternalStore:
-    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
+    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(UTC), evidence=None):
         self.root = Path(root) / "externals"
         self.now = now
+        self.evidence = evidence  # an EvidenceLedger: what a listing says is written there as discovered
         self._lock = InterProcessLock(self.root / ".lock")
 
     def _file(self) -> _ExternalFile:
@@ -64,7 +66,12 @@ class ExternalStore:
                 vendor_id=vid, external_id=external_id, name=name, city=city, category=category, source=source, source_url=source_url, website=website,
                 rating=rating, is_test=source == "test", origin="test" if source == "test" else "discovered", owner_confirmed_by=owner_confirmed_by, created_at=self.now(),
             )
-            return self._file()._append(biz, vid)
+            self._file()._append(biz, vid)
+        if self.evidence is not None and not biz.is_test:  # a listing's words are discovered, never verified; a test vendor was not discovered
+            for field, value in (("name", biz.name), ("website", biz.website), ("rating", biz.rating)):
+                if value is not None:
+                    self.evidence.record(vid, field, value, FactState.DISCOVERED, f"tool:{biz.source}", biz.source_url)
+        return biz
 
     def set_website(self, vendor_id: str, url: str) -> ExternalBusiness:
         """A website the user typed for a business whose listing had none. It is marked as the user's, not the listing's."""

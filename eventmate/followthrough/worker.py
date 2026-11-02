@@ -9,7 +9,9 @@ confirming a claim needs the validity the user chooses; the vendor list can come
 
 from __future__ import annotations
 
+import contextlib
 import os
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -54,9 +56,35 @@ class _Tick:
 VendorSpec = Union[dict[str, tuple[str, str]], Sequence[str]]
 
 
+LEASE_S = 120.0  # how long a worker holds a job before another may take it over; the holder renews at a third of this while it works
+
+
 class JobWorker:
-    def __init__(self, em, store: JobStore, now: Callable[[], datetime] = _utcnow):
-        self.em, self.store, self.now = em, store, now
+    def __init__(self, em, store: JobStore, now: Callable[[], datetime] = _utcnow, lease_s: float = LEASE_S):
+        self.em, self.store, self.now, self.lease_s = em, store, now, lease_s
+
+    @contextlib.contextmanager
+    def _leased(self, job_id: str):
+        """Hold the job while it is worked on, renewing the lease from a side thread. Yields the job freshly read after the claim, or None when another worker holds it."""
+        lease = self.store.claim(job_id, self.now(), self.lease_s)
+        if lease is None:
+            yield None
+            return
+        stop = threading.Event()
+
+        def beat():
+            while not stop.wait(max(0.05, self.lease_s / 3)):
+                if not self.store.renew(job_id, lease, self.now(), self.lease_s):
+                    return  # taken over: the save will be refused if this worker is still running
+
+        t = threading.Thread(target=beat, name=f"lease-{job_id[:8]}", daemon=True)
+        t.start()
+        try:
+            yield self.store.get(job_id)  # read after the claim: another worker may have finished it between the due list and the claim
+        finally:
+            stop.set()
+            t.join(2)
+            self.store.release(job_id, lease)
 
     def _persist(self, job: Job, actor: str, event: str, now: datetime, detail: dict | None = None) -> Job:
         """Save the job, and write a digest to the in-app inbox if what the owner should know has changed."""
@@ -198,7 +226,10 @@ class JobWorker:
             report["errors"].append(f"poll: {type(exc).__name__}")
         for job in self.store.due(now, MAX_JOBS_PER_TICK):
             try:
-                self._run(job, now)
+                with self._leased(job.job_id) as held:
+                    if held is None or held.status in TERMINAL or held.wake_at is None or held.wake_at > now:
+                        continue  # another worker has it, or it was dealt with since the list was made
+                    self._run(held, now)
                 report["ran"].append(job.job_id)
             except StaleJob:
                 continue  # someone else (the user, another worker) changed it first; it is due again next tick
@@ -221,7 +252,10 @@ class JobWorker:
             if job.status in TERMINAL:
                 continue
             try:
-                self._run(job, self.now())
+                with self._leased(job.job_id) as held:
+                    if held is None:
+                        continue  # a worker is on it now; it will see the new plan version
+                    self._run(held, self.now())
                 ran.append(job.job_id)
             except StaleJob:
                 continue  # someone changed it first; the next tick sees the current state

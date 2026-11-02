@@ -16,6 +16,7 @@ Rules enforced here (and re-checked independently by the Validator):
 from __future__ import annotations
 
 import contextlib
+import re
 from datetime import date
 
 from pydantic import ValidationError
@@ -35,6 +36,7 @@ from eventmate.schemas import (
     BookingStatus,
     ConstraintCheck,
     ConstraintViolation,
+    ExtraTask,
     DecisionType,
     DiffItem,
     Disruption,
@@ -182,13 +184,92 @@ class ReplannerAgent:
     # ------------------------------------------------------------- replan
 
     def replan(self, plan_id: str, disruption: Disruption, today: date | None = None) -> ReplanOutcome:
+        return self._replan(plan_id, [disruption], today, {})
+
+    def repair(self, plan_id: str, delta, state, today: date | None = None) -> ReplanOutcome:
+        """Apply a confirmed change as ONE new version, with finished and under-way work held where it really is (architecture L5).
+
+        The same guards as ``replan`` apply (confirmed bookings, the validator, the hash chain): this is the same path with several changes folded together and
+        with the execution state turned into fixed starts. A task that is done or under way is pinned at the start it had in the parent version, so what follows it
+        waits for it and nothing is scheduled again that has already happened. A booking whose vendor is let go is void, so its pin is dropped. New tasks are
+        refused for now rather than silently left out."""
+        from eventmate.planning.delta import to_disruptions
+
+        parent = self.store.latest(plan_id)
+        rid = parent.request.request_id
+        start = len(self.logs.decisions.entry_ids)
+        try:
+            extras = self._extra_tasks(parent, delta)
+        except _Rejected as rej:
+            self._fail(rid, "Change refused: new tasks", [rej.violation])
+            return ReplanOutcome(status="failed", violations=(rej.violation,), decision_entry_ids=tuple(self.logs.decisions.entry_ids[start:]))
+        disruptions = to_disruptions(delta)
+        if not disruptions and not extras:
+            v = ConstraintViolation(constraint="empty_change", detail="the change has nothing to apply", repair="say what should change")
+            self._fail(rid, "Change refused: empty", [v])
+            return ReplanOutcome(status="failed", violations=(v,), decision_entry_ids=tuple(self.logs.decisions.entry_ids[start:]))
+        try:
+            pins = self._pins(parent, state, disruptions)
+        except _Rejected as rej:
+            self._fail(rid, "Change refused: execution state", [rej.violation])
+            return ReplanOutcome(status="failed", violations=(rej.violation,), decision_entry_ids=tuple(self.logs.decisions.entry_ids[start:]))
+        return self._replan(plan_id, disruptions, today, pins, extras)
+
+    def now_offset(self, parent: PlanVersion, today: date) -> int:
+        """Minutes from the plan's origin to the start of the working day today: nothing that has not happened can be scheduled before it."""
+        return max(0, (today - parent.origin.date()).days) * DAY + self.planner.scheduler.policy.work_start_hour * 60
+
+    @staticmethod
+    def _extra_tasks(parent: PlanVersion, delta) -> tuple[ExtraTask, ...]:
+        """The delta's new tasks as the request's extra tasks. Every one needs a length the user said, and may follow only tasks that are already in the plan."""
+        have = {t.id for t in parent.spec.tasks}
+        taken = {x.task_id for x in parent.request.extra_tasks}
+        out: list[ExtraTask] = []
+        for t in delta.add_tasks:
+            if t.duration_minutes is None:
+                raise _Rejected(ConstraintViolation(constraint="new_task_needs_a_length", detail=f"how long '{t.name}' takes was not said", repair="say how long it takes, then apply the change"))
+            unknown = [a for a in t.after if a not in have]
+            if unknown:
+                raise _Rejected(ConstraintViolation(constraint="unknown_task", detail=f"'{t.name}' comes after {', '.join(unknown)}, which is not in this plan", repair="name tasks from the current plan"))
+            slug = re.sub(r"[^a-z0-9]+", "_", t.name.casefold()).strip("_")[:30] or "task"
+            tid, n = f"extra_{slug}", 1
+            while tid in taken:
+                n += 1
+                tid = f"extra_{slug}_{n}"
+            taken.add(tid)
+            out.append(ExtraTask(task_id=tid, name=t.name, duration_minutes=t.duration_minutes, after=t.after, days_before_event=t.days_before_event))
+        return tuple(out)
+
+    def _pins(self, parent: PlanVersion, state, disruptions: list[Disruption]) -> dict[str, int]:
+        have = {i.task_id: i for i in parent.items}
+        unknown = sorted((set(state.done) | set(state.in_flight)) - set(have))
+        if unknown:
+            raise _Rejected(ConstraintViolation(constraint="unknown_task", detail=f"not tasks of this plan: {', '.join(unknown)}", repair="use task ids from the current plan"))
+        moving = any(d.kind == DisruptionKind.DATE_CHANGE for d in disruptions)
+        released = {d.vendor_id for d in disruptions if d.kind == DisruptionKind.VENDOR_CANCELLATION}
+        void = {BOOKING_TASK[s.category] for s in parent.selections if s.vendor_id in released and s.category in BOOKING_TASK}  # a cancelled vendor's booking is no longer done
+        pins: dict[str, int] = {}
+        for tid in sorted((set(state.done) | set(state.in_flight)) - void):
+            if moving and have[tid].group == "event_day":
+                raise _Rejected(ConstraintViolation(constraint="happened_cannot_move", detail=f"{tid} has already started or finished, so the event date cannot move", repair="keep the date, or say that the event-day work has not happened"))
+            pins[tid] = self._parent_start(parent, tid)
+        return pins
+
+    def _replan(self, plan_id: str, disruptions: list[Disruption], today: date | None, pins: dict[str, int], extras: tuple[ExtraTask, ...] = ()) -> ReplanOutcome:
         today = today or date.today()
         parent = self.store.latest(plan_id)
         start = len(self.logs.decisions.entry_ids)
         rid = parent.request.request_id
         try:
             try:
-                request, excluded, release, reason = self._apply(parent, disruption, today)
+                request, excluded, release, reason = parent.request, tuple(parent.excluded_vendor_ids), set(), []
+                for d in disruptions:  # each change builds on the one before; the reasons are joined
+                    request, excluded, release, why = self._apply(parent, d, today, request, excluded, release)
+                    reason.append(why)
+                if extras:
+                    request = request.with_changes(extra_tasks=tuple(request.extra_tasks) + extras)
+                    reason.append("added: " + ", ".join(f"{x.name} ({x.duration_minutes} min" + (f", {x.days_before_event} day(s) before)" if x.days_before_event else ", event day)") for x in extras))
+                reason = "; ".join(reason)
             except ValidationError as exc:  # e.g. a guest count outside a community event's attendance range
                 raise _Rejected(ConstraintViolation(
                     constraint="request_invalid", detail=str(exc.errors()[0]["msg"])[:300],
@@ -227,8 +308,9 @@ class ReplannerAgent:
             if c not in forced
         )
         origin = parent.origin
-        now_offset = max(0, (today - origin.date()).days) * DAY + self.planner.scheduler.policy.work_start_hour * 60
+        now_offset = self.now_offset(parent, today)
         fixed = {BOOKING_TASK[c]: self._parent_start(parent, BOOKING_TASK[c]) for c in forced}
+        fixed.update(pins)  # work that has happened or is under way stays where it was
         planned = self.planner.plan(request, guests, allocation, shortlists, origin, plan_id, forced=forced, fixed_starts=fixed, now_offset=now_offset, exclude_ids=excluded)
         if planned.draft is None:
             return self._unplannable(parent, forced, list(planned.violations), start, reason)
@@ -276,14 +358,15 @@ class ReplannerAgent:
             raise
         return None
 
-    def _apply(self, parent: PlanVersion, d: Disruption, today: date) -> tuple[EventRequest, tuple[str, ...], set[str], str]:
+    def _apply(self, parent: PlanVersion, d: Disruption, today: date, req: EventRequest | None = None, excluded: tuple[str, ...] | None = None,
+               release: set[str] | None = None) -> tuple[EventRequest, tuple[str, ...], set[str], str]:
         confirmed = {s.vendor_id for s in parent.selections if s.booking_status == BookingStatus.CONFIRMED}
         bogus = sorted(set(d.override_confirmed) - confirmed)
         if bogus:
             raise _Rejected(ConstraintViolation(constraint="invalid_override", detail=f"not confirmed bookings of this plan: {bogus}", repair="list only vendor ids that are currently confirmed"))
-        excluded = tuple(parent.excluded_vendor_ids)
-        release = set(d.override_confirmed)
-        req = parent.request
+        excluded = tuple(parent.excluded_vendor_ids) if excluded is None else excluded
+        release = set(release or ()) | set(d.override_confirmed)
+        req = parent.request if req is None else req
         if d.kind == DisruptionKind.VENDOR_CANCELLATION:
             vendor_id = d.vendor_id
             if vendor_id is None:

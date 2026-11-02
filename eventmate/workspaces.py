@@ -41,6 +41,25 @@ COOKIE_MAX_AGE = 365 * 24 * 3600  # longevity is the goal: a year, renewed on ev
 ID = re.compile(r"ws-[0-9a-f]{16}")
 CREDENTIAL = re.compile(r"[A-Za-z0-9_-]{32}")  # secrets.token_urlsafe(24); a cookie that does not look like one is never even hashed
 TOUCH_EVERY_S = 60
+RECOVERY_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford base32: no I, L, O or U, so a phrase read aloud or copied by hand survives
+RECOVERY_CHARS = 16  # 16 x 5 bits = 80 bits
+
+
+def new_recovery_phrase() -> str:
+    raw = "".join(secrets.choice(RECOVERY_ALPHABET) for _ in range(RECOVERY_CHARS))
+    return "-".join(raw[i:i + 4] for i in range(0, RECOVERY_CHARS, 4))
+
+
+def normalise_phrase(text: object) -> str | None:
+    """The phrase as 16 alphabet characters, forgiving about case, dashes, spaces and the look-alikes (O is 0, I and L are 1); None when it is not a phrase at all."""
+    if not isinstance(text, str) or len(text) > 40:
+        return None
+    t = re.sub(r"[\s-]", "", text).upper().replace("O", "0").replace("I", "1").replace("L", "1")
+    return t if len(t) == RECOVERY_CHARS and all(c in RECOVERY_ALPHABET for c in t) else None
+
+
+def _rhash(normalised: str) -> str:
+    return hashlib.sha256(b"recovery:" + normalised.encode("ascii")).hexdigest()
 
 
 class WorkspaceError(Exception):
@@ -85,6 +104,8 @@ class WorkspaceDirectory:
         self._lock = threading.Lock()
         with self._db() as db:
             db.execute("CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, cred_hash TEXT UNIQUE, created REAL NOT NULL, last_seen REAL NOT NULL)")
+            if "recovery_hash" not in {r[1] for r in db.execute("PRAGMA table_info(workspaces)")}:
+                db.execute("ALTER TABLE workspaces ADD COLUMN recovery_hash TEXT")  # added to a directory made before recovery phrases existed
         self.path.chmod(0o600)
 
     def _db(self):
@@ -131,6 +152,32 @@ class WorkspaceDirectory:
         with self._lock, self._db() as db:
             cur = db.execute("UPDATE workspaces SET cred_hash = ? WHERE id = ? AND cred_hash IS NOT NULL", (_hash(credential), workspace_id))
         return credential if cur.rowcount else None
+
+    def set_recovery(self, workspace_id: str) -> str | None:
+        """A new recovery phrase for an open workspace (the old one stops working); only its hash is kept. None for a revoked or unknown workspace."""
+        phrase = new_recovery_phrase()
+        with self._lock, self._db() as db:
+            cur = db.execute("UPDATE workspaces SET recovery_hash = ? WHERE id = ? AND cred_hash IS NOT NULL", (_rhash(normalise_phrase(phrase)), workspace_id))
+        return phrase if cur.rowcount else None
+
+    def has_recovery(self, workspace_id: str) -> bool:
+        with self._db() as db:
+            row = db.execute("SELECT recovery_hash FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
+        return bool(row and row[0])
+
+    def recover(self, phrase: object) -> tuple[str, str, str] | None:
+        """Use a phrase: (workspace id, a new credential, a new phrase), or None. The old credential and the used phrase stop working in the same step, so a phrase opens a
+        workspace once. A revoked workspace cannot be recovered: revoking means no credential, and this would make one."""
+        norm = normalise_phrase(phrase)
+        if norm is None:
+            return None
+        credential, fresh = secrets.token_urlsafe(24), new_recovery_phrase()
+        with self._lock, self._db() as db:
+            row = db.execute("SELECT id, recovery_hash FROM workspaces WHERE recovery_hash = ? AND cred_hash IS NOT NULL", (_rhash(norm),)).fetchone()
+            if row is None or not hmac.compare_digest(row[1], _rhash(norm)):
+                return None
+            db.execute("UPDATE workspaces SET cred_hash = ?, recovery_hash = ? WHERE id = ?", (_hash(credential), _rhash(normalise_phrase(fresh)), row[0]))
+        return row[0], credential, fresh
 
     def revoke(self, workspace_id: str) -> bool:
         """No credential opens the workspace any more. Its data stays until it is deleted."""
@@ -200,6 +247,8 @@ class WorkspaceRegistry:
         self._usage_cache: dict[str, tuple[float, int]] = {}
         self._global = WindowLimiter(create_per_hour, 3600.0)
         self._per_address = WindowLimiter(create_per_address_per_hour, 3600.0)
+        self._recover_address = WindowLimiter(10, 3600.0)  # 80 bits cannot be guessed, but nobody gets to try freely
+        self._recover_global = WindowLimiter(200, 3600.0)
 
     def home(self, workspace_id: str) -> Path:
         if not ID.fullmatch(workspace_id):
@@ -263,6 +312,27 @@ class WorkspaceRegistry:
 
     def rotate(self, workspace_id: str) -> str | None:
         return self.directory.rotate(workspace_id)
+
+    def set_recovery(self, workspace_id: str) -> str | None:
+        return self.directory.set_recovery(workspace_id)
+
+    def recover(self, address: str, phrase: object) -> tuple[str, str, str]:
+        """(workspace id, new credential, new phrase), or a WorkspaceError: 429 when this address or the server is trying too often, 404 for a phrase that opens nothing."""
+        if not self._recover_address.allow(address or "?") or not self._recover_global.allow("all"):
+            raise WorkspaceError(429, "recovery_rate_limited", "too many recovery attempts; try again later")
+        found = self.directory.recover(phrase)
+        if found is None:
+            raise WorkspaceError(404, "recovery_not_recognised", "that recovery phrase is not recognised")
+        return found
+
+    def discard_empty(self, workspace_id: str) -> bool:
+        """Drop a workspace that holds nothing (the throwaway one a visitor was given before they recovered their own). Refuses one with data."""
+        if self.has_data(workspace_id):
+            return False
+        with self._lock:
+            self._live.pop(workspace_id, None)
+        shutil.rmtree(self.home(workspace_id), ignore_errors=True)
+        return self.directory.forget(workspace_id)
 
     def revoke(self, workspace_id: str) -> bool:
         with self._lock:

@@ -7,6 +7,8 @@ pick writes, books, pays or sends anything. At most two model calls are made per
 
 from __future__ import annotations
 
+from eventmate import consumption
+
 import json
 import re
 from dataclasses import dataclass
@@ -146,7 +148,8 @@ def route(em, text: str, today: date, clients: list[Any]) -> Routed:
     attempts = (list(clients) * MAX_MODEL_CALLS)[:MAX_MODEL_CALLS] if len(clients) == 1 else list(clients)[:MAX_MODEL_CALLS]  # a lone provider gets one retry
     for client in attempts:
         try:
-            output = client.complete(system, user, MAX_TOKENS)
+            with consumption.stage("explore"):
+                output = client.complete(system, user, MAX_TOKENS)
         except LLMError as exc:
             problems.append(str(exc))
             continue

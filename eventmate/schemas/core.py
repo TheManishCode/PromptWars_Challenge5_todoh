@@ -291,6 +291,16 @@ class CommunityDetails(_Model):
         return self
 
 
+class ExtraTask(_Model):
+    """A step the organiser added to a plan ("a mehendi the night before"). It is part of the request, so the scheduler places it and the validator knows it is allowed."""
+
+    task_id: str = Field(pattern=r"^extra_[a-z0-9_]{1,50}$")
+    name: str = Field(min_length=1, max_length=80, pattern=r"^[^\x00-\x1f<>]+$")
+    duration_minutes: int = Field(ge=1, le=1440)
+    after: tuple[str, ...] = Field(default=(), max_length=10)  # ids of tasks that must finish first
+    days_before_event: int = Field(default=0, ge=0, le=60)  # 0 = on the event day, before it starts
+
+
 class EventRequest(_Model):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     raw_text: str = Field(min_length=1, max_length=2000)
@@ -312,6 +322,8 @@ class EventRequest(_Model):
     organizers: int = Field(default=1, ge=1, le=MAX_ORGANIZERS)
     # only for community events; everything the community hard checks compute from
     community: CommunityDetails | None = None
+    # steps the organiser added after the plan existed; empty for every plan made before this field (old stored plans load as they are)
+    extra_tasks: tuple[ExtraTask, ...] = Field(default=(), max_length=10)
 
     @property
     def planning_attendance(self) -> int:
@@ -322,6 +334,13 @@ class EventRequest(_Model):
     def with_changes(self, **changes) -> EventRequest:
         """Copy with changes, re-running validation (``model_copy`` would skip it)."""
         return EventRequest.model_validate({**self.model_dump(), **changes})
+
+    @model_validator(mode="after")
+    def _extra_task_ids_are_unique(self) -> EventRequest:
+        ids = [x.task_id for x in self.extra_tasks]
+        if len(set(ids)) != len(ids):
+            raise ValueError("extra task ids must be unique")
+        return self
 
     @model_validator(mode="after")
     def _venue_always_required(self) -> EventRequest:

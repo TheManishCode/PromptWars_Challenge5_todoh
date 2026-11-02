@@ -189,6 +189,8 @@ class ValidatorAgent:
             want["reminder_vendor_confirmation"] = (p.reminder_minutes, "organizer")
         for a in (d.request.community.program if d.request.community else ()):
             want[f"activity_{a.activity_id}"] = (a.minutes, f"res_{a.resource}")
+        for x in d.request.extra_tasks:
+            want[x.task_id] = (x.duration_minutes, "organizer")
         problems = []
         have = {t.id: (t.duration, t.resource) for t in d.spec.tasks}
         for tid, exp in want.items():
@@ -304,6 +306,15 @@ class ValidatorAgent:
             ok = all(s.end + p.setup_buffer_minutes <= ev.start for s in setups)
             out.append(_chk("setup_before_event", ok, f"all setups must end {p.setup_buffer_minutes} min before the event starts"))
             out.append(_chk("teardown_after_event", "teardown" in e and e["teardown"].start >= ev.end, "teardown starts after the event ends"))
+        for x in d.request.extra_tasks:
+            got = e.get(x.task_id)
+            if x.days_before_event and got is not None:
+                lo, hi = day0 - x.days_before_event * DAY, day0 - x.days_before_event * DAY + DAY
+                out.append(_chk(f"extra_task_day:{x.task_id}", lo <= got.start and got.end <= hi, f"'{x.name}' must fall on the day {x.days_before_event} day(s) before the event"))
+            elif got is not None and ev is not None:
+                out.append(_chk(f"extra_task_before_event:{x.task_id}", got.end + p.setup_buffer_minutes <= ev.start, f"'{x.name}' must end {p.setup_buffer_minutes} min before the event starts"))
+            else:
+                out.append(_chk(f"extra_task_scheduled:{x.task_id}", got is not None, f"'{x.name}' is scheduled"))
         wanted = {ReminderKind.INVITATION: "reminder_invitation", ReminderKind.VENDOR_CONFIRMATION: "reminder_vendor_confirmation"}
         items = {i.task_id for i in d.items}
         miss = [wanted[r] for r in d.request.reminders if wanted[r] not in items]

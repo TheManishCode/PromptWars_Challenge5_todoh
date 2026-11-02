@@ -8,6 +8,8 @@ no dropped vendor names, no markup/links) and every attempt is traced.
 
 from __future__ import annotations
 
+from eventmate import consumption
+
 import re
 import time
 
@@ -93,7 +95,8 @@ class ExplainerAgent:
         started = time.perf_counter()
         output, reason = "", None
         try:
-            output = self.llm.complete("You edit verified event plans without changing facts.", user, _MAX_TOKENS)
+            with consumption.stage("explain"):
+                output = self.llm.complete("You edit verified event plans without changing facts.", user, _MAX_TOKENS)
             reason = guard_rewrite(output, markdown, [s.name for s in plan.selections])
         except Exception as exc:  # any provider failure must degrade to deterministic text
             reason = redact_secrets(f"llm call failed: {type(exc).__name__}: {exc}")[:400]

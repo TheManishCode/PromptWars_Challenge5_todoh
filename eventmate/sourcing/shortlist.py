@@ -11,6 +11,9 @@ from datetime import datetime, UTC
 from pathlib import Path
 from collections.abc import Callable, Sequence
 
+import hashlib
+
+from eventmate.evidence.ledger import FactState
 from eventmate.jsonl import InterProcessLock, JsonlLog
 from eventmate.schemas import ContactCandidate, ShortlistEntry, VendorCategory
 
@@ -29,9 +32,10 @@ MAX_CANDIDATES_PER_BUSINESS = 5
 
 
 class ShortlistStore:
-    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
+    def __init__(self, root: Path, now: Callable[[], datetime] = lambda: datetime.now(UTC), evidence=None):
         self.root = Path(root) / "shortlist"
         self.now = now
+        self.evidence = evidence  # an EvidenceLedger: every address found is written there as discovered, under its own field
         self._lock = InterProcessLock(self.root / ".lock")
 
     def _entries(self, plan_id: str) -> _EntryFile:
@@ -79,6 +83,10 @@ class ShortlistStore:
                 seen.add(key)
                 added.append(cand)
                 room -= 1
+        if self.evidence is not None:
+            for c in added:  # one field per address, so several finds for one business do not overwrite each other; "email" is left for the one the user confirms
+                tag = hashlib.sha256(c.value.casefold().encode()).hexdigest()[:8]
+                self.evidence.record(vendor_id, f"{c.channel}_candidate:{tag}", c.value, FactState.DISCOVERED, "web:" + hashlib.sha256(c.source_url.encode()).hexdigest()[:16], c.source_url)
         return added
 
     def update(self, candidate_id: str, **changes) -> ContactCandidate:

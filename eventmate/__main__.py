@@ -17,6 +17,7 @@
     python -m eventmate multicity LEG LEG... [--json]   # LEG = ORIGIN,DEST,YYYY-MM-DD; built from separate one-way searches
     python -m eventmate outreach PLAN_ID CATEGORY {email|whatsapp} RECIPIENT --name NAME [--json]   # write a quote request and a link; you send it, nothing is sent
     python -m eventmate jobs [show|start|approve|confirm|reject|resolve|nudge|cancel|tick] ...   # follow-through jobs; `python -m eventmate.followthrough.worker --every 60` runs them
+    python -m eventmate mission {start BRIEF --name N --category C [--source S] | show ID | resume ID --decision FILE}   # brief to approved outreach; pauses for your answers
     python -m eventmate inbox [show|poll|approve|deny|autoreply|kill|resume] [PLAN_ID] [DRAFT_ID --hash H] [--watch SECONDS]   # the agent sends what you approve and reads replies
     python -m eventmate quotes {show VENDOR_ID | compare CATEGORY | score CATEGORY} [--json]   # recorded vendor quotes (record them via the web API)
 
@@ -45,7 +46,7 @@ from eventmate.integrations.discovery import DiscoveryError
 from eventmate.integrations.travel import TravelError, check_date
 from eventmate.integrations.weather import WeatherError
 
-COMMANDS = {"verify", "repair", "delete-plan", "purge-logs", "testvendor", "jobs", "inbox", "outreach", "plan", "confirm", "replan", "show", "diff", "validate", "list", "intake", "tradeoffs", "ledger", "quotes", "flights", "multicity", "discover", "weather", "deals"}
+COMMANDS = {"mission", "verify", "repair", "delete-plan", "purge-logs", "testvendor", "jobs", "inbox", "outreach", "plan", "confirm", "replan", "show", "diff", "validate", "list", "intake", "tradeoffs", "ledger", "quotes", "flights", "multicity", "discover", "weather", "deals"}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -123,6 +124,13 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--max-total", type=int, default=10, help="autoreply: automatic messages per plan (1-30)")
     p.add_argument("--off", action="store_true", help="autoreply: revoke the permission")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("mission", help="a graph that finds vendors, reads their public contacts, drafts requests and sends what you approve; it stops for your answers and resumes later")
+    p.add_argument("what", choices=["start", "show", "resume"])
+    p.add_argument("target", help="start: the brief; show and resume: the mission id")
+    p.add_argument("--name", help="start: your name, signed on the messages")
+    p.add_argument("--category", action="append", choices=[c.value for c in VendorCategory], help="start: a category to search (repeat for several)")
+    p.add_argument("--source", choices=["osm", "places"], default=None, help="start: where to search (default: the configured source)")
+    p.add_argument("--decision", type=Path, help="resume: a JSON file with your answer to the question the mission is waiting on")
     p = sub.add_parser("testvendor", help="add a TEST VENDOR whose email address is yours, to a plan's shortlist (never a discovered business)")
     p.add_argument("plan_id")
     p.add_argument("category", choices=[c.value for c in VendorCategory])
@@ -589,6 +597,29 @@ def _jobs(em: EventMate, a) -> int:
     return _jobs_list(em, a)
 
 
+def _mission(em: EventMate, a) -> int:
+    from eventmate.orchestration import MissionRunner
+
+    runner = MissionRunner(em, em.store.root / "missions.sqlite")
+    try:
+        if a.what == "start":
+            if not a.name or not a.category:
+                print("start needs --name and at least one --category", file=sys.stderr)
+                return 2
+            view = runner.start(a.target, a.name, a.category, today=a.today, source=a.source)
+        elif a.what == "resume":
+            if a.decision is None:
+                print("resume needs --decision FILE", file=sys.stderr)
+                return 2
+            view = runner.resume(a.target, json.loads(a.decision.read_text(encoding="utf-8")))
+        else:
+            view = runner.view(a.target)
+    finally:
+        runner.close()
+    print(view.model_dump_json(indent=2))
+    return {"waiting": 3, "failed": 3}.get(view.status, 0)  # 3: a decision is needed or the plan could not be made
+
+
 def _inbox_poll(em: EventMate, a) -> int:
     import time
 
@@ -753,7 +784,7 @@ _COMMANDS = {
     "intake": _intake, "plan": _plan, "tradeoffs": _tradeoffs, "ledger": _ledger, "quotes": _quotes, "outreach": _outreach, "inbox": _inbox, "jobs": _jobs,
     "delete-plan": _delete_plan, "verify": _verify, "repair": _repair, "purge-logs": _purge_logs, "testvendor": _testvendor, "flights": _travel,
     "multicity": _travel, "discover": _discover, "weather": _weather, "deals": _deals, "confirm": _confirm, "replan": _replan, "show": _show,
-    "diff": _diff, "validate": _validate,
+    "diff": _diff, "validate": _validate, "mission": _mission,
 }
 
 

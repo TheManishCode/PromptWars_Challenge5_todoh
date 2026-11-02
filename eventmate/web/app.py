@@ -52,7 +52,7 @@ from eventmate.web.base import (
     _PLAN_ID,
 )
 __all__ = ["AUDIO_UPLOAD_LIMIT", "GUEST_UPLOAD_LIMIT", "LOOPBACK", "STATIC_FILES", "VENDOR_FILES", "IntakeConfirmBody", "create_app"]  # what other modules and the tests import from here
-from eventmate.web.routes import assistant_plans, errors, ideas_sourcing, ledger_external, outreach_jobs, pages, plan_extras, plan_versions, voice_guests, workspace_ops
+from eventmate.web.routes import assistant_plans, changes, errors, evidence, ideas_sourcing, ledger_external, missions, outreach_jobs, pages, plan_extras, plan_versions, voice_guests, watches, workspace_ops
 
 
 def create_app(
@@ -346,8 +346,8 @@ def create_app(
         return f.stream.read(voice_audio.MAX_BYTES + 1), f.mimetype or ""
 
     # ---- the routes (eventmate/web/routes/*): registered once the helpers above exist
-    k = SimpleNamespace(P=P, _err=_err, asset_version=asset_version, assistant=assistant, audio_upload=audio_upload, body=body, em=em, heavy=heavy, local=local, lock=lock, metrics=metrics, no_body_or_empty_object=no_body_or_empty_object, out=out, pid=pid, plan_response=plan_response, poll_state=poll_state, registry=registry, shared=shared, started_at=started_at, stream_slots=stream_slots, today_fn=today_fn, transcriber=transcriber, version_arg=version_arg, voice_svc=voice_svc, workspace_limit=workspace_limit)
-    for module in (errors, pages, workspace_ops, assistant_plans, plan_extras, outreach_jobs, ideas_sourcing, voice_guests, ledger_external, plan_versions):
+    k = SimpleNamespace(P=P, _err=_err, caller=caller, asset_version=asset_version, assistant=assistant, audio_upload=audio_upload, body=body, em=em, heavy=heavy, local=local, lock=lock, metrics=metrics, no_body_or_empty_object=no_body_or_empty_object, out=out, pid=pid, plan_response=plan_response, poll_state=poll_state, registry=registry, shared=shared, started_at=started_at, stream_slots=stream_slots, today_fn=today_fn, transcriber=transcriber, version_arg=version_arg, voice_svc=voice_svc, workspace_limit=workspace_limit)
+    for module in (errors, pages, workspace_ops, assistant_plans, plan_extras, outreach_jobs, ideas_sourcing, voice_guests, ledger_external, plan_versions, missions, evidence, changes, watches):
         module.register(app, k)
 
 
