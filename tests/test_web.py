@@ -41,9 +41,10 @@ def plan_id(client):
 
 
 def test_index_and_assets_are_served(client):
-    for url, ctype in (("/", "text/html"), ("/static/arcade.js", "javascript"), ("/static/arcade.css", "text/css")):
+    for url, ctype in (("/", "text/html"), ("/app", "text/html"), ("/static/site.css", "text/css"), ("/static/app.js", "javascript"), ("/static/app.css", "text/css"),
+                       ("/static/landing.css", "text/css"), ("/static/landing.js", "javascript"), ("/static/landing-inter-400.ttf", "font/ttf")):
         r = client.get(url)
-        assert r.status_code == 200 and ctype in r.content_type
+        assert r.status_code == 200 and ctype in r.content_type, url
 
 
 def test_create_and_fetch_a_plan(client, plan_id):
@@ -138,7 +139,7 @@ def test_dns_rebinding_host_is_rejected(client):
 
 
 def test_security_headers_on_every_response(client):
-    for url in ("/", "/api/plans", "/static/arcade.js"):
+    for url in ("/", "/app", "/api/plans", "/static/app.js"):
         h = client.get(url).headers
         csp = h["Content-Security-Policy"]
         assert "default-src 'none'" in csp and "script-src 'self'" in csp and "'unsafe-inline'" not in csp and "frame-ancestors 'none'" in csp
@@ -286,38 +287,30 @@ def test_tradeoffs_need_csrf_and_valid_body(client):
     assert post(client, "/api/tradeoffs", {"request": tight(), "x": 1}).status_code == 422
 
 
-# ---- the attendant avatar (a CC-BY model drawn in the room): served, bounded, credited, and the CSP stays strict
+# ---- the pages: served, strict CSP, and the old 3D room is gone
 
-def test_avatar_assets_are_served_with_the_right_types_and_nothing_else_is(client):
-    glb = client.get("/static/avatar.glb")
-    assert glb.status_code == 200 and glb.content_type.startswith("model/gltf-binary") and glb.data[:4] == b"glTF" and len(glb.data) < 2_000_000
-    assert client.get("/static/model-viewer.min.js").status_code == 404 and client.get("/static/avatar.png").status_code == 404  # the classic page and its viewer are gone
+def test_the_old_room_assets_are_gone_and_its_address_still_leads_somewhere(client):
+    for name in ("arcade.js", "arcade.css", "arcade3d.js", "three.min.js", "avatar.glb", "cabinet.glb", "model-viewer.min.js"):
+        assert client.get(f"/static/{name}").status_code == 404, name
+    for old in ("/arcade", "/welcome"):
+        r = client.get(old)
+        assert r.status_code == 308 and r.headers["Location"].endswith("/"), old
 
 
-def test_the_csp_allows_only_what_the_room_needs_and_nothing_more(client):
+def test_the_pages_name_their_assets_by_version_and_only_serve_files_that_exist(client):
+    html = client.get("/app").get_data(as_text=True)
+    version = client.get("/").get_data(as_text=True).split('name="asset-version" content="')[1].split('"')[0]
+    assert f'/static/app.js?v={version}' in html and f'/static/site.css?v={version}' in html and "style=" not in html and " onclick=" not in html
+    assert client.get(f"/static/app.js?v={version}").headers["Cache-Control"] == "public, max-age=31536000, immutable"
+    assert client.get("/static/app.js").headers["Cache-Control"] == "no-cache"
+    assert client.get("/static/not-listed.js").status_code == 404
+
+
+def test_the_csp_allows_only_what_the_pages_need_and_nothing_more(client):
     csp = client.get("/").headers["Content-Security-Policy"]
-    assert "img-src 'self' data: blob:" in csp and "connect-src 'self' blob:" in csp and "default-src 'none'" in csp and "script-src 'self' 'wasm-unsafe-eval';" in csp
-    assert "style-src 'self';" in csp  # no hash and never unsafe-inline: the model viewer that needed one is gone
+    for needed in ("default-src 'none'", "script-src 'self';", "style-src 'self';", "img-src 'self' data:;", "media-src 'self';", "font-src 'self';", "connect-src 'self';"):
+        assert needed in csp, needed
+    assert "wasm-unsafe-eval" not in csp and "blob:" not in csp  # only the 3D room needed them
     for never in ("'unsafe-inline'", "'unsafe-eval'", "worker-src", "http:", "https:", "*", "child-src", "frame-src", "object-src"):
         assert never not in csp.replace("frame-ancestors 'none'", ""), never
     assert "frame-ancestors 'none'" in csp and "base-uri 'none'" in csp and "form-action 'none'" in csp
-
-
-def test_the_avatar_is_credited_in_the_page_and_the_files_match_the_credit():
-    import hashlib
-    import json
-    import re
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parents[1]
-    page = (root / "eventmate/web/static/arcade.html").read_text()
-    notes = (root / "docs/ATTRIBUTIONS.md").read_text()
-    assert "Polytoria Avatar V3" in page and "dantheman" in page and "CC BY 4.0" in page and 'rel="noopener noreferrer"' in page
-    for name in ("avatar.glb",):
-        digest = hashlib.sha256((root / "eventmate/web/static" / name).read_bytes()).hexdigest()
-        assert digest in notes, f"docs/ATTRIBUTIONS.md must record the SHA-256 of {name} (substituting a file must be visible)"
-    assert "creativecommons.org/licenses/by/4.0" in notes and "sketchfab.com/3d-models/polytoria-avatar-v3-pauly" in notes
-    glb = (root / "eventmate/web/static/avatar.glb").read_bytes()
-    clen = int.from_bytes(glb[12:16], "little")
-    meta = json.loads(glb[20:20 + clen])
-    assert "CC-BY-4.0" in meta["asset"]["extras"]["license"] and not re.search(r'"uri"\s*:\s*"(?!data:)', glb[20:20 + clen].decode("utf8", "ignore"))

@@ -35,8 +35,7 @@ from eventmate.wall.routes import Wall
 from eventmate.wall.store import WallConfig, WallStore
 from eventmate.web.base import (
     AUDIO_UPLOAD_LIMIT,
-    asset_base,
-    csp_for,
+    CSP,
     EmptyBody,
     GUEST_UPLOAD_LIMIT,
     HEAVY_MAX,
@@ -46,12 +45,11 @@ from eventmate.web.base import (
     STATIC_DIR,
     STATIC_FILES,
     UPLOAD_ROUTES,
-    VENDOR_FILES,
     VOICE_STREAMS_MAX,
     WORKSPACE_EXEMPT,
     _PLAN_ID,
 )
-__all__ = ["AUDIO_UPLOAD_LIMIT", "GUEST_UPLOAD_LIMIT", "LOOPBACK", "STATIC_FILES", "VENDOR_FILES", "IntakeConfirmBody", "create_app"]  # what other modules and the tests import from here
+__all__ = ["AUDIO_UPLOAD_LIMIT", "GUEST_UPLOAD_LIMIT", "LOOPBACK", "STATIC_FILES", "IntakeConfirmBody", "create_app"]  # what other modules and the tests import from here
 from eventmate.web.routes import assistant_plans, changes, errors, evidence, ideas_sourcing, ledger_external, missions, outreach_jobs, pages, plan_extras, plan_versions, voice_guests, watches, workspace_ops
 
 
@@ -269,7 +267,7 @@ def create_app(
 
     @app.after_request
     def headers(resp: Response) -> Response:
-        resp.headers["Content-Security-Policy"] = csp_for(asset_base())
+        resp.headers["Content-Security-Policy"] = CSP
         resp.headers["X-Content-Type-Options"] = "nosniff"
         resp.headers["Referrer-Policy"] = "no-referrer"
         resp.headers["X-Frame-Options"] = "DENY"
@@ -316,11 +314,11 @@ def create_app(
         return Response(model.model_dump_json(), code, mimetype="application/json")
 
     def asset_version() -> str:
-        """A short hash of every served file's name, size and time. The page names each script, style and model with it (``?v=``), so a changed file gets a new address:
-        a phone that cached last week's ``cabinet.glb`` under a one-hour rule showed the old, sideways cabinet beside new code written for the new one."""
+        """A short hash of every served file's name, size and time. The page names each script, style, image and video with it (``?v=``), so a changed file gets a new address:
+        a phone that cached last week's script under a one-hour rule would run it against this week's markup."""
         h = hashlib.sha256()
         for name in sorted(STATIC_FILES):
-            path = STATIC_DIR / ("vendor" if name in VENDOR_FILES else "") / name
+            path = STATIC_DIR / name
             try:
                 st = path.stat()
             except OSError:

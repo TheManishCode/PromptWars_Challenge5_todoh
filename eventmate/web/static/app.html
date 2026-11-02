@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planner - to;doh</title>
+<meta name="description" content="Describe an event in plain words. to;doh builds a plan with a budget and a timeline and shows it only after an independent validator has re-checked it.">
+<link rel="icon" href="/static/favicon.svg">
+<link rel="stylesheet" href="/static/site.css">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="app-body">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="app-bar">
+  <nav class="nav-grid" aria-label="Main">
+    <a class="brand" href="/">to;doh</a>
+    <span class="app-bar__title">Planner</span>
+    <div class="nav-cta">
+      <button type="button" class="btn btn--ghost btn--small" id="workspace-open" aria-haspopup="dialog">Workspace</button>
+    </div>
+  </nav>
+</header>
+
+<p class="sr-only" id="live" role="status" aria-live="polite"></p>
+
+<main id="main" class="app">
+  <noscript><p class="notice notice--warn">The planner needs JavaScript. The landing page and the API work without it.</p></noscript>
+
+  <section class="panel panel--brief" aria-labelledby="brief-heading">
+    <h1 id="brief-heading">Your event</h1>
+
+    <div class="field" id="plan-picker" hidden>
+      <label for="plan-select">Open an earlier plan</label>
+      <select id="plan-select"></select>
+    </div>
+
+    <form id="brief-form" novalidate>
+      <label for="brief-input">Describe your event</label>
+      <textarea id="brief-input" rows="5" maxlength="1900" placeholder="A 120-person engagement party in Pune on 12 December, budget 2 lakh, vegetarian"></textarea>
+      <p class="hint">Guests, city, date and budget are enough. Lakh and crore are fine.</p>
+      <div class="row">
+        <button type="submit" class="btn" id="read-brief">Read my brief</button>
+        <button type="button" class="btn btn--ghost" id="start-over">Start over</button>
+      </div>
+    </form>
+
+    <div id="understood" class="understood" aria-live="polite"></div>
+  </section>
+
+  <section class="panel panel--plan" aria-labelledby="plan-heading" tabindex="-1" id="plan-panel">
+    <h2 id="plan-heading" class="sr-only">Plan</h2>
+    <div id="plan-empty" class="empty">
+      <p class="empty__title">No plan yet</p>
+      <p>Describe your event first. You check what was understood, press Build my plan, and the plan appears here once it has passed every hard check.</p>
+    </div>
+    <div id="plan-view" hidden></div>
+  </section>
+</main>
+
+<dialog id="workspace-dialog" aria-labelledby="workspace-title">
+  <button type="button" class="btn btn--ghost btn--small dialog__close" id="workspace-close">Close</button>
+  <h2 id="workspace-title">Your workspace</h2>
+  <p id="workspace-mode" class="hint"></p>
+  <div class="dialog__actions">
+    <button type="button" class="btn btn--small" id="export-data">Export everything</button>
+  </div>
+  <div id="shared-only" hidden>
+    <h3>Recovery phrase</h3>
+    <p class="hint">Your workspace lives in this browser's cookie. A recovery phrase opens it from another browser if the cookie is lost. It is shown once and the server keeps only a hash.</p>
+    <div class="dialog__actions">
+      <button type="button" class="btn btn--small" id="phrase-make">Make a recovery phrase</button>
+    </div>
+    <p id="phrase-out" class="phrase" hidden></p>
+    <form id="recover-form" class="field" novalidate>
+      <label for="recover-input">Recover a workspace</label>
+      <input id="recover-input" type="text" autocomplete="off" spellcheck="false" maxlength="40" placeholder="XXXX-XXXX-XXXX-XXXX">
+      <button type="submit" class="btn btn--small btn--ghost">Recover</button>
+    </form>
+    <h3>Delete</h3>
+    <form id="delete-form" class="field" novalidate>
+      <label for="delete-input">Type delete to remove this workspace and everything in it</label>
+      <input id="delete-input" type="text" autocomplete="off" spellcheck="false" maxlength="10">
+      <button type="submit" class="btn btn--small btn--ghost">Delete workspace</button>
+    </form>
+  </div>
+  <p id="workspace-msg" class="hint" role="status"></p>
+</dialog>
+
+<footer class="site-footer">
+  <span class="footer-brand">to;doh &middot; the event planner</span>
+  <span class="footer-note">Early prototype. Vendor data is synthetic. Nothing is booked, sent or paid until you approve it.</span>
+  <a class="footer-link" href="/">About</a>
+</footer>
+
+<script src="/static/app.js" defer></script>
+</body>
+</html>

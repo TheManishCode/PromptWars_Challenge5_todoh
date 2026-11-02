@@ -1,0 +1,12 @@
+Third-party files served from this directory
+
+landing-instrument-serif.ttf   Instrument Serif. Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif).
+landing-inter-400.ttf          Inter. Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter).
+landing-inter-500.ttf          Inter (medium weight), same project and licence.
+
+Both are licensed under the SIL Open Font License, Version 1.1: https://openfontlicense.org
+The licence allows use, embedding, redistribution and modification, provided the copyright notice and licence travel with the fonts (this file) and the fonts
+are not sold on their own. The font files carry the same notices in their name tables.
+
+The landing page's hero poster and video (landing-poster.jpg, landing-hero.mp4) are NOT in the repository: their licence has not been confirmed. The page works
+without them. Put them back here (and take the two lines out of .gitignore) only once the right to publish them is confirmed.

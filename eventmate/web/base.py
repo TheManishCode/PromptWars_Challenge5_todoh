@@ -15,9 +15,7 @@ for concurrent mutation of the same plan.
 """
 
 from __future__ import annotations
-import json
 import logging
-import os
 import re
 from datetime import date
 from pathlib import Path
@@ -33,30 +31,17 @@ from eventmate.integrations.travel import CABINS
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_FILES = {
     "favicon.svg": "image/svg+xml",
-    "avatar.glb": "model/gltf-binary",  # the attendant in the room (docs/ATTRIBUTIONS.md)
-    # the /arcade page: a 3D cabinet scene
-    "cabinet.glb": "model/gltf-binary", "arcade.css": "text/css; charset=utf-8", "arcade.js": "text/javascript; charset=utf-8",
-    "arcade3d.js": "text/javascript; charset=utf-8", "three.min.js": "text/javascript; charset=utf-8", "CopyShader.js": "text/javascript; charset=utf-8",
-    "LuminosityHighPassShader.js": "text/javascript; charset=utf-8", "EffectComposer.js": "text/javascript; charset=utf-8", "RenderPass.js": "text/javascript; charset=utf-8",
-    "ShaderPass.js": "text/javascript; charset=utf-8", "MaskPass.js": "text/javascript; charset=utf-8", "UnrealBloomPass.js": "text/javascript; charset=utf-8",
-    "GLTFLoader.js": "text/javascript; charset=utf-8", "meshopt_decoder.js": "text/javascript; charset=utf-8",
-    # back-alley dressing for the /arcade room (attribution + licenses: docs/ATTRIBUTIONS.md)
-    "alley_van.glb": "model/gltf-binary", "alley_dumpster.glb": "model/gltf-binary", "alley_candy.glb": "model/gltf-binary",
-    "vend_nuka.glb": "model/gltf-binary", "vend_retro.glb": "model/gltf-binary",
-    "vend_cat.glb": "model/gltf-binary", "wall_mural.glb": "model/gltf-binary", "wall_posters.glb": "model/gltf-binary",
-    # the cabinet CRT's night road (car/road/barrier - attribution in docs/ATTRIBUTIONS.md)
-    "holo_table.glb": "model/gltf-binary", "secret_dossier.glb": "model/gltf-binary", "road.glb": "model/gltf-binary", "car.glb": "model/gltf-binary", "barrier.glb": "model/gltf-binary",
-    # the same models optimised for phones and small computers (textures <= 1024): tools/assets/optimize_models.sh
-    "cabinet.low.glb": "model/gltf-binary", "alley_van.low.glb": "model/gltf-binary", "alley_dumpster.low.glb": "model/gltf-binary", "alley_candy.low.glb": "model/gltf-binary", "vend_nuka.low.glb": "model/gltf-binary", "vend_retro.low.glb": "model/gltf-binary", "wall_mural.low.glb": "model/gltf-binary", "wall_posters.low.glb": "model/gltf-binary", "holo_table.low.glb": "model/gltf-binary", "secret_dossier.low.glb": "model/gltf-binary",
+    # the landing page (/) and the planner (/app); the look they share is site.css
+    "site.css": "text/css; charset=utf-8", "landing.css": "text/css; charset=utf-8", "landing.js": "text/javascript; charset=utf-8",
+    "app.css": "text/css; charset=utf-8", "app.js": "text/javascript; charset=utf-8",
+    # fonts and hero media served from this origin: the CSP allows no third party. The poster and the video are not in the repository (their licence is unconfirmed): without
+    # them the hero shows its plain gradient, and a file that is absent is a 404.
+    "landing-poster.jpg": "image/jpeg", "landing-hero.mp4": "video/mp4",
+    "landing-instrument-serif.ttf": "font/ttf", "landing-inter-400.ttf": "font/ttf", "landing-inter-500.ttf": "font/ttf",
 }
-# blob: (which only same-origin script can mint) is allowed for recordings and model textures instead of any external source, and wasm-unsafe-eval permits
-# WebAssembly compilation only, never string eval. Both were kept when the classic page and its model viewer (and the one style hash it needed) were removed;
-# neither has been shown to be unneeded by the room, so narrowing them is left until the real models have been run.
-LONG_CACHE = frozenset({"avatar.glb", "cabinet.glb", "three.min.js", "alley_van.glb", "alley_dumpster.glb", "alley_candy.glb", "vend_nuka.glb", "vend_retro.glb", "vend_cat.glb", "wall_mural.glb", "wall_posters.glb", "road.glb", "car.glb", "barrier.glb", "holo_table.glb", "secret_dossier.glb", "cabinet.low.glb", "alley_van.low.glb", "alley_dumpster.low.glb", "alley_candy.low.glb", "vend_nuka.low.glb", "vend_retro.low.glb", "wall_mural.low.glb", "wall_posters.low.glb", "holo_table.low.glb", "secret_dossier.low.glb"})  # large and unchanging: not re-sent on every page load
-# third-party files live in static/vendor/ but are served from the same flat /static/<name> URLs
-VENDOR_FILES = frozenset({"three.min.js", "CopyShader.js", "LuminosityHighPassShader.js", "EffectComposer.js", "RenderPass.js", "ShaderPass.js", "MaskPass.js", "UnrealBloomPass.js", "GLTFLoader.js", "meshopt_decoder.js"})
+LONG_CACHE = frozenset({"landing-poster.jpg", "landing-hero.mp4", "landing-instrument-serif.ttf", "landing-inter-400.ttf", "landing-inter-500.ttf"})  # large and unchanging: not re-sent on every page load
 GZIP_MIN = 1024  # below this the header overhead outweighs the saving
-GZIP_MAX = 6 * 1024 * 1024  # above this a file is sent as it is: the 55 MB cat machine would stall the request and sit in memory. Measured: the 3.6 MB mural shrinks 44% (3.6 -> 2.0 MB), the Hall table 50%; compression is done once per file and cached
+GZIP_MAX = 6 * 1024 * 1024  # above this a file (the hero video) is streamed as it is, with ETag and Range, never read whole into memory; compression is done once per file and cached
 _gzip_cache: dict[tuple, bytes] = {}  # (name, mtime_ns) -> compressed bytes; the file set is fixed and small
 WORKSPACE_EXEMPT = ("/api/owner/status", "/metrics", "/api/wall/")  # /api routes with their own authentication: no workspace is looked up or made for them
 # POST routes that send, or let something send later, through the owner's mailbox or gateway; refused for every guest workspace
@@ -66,28 +51,9 @@ SENDING_ROUTES = re.compile(
 )
 LOOPBACK = {"127.0.0.1", "localhost", "[::1]", "::1"}
 CSP = (
-    "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; "
-    "media-src 'self' blob:; connect-src 'self' blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self'; "
+    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 )
-
-
-def asset_base() -> str:
-    """The origin that holds the room's full-quality models (``EVENTMATE_ASSET_BASE``, a plain https origin or origin plus path, no query). Empty when unset or malformed:
-    the room then runs on the models in the repository (the light set), which is what a fresh checkout does."""
-    raw = os.environ.get("EVENTMATE_ASSET_BASE", "").strip().rstrip("/")
-    return raw if re.fullmatch(r"https://[A-Za-z0-9.-]+(?::\d{1,5})?(?:/[A-Za-z0-9._~/-]*)?", raw) else ""
-
-
-def csp_for(base: str) -> str:
-    """The page's policy; the one addition for a model host is permission to fetch from that single origin (``connect-src``), never to run script from it."""
-    if not base:
-        return CSP
-    origin = "/".join(base.split("/", 3)[:3])
-    return CSP.replace("connect-src 'self' blob:", f"connect-src 'self' blob: {origin}")
-
-
-# model name -> content-addressed file name on the model host (``tools/assets/publish_models.sh`` writes this); a changed model is a new name, so the host can cache it for good
-CDN_MODELS: dict[str, str] = {k: v["file"] for k, v in json.loads((Path(__file__).parent / "cdn_models.json").read_text(encoding="utf-8")).items()}
 HEAVY_MAX = 4  # concurrent network-bound searches
 _PLAN_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 GUEST_UPLOAD_LIMIT = 640 * 1024  # a 256 KB CSV can grow when JSON-escaped; the parser enforces the real 256 KB limit

@@ -28,3 +28,9 @@ deploy/prometheus/owner_token
 deploy/.env
 .hypothesis/
 .ruff_cache/
+solvers/
+# the docs are kept locally and not published for now
+docs/
+# media whose licence is not confirmed (see eventmate/web/static/LICENSES.txt); the pages work without them
+eventmate/web/static/landing-poster.jpg
+eventmate/web/static/landing-hero.mp4

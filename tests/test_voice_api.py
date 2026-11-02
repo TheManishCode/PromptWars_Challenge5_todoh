@@ -355,6 +355,8 @@ def test_the_retention_period_is_configurable_and_has_a_floor(em, monkeypatch):
     assert fresh.voice_notes.enabled is False
 
 
-def test_the_csp_allows_playing_back_a_recording_made_in_the_page_and_nothing_wider(rig):
+def test_the_csp_has_no_recorder_allowance_because_the_pages_have_no_recorder(rig):
+    """The 3D room recorded and played back audio in the page, which needed ``blob:`` for media. The landing page and the planner do not, so the policy does not allow it;
+    a page that records again must widen the policy on purpose, and this test is where that choice is seen."""
     csp = rig.client.get("/").headers["Content-Security-Policy"]
-    assert "media-src 'self' blob:" in csp and "default-src 'none'" in csp and "connect-src 'self' blob:" in csp and "unsafe-inline" not in csp
+    assert "media-src 'self';" in csp and "blob:" not in csp and "default-src 'none'" in csp and "connect-src 'self';" in csp and "unsafe-inline" not in csp

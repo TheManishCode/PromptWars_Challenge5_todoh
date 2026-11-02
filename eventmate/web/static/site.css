@@ -1,0 +1,63 @@
+/* to;doh - shared look: Instrument Serif display, Inter body, navy on white, pill actions.
+   Used by the landing page (/) and the planner (/app). Fonts are served from this origin (the CSP allows no third party);
+   Instrument Serif and Inter are SIL OFL, see docs/ATTRIBUTIONS.md */
+@font-face { font-family: 'Instrument Serif'; font-style: normal; font-weight: 400; font-display: swap; src: url(/static/landing-instrument-serif.ttf) format('truetype'); }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url(/static/landing-inter-400.ttf) format('truetype'); }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap; src: url(/static/landing-inter-500.ttf) format('truetype'); }
+
+:root {
+  --navy: #0f172a;
+  --muted: hsl(215, 25%, 32%);
+  --line: hsl(214, 32%, 88%);
+  --tint: hsl(210, 40%, 97%);
+  --black: #000000;
+  --white: #ffffff;
+  --ok: hsl(152, 55%, 24%);
+  --ok-bg: hsl(150, 50%, 94%);
+  --warn: hsl(32, 90%, 24%);
+  --warn-bg: hsl(40, 100%, 93%);
+  --bad: hsl(0, 65%, 33%);
+  --bad-bg: hsl(0, 85%, 96%);
+  --hero-bg: linear-gradient(160deg, hsl(205, 75%, 90%) 0%, hsl(215, 60%, 94%) 45%, hsl(38, 70%, 92%) 100%);  /* light, so the navy text stays readable when the hero poster and video are absent */
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { font-family: var(--font-body); font-weight: 400; color: var(--navy); background: var(--white); -webkit-font-smoothing: antialiased; }
+[hidden] { display: none !important; }
+
+.skip-link { position: absolute; left: -9999px; top: 0; background: var(--black); color: var(--white); padding: 10px 24px; border-radius: 0 0 9999px 0; z-index: 30; font-size: 14px; }
+.skip-link:focus { left: 0; }
+
+@keyframes fade-rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+
+/* navigation */
+.nav-grid { max-width: 1280px; margin: 0 auto; padding: 24px 32px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+.brand { font-family: var(--font-display); font-size: 30px; font-weight: 400; color: var(--navy); text-decoration: none; justify-self: start; line-height: 1; }
+.nav-links { display: flex; gap: 40px; list-style: none; justify-self: center; }
+.nav-links a { font-size: 14px; font-weight: 500; color: var(--navy); text-decoration: none; }
+.nav-links a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.nav-cta { justify-self: end; display: flex; gap: 12px; align-items: center; }
+
+/* pill buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--black); border-radius: 9999px; background-color: var(--black); color: var(--white); font-family: var(--font-body); font-weight: 500; text-decoration: none; cursor: pointer; transition: transform 0.3s ease-in-out; will-change: transform; }
+.btn:hover { transform: scale(1.03); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.btn--small { padding: 10px 24px; font-size: 14px; }
+.btn--hero { padding: 20px 56px; font-size: 16px; }
+.btn--ghost { background: transparent; color: var(--navy); border-color: var(--navy); }
+
+/* footer */
+.site-footer { max-width: 1280px; margin: 0 auto; padding: 24px 32px 40px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
+.footer-brand { font-family: var(--font-display); font-size: 20px; color: var(--navy); }
+.footer-link { color: var(--navy); font-weight: 500; text-decoration: none; }
+.footer-link:hover { text-decoration: underline; text-underline-offset: 4px; }
+
+/* focus */
+a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--navy); outline-offset: 3px; border-radius: 4px; }
+.btn:focus-visible { border-radius: 9999px; }
+
+@media (max-width: 900px) { .nav-links { display: none; } .nav-grid { grid-template-columns: 1fr auto; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .btn { transition: none; } .btn:hover { transform: none; } }

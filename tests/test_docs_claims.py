@@ -2,11 +2,16 @@
 
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def read(*parts):
-    return (ROOT.joinpath(*parts)).read_text(encoding="utf-8")
+    path = ROOT.joinpath(*parts)
+    if parts[0] == "docs" and not path.is_file():
+        pytest.skip("docs/ is not in this checkout (it is git-ignored for now)")  # the claims in the docs can only be checked where the docs are
+    return path.read_text(encoding="utf-8")
 
 
 def test_the_readme_does_not_call_stop_or_bounce_matching_authenticated():
@@ -16,9 +21,9 @@ def test_the_readme_does_not_call_stop_or_bounce_matching_authenticated():
         assert claim not in readme.lower()
 
 
-def test_the_room_never_calls_stop_or_bounce_matching_authenticated():
-    """The classic page (removed) said next to the do-not-contact list that neither is authenticated. The room has no such list, so the claim that must hold is the negative one."""
-    js = read("eventmate", "web", "static", "arcade.js").lower()
+def test_the_pages_never_call_stop_or_bounce_matching_authenticated():
+    """Neither the landing page nor the planner has a do-not-contact list, so the claim that must hold is the negative one."""
+    js = "".join(read("eventmate", "web", "static", n).lower() for n in ("app.js", "app.html", "landing.html"))
     for claim in ("verified stop", "authenticated stop", "authenticated bounce", "verified bounce", "confirmed by the mail server"):
         assert claim not in js
 

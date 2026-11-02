@@ -6,8 +6,8 @@ test:
 lint:
 	python -m pyflakes eventmate tests
 	ruff check eventmate tests tools
-	node --check eventmate/web/static/arcade.js
-	node --check eventmate/web/static/arcade3d.js
+	node --check eventmate/web/static/app.js
+	node --check eventmate/web/static/landing.js
 security:
 	python -m bandit -q -r eventmate -ll
 check: lint security test

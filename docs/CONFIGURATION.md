@@ -11,7 +11,6 @@
 | `EVENTMATE_WEB_TOKEN` | Bearer token required for the API (mandatory for non-loopback binds) |
 | `EVENTMATE_OWNER_EMAILS` | Comma-separated list of the only addresses the owner digest may be sent to (unset: any address the caller proposes). **Set it on any installation that someone other than you can reach**: the confirmation code is returned to whoever proposes the address, so it does not prove who owns it (F-009) |
 | `EVENTMATE_FD`, `EVENTMATE_VAL` | Paths to Fast Downward / VAL if not in the default locations |
-| `EVENTMATE_ASSET_BASE` | An https origin (for example a public Cloudflare R2 bucket) that holds the room's full-quality models, named by `eventmate/web/cdn_models.json`. The page then asks that origin for them and the CSP's `connect-src` allows exactly it. Unset (a fresh checkout): the room runs on the light models in the repository. Publish with `tools/assets/publish_models.sh` |
 | `NVIDIA_API_KEY`, `OPENROUTER_API_KEY` (`EVENTMATE_ENABLE_LLM=0` turns models off) | Models: NVIDIA for heavy work, OpenRouter free models for light work and as backup; no SDK needed |
 
 Secrets are only read from the environment and never written to disk or logs.

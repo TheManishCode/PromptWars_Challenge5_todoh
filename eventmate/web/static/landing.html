@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>to;doh - every event, beautifully planned</title>
+<meta name="description" content="to;doh turns a plain-language brief into a plan with a budget, a timeline and a vendor checklist, and shows it only after an independent validator has re-checked every hard constraint.">
+<link rel="icon" href="/static/favicon.svg">
+<link rel="stylesheet" href="/static/site.css">
+<link rel="stylesheet" href="/static/landing.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-nav">
+  <nav class="nav-grid" aria-label="Main">
+    <a class="brand" href="/">to;doh</a>
+    <ul class="nav-links">
+      <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="#verified">Verified</a></li>
+      <li><a href="#evidence">Evidence</a></li>
+      <li><a href="#follow-through">Follow-through</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a class="btn btn--small" href="/app">Plan my event</a>
+    </div>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="hero" aria-label="Introduction">
+    <div class="hero__media" aria-hidden="true">
+      <img class="hero__poster" src="/static/landing-poster.jpg" alt="">
+      <video class="hero__video" autoplay muted loop playsinline preload="metadata" poster="/static/landing-poster.jpg">
+        <source src="/static/landing-hero.mp4" type="video/mp4">
+      </video>
+      <div class="hero__scrim"></div>
+    </div>
+    <div class="hero__content">
+      <h1 class="rise rise--1">Every event,<br><em>beautifully</em> planned.</h1>
+      <p class="rise rise--2">to;doh turns a plain-language brief into a plan with a budget, a timeline and a vendor checklist. It shows you a plan only after an independent validator has re-checked every hard constraint. Weddings, birthdays, college fests and community events.</p>
+      <div class="rise rise--3 hero__actions">
+        <a class="btn btn--hero" href="/app">Start planning</a>
+      </div>
+      <p class="rise rise--3 hero__note">Early prototype. Vendor data is synthetic. Nothing is booked, sent or paid until you approve it.</p>
+    </div>
+  </section>
+
+  <section id="how-it-works" class="section" aria-labelledby="how-heading">
+    <h2 id="how-heading">How it works</h2>
+    <ol class="steps">
+      <li>
+        <h3>Describe your event</h3>
+        <p>Write it the way you would tell a friend. to;doh reads guests, city, date and budget, including lakh and crore, and asks for one missing detail at a time.</p>
+      </li>
+      <li>
+        <h3>Check the brief</h3>
+        <p>Review what it understood before anything runs. Nothing is planned until you press Build my plan.</p>
+      </li>
+      <li>
+        <h3>Get the dossier</h3>
+        <p>Overview, timeline, vendors, budget and evidence come back together. Describe a change in your own words, check what it understood, and it replans without moving what you have confirmed.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section id="verified" class="section section--tint" aria-labelledby="verified-heading">
+    <h2 id="verified-heading">The model suggests. Code decides.</h2>
+    <p class="lede">Language models read your brief, word explanations and suggest ideas. They never decide a price, an availability, a capacity or whether a plan is valid.</p>
+    <div class="features">
+      <div class="feature">
+        <h3>Constraint-solved schedule</h3>
+        <p>A CP-SAT solver builds the timeline and cross-checks it symbolically. When constraints conflict it names the conflict.</p>
+      </div>
+      <div class="feature">
+        <h3>Independent validator</h3>
+        <p>No plan version exists unless the validator, which re-derives every fact from the data, passes it.</p>
+      </div>
+      <div class="feature">
+        <h3>Priced trade-offs</h3>
+        <p>When a brief cannot work, you get ranked options such as shifting the date or rebalancing the budget, instead of a quietly bent rule.</p>
+      </div>
+      <div class="feature">
+        <h3>Immutable versions</h3>
+        <p>Every change is a new hash-checked version with a diff: what was added, removed, changed and preserved.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="evidence" class="section" aria-labelledby="evidence-heading">
+    <h2 id="evidence-heading">Every fact says how far to trust it</h2>
+    <p class="lede">Six explicit states, shown next to each fact. A model can only suggest. Only you can confirm or book. Only code can verify.</p>
+    <ol class="ladder">
+      <li><strong>Suggested</strong><span>A model's idea. Never feeds a hard constraint.</span></li>
+      <li><strong>Discovered</strong><span>A listing or page says it exists.</span></li>
+      <li><strong>Extracted</strong><span>A value read from a page or reply, not yet reviewed.</span></li>
+      <li><strong>Confirmed</strong><span>You said it is right.</span></li>
+      <li><strong>Verified</strong><span>Confirmed, then re-checked by code.</span></li>
+      <li><strong>Booked</strong><span>You state it is booked. The plan holds it in place.</span></li>
+    </ol>
+  </section>
+
+  <section id="follow-through" class="section section--tint" aria-labelledby="follow-heading">
+    <h2 id="follow-heading">It can write to vendors. You approve every word.</h2>
+    <div class="features features--three">
+      <div class="feature">
+        <h3>Find vendors</h3>
+        <p>Finds businesses and public contact details from their own pages. You review and confirm each address. A do-not-contact list covers every plan.</p>
+      </div>
+      <div class="feature">
+        <h3>Hash-approved messages</h3>
+        <p>Email or WhatsApp, sent only after you approve the exact text. Replies are read as untrusted text, never as instructions.</p>
+      </div>
+      <div class="feature">
+        <h3>Quotes and jobs</h3>
+        <p>"Get three comparable quotes by Friday": claims you confirm, expiry dates, hidden-cost flags and a transparent vendor score.</p>
+      </div>
+    </div>
+    <p class="aside">Vendor outreach runs through the API and the command line today; the planner screen shows your plan, its evidence and your changes. Each visitor gets an anonymous workspace, and you can export or delete it.</p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <span class="footer-brand">to;doh &middot; the event planner</span>
+  <span class="footer-note">Early prototype. Vendor data is synthetic seed data, not real prices or availability.</span>
+  <a class="footer-link" href="/app">Open the planner</a>
+</footer>
+
+<script src="/static/landing.js" defer></script>
+</body>
+</html>

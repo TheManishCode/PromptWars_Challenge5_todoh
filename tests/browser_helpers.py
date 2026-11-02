@@ -1,4 +1,4 @@
-"""Shared pieces for the browser tests of the arcade page: one Chromium recipe, an axe-core runner, and a contrast meter that reads real pixels.
+"""Shared pieces for the browser tests of the pages: one Chromium recipe, an axe-core runner, and a contrast meter that reads real pixels.
 
 axe-core cannot decide text contrast over a canvas or a gradient (it reports "incomplete"), so ``measure_contrast`` does what a person looks at: it hides each
 text element's own ink, takes a screenshot, and compares the element's colour with the pixels that were behind it.
@@ -10,8 +10,7 @@ import shutil
 from pathlib import Path
 
 CHROMIUM = shutil.which("chromium") or shutil.which("google-chrome-stable")
-GL_ARGS = ["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]
-NOGL_ARGS = ["--no-sandbox", "--disable-3d-apis", "--disable-gpu"]
+BROWSER_ARGS = ["--no-sandbox", "--disable-gpu"]
 
 VENDOR = Path(__file__).resolve().parent / "vendor"
 AXE_JS = VENDOR / "axe.min.js"

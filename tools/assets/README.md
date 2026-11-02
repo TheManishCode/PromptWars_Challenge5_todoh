@@ -1,6 +1,0 @@
-# Room models: two sizes, made by a script, originals untouched
-
-`optimize_models.sh SRC OUT` writes `<name>.glb` (high: textures at most 2048 px) and `<name>.low.glb` (low: at most 1024 px) for every model of the room, WebP, pruned. It needs node and `npm i @gltf-transform/cli sharp` in a scratch directory (not a project dependency) and the original `.glb` files. `build_manifest.py ORIGINALS` then records every shipped file with its own hash, the original's hash, its licence and what was done to it in `eventmate/web/vendor_manifest.json`; `tests/test_vendor_manifest.py` fails if a file changes without that.
-The cat vending machine (CC BY-NC-ND, no derivatives) is never processed and is not committed: copy the original to `eventmate/web/static/vend_cat.glb`.
-Measured (this machine, 2026-11-01): the ten processed models were 154 MB of originals and are 15.6 MB (high) and 9.6 MB (low). GPU memory falls roughly four-fold from high to low, and by about a tenth from the originals' 4096 px textures; those are texture-size arithmetic, not a measurement on a phone.
-Not done: KTX2/Basis texture compression and Draco or meshopt geometry (the vendored GLTFLoader reads the extensions but no decoder is vendored); a build step that runs this in CI.
