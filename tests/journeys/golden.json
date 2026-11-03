@@ -535,5 +535,34 @@
    ],
    "ready": true
   }
+ },
+ {
+  "id": "c15",
+  "kind": "change",
+  "base": "p01",
+  "text": "ab 80 log honge",
+  "expect": {
+   "set_guest_count": 80
+  }
+ },
+ {
+  "id": "c16",
+  "kind": "change",
+  "base": "p01",
+  "text": "budget 1.5 lakh kar do",
+  "expect": {
+   "set_budget_inr": 150000
+  }
+ },
+ {
+  "id": "c17",
+  "kind": "change",
+  "base": "p01",
+  "text": "caterer ne mana kar diya",
+  "expect": {
+   "cancel_vendor_categories": [
+    "caterer"
+   ]
+  }
  }
 ]

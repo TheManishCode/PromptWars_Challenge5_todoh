@@ -31,7 +31,7 @@ PROMPT_ID = "delta.extract"
 MAX_MESSAGE_CHARS = 2000
 ALLOWED = ("cancel_vendor", "set_budget_inr", "set_guest_count", "set_date", "add_tasks")  # a key outside this list is dropped, not obeyed
 _FENCE = re.compile(r"<<<[A-Z]+|[A-Z]+>>>")
-_CANCEL = re.compile(r"\b(?:cancel(?:led|ed|s)?|pull(?:ed)?\s+out|dropp?ed\s+out|backed\s+out|back(?:s|ing)?\s+out|no\s+longer\s+(?:available|coming)|unavailable|can'?t\s+make\s+it|won'?t\s+be\s+able)\b", re.I)
+_CANCEL = re.compile(r"\b(?:cancel(?:led|ed|s)?|pull(?:ed)?\s+out|dropp?ed\s+out|backed\s+out|back(?:s|ing)?\s+out|mana\s+kar\s+(?:diya|di)|nahi\s+aa\s+(?:sakta|sakte|payega|payenge)|no\s+longer\s+(?:available|coming)|unavailable|can'?t\s+make\s+it|won'?t\s+be\s+able)\b", re.I)
 _DURATION = re.compile(r"(\d{1,3})\s*(h(?:ours?|rs?)?|min(?:ute)?s?)\b", re.I)
 
 
