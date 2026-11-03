@@ -3,6 +3,8 @@
    and there are no inline handlers or styles (the CSP forbids them; styles are set through the CSSOM). */
 (function () {
   'use strict';
+  /* lite (?lite=1 or the browser's data-saver): no animation, same content */
+  if (/[?&]lite=1\b/.test(location.search) || (navigator.connection && navigator.connection.saveData)) document.documentElement.classList.add('lite');
 
   var $ = function (s, c) { return (c || document).querySelector(s); };
   var $$ = function (s, c) { return Array.prototype.slice.call((c || document).querySelectorAll(s)); };

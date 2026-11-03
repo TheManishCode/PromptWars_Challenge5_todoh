@@ -334,3 +334,6 @@ dialog.dlg::backdrop { background: rgba(0,0,0,.6); }
 .b--cal > .cal { position: absolute; inset: 0; }
 .places--scroll { max-height: 196px; overflow-y: auto; scrollbar-width: thin; padding-right: 2px; }
 .b--venue .wide, .b--cat .wide, .b--photo .wide { margin-top: 10px; height: 36px; }
+
+.lite *, .lite *::before, .lite *::after { transition: none !important; animation: none !important; }
+.lite .rise, .lite .site-nav, .lite .sheet.drop { opacity: 1; transform: none; }

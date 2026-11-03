@@ -287,3 +287,14 @@ def test_a_quote_file_added_to_a_vendor_event_shows_its_lines_as_extracted_and_u
     page.keyboard.press("Escape")
     seen[:] = [s for s in seen if "422" not in s]  # the refusal above is a deliberate 422
     clean(page, ctx, seen)
+
+
+def test_lite_mode_drops_the_video_and_every_animation_and_still_passes_axe(server, ctx):
+    url, _ = server
+    for path in ("/?lite=1", "/app?lite=1"):
+        page, seen = opened(ctx, url + path)
+        assert page.evaluate("document.documentElement.classList.contains('lite')")
+        assert page.locator("video").count() == 0
+        assert page.evaluate("document.getAnimations().filter(a => a.playState === 'running').length") == 0
+        assert axe_violations(page) == [] and seen == []
+        page.close()

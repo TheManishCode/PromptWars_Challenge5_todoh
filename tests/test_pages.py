@@ -213,3 +213,11 @@ def test_an_idle_stream_lets_go_after_the_start_wait_not_the_full_minute(tmp_pat
     started = time.perf_counter()
     got = events(c.get("/api/pulse/stream", buffered=False))
     assert [n for n, _ in got][-1] == "timeout" and time.perf_counter() - started < 5  # seconds, where a run that never starts used to hold the connection for a minute
+
+
+def test_lite_mode_is_wired_in_both_pages_and_needs_no_inline_script():
+    for js, css in (("landing.js", "landing.css"), ("app.js", "app.css")):
+        assert "lite=1" in (STATIC / js).read_text() and "classList.add('lite')" in (STATIC / js).read_text()
+        assert ".lite *" in (STATIC / css).read_text() and "animation: none" in (STATIC / css).read_text()
+    assert "saveData" in (STATIC / "landing.js").read_text() and "deviceMemory" in (STATIC / "landing.js").read_text()
+    assert "<script>" not in (STATIC / "landing.html").read_text() and "<script>" not in (STATIC / "app.html").read_text()

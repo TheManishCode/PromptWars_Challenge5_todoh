@@ -174,3 +174,6 @@
   html { scroll-behavior: auto; }
   .rise, .site-nav { animation: none; opacity: 1; transform: none; }
 }
+
+.lite *, .lite *::before, .lite *::after { transition: none !important; animation: none !important; }
+.lite .rise, .lite .site-nav, .lite .sheet.drop { opacity: 1; transform: none; }
