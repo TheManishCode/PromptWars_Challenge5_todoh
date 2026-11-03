@@ -475,5 +475,65 @@
     "guest_count"
    ]
   }
+ },
+ {
+  "id": "b25",
+  "kind": "brief",
+  "text": "Pune mein 120 logon ki shaadi 12 December ko, budget 2 lakh rupaye, shakahari khana",
+  "expect": {
+   "guest_count": 120,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000,
+   "dietary": [
+    "vegetarian"
+   ],
+   "ready": true
+  }
+ },
+ {
+  "id": "b26",
+  "kind": "brief",
+  "text": "Mumbai me 50 log ka birthday party 20 December, budget 80 hazaar, veg",
+  "expect": {
+   "guest_count": 50,
+   "city": "Mumbai",
+   "event_date": "2026-12-20",
+   "budget_total": 80000,
+   "dietary": [
+    "vegetarian"
+   ],
+   "ready": true
+  }
+ },
+ {
+  "id": "b27",
+  "kind": "brief",
+  "text": "Hume Bangalore mein 200 mehmaan ke liye reception karni hai 15 December ko, 5 lakh ka budget, jain khana",
+  "expect": {
+   "guest_count": 200,
+   "city": "Bengaluru",
+   "event_date": "2026-12-15",
+   "budget_total": 500000,
+   "dietary": [
+    "jain"
+   ],
+   "ready": true
+  }
+ },
+ {
+  "id": "b28",
+  "kind": "brief",
+  "text": "30 guests in Delhi on 5 January, budget 80 thousand, veg",
+  "expect": {
+   "guest_count": 30,
+   "city": "Delhi",
+   "event_date": "2027-01-05",
+   "budget_total": 80000,
+   "dietary": [
+    "vegetarian"
+   ],
+   "ready": true
+  }
  }
 ]

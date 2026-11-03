@@ -85,22 +85,23 @@ _DIGIT_RUN = re.compile(r"\d+")  # unicode \d: any decimal digit, including Deva
 _NUM = r"\d{1,3}(?:,\d{2,3})+(?:\.\d+)?|\d+(?:\.\d+)?"
 _MONEY = re.compile(
     rf"(?:budget(?:\s+(?:of|is|to|now|at|around|about))*[\s:]*)?(?:(?P<cur>inr|rs\.?|₹|rupees)\s*)?(?<![\d,.])(?P<num>{_NUM})"
-    r"(?:\s*(?P<unit>lakhs?|lacs?|crores?|cr|k|l)\b)?(?:\s*(?P<cur2>inr|rs|rupees)\b)?",
+    r"(?:\s*(?P<unit>lakhs?|lacs?|crores?|cr|k|l|thousand|ha[zj]aa?r)\b)?(?:\s*(?P<cur2>inr|rs|rupees?|rupaye|rupay[ae])\b)?",
     re.I,
 )
 _ORGANIZERS = re.compile(r"(?<![\d,.])(\d{1,3})\s*-?\s*(?:organi[sz]ers?|coordinators?|planners?)\b", re.I | re.A)
 _BUDGET_WORD = re.compile(r"budget", re.I | re.A)
-_UNIT = {"k": 1_000, "lakh": 100_000, "lac": 100_000, "crore": 10_000_000, "cr": 10_000_000, "l": 100_000}
+_UNIT = {"k": 1_000, "lakh": 100_000, "lac": 100_000, "crore": 10_000_000, "cr": 10_000_000, "l": 100_000,
+         "thousand": 1_000, "hazaar": 1_000, "hazar": 1_000, "hajaar": 1_000, "hajar": 1_000}
 
 _GUESTS = [
-    re.compile(r"(?<![\d,.])(\d{1,12})\s*-?\s*(?:person|persons|people|guests?|pax|attendees?)\b", re.I | re.A),
+    re.compile(r"(?<![\d,.])(\d{1,12})\s*-?\s*(?:person|persons|people|guests?|pax|attendees?|log|logon|logo|mehmaan|mehman|aadmi)\b", re.I | re.A),
     re.compile(r"\bguests?(?:\s+count)?\s*(?:of|:|=)\s*(\d{1,12})\b", re.I | re.A),
 ]
 # Used only when no explicit "guests / people / pax" count exists, so "2 kids and 40 guests" is never read as a conflict.
 _GUESTS_GROUP = re.compile(r"(?<![\d,.])(\d{1,12})\s*-?\s*(?:friends|relatives|invitees?|colleagues|coworkers|classmates|students|members|residents)\b", re.I | re.A)
 # "a wedding for 120": a headcount with no noun, used only when nothing says guests, people or pax. Not "for 2 lakh", "for 12 Dec" or "for 3 days".
 _GUESTS_FOR = re.compile(
-    r"\bfor\s+(?:about\s+|around\s+|approx(?:imately)?\s+|nearly\s+)?(\d{1,5})(?!\d|[,.]\d|\s*%|\s*(?:lakhs?|lacs?|crores?|cr|k|l|inr|rs|rupees|days?|hours?|nights?|mins?|minutes|weeks?|months?|years?"
+    r"\bfor\s+(?:about\s+|around\s+|approx(?:imately)?\s+|nearly\s+)?(\d{1,5})(?!\d|[,.]\d|\s*%|\s*(?:lakhs?|lacs?|crores?|cr|k|l|thousand|ha[zj]aa?r|inr|rs|rupees|days?|hours?|nights?|mins?|minutes|weeks?|months?|years?"
     r"|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b)",
     re.I | re.A,
 )
@@ -111,14 +112,15 @@ _CLAUSE_BREAK = re.compile(r"[.;,!?\n]")
 
 _EVENT_TYPES = [
     (re.compile(r"\bengagement\b", re.I | re.A), EventType.ENGAGEMENT_PARTY),
-    (re.compile(r"\bwedding\b", re.I | re.A), EventType.WEDDING),
+    (re.compile(r"\b(?:wedding|shaa?di)\b", re.I | re.A), EventType.WEDDING),
+    (re.compile(r"\bsagai\b", re.I | re.A), EventType.ENGAGEMENT_PARTY),
     (re.compile(r"\bbirthday\b", re.I | re.A), EventType.BIRTHDAY),
     (re.compile(r"\bconference\b", re.I | re.A), EventType.CONFERENCE),
     (re.compile(r"\b(?:corporate|offsite|company)\b", re.I | re.A), EventType.CORPORATE),
 ]
 _DIETS = [
-    (re.compile(r"\bnon[- ]?veg(?:etarian)?\b", re.I | re.A), DietaryRequirement.NON_VEGETARIAN),
-    (re.compile(r"(?<!non-)(?<!non )\bveg(?:etarian)?\b", re.I | re.A), DietaryRequirement.VEGETARIAN),
+    (re.compile(r"\b(?:non[- ]?veg(?:etarian)?|maansahari|mansahari)\b", re.I | re.A), DietaryRequirement.NON_VEGETARIAN),
+    (re.compile(r"(?<!non-)(?<!non )\b(?:veg(?:etarian)?|shakahari|shaakahaari)\b", re.I | re.A), DietaryRequirement.VEGETARIAN),
     (re.compile(r"\bvegan\b", re.I | re.A), DietaryRequirement.VEGAN),
     (re.compile(r"\bjain\b", re.I | re.A), DietaryRequirement.JAIN),
     (re.compile(r"\bhalal\b", re.I | re.A), DietaryRequirement.HALAL),
