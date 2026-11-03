@@ -117,6 +117,10 @@ class _CurrentPulse:
         self._default = ArcadePulse()
         self._var: contextvars.ContextVar[ArcadePulse | None] = contextvars.ContextVar("eventmate_pulse", default=None)
 
+    def current(self) -> ArcadePulse:
+        """The pulse this request is bound to: a stream holds it while it runs, after the request context has moved on."""
+        return self._target()
+
     def bind(self, pulse_: ArcadePulse):
         return self._var.set(pulse_)
 

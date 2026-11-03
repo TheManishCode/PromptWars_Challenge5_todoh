@@ -1,6 +1,7 @@
 """The landing page (/) and the planner (/app): served, local, cached by version; and the pulse the pipeline reports while it runs (kept as an API for progress)."""
 
 import gzip
+import json
 import re
 from pathlib import Path
 
@@ -140,3 +141,63 @@ def test_the_two_pages_link_to_each_other_and_nothing_else_is_an_interface(clien
     assert 'href="/app"' in landing and 'href="/"' in planner and "<h1" in landing and 'id="brief-form"' in planner
     for gone in ("/classic", "/static/index.html", "/static/style.css", "/static/arcade.html"):
         assert client.get(gone).status_code == 404, gone
+
+
+# ---------------------------------------------------------------- live progress (server-sent events)
+
+
+def events(resp):
+    out, name = [], None
+    for raw in resp.response:
+        for line in (raw.decode() if isinstance(raw, bytes) else raw).splitlines():
+            if line.startswith("event: "):
+                name = line[7:]
+            elif line.startswith("data: "):
+                out.append((name, json.loads(line[6:])))
+    return out
+
+
+def test_the_stream_follows_a_real_run_stage_by_stage_and_ends_when_it_does(tmp_path):
+    import threading
+
+    em = EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="sse")
+    c = create_app(em, today_fn=lambda: TODAY, poll_seconds=0).test_client()
+    resp = c.get("/api/pulse/stream", buffered=False)
+    got = []
+    th = threading.Thread(target=lambda: got.extend(events(resp)))
+    th.start()
+    assert post(c, "/api/plans", {"request": EXAMPLE}).status_code in (201, 422)  # a real run in this workspace drives the stream
+    th.join(70)
+    assert not th.is_alive()
+    assert {n for n, _ in got} == {"progress"}  # it ended because the run did, not because it gave up waiting
+    runs = [d for n, d in got if n == "progress" and d["state"] in ("running", "done", "failed")]
+    assert runs and runs[-1]["state"] in ("done", "failed") and runs[-1]["run_id"] >= 1
+    assert [s["name"] for s in runs[-1]["stages"]] == list(STAGES)
+    assert len({tuple(s["state"] for s in d["stages"]) for d in runs}) >= 2  # it moved: more than one picture of the run was sent
+
+
+def test_a_stream_with_no_run_gives_up_and_says_so(tmp_path, monkeypatch):
+    import eventmate.web.routes.assistant_plans as ap
+
+    monkeypatch.setattr(ap, "PULSE_STREAM_MAX_S", 0.4)
+    c = create_app(EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="sse2"), today_fn=lambda: TODAY, poll_seconds=0).test_client()
+    got = events(c.get("/api/pulse/stream", buffered=False))
+    assert [n for n, _ in got] == ["progress", "timeout"] and got[0][1]["state"] == "idle"
+
+
+def test_streams_are_limited_and_the_slot_comes_back(tmp_path, monkeypatch):
+    import eventmate.web.routes.assistant_plans as ap
+    from eventmate.web.base import VOICE_STREAMS_MAX
+
+    monkeypatch.setattr(ap, "PULSE_STREAM_MAX_S", 0.3)
+    c = create_app(EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="sse3"), today_fn=lambda: TODAY, poll_seconds=0).test_client()
+    held = [c.get("/api/pulse/stream", buffered=False) for _ in range(VOICE_STREAMS_MAX)]
+    assert c.get("/api/pulse/stream").status_code == 429
+    for r in held:
+        events(r)  # each finishes (times out) and gives its slot back
+    assert c.get("/api/pulse/stream", buffered=False).status_code == 200
+
+
+def test_the_stream_is_read_only(tmp_path):
+    c = create_app(EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="sse4"), today_fn=lambda: TODAY, poll_seconds=0).test_client()
+    assert c.post("/api/pulse/stream").status_code in (403, 405)

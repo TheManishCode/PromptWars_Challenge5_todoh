@@ -300,6 +300,13 @@ button.place { border: 1px dashed transparent; } button.place:hover { border-col
 .empty-d b { display: block; font: 400 22px/1.1 var(--serif); color: var(--ink); margin-bottom: 4px; }
 .place__go { margin-top: 6px; grid-column: 1 / -1; justify-self: start; height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #000; background: #fff; font-size: 12px; font-weight: 500; }
 
+.prog { margin: 14px 0 0; display: grid; gap: 4px; font-size: 13px; }
+.prog li { display: flex; gap: 8px; align-items: center; color: var(--mute); }
+.prog li::before { content: ""; width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid currentColor; flex: none; }
+.prog li[data-state="active"] { color: var(--ink); font-weight: 500; } .prog li[data-state="active"]::before { background: var(--accent); border-color: var(--accent); }
+.prog li[data-state="done"] { color: #0b6b4f; } .prog li[data-state="done"]::before { background: #0b6b4f; border-color: #0b6b4f; }
+.prog li[data-state="failed"] { color: #8a1f1f; } .prog li[data-state="failed"]::before { background: #8a1f1f; border-color: #8a1f1f; }
+.prog small { margin-left: auto; font-family: var(--mono); font-size: 11px; }
 dialog.dlg { margin: auto; width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; border: 0; border-radius: 26px; padding: 26px 26px 22px; background: #fff; color: var(--ink); box-shadow: 0 30px 80px rgba(0,0,0,.45); }
 dialog.dlg::backdrop { background: rgba(0,0,0,.6); }
 .dlg h2 { font: 400 32px/1.05 var(--serif); margin-bottom: 14px; padding-right: 36px; } .dlg h3 { font: 400 22px/1.1 var(--serif); margin: 20px 0 6px; }

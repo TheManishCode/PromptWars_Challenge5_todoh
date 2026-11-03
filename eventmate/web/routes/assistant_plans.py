@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from flask import Response, abort, jsonify, request
 from eventmate.arcade_pulse import pulse as _arcade_pulse
 from eventmate.assistant.agent import AssistantError
@@ -20,6 +21,10 @@ from eventmate.web.base import (
     SessionClearBody,
     _PLAN_ID,
 )
+
+
+PULSE_STREAM_MAX_S = 60.0  # a plan run takes seconds; a stream that waits a minute for one is abandoned
+PULSE_POLL_S = 0.1
 
 
 def register(app, k):
@@ -165,6 +170,37 @@ def register(app, k):
             raise
         _arcade_pulse.finish(outcome.plan is not None, "; ".join(v.detail for v in outcome.violations))
         return plan_response(outcome)
+
+    @app.get("/api/pulse/stream")
+    def pulse_stream():
+        """Server-sent events: the run's stage snapshot each time it changes, so a page shows the real pipeline moving while a plan is made. It ends when a run that
+        began after the stream opened (or was already running) finishes, or after ``PULSE_STREAM_MAX_S``. It reads this workspace's pulse only and takes no lock."""
+        if not k.stream_slots.acquire(blocking=False):
+            return _err(429, "too many streams are open; try again in a moment")
+        source = _arcade_pulse.current()
+
+        def stream():
+            try:
+                first, last, deadline, beat = None, None, time.monotonic() + PULSE_STREAM_MAX_S, time.monotonic()
+                while time.monotonic() < deadline:
+                    snap = source.snapshot()
+                    if first is None:
+                        first = (snap["run_id"], snap["state"] == "running")
+                    key = (snap["run_id"], snap["state"], tuple(s["state"] for s in snap["stages"]))
+                    if key != last:
+                        last = key
+                        yield f"event: progress\ndata: {json.dumps(snap)}\n\n"
+                    if snap["state"] in ("done", "failed") and (snap["run_id"] > first[0] or first[1]):
+                        return
+                    if time.monotonic() - beat > 15:
+                        beat = time.monotonic()
+                        yield ": keep-alive\n\n"
+                    time.sleep(PULSE_POLL_S)
+                yield "event: timeout\ndata: {}\n\n"
+            finally:
+                k.stream_slots.release()
+
+        return Response(stream(), mimetype="text/event-stream", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
     @app.get("/api/arcade/pulse")
     def arcade_pulse():

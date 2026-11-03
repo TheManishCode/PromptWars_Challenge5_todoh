@@ -50,7 +50,7 @@ def opened(ctx, url):
     seen = []
     page.on("console", lambda m: seen.append(f"{m.type}: {m.text}") if m.type in ("error", "warning") and not any(n in m.text for n in NOISE) else None)
     page.on("pageerror", lambda e: seen.append(f"pageerror: {e}"))
-    page.on("requestfailed", lambda r: seen.append(f"failed: {r.url} {r.failure}"))
+    page.on("requestfailed", lambda r: seen.append(f"failed: {r.url} {r.failure}") if not (r.url.endswith("/api/pulse/stream") and "ERR_ABORTED" in str(r.failure)) else None)  # closing the event stream is ours, on purpose
     page.goto(url, wait_until="networkidle")
     return page, seen
 
@@ -61,6 +61,8 @@ def new_plan(page, text=BRIEF):
     page.click("#read-brief")
     page.wait_for_selector("#build")
     page.click("#build")
+    page.wait_for_selector("#progress li", timeout=5000)  # the real pipeline stages arrive over the event stream while the plan is made
+    assert page.locator("#progress li").count() == 10
     page.wait_for_selector("#eventline:has-text('version 1')")
 
 

@@ -555,12 +555,27 @@
       var f = $('#build') || $('#brief-input'); if (f) f.focus();
     });
   }
+  var STAGE_NAME = { parse: 'Reading the brief', decompose: 'Breaking it into tasks', budget: 'Splitting the budget', guests: 'Counting guests and diets', vendors: 'Checking every vendor', select: 'Choosing the best combination',
+    schedule: 'Solving the schedule', symbolic: 'Cross-checking the timeline', validate: 'Independent validator', store: 'Saving the version' };
+  var stream = null;
+  function stopProgress() { if (stream) { stream.close(); stream = null; } }
+  function startProgress() {
+    stopProgress(); var ol = clear($('#progress')); ol.hidden = false;
+    if (typeof window.EventSource !== 'function') { ol.hidden = true; return; }
+    stream = new window.EventSource('/api/pulse/stream');
+    stream.addEventListener('progress', function (ev) {
+      var snap; try { snap = JSON.parse(ev.data); } catch (e) { return; }
+      clear(ol); snap.stages.forEach(function (s) { ol.appendChild(h('li', { 'data-state': s.state }, STAGE_NAME[s.name] || s.name, s.ms !== null && s.state === 'done' ? h('small', { text: Math.round(s.ms) + ' ms' }) : null)); });
+      if (snap.state === 'done' || snap.state === 'failed') stopProgress();
+    });
+    stream.addEventListener('timeout', stopProgress); stream.onerror = stopProgress;
+  }
   function build() {
     if (st.busy || !st.draft) return; busy(true); var src = st.turn && /^[A-Za-z0-9:._-]+$/.test(st.turn.source || '') ? st.turn.source : 'rule:parser';
-    announce('Building the plan and checking every hard constraint.');
+    announce('Building the plan and checking every hard constraint.'); startProgress();
     api('/api/intake/confirm', { method: 'POST', body: { draft: st.draft, raw_text: st.messages.join('\n').slice(0, 2000), source: src } }).then(function (r) {
-      busy(false);
-      if (r.ok && r.data && r.data.plan) { st.reality = r.data.reality || null; closeDialog(briefDlg); st.messages = []; st.draft = null; st.turn = null; clear($('#understood')); refreshAll(r.data.plan.plan_id).then(function () { announce('Plan ready.'); openAssistant(); say('ai', (r.data.reality && r.data.reality.message) || 'Plan ready.'); }); return; }
+      busy(false); window.setTimeout(stopProgress, 600);
+      if (r.ok && r.data && r.data.plan) { st.reality = r.data.reality || null; window.setTimeout(function () { closeDialog(briefDlg); }, reduce.matches ? 0 : 450); st.messages = []; st.draft = null; st.turn = null; clear($('#understood')); refreshAll(r.data.plan.plan_id).then(function () { announce('Plan ready.'); openAssistant(); say('ai', (r.data.reality && r.data.reality.message) || 'Plan ready.'); }); return; }
       if (!r.lost) failure(r);
     });
   }
