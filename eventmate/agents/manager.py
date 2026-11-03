@@ -84,7 +84,7 @@ _DIGIT_RUN = re.compile(r"\d+")  # unicode \d: any decimal digit, including Deva
 
 _NUM = r"\d{1,3}(?:,\d{2,3})+(?:\.\d+)?|\d+(?:\.\d+)?"
 _MONEY = re.compile(
-    rf"(?:budget(?:\s+(?:of|is))?\s*:?\s*)?(?:(?P<cur>inr|rs\.?|₹|rupees)\s*)?(?<![\d,.])(?P<num>{_NUM})"
+    rf"(?:budget(?:\s+(?:of|is|to|now|at|around|about))*[\s:]*)?(?:(?P<cur>inr|rs\.?|₹|rupees)\s*)?(?<![\d,.])(?P<num>{_NUM})"
     r"(?:\s*(?P<unit>lakhs?|lacs?|crores?|cr|k|l)\b)?(?:\s*(?P<cur2>inr|rs|rupees)\b)?",
     re.I,
 )
@@ -98,6 +98,12 @@ _GUESTS = [
 ]
 # Used only when no explicit "guests / people / pax" count exists, so "2 kids and 40 guests" is never read as a conflict.
 _GUESTS_GROUP = re.compile(r"(?<![\d,.])(\d{1,12})\s*-?\s*(?:friends|relatives|invitees?|colleagues|coworkers|classmates|students|members|residents)\b", re.I | re.A)
+# "a wedding for 120": a headcount with no noun, used only when nothing says guests, people or pax. Not "for 2 lakh", "for 12 Dec" or "for 3 days".
+_GUESTS_FOR = re.compile(
+    r"\bfor\s+(?:about\s+|around\s+|approx(?:imately)?\s+|nearly\s+)?(\d{1,5})(?!\d|[,.]\d|\s*%|\s*(?:lakhs?|lacs?|crores?|cr|k|l|inr|rs|rupees|days?|hours?|nights?|mins?|minutes|weeks?|months?|years?"
+    r"|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b)",
+    re.I | re.A,
+)
 _CITY_FALLBACK = re.compile(r"\b(?:in|at|near)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\b", re.A)
 _NOT_CITIES = frozenset({"rs", "inr", "the", "this", "our", "my", "a", "an"})
 _NEGATION = re.compile(r"\b(?:no|not|without|skip|exclude|excluding|never|don't|dont)\b", re.I | re.A)
@@ -234,10 +240,24 @@ def _valid(y: int, m: int, d: int) -> bool:
         return False
 
 
+_POST_BUDGET = re.compile(r"(?<!\s)\s+budget\b", re.I | re.A)  # not starting inside a run of spaces: a search over a long run stays linear
+_MONTH_BEFORE = re.compile(r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*$", re.I | re.A)
+
+
+def _stands_for_budget(text: str, m: re.Match) -> bool:
+    """A number written before the word "budget" ("1,80,000 budget"). Not when it is part of a date ("December 12 budget 5L", "2027-02-10 budget 5L") or a year."""
+    if not _POST_BUDGET.match(text, m.end()):  # looked at, not consumed: the word may be the cue for the number that follows it
+        return False
+    before, num = text[max(0, m.start("num") - 24): m.start("num")], m.group("num")  # a few characters are enough to see a month or a dash, and a whole prefix per match is quadratic
+    if before[-1:] in ("-", "/") or _MONTH_BEFORE.search(before):
+        return False
+    return not (len(num) == 4 and num.isdigit() and 1900 <= int(num) <= 2100)
+
+
 def _parse_budget(text: str, problems: list[str]) -> int | None:
     values = set()
     for m in _MONEY.finditer(text):
-        marked = m.group("cur") or m.group("unit") or m.group("cur2") or _BUDGET_WORD.match(m.group(0))
+        marked = m.group("cur") or m.group("unit") or m.group("cur2") or _stands_for_budget(text, m) or _BUDGET_WORD.match(m.group(0))
         if not marked:
             continue
         try:
@@ -269,6 +289,8 @@ def _parse_guests(text: str, problems: list[str]) -> int | None:
     if not values:
         values = {int(m.group(1)) for m in _GUESTS_GROUP.finditer(text)}
     if not values:
+        values = {int(m.group(1)) for m in _GUESTS_FOR.finditer(text)}
+    if not values:
         problems.append("guest count not found (e.g. '120 guests')")
         return None
     if len(values) > 1:
@@ -294,6 +316,8 @@ def _parse_city(text: str, known: Iterable[str], problems: list[str]) -> str | N
             if not re.fullmatch(_MONTH_RE, m.group(1).split()[0], re.I | re.A)
             and m.group(1).split()[0].lower() not in _NOT_CITIES
         }
+    if not found:  # a bare name in a list ("50 students, Bangalore, veg"): only a city this product knows, never a guess
+        found = {city_aliases.canonical(m.group(0)) for m in city_aliases.BARE.finditer(text)} | {c for c in cities if re.search(rf"(?<!\w){re.escape(c)}(?!\w)", text, re.I)}
     if not found:
         problems.append("city not found (e.g. 'in Pune')")
         return None

@@ -19,6 +19,8 @@ ALIASES: dict[str, str] = {
     "hyderabad": "Hyderabad", "hyd": "Hyderabad",
 }
 _ALTERNATION = "|".join(sorted(map(re.escape, ALIASES), key=lambda a: (-len(a), a)))
+# a city written on its own, with no "in" before it: the longer spellings, any case, and the airport-style codes only in capitals (a lowercase "bom" is not Mumbai)
+BARE = re.compile(rf"(?<!\w)(?:{'|'.join(sorted((a for a in ALIASES if len(a) >= 4), key=lambda a: (-len(a), a)))}|(?-i:BLR|HYD|BOM))(?!\w)", re.I)
 AFTER_PREPOSITION = re.compile(rf"\b(?:in|at|near)\s+({_ALTERNATION})\b", re.I | re.A)
 
 

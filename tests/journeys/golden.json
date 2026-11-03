@@ -1,0 +1,479 @@
+[
+ {
+  "id": "b01",
+  "kind": "brief",
+  "text": "120-person engagement party in Pune on December 12, budget 2 lakh, vegetarian",
+  "expect": {
+   "guest_count": 120,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000,
+   "dietary": [
+    "vegetarian"
+   ],
+   "ready": true
+  }
+ },
+ {
+  "id": "b02",
+  "kind": "brief",
+  "text": "Wedding in Mumbai on 5 January 2027 for 300 guests, budget Rs 12,00,000",
+  "expect": {
+   "guest_count": 300,
+   "city": "Mumbai",
+   "event_date": "2027-01-05",
+   "budget_total": 1200000,
+   "ready": true
+  }
+ },
+ {
+  "id": "b03",
+  "kind": "brief",
+  "text": "50 students, Bangalore, veg, under 40000 rupees, Dec 14",
+  "expect": {
+   "guest_count": 50,
+   "city": "Bengaluru",
+   "event_date": "2026-12-14",
+   "budget_total": 40000,
+   "dietary": [
+    "vegetarian"
+   ],
+   "ready": true
+  }
+ },
+ {
+  "id": "b04",
+  "kind": "brief",
+  "text": "Birthday party in BLR for 30 people on 20 Nov, 25k budget",
+  "expect": {
+   "guest_count": 30,
+   "city": "Bengaluru",
+   "event_date": "2026-11-20",
+   "budget_total": 25000,
+   "ready": true
+  }
+ },
+ {
+  "id": "b05",
+  "kind": "brief",
+  "text": "college fest in Pune, 500 attendees, 3 lakh, on 15 January",
+  "expect": {
+   "guest_count": 500,
+   "city": "Pune",
+   "budget_total": 300000,
+   "event_date": "2027-01-15",
+   "ready": true
+  }
+ },
+ {
+  "id": "b06",
+  "kind": "brief",
+  "text": "reception at Pune for 200 guests on 2027-02-10 budget 5L",
+  "expect": {
+   "guest_count": 200,
+   "city": "Pune",
+   "event_date": "2027-02-10",
+   "budget_total": 500000,
+   "ready": true
+  }
+ },
+ {
+  "id": "b07",
+  "kind": "brief",
+  "text": "corporate offsite in Mumbai for 80 people, 1.5 lakh, 3 December",
+  "expect": {
+   "guest_count": 80,
+   "city": "Mumbai",
+   "budget_total": 150000,
+   "event_date": "2026-12-03",
+   "ready": true
+  }
+ },
+ {
+  "id": "b08",
+  "kind": "brief",
+  "text": "Housewarming near Pune for 40 guests, jain food, 60000 on 8 Dec",
+  "expect": {
+   "guest_count": 40,
+   "city": "Pune",
+   "event_date": "2026-12-08",
+   "dietary": [
+    "jain"
+   ],
+   "ready": false,
+   "missing_has": [
+    "budget_total"
+   ]
+  }
+ },
+ {
+  "id": "b09",
+  "kind": "brief",
+  "text": "party in Pune on December 12",
+  "expect": {
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "ready": false,
+   "missing_has": [
+    "guest_count",
+    "budget_total"
+   ]
+  }
+ },
+ {
+  "id": "b10",
+  "kind": "brief",
+  "text": "120 guests, budget 2 lakh",
+  "expect": {
+   "guest_count": 120,
+   "budget_total": 200000,
+   "ready": false,
+   "missing_has": [
+    "city",
+    "event_date"
+   ]
+  }
+ },
+ {
+  "id": "b11",
+  "kind": "brief",
+  "text": "engagement in Pune on 12 Dec, 120 people, budget 1 crore",
+  "expect": {
+   "guest_count": 120,
+   "budget_total": 10000000,
+   "city": "Pune",
+   "ready": true
+  }
+ },
+ {
+  "id": "b12",
+  "kind": "brief",
+  "text": "anniversary in Mumbai for 60 pax on 1 Dec with a 90k budget, vegan",
+  "expect": {
+   "guest_count": 60,
+   "city": "Mumbai",
+   "budget_total": 90000,
+   "event_date": "2026-12-01",
+   "dietary": [
+    "vegan"
+   ],
+   "ready": true
+  }
+ },
+ {
+  "id": "b13",
+  "kind": "brief",
+  "text": "Plan a baby shower in Pune on 22 December for 45 people under INR 75,000",
+  "expect": {
+   "guest_count": 45,
+   "city": "Pune",
+   "budget_total": 75000,
+   "event_date": "2026-12-22",
+   "ready": true
+  }
+ },
+ {
+  "id": "b14",
+  "kind": "brief",
+  "text": "sangeet in Mumbai on 10 Jan for 250 guests, budget 6 lakh, halal catering",
+  "expect": {
+   "guest_count": 250,
+   "city": "Mumbai",
+   "budget_total": 600000,
+   "event_date": "2027-01-10",
+   "dietary": [
+    "halal"
+   ],
+   "ready": true
+  }
+ },
+ {
+  "id": "b15",
+  "kind": "brief",
+  "text": "Wedding in Pune on 12 December for 120 guests and 10 children",
+  "expect": {
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "ready": false
+  }
+ },
+ {
+  "id": "b16",
+  "kind": "brief",
+  "text": "hello",
+  "expect": {
+   "ready": false,
+   "missing_has": [
+    "guest_count",
+    "city",
+    "event_date",
+    "budget_total"
+   ]
+  }
+ },
+ {
+  "id": "b17",
+  "kind": "brief",
+  "text": "engagement in Poona on 12 Dec for 100 people, 2 lakh",
+  "expect": {
+   "guest_count": 100,
+   "city": "Pune",
+   "budget_total": 200000,
+   "ready": true
+  }
+ },
+ {
+  "id": "b18",
+  "kind": "brief",
+  "text": "meetup in Bombay for 70 people on 18 Dec with budget 50k",
+  "expect": {
+   "guest_count": 70,
+   "city": "Mumbai",
+   "budget_total": 50000,
+   "event_date": "2026-12-18",
+   "ready": true
+  }
+ },
+ {
+  "id": "b19",
+  "kind": "brief",
+  "text": "Birthday in Pune on 12 Dec for 120 people, budget 2 lakh. Actually 100 people",
+  "expect": {
+   "city": "Pune",
+   "ready": null
+  }
+ },
+ {
+  "id": "b20",
+  "kind": "brief",
+  "text": "Engagement party in Pune on December 12th, 120 guests, budget Rs. 2,00,000",
+  "expect": {
+   "guest_count": 120,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000,
+   "ready": true
+  }
+ },
+ {
+  "id": "p01",
+  "kind": "plan",
+  "text": "120-person engagement party in Pune on December 12 under INR 200,000. Vegetarian catering, indoor venue, photographer.",
+  "expect": {
+   "status": "planned"
+  }
+ },
+ {
+  "id": "p02",
+  "kind": "plan",
+  "text": "engagement party in Pune on December 12 for 120 guests with budget 60000, vegetarian catering and a photographer",
+  "expect": {
+   "status": "failed"
+  }
+ },
+ {
+  "id": "p03",
+  "kind": "plan",
+  "text": "birthday party in Pune on 12 December for 30 people, budget 150000, vegetarian",
+  "expect": {
+   "status": "planned"
+  }
+ },
+ {
+  "id": "p04",
+  "kind": "plan",
+  "text": "wedding in Pune on 12 December for 120 guests, budget 50000",
+  "expect": {
+   "status": "failed"
+  }
+ },
+ {
+  "id": "p05",
+  "kind": "plan",
+  "text": "conference in Pune on 12 December for 80 people, budget 2 lakh",
+  "expect": {
+   "status": "failed"
+  },
+  "note": "a 09:00 conference start cannot be planned under the default timing policy; the refusal names 10:30 as the fix (tests/test_community_checks.py pins this)"
+ },
+ {
+  "id": "c01",
+  "kind": "change",
+  "base": "p01",
+  "text": "now 80 guests",
+  "expect": {
+   "set_guest_count": 80
+  }
+ },
+ {
+  "id": "c02",
+  "kind": "change",
+  "base": "p01",
+  "text": "make the budget 1.5 lakh",
+  "expect": {
+   "set_budget_inr": 150000
+  }
+ },
+ {
+  "id": "c03",
+  "kind": "change",
+  "base": "p01",
+  "text": "move it to December 20",
+  "expect": {
+   "set_date": "2026-12-20"
+  }
+ },
+ {
+  "id": "c04",
+  "kind": "change",
+  "base": "p01",
+  "text": "the caterer pulled out",
+  "expect": {
+   "cancel_vendor_categories": [
+    "caterer"
+   ]
+  }
+ },
+ {
+  "id": "c05",
+  "kind": "change",
+  "base": "p01",
+  "text": "budget is now 3 lakh and we are 150 guests",
+  "expect": {
+   "set_budget_inr": 300000,
+   "set_guest_count": 150
+  }
+ },
+ {
+  "id": "c06",
+  "kind": "change",
+  "base": "p01",
+  "text": "thanks, looks good",
+  "expect": {
+   "empty": true
+  }
+ },
+ {
+  "id": "c07",
+  "kind": "change",
+  "base": "p01",
+  "text": "reduce budget to 1,80,000",
+  "expect": {
+   "set_budget_inr": 180000
+  }
+ },
+ {
+  "id": "c08",
+  "kind": "change",
+  "base": "p01",
+  "text": "the venue cancelled on us",
+  "expect": {
+   "cancel_vendor_categories": [
+    "venue"
+   ]
+  }
+ },
+ {
+  "id": "c09",
+  "kind": "change",
+  "base": "p01",
+  "text": "push the event to 28 December and cut the budget to 1.7 lakh",
+  "expect": {
+   "set_date": "2026-12-28",
+   "set_budget_inr": 170000
+  }
+ },
+ {
+  "id": "c10",
+  "kind": "change",
+  "base": "p01",
+  "text": "what does the caterer cost?",
+  "expect": {
+   "empty": true
+  }
+ },
+ {
+  "id": "c11",
+  "kind": "change",
+  "base": "p01",
+  "text": "we are now 95 people",
+  "expect": {
+   "set_guest_count": 95
+  }
+ },
+ {
+  "id": "c12",
+  "kind": "change",
+  "base": "p01",
+  "text": "photographer is unavailable",
+  "expect": {
+   "cancel_vendor_categories": [
+    "photographer"
+   ]
+  }
+ },
+ {
+  "id": "b21",
+  "kind": "brief",
+  "text": "wedding for 120, Pune, 2 lakh, 12 Dec",
+  "expect": {
+   "guest_count": 120,
+   "city": "Pune",
+   "budget_total": 200000,
+   "event_date": "2026-12-12",
+   "ready": true
+  }
+ },
+ {
+  "id": "b22",
+  "kind": "brief",
+  "text": "party with kids under 12, 60 guests in Pune on 12 Dec, budget 1 lakh",
+  "expect": {
+   "guest_count": 60,
+   "city": "Pune",
+   "budget_total": 100000,
+   "ready": true
+  }
+ },
+ {
+  "id": "c13",
+  "kind": "change",
+  "base": "p01",
+  "text": "1,80,000 budget now",
+  "expect": {
+   "set_budget_inr": 180000
+  }
+ },
+ {
+  "id": "c14",
+  "kind": "change",
+  "base": "p01",
+  "text": "change the budget to 2.5 lakh",
+  "expect": {
+   "set_budget_inr": 250000
+  }
+ },
+ {
+  "id": "b23",
+  "kind": "brief",
+  "text": "party for 2 lakh in Pune on 12 Dec for 60 people",
+  "expect": {
+   "guest_count": 60,
+   "budget_total": 200000,
+   "city": "Pune",
+   "ready": true
+  }
+ },
+ {
+  "id": "b24",
+  "kind": "brief",
+  "text": "a dinner in Pune for 3 days from 10 Dec",
+  "expect": {
+   "city": "Pune",
+   "ready": false,
+   "missing_has": [
+    "guest_count"
+   ]
+  }
+ }
+]

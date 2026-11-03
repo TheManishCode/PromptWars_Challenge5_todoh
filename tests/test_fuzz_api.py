@@ -78,6 +78,9 @@ def world(tmp_path_factory):
     em = EventMate(log_dir=tmp / "l", plan_dir=tmp / "p", run_id="fz", flights=FlightFake(flat()), weather=wx_src(), places=places_src(), discovery=osm_src())
     em.deals_factory = lambda on_call: DealAgent(FakeSearch([A, B, C, D, E]), FakeFetch(PAGES), on_call=on_call)
     em.router_clients = lambda: []
+    import eventmate.web.routes.assistant_plans as _ap
+
+    _ap.PULSE_START_WAIT_S = 0.02  # the progress stream waits for a run to start; here nothing will start one, so it should let go at once
     app = create_app(em, today_fn=lambda: TODAY, rate_limit_per_minute=10**9)  # the limiter has its own test; here every request must reach its handler
     c = app.test_client()
     tok = c.get("/api/session").get_json()["csrf"]

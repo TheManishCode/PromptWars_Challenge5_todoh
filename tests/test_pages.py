@@ -179,7 +179,7 @@ def test_the_stream_follows_a_real_run_stage_by_stage_and_ends_when_it_does(tmp_
 def test_a_stream_with_no_run_gives_up_and_says_so(tmp_path, monkeypatch):
     import eventmate.web.routes.assistant_plans as ap
 
-    monkeypatch.setattr(ap, "PULSE_STREAM_MAX_S", 0.4)
+    monkeypatch.setattr(ap, "PULSE_START_WAIT_S", 0.4)
     c = create_app(EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="sse2"), today_fn=lambda: TODAY, poll_seconds=0).test_client()
     got = events(c.get("/api/pulse/stream", buffered=False))
     assert [n for n, _ in got] == ["progress", "timeout"] and got[0][1]["state"] == "idle"
@@ -189,7 +189,7 @@ def test_streams_are_limited_and_the_slot_comes_back(tmp_path, monkeypatch):
     import eventmate.web.routes.assistant_plans as ap
     from eventmate.web.base import VOICE_STREAMS_MAX
 
-    monkeypatch.setattr(ap, "PULSE_STREAM_MAX_S", 0.3)
+    monkeypatch.setattr(ap, "PULSE_START_WAIT_S", 0.3)
     c = create_app(EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="sse3"), today_fn=lambda: TODAY, poll_seconds=0).test_client()
     held = [c.get("/api/pulse/stream", buffered=False) for _ in range(VOICE_STREAMS_MAX)]
     assert c.get("/api/pulse/stream").status_code == 429
@@ -201,3 +201,15 @@ def test_streams_are_limited_and_the_slot_comes_back(tmp_path, monkeypatch):
 def test_the_stream_is_read_only(tmp_path):
     c = create_app(EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="sse4"), today_fn=lambda: TODAY, poll_seconds=0).test_client()
     assert c.post("/api/pulse/stream").status_code in (403, 405)
+
+
+def test_an_idle_stream_lets_go_after_the_start_wait_not_the_full_minute(tmp_path, monkeypatch):
+    import time
+
+    import eventmate.web.routes.assistant_plans as ap
+
+    monkeypatch.setattr(ap, "PULSE_START_WAIT_S", 0.3)
+    c = create_app(EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="sse5"), today_fn=lambda: TODAY, poll_seconds=0).test_client()
+    started = time.perf_counter()
+    got = events(c.get("/api/pulse/stream", buffered=False))
+    assert [n for n, _ in got][-1] == "timeout" and time.perf_counter() - started < 5  # seconds, where a run that never starts used to hold the connection for a minute

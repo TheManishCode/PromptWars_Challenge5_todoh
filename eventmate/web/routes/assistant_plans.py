@@ -23,7 +23,8 @@ from eventmate.web.base import (
 )
 
 
-PULSE_STREAM_MAX_S = 60.0  # a plan run takes seconds; a stream that waits a minute for one is abandoned
+PULSE_STREAM_MAX_S = 60.0  # a plan run takes seconds; a stream that follows one for a minute is abandoned
+PULSE_START_WAIT_S = 5.0  # a page opens the stream just before it starts a run; with none under way and none started, an idle stream lets go of its connection
 PULSE_POLL_S = 0.1
 
 
@@ -182,6 +183,7 @@ def register(app, k):
         def stream():
             try:
                 first, last, deadline, beat = None, None, time.monotonic() + PULSE_STREAM_MAX_S, time.monotonic()
+                opened = beat
                 while time.monotonic() < deadline:
                     snap = source.snapshot()
                     if first is None:
@@ -191,6 +193,9 @@ def register(app, k):
                         last = key
                         yield f"event: progress\ndata: {json.dumps(snap)}\n\n"
                     if snap["state"] in ("done", "failed") and (snap["run_id"] > first[0] or first[1]):
+                        return
+                    if snap["run_id"] == first[0] and not first[1] and time.monotonic() - opened > PULSE_START_WAIT_S:  # no run under way and none has started
+                        yield "event: timeout\ndata: {}\n\n"
                         return
                     if time.monotonic() - beat > 15:
                         beat = time.monotonic()
