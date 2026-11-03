@@ -57,6 +57,7 @@ CSP = (
 HEAVY_MAX = 4  # concurrent network-bound searches
 _PLAN_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 GUEST_UPLOAD_LIMIT = 640 * 1024  # a 256 KB CSV can grow when JSON-escaped; the parser enforces the real 256 KB limit
+QUOTE_DOC_UPLOAD_LIMIT = 5 * 1024 * 1024 + 256 * 1024  # a quote file plus the multipart wrapper; the sandbox check enforces the real 5 MB
 AUDIO_UPLOAD_LIMIT = voice_audio.MAX_BYTES + 256 * 1024  # a recording plus the multipart wrapper; the audio check enforces the real 5 MB
 VOICE_STREAMS_MAX = 4  # concurrent server-sent event streams
 # the only routes that take a body larger than 64 KB, or multipart instead of JSON: (path pattern, limit)
@@ -64,6 +65,7 @@ UPLOAD_ROUTES = (
     (re.compile(r"/api/plans/[A-Za-z0-9_-]{1,64}/guests/preview"), GUEST_UPLOAD_LIMIT),
     (re.compile(r"/api/voice/transcribe"), AUDIO_UPLOAD_LIMIT),
     (re.compile(r"/api/plans/[A-Za-z0-9_-]{1,64}/voice-notes"), AUDIO_UPLOAD_LIMIT),
+    (re.compile(r"/api/vendors/[A-Za-z0-9_:.-]{1,64}/quote-document"), QUOTE_DOC_UPLOAD_LIMIT),
     (re.compile(r"/api/workspace/import"), transfer.MAX_ARCHIVE + 256 * 1024),  # an archive plus the multipart wrapper; the importer enforces the real 20 MB
 )
 log = logging.getLogger("eventmate.web")

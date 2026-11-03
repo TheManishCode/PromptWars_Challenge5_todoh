@@ -279,6 +279,22 @@ class EventMate:
         )
         return report(versions, files, jobs)
 
+    def read_quote_document(self, vendor_id: str, filename: str, data: bytes) -> dict:
+        """Read a vendor's quote file into priced lines for the user to confirm. The file is converted in a sandbox and is not kept; each line is noted as an
+        unreviewed ('extracted') fact about the vendor, which no hard constraint may rest on until the user confirms it."""
+        from eventmate.documents import quotes, sandbox
+
+        if vendor_id not in self.vendor_directory():
+            raise ValueError("unknown vendor")
+        converted = sandbox.convert(data, filename)
+        found = quotes.extract(converted.markdown)
+        digest = hashlib.sha256(data).hexdigest()[:10]
+        for n, ln in enumerate(found.lines, 1):
+            self.evidence.record(vendor_id, f"quote.{digest}.l{n}", {"label": ln.label, "quantity": ln.quantity, "unit_inr": ln.unit_inr, "total_inr": ln.total_inr, "basis": ln.basis},
+                                 FactState.EXTRACTED, f"doc:{digest}")
+        return {"document": digest, "engine": converted.engine, "truncated": converted.truncated, "summary": found.summary, "warnings": found.warnings,
+                "lines": [{"label": ln.label, "quantity": ln.quantity, "unit_inr": ln.unit_inr, "total_inr": ln.total_inr, "basis": ln.basis, "warnings": list(ln.warnings)} for ln in found.lines]}
+
     def purge_logs(self, max_age_days: int | None = None) -> list[str]:
         """Delete run logs older than the retention period (default 90 days, ``EVENTMATE_LOG_RETENTION_DAYS``) and kept voice notes older than theirs. Returns what was removed."""
         return purge_old_logs(self.logs.decisions.log_dir, max_age_days) + [f"voice note {n}" for n in self.voice_notes.purge_expired()]

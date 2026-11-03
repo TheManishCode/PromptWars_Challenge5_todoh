@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, UTC
 from flask import jsonify, request
+from eventmate.documents import sandbox
 from eventmate.state import build_state
 from eventmate.integrations.explore import route as explore_route
 from eventmate.schemas import DealQuery, TripRequest, VendorCategory
@@ -59,6 +60,18 @@ def register(app, k):
             em.ledger_add(plan_id, b.kind.value, b.category, b.amount, b.note)
             summary = em.ledger_summary(plan_id)
         return out(summary, 201)
+
+    @app.post("/api/vendors/<vendor_id>/quote-document")
+    def quote_document(vendor_id):
+        """A quote file the user was sent, read into priced lines for them to confirm. Converted in a sandbox, not kept; the lines are unreviewed evidence, never a price."""
+        if k.shared:
+            return k._err(403, "reading quote files runs on your own machine, not on shared hosting", code="local_only")
+        f = request.files.get("file")
+        if f is None or len(request.files) != 1:
+            raise ValueError("send exactly one file, in the field named file")
+        data = f.stream.read(sandbox.MAX_FILE_BYTES + 1)
+        with lock:
+            return jsonify(em.read_quote_document(pid(vendor_id), f.filename or "", data))
 
     @app.post("/api/observations/<vendor_id>/quotes")
     def observation_add(vendor_id):

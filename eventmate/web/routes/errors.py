@@ -10,6 +10,7 @@ from eventmate.voice.notes import NotesDisabled
 from eventmate.voice.transcribe import TranscribeError
 from eventmate.voice.turns import VoiceError
 from eventmate.guestlist import MAX_BYTES as MAX_GUEST_BYTES, GuestListTooLarge, StalePreview
+from eventmate.documents.sandbox import DocumentError
 from eventmate.retention import PlanBusy
 from eventmate.agents.guest import GuestDataError
 from eventmate.agents.manager import RequestParseError
@@ -57,6 +58,10 @@ def register(app, k):
     @app.errorhandler(StalePreview)
     def _stale_preview(exc):
         return _err(409, str(exc)[:200])
+
+    @app.errorhandler(DocumentError)
+    def _document(exc):
+        return _err(422, str(exc)[:300], code="bad_document")
 
     @app.errorhandler(PlanBusy)
     def _plan_busy(exc):
