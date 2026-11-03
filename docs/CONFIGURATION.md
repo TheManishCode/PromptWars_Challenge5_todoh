@@ -11,6 +11,7 @@
 | `EVENTMATE_WEB_TOKEN` | Bearer token required for the API (mandatory for non-loopback binds) |
 | `EVENTMATE_OWNER_EMAILS` | Comma-separated list of the only addresses the owner digest may be sent to (unset: any address the caller proposes). **Set it on any installation that someone other than you can reach**: the confirmation code is returned to whoever proposes the address, so it does not prove who owns it (F-009) |
 | `EVENTMATE_FD`, `EVENTMATE_VAL` | Paths to Fast Downward / VAL if not in the default locations |
+| `EVENTMATE_BROWSER=1` | A read-only browser for vendor pages that show their text only after scripts run (needs Playwright and Chromium; `EVENTMATE_BROWSER_NO_SANDBOX=1` inside a container). It clicks and types nothing, Chromium has no network of its own (every request is answered by the same checked, pinned fetch as a static page), and the text it returns goes to the price and contact readers, never to a model |
 | `NVIDIA_API_KEY`, `OPENROUTER_API_KEY` (`EVENTMATE_ENABLE_LLM=0` turns models off) | Models: NVIDIA for heavy work, OpenRouter free models for light work and as backup; no SDK needed |
 
 Secrets are only read from the environment and never written to disk or logs.

@@ -52,6 +52,17 @@ class DietaryRequirement(str, Enum):
     GLUTEN_FREE = "gluten_free"
 
 
+class Allergen(str, Enum):
+    PEANUT = "peanut"
+    TREE_NUT = "tree_nut"
+    DAIRY = "dairy"
+    EGG = "egg"
+    SHELLFISH = "shellfish"
+    FISH = "fish"
+    SOY = "soy"
+    SESAME = "sesame"
+
+
 class VenueSetting(str, Enum):
     INDOOR = "indoor"
     OUTDOOR = "outdoor"
@@ -311,6 +322,8 @@ class EventRequest(_Model):
     budget_total: int = Field(gt=0, le=MAX_BUDGET_INR)
     currency: Literal["INR"] = "INR"
     dietary: tuple[DietaryRequirement, ...] = ()
+    # allergies the user stated; no vendor record can prove a kitchen is free of one, so the plan says so instead of passing (empty for every plan made before this field)
+    allergens: tuple[Allergen, ...] = ()
     venue_setting: VenueSetting = VenueSetting.ANY
     services: tuple[VendorCategory, ...] = (VendorCategory.VENUE,)
     reminders: tuple[ReminderKind, ...] = ()

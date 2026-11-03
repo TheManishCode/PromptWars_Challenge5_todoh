@@ -33,6 +33,7 @@ from eventmate.untrusted import UntrustedTextRejected, normalize_untrusted, rend
 from eventmate.schemas import (
     MAX_BUDGET_INR,
     MAX_GUESTS,
+    Allergen,
     CommunityDetails,
     DietaryRequirement,
     EventRequest,
@@ -49,7 +50,7 @@ MAX_MESSAGE_CHARS = mgr.MAX_TEXT_CHARS
 _MAX_TOKENS = 1200  # a reasoning model spends part of this thinking; 600 sometimes ended before any JSON
 _ATTEMPTS = 2  # one retry, only for a reply that is not usable JSON; a provider failure is not retried
 REQUIRED = ("guest_count", "city", "event_date", "budget_total")
-FIELDS = tuple(f for f in ("event_type", "community_subtype", "guest_count", "city", "event_date", "budget_total", "dietary", "venue_setting", "services", "reminders"))
+FIELDS = tuple(f for f in ("event_type", "community_subtype", "guest_count", "city", "event_date", "budget_total", "dietary", "allergens", "venue_setting", "services", "reminders"))
 _CITY = re.compile(r"[^\W\d_](?:[^\W\d_]|[ .'-])*")  # letters, spaces, . ' - only
 MAX_CITY_WORDS, MAX_CITY_CHARS = 3, 40  # "Navi Mumbai" fits; a sentence or payload does not
 _QUESTIONS = {
@@ -81,6 +82,7 @@ class IntakeDraft(_Model):
     event_date: date | None = None
     budget_total: int | None = Field(default=None, gt=0, le=MAX_BUDGET_INR)
     dietary: tuple[DietaryRequirement, ...] = ()
+    allergens: tuple[Allergen, ...] = ()  # only ever read from the user's own words (rules), never proposed by a model
     venue_setting: VenueSetting | None = None
     services: tuple[VendorCategory, ...] = ()
     reminders: tuple[ReminderKind, ...] = ()
@@ -195,6 +197,7 @@ def _rule_draft(text: str, today: date, notes: list[str], choices: list[IntakeCh
         event_date=when,
         budget_total=budget,
         dietary=tuple(d for rx, d in mgr._DIETS if mgr._mentioned(rx, t)),
+        allergens=mgr.parse_allergens(t),
         venue_setting=setting,
         services=tuple(services),
         reminders=tuple(reminders),
@@ -241,7 +244,9 @@ def _merge(base: IntakeDraft, new: IntakeDraft) -> IntakeDraft:
     """New non-empty values win; a list the new message did not mention keeps the reviewed one."""
     merged = base.model_dump()
     for name, value in new.model_dump().items():
-        if value not in (None, ()):
+        if name == "allergens":
+            merged[name] = tuple(dict.fromkeys((*base.allergens, *new.allergens)))  # an allergy once stated is never replaced by a later message, only added to
+        elif value not in (None, ()):
             merged[name] = value
     return IntakeDraft.model_validate(merged)
 
@@ -348,7 +353,7 @@ def propose(
                 else "The AI reader was unavailable, so I used the basic reader. Please check the details."
             )
         else:
-            ai = _grounded(ai, latest, prior)
+            ai = _grounded(ai, latest, prior).model_copy(update={"allergens": ()})  # a model may not state or drop an allergy
             source, new = _source_label(llm), _merge(rules, ai)  # the parser's reading is the baseline
             flags = tuple(f for f in FIELDS if _uncorroborated(getattr(ai, f), getattr(rules, f)))
     draft = _merge(prior, new)
@@ -422,6 +427,7 @@ def to_request(draft: IntakeDraft, raw_text: str, today: date, source: str = "ru
             event_date=draft.event_date,
             budget_total=draft.budget_total,
             dietary=draft.dietary,
+            allergens=draft.allergens,
             venue_setting=setting,
             services=tuple(services),
             reminders=draft.reminders,

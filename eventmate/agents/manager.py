@@ -33,6 +33,7 @@ from eventmate.schemas import (
     MAX_ORGANIZERS,
     AgentName,
     PlanVersion,
+    Allergen,
     ConstraintCheck,
     ConstraintViolation,
     DecisionType,
@@ -126,6 +127,23 @@ _DIETS = [
     (re.compile(r"\bhalal\b", re.I | re.A), DietaryRequirement.HALAL),
     (re.compile(r"\bgluten[- ]free\b", re.I | re.A), DietaryRequirement.GLUTEN_FREE),
 ]
+# An allergy is read only where the user says "allergy/allergic" in the clause, or writes "<x>-free". A missed allergy is the harmful error, so a negated clause still counts
+# when it also says "allergic" ("not allergic" is the one exception: that clause is skipped).
+_ALLERGY_WORDS = re.compile(r"\ballerg(?:y|ies|ic)\b", re.I | re.A)
+_NOT_ALLERGIC = re.compile(r"\b(?:no|not|without|never|don'?t|dont)\s+(?:\w+\s+){0,2}allerg", re.I | re.A)
+_ALLERGEN_WORDS = [
+    (re.compile(r"\b(?:peanuts?|groundnuts?)\b", re.I | re.A), (Allergen.PEANUT,)),
+    (re.compile(r"\b(?:tree[- ]?nuts?|almonds?|cashews?|walnuts?|pistachios?|hazelnuts?)\b", re.I | re.A), (Allergen.TREE_NUT,)),
+    (re.compile(r"\bnuts?\b", re.I | re.A), (Allergen.PEANUT, Allergen.TREE_NUT)),  # "nut allergy" does not say which: both
+    (re.compile(r"\b(?:dairy|milk|lactose)\b", re.I | re.A), (Allergen.DAIRY,)),
+    (re.compile(r"\beggs?\b", re.I | re.A), (Allergen.EGG,)),
+    (re.compile(r"\b(?:shellfish|prawns?|shrimps?|crabs?|lobsters?)\b", re.I | re.A), (Allergen.SHELLFISH,)),
+    (re.compile(r"\bfish\b", re.I | re.A), (Allergen.FISH,)),
+    (re.compile(r"\b(?:soy|soya)\b", re.I | re.A), (Allergen.SOY,)),
+    (re.compile(r"\b(?:sesame|til)\b", re.I | re.A), (Allergen.SESAME,)),
+]
+_ALLERGY_CLAUSE = re.compile(r"[.;,!?\n]|\b(?:but|however|although|except|yet)\b", re.I | re.A)  # "not allergic to nuts but allergic to eggs" is two statements
+_FREE_OF = re.compile(r"\b(?:peanut|groundnut|nut|tree[- ]?nut|dairy|egg|shellfish|fish|soy|soya|sesame)[- ]free\b", re.I | re.A)
 _CATERER = re.compile(r"\b(?:cater(?:er|ers|ing)?|food|meals?)\b", re.I | re.A)
 _PHOTO = re.compile(r"\bphoto(?:grapher|graphy|graphers)?\b", re.I | re.A)
 _REMINDER = re.compile(r"\breminders?\b", re.I | re.A)
@@ -133,6 +151,20 @@ _REM_INVITE = re.compile(r"\binvit(?:e|es|ation|ations)\b", re.I | re.A)
 _REM_VENDOR = re.compile(r"\bvendor(?:s)?\s+confirm(?:ation|ations)?\b|\bconfirm(?:ation|ing)?\s+(?:with\s+|of\s+)?vendors?\b", re.I | re.A)
 _INDOOR = re.compile(r"\bindoors?\b", re.I | re.A)
 _OUTDOOR = re.compile(r"\boutdoors?\b", re.I | re.A)
+
+
+def parse_allergens(text: str) -> tuple[Allergen, ...]:
+    """Allergens the user's own words name next to "allergy/allergic" or as "<x>-free". Never inferred from anything else."""
+    found: list[Allergen] = []
+    for clause in _ALLERGY_CLAUSE.split(text):
+        if _NOT_ALLERGIC.search(clause):
+            continue
+        if _ALLERGY_WORDS.search(clause) or _FREE_OF.search(clause):
+            scope = clause if _ALLERGY_WORDS.search(clause) else " ".join(m.group(0) for m in _FREE_OF.finditer(clause))
+            for rx, kinds in _ALLERGEN_WORDS:
+                if rx.search(scope):
+                    found += kinds
+    return tuple(dict.fromkeys(found))
 
 
 def _mentioned(rx: re.Pattern[str], text: str) -> bool:
@@ -416,6 +448,7 @@ def parse_request(
     event_type, community = _parse_event_type(text, assumptions)
     setting = _parse_setting(text, assumptions)
     services, dietary = _parse_services(text, assumptions)
+    allergens = parse_allergens(text)
     reminders = _parse_reminders(text, assumptions)
 
     assumptions = list(dict.fromkeys(assumptions))
@@ -429,6 +462,7 @@ def parse_request(
             event_date=event_date,
             budget_total=budget,
             dietary=dietary,
+            allergens=allergens,
             venue_setting=setting,
             services=tuple(services),
             reminders=tuple(reminders),

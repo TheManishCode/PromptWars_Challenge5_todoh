@@ -72,6 +72,7 @@ from eventmate.env import load_env
 from eventmate.integrations.places import PlacesSource
 from eventmate.integrations.weather import OpenWeatherSource
 from eventmate.integrations.weather_advice import advise
+from eventmate.browser.render import RenderingFetcher
 from eventmate.integrations.travel import FlightProvider, FliProvider, TravelError, check_range, check_search, search_multi_city
 from eventmate.integrations.tripsearch import search_trip
 
@@ -110,7 +111,7 @@ class EventMate:
         self.weather = weather or OpenWeatherSource()
         self.places = places or PlacesSource()
         self.router_clients = lambda: (client_from_env(tier="light") or _NoClients()).clients  # light tier: OpenRouter free first, NVIDIA behind
-        self.deals_factory = lambda on_call: DealAgent(default_provider(), SafeFetcher(), on_call=on_call)
+        self.deals_factory = lambda on_call: DealAgent(default_provider(), RenderingFetcher(), on_call=on_call)  # static pages first; the read-only browser only for a page with almost no text
         self.observations = ObservationStore(self.store.root, self.repo)
         self.repo.quotes = self.observations
         self.evidence = EvidenceLedger(self.store.root)

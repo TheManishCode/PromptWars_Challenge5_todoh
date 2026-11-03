@@ -20,6 +20,7 @@ from eventmate.agents.scheduler import DAY, EventPolicy
 from eventmate.agents.vendor import VendorRepository, evaluate
 from eventmate.logs import RunLogs
 from eventmate.schemas import (
+    UnverifiedItem,
     AgentName,
     BookingStatus,
     ConstraintCheck,
@@ -97,6 +98,7 @@ class ValidatorAgent:
         checks += self._policy_rules(draft)
         checks += self._symbolic(draft, warnings)
         community_checks, unverified = community.evaluate(draft, self.repo, self.policy)
+        unverified = [*unverified, *self._allergen_items(draft)]
         checks += community_checks
         if parent is not None:
             checks += self._preservation(draft, parent, released)
@@ -322,6 +324,19 @@ class ValidatorAgent:
         return out
 
     # ---------------------------------------------------------------- symbolic
+
+    @staticmethod
+    def _allergen_items(draft: PlanDraft) -> list[UnverifiedItem]:
+        """A stated allergy is never "passed": no vendor record proves a kitchen is free of an allergen, so the plan stays provisional until the user has the vendor's written answer."""
+        if not draft.request.allergens:
+            return []
+        names = ", ".join(a.value.replace("_", " ") for a in draft.request.allergens)
+        return [UnverifiedItem(
+            name="allergens_unconfirmed",
+            detail=f"you told us about an allergy ({names}); nothing in the vendor records can show that a caterer or venue kitchen is free of it",
+            repair="ask each caterer, in writing, whether they can serve without it and how they prevent cross-contact, and keep their reply",
+            label=f"allergy not confirmed with the caterer ({names})",
+        )]
 
     def _symbolic(self, d: PlanDraft, warnings: list[str]) -> list[ConstraintCheck]:
         s = d.symbolic.status
