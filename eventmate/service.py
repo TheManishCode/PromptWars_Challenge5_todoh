@@ -137,6 +137,8 @@ class EventMate:
         self.conversations.health = self.integrity.blocker
         self.conversations.guards.append(self._job_guard)
         self.conversations.suppressions, self.conversations.unmatched = self.suppressions, self.unmatched
+        if os.environ.get("EVENTMATE_READ_QUOTE_ATTACHMENTS") == "1":  # off unless the user turns it on: an attachment is a stranger's file
+            self.conversations.read_attachment = self._read_attachment
         self.notifier = OwnerNotifier(
             self.store.root, self.digest_store, lambda: self.conversations.channels["email"], self._jobs_of, self._vendor_names, self._vendor_addresses,
             self._own_addresses,
@@ -294,10 +296,33 @@ class EventMate:
             self.evidence.record(vendor_id, f"quote.{digest}.grand_total", {"label": "Grand total", "quantity": None, "unit_inr": None, "total_inr": found.summary["grand_total"], "basis": "total"},
                                  FactState.EXTRACTED, f"doc:{digest}")
         for n, ln in enumerate(found.lines, 1):
-            self.evidence.record(vendor_id, f"quote.{digest}.l{n}", {"label": ln.label, "quantity": ln.quantity, "unit_inr": ln.unit_inr, "total_inr": ln.total_inr, "basis": ln.basis},
+            self.evidence.record(vendor_id, f"quote.{digest}.l{n}", {"label": ln.label, "quantity": ln.quantity, "unit_inr": ln.unit_inr, "total_inr": ln.total_inr, "basis": ln.basis, "warnings": list(ln.warnings)},
                                  FactState.EXTRACTED, f"doc:{digest}")
         return {"document": digest, "engine": converted.engine, "truncated": converted.truncated, "summary": found.summary, "warnings": found.warnings,
-                "lines": [{"label": ln.label, "quantity": ln.quantity, "unit_inr": ln.unit_inr, "total_inr": ln.total_inr, "basis": ln.basis, "warnings": list(ln.warnings)} for ln in found.lines]}
+                "lines": [{"key": str(n), "label": ln.label, "quantity": ln.quantity, "unit_inr": ln.unit_inr, "total_inr": ln.total_inr, "basis": ln.basis, "warnings": list(ln.warnings)} for n, ln in enumerate(found.lines, 1)]}
+
+    def quote_documents(self, vendor_id: str) -> list[dict]:
+        """Every quote file read for this vendor (uploaded or attached to a reply), newest first, with each line's state: still unreviewed, or one the user confirmed."""
+        docs: dict[str, dict] = {}
+        for r in self.evidence.records(vendor_id):
+            m = re.fullmatch(r"quote\.([0-9a-f]{10})\.(l[1-9][0-9]{0,2}|grand_total)", r.field)
+            if not m or r.source not in (f"doc:{m.group(1)}", "user_input") or not isinstance(r.value, dict):
+                continue
+            row = docs.setdefault(m.group(1), {"document": m.group(1), "lines": {}})["lines"].setdefault(m.group(2), {**r.value, "key": m.group(2).lstrip("l"), "confirmed": False})
+            row["confirmed"] = row["confirmed"] or r.state is FactState.USER_CONFIRMED
+        out = []
+        for doc in reversed(list(docs.values())):
+            lines = sorted((v for k, v in doc["lines"].items() if k != "grand_total"), key=lambda v: int(v["key"]))
+            total = doc["lines"].get("grand_total")
+            out.append({"document": doc["document"], "lines": lines, "summary": {"grand_total": total["total_inr"]} if total else {}, "grand_total_confirmed": bool(total and total["confirmed"]), "warnings": []})
+        return out[:10]
+
+    def _read_attachment(self, vendor_id: str, name: str, data: bytes) -> str | None:
+        try:
+            out = self.read_quote_document(vendor_id, name, data)
+        except ValueError:  # includes DocumentError: not a readable quote file
+            return None
+        return out["document"] if out["lines"] else None
 
     def confirm_quote_line(self, vendor_id: str, document: str, line: str, valid_days: int):
         """The user's tap on a line read from a quote file ("1".."n", or "grand_total"). The amount is the one this app extracted and kept, never one the caller sends, and

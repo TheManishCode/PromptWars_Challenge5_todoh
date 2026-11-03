@@ -63,6 +63,12 @@ def register(app, k):
             summary = em.ledger_summary(plan_id)
         return out(summary, 201)
 
+    @app.get("/api/vendors/<vendor_id>/quote-documents")
+    def quote_documents(vendor_id):
+        """The quote files already read for this vendor, with the state of each line. Read-only."""
+        with lock:
+            return jsonify({"documents": em.quote_documents(pid(vendor_id))})
+
     @app.post("/api/vendors/<vendor_id>/quote-document")
     def quote_document(vendor_id):
         """A quote file the user was sent, read into priced lines for them to confirm. Converted in a sandbox, not kept; the lines are unreviewed evidence, never a price."""

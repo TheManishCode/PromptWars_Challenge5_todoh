@@ -133,3 +133,14 @@ def test_names_are_compared_ignoring_the_first_word_of_each_sentence():
     assert verify_spoken("Rohan is coming. He likes Pune.", "Rohan is coming. He likes Pune.")
     assert not verify_spoken("Rohan is coming.", "Today Rohan and Meera are coming.")
     assert verify_spoken("Ask Rohan.", "Ask Rohan.") and not verify_spoken("ask rohan.", "Please ask Meera.")
+
+
+def test_table_rows_are_spoken_as_lists_and_the_row_pattern_is_linear_on_blank_lines():
+    import time
+
+    from eventmate.voice.speech import _TABLE_ROW, strip_markup
+
+    assert strip_markup("Prices\n| Veg | 450 |\n  | Stage | 1,20,000 |  \nthanks") == "Prices\nVeg, 450\nStage, 1,20,000\nthanks"
+    started = time.perf_counter()
+    _TABLE_ROW.sub("", "\n" * 40_000 + "x")  # the pattern alone: the markup step that runs before it hides the case, but the pattern must not depend on that
+    assert time.perf_counter() - started < 1.0

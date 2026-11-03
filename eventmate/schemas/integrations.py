@@ -582,7 +582,8 @@ class InboundMessage(_Model):
     external_id: str = Field(min_length=1, max_length=400)
     body: str = Field(max_length=4000)
     truncated: bool = False
-    attachments: int = Field(default=0, ge=0, le=100)  # counted, never opened
+    attachments: int = Field(default=0, ge=0, le=100)  # counted; opened only when the user has turned on reading quote attachments, and then only in the sandbox
+    quote_documents: tuple[str, ...] = Field(default=(), max_length=2)  # quote files read from this reply (their ids): the lines are unreviewed evidence until the user confirms them
     analysis: ReplyAnalysis = ReplyAnalysis()
     read: bool = False
     sender_differs: bool = False  # an email reply carrying the thread's headers from an address other than the one written to: shown, never trusted or answered automatically

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import email
 import hashlib
+import os
 import email.policy
 import email.utils
 import http.client
@@ -86,6 +87,7 @@ class Inbound:
     attachments: int = 0
     truncated: bool = False
     bounce: Bounce | None = None
+    files: tuple[tuple[str, bytes], ...] = field(default=(), repr=False, compare=False)  # (name, bytes) of up to MAX_QUOTE_FILES attachments a quote could be read from; never stored, only handed to the reader
 
 
 class Channel(Protocol):
@@ -170,6 +172,8 @@ def _strip_html(html: str) -> str:
 
 
 _NESTED_PART = re.compile(rb"(?im)^content-type:[ \t]*(?:multipart|message)/")  # header lines only, so a URL in a body that contains "message/" does not count
+MAX_QUOTE_FILES = 2
+QUOTE_FILE_EXTENSIONS = frozenset({".pdf", ".docx", ".xlsx", ".csv", ".html", ".htm", ".txt", ".png", ".jpg", ".jpeg"})
 MAX_MIME_NESTING = 24  # a real reply has a handful of parts; thousands of nested ones exist only to exhaust the parser's stack
 
 
@@ -365,8 +369,27 @@ class EmailChannel:
         return Inbound(
             channel="email", sender=sender[:254], external_id=(mid or "nomsgid-" + hashlib.sha256(raw).hexdigest()[:32])[:400], received_at=self._when(msg), body=body,
             subject=str(msg.get("Subject", ""))[:200], in_reply_to=str(msg.get("In-Reply-To", "")).strip()[:400], references=str(msg.get("References", ""))[:2000],
-            attachments=min(attachments, 100), truncated=truncated,
+            attachments=min(attachments, 100), truncated=truncated, files=_quote_files(msg, raw),
         )
+
+
+def _quote_files(msg, raw: bytes) -> tuple[tuple[str, bytes], ...]:
+    """The attachments a quote might be read from. Only when the whole message was fetched: past the fetch limit a part is cut off and its bytes are not the file."""
+    if len(raw) >= MAX_FETCH_BYTES:
+        return ()
+    out = []
+    try:
+        for part in msg.iter_attachments():
+            name = os.path.basename(str(part.get_filename() or ""))[:100]
+            if os.path.splitext(name)[1].lower() in QUOTE_FILE_EXTENSIONS and not part.is_multipart():
+                data = part.get_payload(decode=True)
+                if data:
+                    out.append((name, bytes(data)))
+            if len(out) >= MAX_QUOTE_FILES:
+                break
+    except Exception:  # an attachment that cannot be decoded is simply not offered
+        return ()
+    return tuple(out)
 
 
 def _dsn(msg) -> Bounce | None:

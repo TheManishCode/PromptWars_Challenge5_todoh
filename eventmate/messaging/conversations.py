@@ -109,6 +109,7 @@ class ConversationService:
         self.suppressions: SuppressionStore | None = None  # set by to;doh-the event planner: the do-not-contact list, checked at approval and again when a message is about to be sent
         self.unmatched: UnmatchedStore | None = None  # set by to;doh-the event planner: stop-like mail and bounces that are not tied to anything we sent, for the user to review
         self.guards: list[Callable[[OutreachDraft], str | None]] = []  # each may veto an automatic send at dispatch time (for example: its job was cancelled)
+        self.read_attachment: Callable[[str, str, bytes], str | None] | None = None  # set by to;doh-the event planner only when the user turned it on: (vendor id, file name, bytes) -> the quote document id, or None
         self.health: Callable[[], str | None] | None = None  # set by to;doh-the event planner: why nothing may be sent or approved right now (a damaged record file), or None
 
     # ------------------------------------------------------------ approval
@@ -347,6 +348,16 @@ class ConversationService:
             sender_differs=item.channel == "email" and _address_key(item.channel, item.sender) != _address_key(item.channel, d.recipient),
             auto_handled=not self.autoreply_status(pid).active,  # a reply that arrives while no permission is active can never be answered automatically later
         )
+        if self.read_attachment is not None and item.files and not msg.sender_differs and item.channel == "email":  # only the address we wrote to, on the thread we started
+            docs = []
+            for name, data in item.files:
+                try:
+                    doc = self.read_attachment(d.vendor_id, name, data)
+                except Exception:  # an unreadable or hostile file is just not read; the reply itself is stored as always
+                    doc = None
+                if doc:
+                    docs.append(doc)
+            msg = msg.model_copy(update={"quote_documents": tuple(docs[:2])})
         stored = self.store.add_inbound(msg)
         if stored is not None and stored.analysis.asks_to_stop:
             if stored.sender_differs:  # right thread, wrong address: anyone could have written it, so it adds nothing; the user reads it

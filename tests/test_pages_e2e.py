@@ -241,9 +241,8 @@ def test_the_workspace_dialog_opens_exports_and_closes(server, ctx):
     assert seen == [], seen
 
 
-def test_a_quote_file_added_to_a_vendor_event_shows_its_lines_as_extracted_and_unconfirmed(server, ctx, tmp_path):
-    page, seen = opened(ctx, server[0] + "/app")
-    new_plan(page)
+def open_vendor_event(page):
+    """Open the popover of an event that books a vendor; the others do not offer the quote control."""
     for i in range(page.locator("#cal .ev").count()):  # the events that book a vendor offer the control; the others do not
         page.click(f"#cal .ev >> nth={i}")
         page.wait_for_selector("#pop:not([hidden])")
@@ -259,6 +258,12 @@ def test_a_quote_file_added_to_a_vendor_event_shows_its_lines_as_extracted_and_u
                 break
             page.keyboard.press("Escape")
     assert page.locator("#pop-quote:not([hidden])").count() == 1
+
+
+def test_a_quote_file_added_to_a_vendor_event_shows_its_lines_as_extracted_and_unconfirmed(server, ctx, tmp_path):
+    page, seen = opened(ctx, server[0] + "/app")
+    new_plan(page)
+    open_vendor_event(page)
     quote = tmp_path / "quote.csv"
     quote.write_text("Item,Qty,Rate,Total\nVeg buffet,120,450,54000\nStage,1,,120000\n", encoding="utf-8")
     page.set_input_files("#pop-quote input[type=file]", str(quote))
@@ -269,6 +274,10 @@ def test_a_quote_file_added_to_a_vendor_event_shows_its_lines_as_extracted_and_u
     page.locator("#pop-quote .pop__line button >> nth=0").click()  # the user's tap is what turns a line into a recorded quote
     page.wait_for_selector("#pop-quote .pop__line .chip[data-s=user_confirmed]")
     assert "recorded as a quote for 14 days" in page.inner_text("#pop-quote") and page.locator("#pop-quote .pop__line .chip[data-s=extracted]").count() == 1
+    page.keyboard.press("Escape")  # reopen: the file read a moment ago is listed, and the line the user confirmed shows as confirmed
+    open_vendor_event(page)
+    page.wait_for_selector("#pop-quote .pop__quote-out .pop__doc")
+    assert "Quote files already read" in page.inner_text("#pop-quote") and page.locator("#pop-quote .pop__quote-out .pop__line .chip[data-s=user_confirmed]").count() == 1
     page.set_input_files("#pop-quote input[type=file]", files=[{"name": "bad.exe", "mimeType": "application/octet-stream", "buffer": b"MZ"}])
     page.wait_for_selector("#pop-quote .notice.bad")
     assert "PDF, Word" in page.inner_text("#pop-quote")  # a refused file says what would be accepted

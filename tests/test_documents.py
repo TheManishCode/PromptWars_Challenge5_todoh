@@ -285,3 +285,30 @@ def test_a_fact_from_another_source_with_the_same_field_name_cannot_be_confirmed
     with pytest.raises(ValueError, match="no such quote line"):
         em.confirm_quote_line(vendor, "0123456789", "1", 14)
     assert em.observations.quotes(vendor) == []
+
+
+# ---------------------------------------------------------------- files already read
+
+
+def test_the_files_already_read_come_back_with_each_lines_state(tmp_path):
+    em, vendor, doc = read_one(tmp_path)
+    em.confirm_quote_line(vendor, doc["document"], "1", 14)
+    got = em.quote_documents(vendor)
+    assert len(got) == 1 and got[0]["document"] == doc["document"] and got[0]["summary"] == {"grand_total": 174_000} and got[0]["grand_total_confirmed"] is False
+    assert [(ln["key"], ln["label"], ln["confirmed"]) for ln in got[0]["lines"]] == [("1", "Veg buffet", True), ("2", "Stage", False)]
+    em.confirm_quote_line(vendor, doc["document"], "grand_total", 14)
+    assert em.quote_documents(vendor)[0]["grand_total_confirmed"] is True
+
+
+def test_another_vendors_files_and_look_alike_facts_are_not_listed(tmp_path):
+    em, vendor, doc = read_one(tmp_path)
+    other = next(v for v, d in em.vendor_directory().items() if v != vendor and d["origin"] == "seed")
+    em.evidence.record(vendor, "quote.0123456789.l1", {"label": "forged", "total_inr": 1, "basis": "total"}, FactState.EXTRACTED, "web:abc")
+    assert em.quote_documents(other) == [] and [d["document"] for d in em.quote_documents(vendor)] == [doc["document"]]
+
+
+def test_the_route_lists_them(web):
+    c, vendor = web
+    doc = upload(c, vendor, QUOTE).get_json()["document"]
+    got = c.get(f"/api/vendors/{vendor}/quote-documents").get_json()["documents"]
+    assert [d["document"] for d in got] == [doc] and got[0]["lines"][0]["total_inr"] == 54_000
