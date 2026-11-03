@@ -339,6 +339,16 @@ class FlightBody(_Strict):
     limit: int = Field(default=10, ge=1, le=30)
 
 
+class CheapestDatesBody(_Strict):
+    origin: str = Field(**_IATA_FIELD)
+    destination: str = Field(**_IATA_FIELD)
+    from_date: date
+    to_date: date
+    adults: int = Field(default=1, ge=1, le=9)
+    cabin: Literal[CABINS] = "economy"
+    max_stops: int | None = Field(default=None, ge=0, le=2)
+
+
 class LegBody(_Strict):
     origin: str = Field(**_IATA_FIELD)
     destination: str = Field(**_IATA_FIELD)

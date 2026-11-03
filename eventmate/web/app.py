@@ -158,7 +158,7 @@ def create_app(
 
     csrf_gets = {"/api/workspace/export"}  # spends no quota, but hands over everything in the workspace, so a page on another site must not be able to fetch it
 
-    quota_gets = {"/api/deals", "/api/explore", "/api/travel/flights", "/api/travel/multi-city", "/api/travel/trip", "/api/discover/venues", "/api/weather", "/api/places"}
+    quota_gets = {"/api/deals", "/api/explore", "/api/travel/flights", "/api/travel/cheapest-dates", "/api/travel/multi-city", "/api/travel/trip", "/api/discover/venues", "/api/weather", "/api/places"}
 
     def spends_quota(path: str) -> bool:
         return path in quota_gets or (path.startswith("/api/plans/") and path.endswith(("/weather", "/weather-advice")))

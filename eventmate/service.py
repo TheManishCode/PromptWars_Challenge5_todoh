@@ -70,7 +70,7 @@ from eventmate.env import load_env
 from eventmate.integrations.places import PlacesSource
 from eventmate.integrations.weather import OpenWeatherSource
 from eventmate.integrations.weather_advice import advise
-from eventmate.integrations.travel import FlightProvider, FliProvider, check_search, search_multi_city
+from eventmate.integrations.travel import FlightProvider, FliProvider, check_range, check_search, search_multi_city
 from eventmate.integrations.tripsearch import search_trip
 
 
@@ -719,6 +719,12 @@ class EventMate:
         """Indicative fares and schedules for one direction. Nothing is booked."""
         check_search(origin, destination, kw.get("adults", 1), kw.get("cabin", "economy"), kw.get("limit", 10))  # whatever the provider is
         return self.flights.search_one_way(origin, destination, day, **kw)
+
+    def cheapest_flight_dates(self, origin: str, destination: str, start: date, end: date, today: date | None = None, **kw):
+        """The lowest indicative fare for each day in a range (at most 61 days), one direction. Nothing is booked."""
+        check_search(origin, destination, kw.get("adults", 1), kw.get("cabin", "economy"), 1)
+        check_range(start, end, today or date.today())
+        return self.flights.cheapest_dates(origin, destination, start, end, **kw)
 
     def plan_trip(self, request, today: date | None = None, **kw):
         """Order the stops, choose dates, search every distinct leg and rank complete itineraries. Every search is logged."""

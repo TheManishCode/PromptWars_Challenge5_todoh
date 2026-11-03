@@ -38,6 +38,19 @@ class Fake(FlightProvider):
             options=tuple(opt(origin, destination, day, p, m) for p, m in rows),
         )
 
+    def cheapest_dates(self, origin, destination, start, end, adults=1, cabin="economy", max_stops=None):
+        from datetime import timedelta
+
+        from eventmate.schemas import CheapestDates, DateFare
+
+        days = []
+        for i in range(min((end - start).days + 1, 61)):
+            rows = self.price_fn(origin, destination, start + timedelta(days=i))
+            if rows:
+                days.append(DateFare(day=start + timedelta(days=i), price_inr=min(p for p, _ in rows)))
+        return CheapestDates(origin=origin, destination=destination, from_date=start, to_date=end, days=tuple(days), cheapest=min(days, key=lambda f: (f.price_inr, f.day), default=None),
+                             fetched_at=datetime(2026, 10, 30, 9))
+
 
 def flat(price=5000, minutes=120):
     return lambda o, d, day: [(price, minutes)]

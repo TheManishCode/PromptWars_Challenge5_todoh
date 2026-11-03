@@ -12,8 +12,11 @@ from datetime import date, datetime, timedelta, UTC
 from collections.abc import Callable, Sequence
 
 from eventmate.schemas import (
+    MAX_DATE_RANGE_DAYS,
     MAX_FLIGHT_OPTIONS,
     MAX_MULTI_CITY_LEGS,
+    CheapestDates,
+    DateFare,
     FlightOption,
     FlightSearch,
     FlightSegmentInfo,
@@ -24,6 +27,8 @@ SOURCE = "tool:fli"
 IATA = re.compile(r"[A-Z]{3}")
 CABINS = ("economy", "premium_economy", "business", "first")
 MAX_ADULTS = 9
+MAX_FARE_INR = 10_000_000  # a fare above INR 1 crore is a misread
+MAX_BOOKABLE_DAYS = 300  # the date grid is not served beyond about 305 days
 MAX_DAYS_AHEAD = 365  # Google Flights sells about this far ahead
 
 
@@ -51,6 +56,19 @@ class FlightProvider:
     ) -> FlightSearch:
         raise NotImplementedError
 
+    def cheapest_dates(self, origin: str, destination: str, start: date, end: date, adults: int = 1, cabin: str = "economy", max_stops: int | None = None) -> CheapestDates:
+        raise NotImplementedError
+
+
+def check_range(start: date, end: date, today: date) -> None:
+    check_date(start, today)
+    if end < start:
+        raise ValueError("the last day is before the first day")
+    if (end - start).days + 1 > MAX_DATE_RANGE_DAYS:
+        raise ValueError(f"search at most {MAX_DATE_RANGE_DAYS} days at a time")
+    if end > today + timedelta(days=MAX_BOOKABLE_DAYS):
+        raise ValueError(f"{end.isoformat()} is too far ahead; the cheapest-day search covers the next {MAX_BOOKABLE_DAYS} days")
+
 
 def check_search(origin: str, destination: str, adults: int, cabin: str, limit: int) -> None:
     for code in (origin, destination):
@@ -69,8 +87,8 @@ def check_search(origin: str, destination: str, adults: int, cabin: str, limit: 
 class FliProvider(FlightProvider):
     """Wraps ``fli.search.SearchFlights``. fli is an optional dependency and is imported on first use."""
 
-    def __init__(self, search_factory: Callable[[], object] | None = None, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
-        self._factory, self._now = search_factory, now
+    def __init__(self, search_factory: Callable[[], object] | None = None, date_factory: Callable[[], object] | None = None, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
+        self._factory, self._date_factory, self._now = search_factory, date_factory, now
 
     def search_one_way(self, origin, destination, day, adults=1, cabin="economy", max_stops=None, limit=10) -> FlightSearch:
         check_search(origin, destination, adults, cabin, limit)
@@ -113,6 +131,48 @@ class FliProvider(FlightProvider):
         return FlightSearch(
             origin=origin, destination=destination, travel_date=day, options=tuple(options[:limit]), fetched_at=self._now(), source=SOURCE, warnings=tuple(warnings)
         )
+
+    def cheapest_dates(self, origin, destination, start, end, adults=1, cabin="economy", max_stops=None) -> CheapestDates:
+        check_search(origin, destination, adults, cabin, 1)
+        if max_stops is not None and not 0 <= max_stops <= 2:
+            raise ValueError("max_stops must be 0, 1 or 2")
+        try:
+            from fli.models import Airport, DateSearchFilters, FlightSegment, MaxStops, PassengerInfo, SeatType
+            from fli.search import SearchDates
+            from fli.search.exceptions import SearchClientError
+        except ImportError as exc:
+            raise TravelError("flight search is not installed: pip install the fli package (see docs/CONFIGURATION.md)") from exc
+        try:
+            frm, to = Airport[origin], Airport[destination]
+        except KeyError as exc:
+            raise ValueError(f"unknown airport code {exc.args[0]!r}") from exc
+        stops = {None: MaxStops.ANY, 0: MaxStops.NON_STOP, 1: MaxStops.ONE_STOP_OR_FEWER, 2: MaxStops.TWO_OR_FEWER_STOPS}[max_stops]
+        filters = DateSearchFilters(
+            passenger_info=PassengerInfo(adults=adults),
+            flight_segments=[FlightSegment(departure_airport=[[frm, 0]], arrival_airport=[[to, 0]], travel_date=start.isoformat())],
+            seat_type=SeatType[cabin.upper()], stops=stops, from_date=start.isoformat(), to_date=end.isoformat(),
+        )
+        search = self._date_factory() if self._date_factory else SearchDates()
+        try:
+            results = search.search(filters, currency="INR") or []
+        except SearchClientError as exc:
+            raise TravelError(f"Google Flights could not be searched ({type(exc).__name__}); try again shortly") from exc
+        except Exception as exc:
+            raise TravelError("the flight search failed unexpectedly") from exc
+        best: dict[date, int] = {}
+        skipped = 0
+        for r in results:
+            try:
+                day, price = r.date[0].date(), r.price
+                if (r.currency or "INR") != "INR" or not start <= day <= end or not price or price <= 0 or price > MAX_FARE_INR:
+                    raise ValueError
+                best[day] = min(best.get(day, MAX_FARE_INR), round(price))
+            except Exception:
+                skipped += 1
+        days = tuple(DateFare(day=d, price_inr=p) for d, p in sorted(best.items()))
+        return CheapestDates(origin=origin, destination=destination, from_date=start, to_date=end, days=days,
+                             cheapest=min(days, key=lambda f: (f.price_inr, f.day), default=None), fetched_at=self._now(),
+                             warnings=(f"{skipped} price(s) could not be read and were skipped",) if skipped else ())
 
     @staticmethod
     def _option(search, r, cabin: str, warnings: list[str]) -> FlightOption:

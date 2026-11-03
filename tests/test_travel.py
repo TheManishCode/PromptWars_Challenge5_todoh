@@ -1,12 +1,12 @@
 """Flight fares and schedules: provider adapter, multi-city built from separate searches, hostile data."""
 
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
 
-from eventmate.schemas import FlightOption, FlightSearch, FlightSegmentInfo
+from eventmate.schemas import CheapestDates, DateFare, FlightOption, FlightSearch, FlightSegmentInfo
 from eventmate.service import EventMate
 from tests.conftest import TODAY
 from eventmate.integrations.travel import FlightProvider, FliProvider, TravelError, search_multi_city
@@ -36,6 +36,14 @@ class Fake(FlightProvider):
             raise TravelError(f"no service for {origin}-{destination}")
         opts = tuple(sorted(self.table.get((origin, destination), ()), key=lambda o: (o.price_inr is None, o.price_inr or 0)))[:limit]
         return FlightSearch(origin=origin, destination=destination, travel_date=day, options=opts, fetched_at=datetime(2026, 10, 30, 9), source="tool:fli")
+
+    def cheapest_dates(self, origin, destination, start, end, adults=1, cabin="economy", max_stops=None):
+        self.calls.append((origin, destination, start, end))
+        if (origin, destination) in self.fail:
+            raise TravelError(f"no service for {origin}-{destination}")
+        prices = [o.price_inr for o in self.table.get((origin, destination), ()) if o.price_inr is not None]
+        days = tuple(DateFare(day=start + timedelta(days=i), price_inr=min(prices) + 100 * i) for i in range(min((end - start).days + 1, 61))) if prices else ()
+        return CheapestDates(origin=origin, destination=destination, from_date=start, to_date=end, days=days, cheapest=days[0] if days else None, fetched_at=datetime(2026, 10, 30, 9))
 
 
 # ------------------------------------------------------------------ schemas
@@ -236,3 +244,68 @@ def test_api_provider_failure_is_a_clean_502_without_internals(em):
 def test_api_post_requires_csrf(client):
     r = client.post("/api/travel/flights", data=json.dumps({"origin": "DEL", "destination": "BOM", "date": "2026-12-12"}), headers={"Content-Type": "application/json"})
     assert r.status_code in (400, 403)
+
+
+# ---------------------------------------------------------------- cheapest days
+
+
+class FakeDates:
+    def __init__(self, results=None, exc=None):
+        self.results, self.exc, self.filters = results, exc, None
+
+    def search(self, filters, currency=None, language=None, country=None):
+        self.filters = filters
+        if self.exc:
+            raise self.exc
+        return self.results
+
+
+def dp(day, price, currency="INR"):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(date=(datetime(day.year, day.month, day.day),), price=price, currency=currency)
+
+
+def dates_provider(results=None, exc=None):
+    fake = FakeDates(results, exc)
+    return FliProvider(date_factory=lambda: fake, now=lambda: datetime(2026, 10, 30, 9)), fake
+
+
+def test_the_cheapest_day_is_found_and_unreadable_prices_are_skipped_not_guessed():
+    d = date(2026, 12, 12)
+    p, fake = dates_provider([dp(d, 5200.4), dp(d + timedelta(days=1), 4100), dp(d + timedelta(days=2), 0), dp(d + timedelta(days=3), 99, "USD"), dp(d + timedelta(days=40), 1000),
+                              dp(d + timedelta(days=4), 10**9), dp(d + timedelta(days=5), None)])
+    out = p.cheapest_dates("DEL", "BOM", d, d + timedelta(days=10))
+    assert [(f.day, f.price_inr) for f in out.days] == [(d, 5200), (d + timedelta(days=1), 4100)] and out.cheapest.price_inr == 4100
+    assert "5 price(s)" in out.warnings[0] and fake.filters.from_date == "2026-12-12" and out.source == "tool:fli"
+
+
+def test_no_prices_is_an_empty_answer_and_a_failure_is_a_plain_error():
+    d = date(2026, 12, 12)
+    out = dates_provider(None)[0].cheapest_dates("DEL", "BOM", d, d)
+    assert out.days == () and out.cheapest is None
+    with pytest.raises(TravelError, match="failed unexpectedly") as e:
+        dates_provider(exc=RuntimeError("secret internals"))[0].cheapest_dates("DEL", "BOM", d, d)
+    assert "secret" not in str(e.value)
+
+
+def test_the_cheapest_day_keeps_the_lowest_when_a_day_repeats():
+    d = date(2026, 12, 12)
+    out = dates_provider([dp(d, 4500), dp(d, 6000)])[0].cheapest_dates("DEL", "BOM", d, d)
+    assert [f.price_inr for f in out.days] == [4500]
+
+
+@pytest.mark.parametrize("start,end,why", [(date(2026, 10, 1), date(2026, 12, 1), "past"), (date(2026, 12, 12), date(2026, 12, 1), "before"), (date(2026, 12, 1), date(2027, 2, 15), "at most 61"),
+                                           (date(2027, 9, 20), date(2027, 9, 30), "too far")])
+def test_the_range_is_bounded(em, start, end, why):
+    with pytest.raises(ValueError, match=why):
+        em.cheapest_flight_dates("DEL", "BOM", start, end, today=TODAY)
+
+
+def test_api_cheapest_dates(client):
+    r = post(client, "/api/travel/cheapest-dates", {"origin": "DEL", "destination": "BOM", "from_date": "2026-12-12", "to_date": "2026-12-14"})
+    body = r.get_json()
+    assert r.status_code == 200 and len(body["days"]) == 3 and body["cheapest"]["price_inr"] == 4000 and body["source"] == "tool:fli"
+    for bad in ({"origin": "DEL", "destination": "BOM", "from_date": "2026-12-14", "to_date": "2026-12-12"}, {"origin": "DEL", "destination": "BOM", "from_date": "2026-12-12", "to_date": "2027-03-01"},
+                {"origin": "del", "destination": "BOM", "from_date": "2026-12-12", "to_date": "2026-12-13"}, {"origin": "DEL", "destination": "BOM", "from_date": "2026-12-12"}):
+        assert post(client, "/api/travel/cheapest-dates", bad).status_code in (400, 422)

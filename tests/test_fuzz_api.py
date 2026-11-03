@@ -44,6 +44,7 @@ VALID = {
     "/api/deals": {"kind": "caterer", "city": "Pune", "guests": 100, "budget_inr": 60000},
     "/api/travel/trip": {"origin": "DEL", "stops": [{"code": "BOM", "nights": 3}], "earliest_start": "2026-12-12"},
     "/api/travel/flights": {"origin": "DEL", "destination": "BOM", "date": "2026-12-12"},
+    "/api/travel/cheapest-dates": {"origin": "DEL", "destination": "BOM", "from_date": "2026-12-12", "to_date": "2026-12-20"},
     "/api/travel/multi-city": {"legs": [{"origin": "DEL", "destination": "BOM", "date": "2026-12-12"}, {"origin": "BOM", "destination": "GOI", "date": "2026-12-15"}]},
     "/api/explore": {"text": "weather in Pune"},
     "/api/plans": {"request": EXAMPLE},

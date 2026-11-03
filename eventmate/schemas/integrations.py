@@ -17,6 +17,7 @@ from eventmate.schemas.core import AccessFeature, ConstraintCheck, MAX_BUDGET_IN
 _IATA = r"^[A-Z]{3}$"
 GOOGLE_FLIGHTS_PREFIX = "https://www.google.com/travel/flights"
 MAX_FLIGHT_OPTIONS = 30
+MAX_DATE_RANGE_DAYS = 61  # one Google Flights date-grid request covers about two months
 MAX_MULTI_CITY_LEGS = 6
 
 
@@ -71,6 +72,26 @@ class FlightSearch(_Model):
     warnings: tuple[str, ...] = ()
     error: str | None = Field(default=None, max_length=300)  # set when this leg could not be searched
     notice: str = "Indicative fare and schedule from Google Flights through fli. Fares change; to;doh-the event planner does not book or pay."
+
+
+class DateFare(_Model):
+    day: date
+    price_inr: int = Field(ge=0)
+
+
+class CheapestDates(_Model):
+    """The lowest fare Google Flights shows for each day in a range, for one direction. A day with no fare is absent, not zero."""
+
+    origin: str = Field(pattern=_IATA)
+    destination: str = Field(pattern=_IATA)
+    from_date: date
+    to_date: date
+    days: tuple[DateFare, ...] = Field(default=(), max_length=MAX_DATE_RANGE_DAYS)
+    cheapest: DateFare | None = None
+    fetched_at: datetime
+    source: Literal["tool:fli"] = "tool:fli"
+    warnings: tuple[str, ...] = ()
+    notice: str = "Indicative fares from Google Flights through fli. Fares change; to;doh-the event planner does not book or pay."
 
 
 class MultiCityResult(_Model):

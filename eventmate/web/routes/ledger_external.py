@@ -12,6 +12,7 @@ from eventmate.schemas import DealQuery, TripRequest, VendorCategory
 from eventmate.integrations.travel import check_date
 from eventmate.web.base import (
     ApplyBody,
+    CheapestDatesBody,
     ExploreBody,
     FlightBody,
     LedgerBody,
@@ -145,6 +146,12 @@ def register(app, k):
         check_date(b.date, today_fn())
         res = em.search_flights(b.origin, b.destination, b.date, adults=b.adults, cabin=b.cabin, max_stops=b.max_stops, limit=b.limit)
         return out(res)
+
+    @app.post("/api/travel/cheapest-dates")
+    def travel_cheapest_dates():
+        """The lowest indicative fare for each day in a range, to pick when to fly. Nothing is booked or paid."""
+        b = body(CheapestDatesBody)
+        return out(em.cheapest_flight_dates(b.origin, b.destination, b.from_date, b.to_date, today=today_fn(), adults=b.adults, cabin=b.cabin, max_stops=b.max_stops))
 
     @app.get("/api/places/status")
     def places_status():
