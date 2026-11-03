@@ -182,6 +182,11 @@ class ConfirmClaimBody(_Strict):
     valid_days: int = Field(ge=1, le=90)
 
 
+class QuoteLineConfirmBody(_Strict):
+    valid_days: int = Field(ge=1, le=90)
+    plan_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")  # the plan to say the effect on
+
+
 class ResolveItemBody(_Strict):
     note: str = Field(default="", max_length=200)
 

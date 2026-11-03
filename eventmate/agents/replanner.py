@@ -384,6 +384,8 @@ class ReplannerAgent:
             if req.event_type != EventType.COMMUNITY:
                 raise _Rejected(ConstraintViolation(constraint="not_a_community_event", detail=f"this plan is a {req.event_type.value} event", repair="community details only apply to a community event"))
             return req.with_changes(community=d.new_community), excluded, release, "community details updated"
+        if d.kind == DisruptionKind.QUOTE_UPDATE:
+            return req, excluded, release, "re-priced from the quotes you confirmed"
         if d.kind == DisruptionKind.GUEST_COUNT_CHANGE:
             return req.with_changes(guest_count=d.new_guest_count), excluded, release, f"guest count change: {req.guest_count} to {d.new_guest_count}"
         new_date = d.new_date

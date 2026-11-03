@@ -61,7 +61,7 @@ from eventmate.llm import LLMClient, client_from_env
 from eventmate.logs import RunLogs
 from eventmate.planning.rules import Advisory, advisories_for
 from eventmate.plan_store import PlanStore, draft_from_plan
-from eventmate.schemas import ObservationSource, AgentName, DecisionType, ContactFindResult, ExternalBusiness, SearchOutcome, ShortlistItem, VendorContact, VendorRef, WeatherAdvice, BookingStatus, DecisionLogEntry, SelectionQuoteStatus, LedgerEntry, LedgerSummary, Disruption, DisruptionKind, PlanDiff, PlanOutcome, PlanVersion, ReplanOutcome, TradeoffOption, TradeoffReport, ValidationReport, VendorCategory
+from eventmate.schemas import ConstraintViolation, ObservationSource, AgentName, DecisionType, ContactFindResult, ExternalBusiness, SearchOutcome, ShortlistItem, VendorContact, VendorRef, WeatherAdvice, BookingStatus, DecisionLogEntry, SelectionQuoteStatus, LedgerEntry, LedgerSummary, Disruption, DisruptionKind, PlanDiff, PlanOutcome, PlanVersion, ReplanOutcome, TradeoffOption, TradeoffReport, ValidationReport, VendorCategory
 from eventmate.symbolic import SymbolicChecker
 from eventmate.integrations.deals import DealAgent
 from eventmate.integrations.discovery import OverpassSource
@@ -316,6 +316,19 @@ class EventMate:
             total = doc["lines"].get("grand_total")
             out.append({"document": doc["document"], "lines": lines, "summary": {"grand_total": total["total_inr"]} if total else {}, "grand_total_confirmed": bool(total and total["confirmed"]), "warnings": []})
         return out[:10]
+
+    def price_effect(self, plan_id: str, vendor_id: str, document: str, line: str, today: date | None = None) -> dict:
+        """What a confirmed quote line does to this plan: what the plan priced the vendor at, what the vendor now costs, and whether the line is only part of the quote
+        (a quote observation replaces the vendor's whole price, so a single line of a longer quote would understate it). The plan itself is unchanged until it is re-priced."""
+        row = next((r for r in self.quote_status(plan_id, today) if r.vendor_id == vendor_id), None)
+        doc = next((d for d in self.quote_documents(vendor_id) if d["document"] == document), None)
+        partial = bool(doc) and line != "grand_total" and (len(doc["lines"]) > 1 or bool(doc["summary"]))
+        return {"in_plan": row is not None, "plan_cost": row.plan_cost if row else None, "now_costs": row.current_price if row else None, "price_stale": bool(row and row.price_stale),
+                "covers_whole_quote": not partial, "quote_total": (doc or {}).get("summary", {}).get("grand_total")}
+
+    def reprice(self, plan_id: str, today: date | None = None) -> ReplanOutcome:
+        """Price the plan again with the quotes the user has confirmed since it was made, as one new version. A confirmed booking keeps its vendor and takes the price from the quote."""
+        return self.replan(plan_id, Disruption(kind=DisruptionKind.QUOTE_UPDATE), today)
 
     def _read_attachment(self, vendor_id: str, name: str, data: bytes) -> str | None:
         try:
@@ -802,6 +815,9 @@ class EventMate:
 
     def replan(self, plan_id: str, disruption: Disruption, today: date | None = None) -> ReplanOutcome:
         self._clock(today)
+        if disruption.kind == DisruptionKind.QUOTE_UPDATE and not any(r.price_stale for r in self.quote_status(plan_id, today)):
+            v = ConstraintViolation(constraint="nothing_to_reprice", detail="no vendor in this plan costs anything different from what the plan priced", repair="confirm a quote first")
+            return ReplanOutcome(status="failed", violations=(v,))
         outcome = self.replanner.replan(plan_id, disruption, today)
         self._after_new_version(plan_id)
         return outcome

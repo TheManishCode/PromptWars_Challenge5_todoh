@@ -225,11 +225,24 @@
   /* a quote file the vendor sent: read on this machine into priced lines, shown as extracted (unreviewed) until the user confirms them */
   function showQuote(out, d, vendor) {
     var days = h('input', { type: 'number', min: '1', max: '90', value: '14', 'aria-label': 'Days this price stays valid', class: 'pop__days' });
+    function showEffect(row, fx) {  // what the confirmed price does to this plan, and the one tap that applies it
+      if (!fx || !fx.in_plan) return;
+      if (!fx.price_stale) { row.appendChild(h('small', { class: 'ok', text: 'The plan already prices this vendor at ' + inr(fx.now_costs) + '.' })); return; }
+      row.appendChild(h('small', { class: 'ok', text: 'The plan priced this vendor at ' + inr(fx.plan_cost) + '; it now costs ' + inr(fx.now_costs) + '. The plan is unchanged until you re-plan.' }));
+      if (!fx.covers_whole_quote) row.appendChild(h('small', { text: 'This is one line of a longer quote and now stands for the vendor\u2019s whole price' + (fx.quote_total ? '; the quote\u2019s total is ' + inr(fx.quote_total) : '') + '.' }));
+      row.appendChild(h('button', { type: 'button', class: 'pill pill--k', text: 'Re-plan with this price', onclick: function (ev) {
+        var b = ev.currentTarget; b.disabled = true;
+        api('/api/plans/' + st.plan.plan_id + '/replan', { method: 'POST', body: { kind: 'quote_update' } }).then(function (rr) {
+          if (rr.ok && rr.data && rr.data.plan) { b.replaceWith(h('small', { class: 'ok', text: 'Re-planned: version ' + rr.data.plan.version + ' uses this price.' })); refreshAll(rr.data.plan.plan_id); }
+          else { b.disabled = false; row.appendChild(h('small', { text: errText(rr, 'The plan could not be re-priced') })); }
+        });
+      } }));
+    }
     function confirmBtn(key, row) {
       return h('button', { type: 'button', class: 'pill pill--k', text: 'Confirm this price', onclick: function (ev) {
         var b = ev.currentTarget; b.disabled = true;
-        api('/api/vendors/' + encodeURIComponent(vendor) + '/quote-document/' + d.document + '/lines/' + key + '/confirm', { method: 'POST', body: { valid_days: parseInt(days.value, 10) || 0 } }).then(function (rr) {
-          if (rr.ok) { var old = row.querySelector('.chip'), done = chip('user_confirmed'); if (old) { old.replaceWith(done); b.replaceWith(h('small', { class: 'ok', text: 'recorded as a quote for ' + days.value + ' days' })); } else b.replaceWith(done, h('small', { class: 'ok', text: ' recorded as a quote for ' + days.value + ' days' })); loadEvidence().then(renderEvidence); }
+        api('/api/vendors/' + encodeURIComponent(vendor) + '/quote-document/' + d.document + '/lines/' + key + '/confirm', { method: 'POST', body: { valid_days: parseInt(days.value, 10) || 0, plan_id: st.plan ? st.plan.plan_id : null } }).then(function (rr) {
+          if (rr.ok) { showEffect(row, rr.data.effect); var old = row.querySelector('.chip'), done = chip('user_confirmed'); if (old) { old.replaceWith(done); b.replaceWith(h('small', { class: 'ok', text: 'recorded as a quote for ' + days.value + ' days' })); } else b.replaceWith(done, h('small', { class: 'ok', text: ' recorded as a quote for ' + days.value + ' days' })); loadEvidence().then(renderEvidence); }
           else { b.disabled = false; row.appendChild(h('small', { text: errText(rr, 'That price could not be confirmed') })); }
         });
       } });
@@ -240,7 +253,7 @@
     d.lines.forEach(function (ln) {
       var price = ln.basis === 'per_unit' ? inr(ln.unit_inr) + ' \u00d7 ' + ln.quantity + (ln.total_inr !== null ? ' = ' + inr(ln.total_inr) : '') : inr(ln.total_inr !== null ? ln.total_inr : ln.unit_inr);
       var row = h('div', { class: 'pop__line' }, h('b', { text: ln.label }), ' ', h('span', { class: 'mono', text: price }), ' ', chip(ln.confirmed ? 'user_confirmed' : 'extracted'), (ln.warnings || []).map(function (w) { return h('small', { text: w }); }));
-      if (!ln.confirmed) { if (ln.total_inr !== null) row.appendChild(confirmBtn(ln.key, row)); else row.appendChild(h('small', { text: 'It does not say what this covers, so it cannot be confirmed as a price.' })); }
+      if (!ln.confirmed) { if (ln.total_inr !== null) { if (d.lines.length > 1 || d.summary.grand_total) row.appendChild(h('small', { text: 'One line of the quote: confirming it makes it this vendor\u2019s whole price.' })); row.appendChild(confirmBtn(ln.key, row)); } else row.appendChild(h('small', { text: 'It does not say what this covers, so it cannot be confirmed as a price.' })); }
       box.appendChild(row);
     });
     Object.keys(d.summary || {}).forEach(function (k) {

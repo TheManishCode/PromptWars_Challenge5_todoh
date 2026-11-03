@@ -943,6 +943,7 @@ class DisruptionKind(str, Enum):
     GUEST_COUNT_CHANGE = "guest_count_change"
     DATE_CHANGE = "date_change"
     COMMUNITY_UPDATE = "community_update"
+    QUOTE_UPDATE = "quote_update"  # no payload: a quote the user confirmed changed what a vendor costs, so price the plan again
 
 
 class Disruption(_Model):

@@ -312,3 +312,72 @@ def test_the_route_lists_them(web):
     doc = upload(c, vendor, QUOTE).get_json()["document"]
     got = c.get(f"/api/vendors/{vendor}/quote-documents").get_json()["documents"]
     assert [d["document"] for d in got] == [doc] and got[0]["lines"][0]["total_inr"] == 54_000
+
+
+# ---------------------------------------------------------------- from a confirmed quote to the plan's price
+
+
+@pytest.fixture
+def planned(tmp_path):
+    from tests.conftest import EXAMPLE, TODAY
+
+    em = EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="reprice")
+    plan = em.plan(EXAMPLE, today=TODAY).plan
+    cat = next(s for s in plan.selections if s.category.value == "caterer")
+    doc = em.read_quote_document(cat.vendor_id, "q.csv", b"Item,Qty,Rate,Total\nBuffet,100,500,50000\nDecor,1,,5000\nGrand total,,,55000\n")
+    return em, plan, cat, doc["document"], TODAY
+
+
+def test_confirming_says_what_it_does_to_the_plans_price_and_when_a_line_is_only_part(planned):
+    em, plan, cat, doc, today = planned
+    em.confirm_quote_line(cat.vendor_id, doc, "1", 30)
+    part = em.price_effect(plan.plan_id, cat.vendor_id, doc, "1", today)
+    assert part == {"in_plan": True, "plan_cost": cat.cost, "now_costs": 50_000, "price_stale": True, "covers_whole_quote": False, "quote_total": 55_000}
+    assert em.price_effect(plan.plan_id, cat.vendor_id, doc, "grand_total", today)["covers_whole_quote"] is True
+
+
+def test_re_pricing_makes_a_new_version_with_the_confirmed_price_and_says_why(planned):
+    em, plan, cat, doc, today = planned
+    em.confirm_quote_line(cat.vendor_id, doc, "grand_total", 30)
+    out = em.reprice(plan.plan_id, today)
+    assert out.status == "replanned" and out.plan.version == plan.version + 1 and out.plan.change_reason == "re-priced from the quotes you confirmed"
+    assert next(s for s in out.plan.selections if s.category.value == "caterer").cost == 55_000
+    assert not any(r.price_stale for r in em.quote_status(plan.plan_id, today))
+
+
+def test_there_is_nothing_to_re_price_until_a_quote_is_confirmed(planned):
+    em, plan, cat, doc, today = planned
+    out = em.reprice(plan.plan_id, today)
+    assert out.status == "failed" and out.violations[0].constraint == "nothing_to_reprice" and em.store.latest(plan.plan_id).version == plan.version
+
+
+def test_the_routes_confirm_with_the_effect_and_re_price(planned):
+    from datetime import date
+
+    from eventmate.web.app import create_app
+
+    em, plan, cat, doc, today = planned
+    app = create_app(em, today_fn=lambda: date(2026, 10, 30), poll_seconds=0)
+    cl = app.test_client()
+    token = cl.get("/api/session").get_json()["csrf"]
+
+    def post(url, body):
+        return cl.post(url, data=json.dumps(body), headers={"X-EventMate-CSRF": token, "Content-Type": "application/json"})
+
+    assert post(f"/api/plans/{plan.plan_id}/replan", {"kind": "quote_update"}).status_code == 422  # nothing confirmed yet
+    done = post(f"/api/vendors/{cat.vendor_id}/quote-document/{doc}/lines/grand_total/confirm", {"valid_days": 30, "plan_id": plan.plan_id})
+    assert done.status_code == 201 and done.get_json()["effect"]["now_costs"] == 55_000 and done.get_json()["effect"]["price_stale"] is True
+    assert post(f"/api/plans/{plan.plan_id}/replan", {"kind": "quote_update", "new_budget": 5}).status_code == 422  # a payload does not belong to this kind
+    ok = post(f"/api/plans/{plan.plan_id}/replan", {"kind": "quote_update"})
+    assert ok.status_code == 200 and ok.get_json()["plan"]["version"] == plan.version + 1
+
+
+def test_a_booking_the_user_confirmed_keeps_its_vendor_and_takes_the_confirmed_price(planned):
+    from eventmate.schemas import VendorCategory
+
+    em, plan, cat, doc, today = planned
+    em.confirm(plan.plan_id, VendorCategory.CATERER)
+    em.confirm_quote_line(cat.vendor_id, doc, "grand_total", 30)
+    out = em.reprice(plan.plan_id, today)
+    kept = next(s for s in out.plan.selections if s.category.value == "caterer")
+    assert out.status == "replanned" and (kept.vendor_id, kept.cost, kept.booking_status.value) == (cat.vendor_id, 55_000, "confirmed")

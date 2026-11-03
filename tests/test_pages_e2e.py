@@ -274,6 +274,9 @@ def test_a_quote_file_added_to_a_vendor_event_shows_its_lines_as_extracted_and_u
     page.locator("#pop-quote .pop__line button >> nth=0").click()  # the user's tap is what turns a line into a recorded quote
     page.wait_for_selector("#pop-quote .pop__line .chip[data-s=user_confirmed]")
     assert "recorded as a quote for 14 days" in page.inner_text("#pop-quote") and page.locator("#pop-quote .pop__line .chip[data-s=extracted]").count() == 1
+    assert "One line of the quote" in text and "The plan priced this vendor at" in page.inner_text("#pop-quote") and "unchanged until you re-plan" in page.inner_text("#pop-quote")
+    page.click("#pop-quote >> text=Re-plan with this price")  # the plan takes the confirmed price as a new version
+    page.wait_for_selector("#pop-quote >> text=Re-planned: version 2")
     page.keyboard.press("Escape")  # reopen: the file read a moment ago is listed, and the line the user confirmed shows as confirmed
     open_vendor_event(page)
     page.wait_for_selector("#pop-quote .pop__quote-out .pop__doc")
