@@ -90,7 +90,7 @@
       var cat = catOf(i.task_id, i.resource), sel = BOOK[i.task_id] ? selectionOf(BOOK[i.task_id]) : null, booked = !!(sel && sel.booking_status === 'confirmed');
       var extra = /^extra_/.test(i.task_id), s = booked ? 'booked' : (extra ? 'user_confirmed' : 'verified');
       var start = hours(i.start), end = dayKeyOf(i.end) !== dayKeyOf(i.start) ? 24 : hours(i.end);
-      ev.push({ date: dayKeyOf(i.start), start: start, end: Math.max(end, start + 0.25), title: i.name, cat: cat, layer: 'milestone', s: s, lock: booked,
+      ev.push({ date: dayKeyOf(i.start), start: start, end: Math.max(end, start + 0.25), title: i.name, cat: cat, layer: 'milestone', s: s, lock: booked, vendor: sel ? sel.vendor_id : null,
         facts: [['When', dayKeyOf(i.start) + ' ' + hhmm(start) + '\u2013' + hhmm(hours(i.end)), 'plan v' + p.version],
           ['Resource', i.resource ? words(i.resource) : null, 'plan v' + p.version], ['Checked by', 'Solver, then the validator', 'validator'],
           sel ? [cap(sel.category) + ' vendor', sel.name + ' (' + inr(sel.cost) + ')', sel.source] : null, booked ? ['Booking', 'Locked: you told us it is booked', 'user_input'] : null, extra ? ['Added by', 'A change you confirmed', 'user_input'] : null].filter(Boolean) });
@@ -218,9 +218,38 @@
       dl.appendChild(h('div', null, h('dt', { text: f[0] }), h('dd', { class: unk ? 'unk' : 'mono' }, unk ? UNK : String(f[1]), ' ', chip(s), h('small', { text: 'Source: ' + f[2] }))));
     });
     if (e.lock) dl.appendChild(h('div', null, h('dt', { text: 'Locked' }), h('dd', { text: 'A confirmed booking. Nothing moves it unless you release it.' })));
-    pop.hidden = false; var r = from.getBoundingClientRect(), w = pop.offsetWidth, hh = pop.offsetHeight;
+    quoteControl(e); pop.hidden = false; var r = from.getBoundingClientRect(), w = pop.offsetWidth, hh = pop.offsetHeight;
     pop.style.left = Math.max(12, Math.min(innerWidth - w - 12, r.right + 10 > innerWidth - w - 12 ? r.left - w - 10 : r.right + 10)) + 'px';
     pop.style.top = Math.max(12, Math.min(innerHeight - hh - 12, r.top)) + 'px'; $('#pop-x').focus();
+  }
+  /* a quote file the vendor sent: read on this machine into priced lines, shown as extracted (unreviewed) until the user confirms them */
+  function quoteControl(e) {
+    var box = clear($('#pop-quote')); box.hidden = !e.vendor; if (!e.vendor) return;
+    var out = h('div', { class: 'pop__quote-out', 'aria-live': 'polite' });
+    var input = h('input', { type: 'file', accept: '.pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.csv,.html,.htm,.txt,.md', hidden: true });
+    input.addEventListener('change', function () {
+      var f = input.files && input.files[0]; if (!f) return;
+      clear(out).appendChild(h('p', { class: 'foot', text: 'Reading ' + f.name + '\u2026' }));
+      var fd = new window.FormData(); fd.append('file', f);
+      var headers = { 'Accept': 'application/json' }; if (st.csrf) headers['X-EventMate-CSRF'] = st.csrf;
+      window.fetch('/api/vendors/' + encodeURIComponent(e.vendor) + '/quote-document', { method: 'POST', headers: headers, body: fd }).then(function (res) {
+        return res.json().catch(function () { return null; }).then(function (d) { return { ok: res.ok, data: d }; });
+      }).catch(function () { return { ok: false, data: null }; }).then(function (r) {
+        clear(out); input.value = '';
+        if (!r.ok || !r.data) { out.appendChild(h('p', { class: 'notice bad', text: (r.data && r.data.error) || 'That file could not be read.' })); return; }
+        var d = r.data;
+        if (!d.lines.length) out.appendChild(h('p', { class: 'foot', text: (d.warnings && d.warnings[0]) || 'No priced lines were found.' }));
+        d.lines.forEach(function (ln) {
+          var price = ln.basis === 'per_unit' ? inr(ln.unit_inr) + ' \u00d7 ' + ln.quantity + (ln.total_inr !== null ? ' = ' + inr(ln.total_inr) : '') : inr(ln.total_inr !== null ? ln.total_inr : ln.unit_inr);
+          out.appendChild(h('div', { class: 'pop__line' }, h('b', { text: ln.label }), ' ', h('span', { class: 'mono', text: price }), ' ', chip('extracted'), (ln.warnings || []).map(function (w) { return h('small', { text: w }); })));
+        });
+        Object.keys(d.summary || {}).forEach(function (k) { out.appendChild(h('p', { class: 'foot', text: words(k) + ': ' + inr(d.summary[k]) })); });
+        (d.warnings || []).forEach(function (w) { if (d.lines.length) out.appendChild(h('p', { class: 'notice bad', text: w })); });
+        if (d.lines.length) out.appendChild(h('p', { class: 'foot', text: 'Read from the file, not confirmed. The file was not kept.' }));
+        loadEvidence().then(renderEvidence);
+      });
+    });
+    box.appendChild(h('button', { type: 'button', class: 'pill', text: 'Add a quote file', onclick: function () { input.click(); } })); box.appendChild(input); box.appendChild(out);
   }
   function closePop() { pop.hidden = true; if (popFrom) { popFrom.focus(); popFrom = null; } }
 

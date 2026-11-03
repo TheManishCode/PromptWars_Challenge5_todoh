@@ -239,3 +239,36 @@ def test_the_workspace_dialog_opens_exports_and_closes(server, ctx):
     page.click("#workspace-close")
     assert page.locator("#workspace-dialog").is_hidden()
     assert seen == [], seen
+
+
+def test_a_quote_file_added_to_a_vendor_event_shows_its_lines_as_extracted_and_unconfirmed(server, ctx, tmp_path):
+    page, seen = opened(ctx, server[0] + "/app")
+    new_plan(page)
+    for i in range(page.locator("#cal .ev").count()):  # the events that book a vendor offer the control; the others do not
+        page.click(f"#cal .ev >> nth={i}")
+        page.wait_for_selector("#pop:not([hidden])")
+        if page.locator("#pop-quote:not([hidden])").count():
+            break
+        page.keyboard.press("Escape")
+    else:
+        page.click("#cal .more")  # a busy day folds some events away: open the day and look there
+        for i in range(page.locator("#cal .ev").count()):
+            page.click(f"#cal .ev >> nth={i}")
+            page.wait_for_selector("#pop:not([hidden])")
+            if page.locator("#pop-quote:not([hidden])").count():
+                break
+            page.keyboard.press("Escape")
+    assert page.locator("#pop-quote:not([hidden])").count() == 1
+    quote = tmp_path / "quote.csv"
+    quote.write_text("Item,Qty,Rate,Total\nVeg buffet,120,450,54000\nStage,1,,120000\n", encoding="utf-8")
+    page.set_input_files("#pop-quote input[type=file]", str(quote))
+    page.wait_for_selector("#pop-quote .pop__line")
+    text = page.inner_text("#pop-quote")
+    assert page.locator("#pop-quote .pop__line").count() == 2 and "Veg buffet" in text and "₹54,000" in text and "not confirmed" in text
+    assert page.locator("#pop-quote .pop__line .chip[data-s=extracted]").count() == 2
+    page.set_input_files("#pop-quote input[type=file]", files=[{"name": "bad.exe", "mimeType": "application/octet-stream", "buffer": b"MZ"}])
+    page.wait_for_selector("#pop-quote .notice.bad")
+    assert "PDF, Word" in page.inner_text("#pop-quote")  # a refused file says what would be accepted
+    page.keyboard.press("Escape")
+    seen[:] = [s for s in seen if "422" not in s]  # the refusal above is a deliberate 422
+    clean(page, ctx, seen)
