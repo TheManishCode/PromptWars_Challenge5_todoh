@@ -210,3 +210,78 @@ def test_the_route_wants_the_csrf_token_and_a_size_it_can_check(web):
     assert no_token.status_code == 403
     too_big = upload(c, vendor, b"a" * (6 * 1024 * 1024))
     assert too_big.status_code == 413
+
+
+# ---------------------------------------------------------------- confirming a line
+
+
+QUOTE = b"Item,Qty,Rate,Total\nVeg buffet,120,450,54000\nPhotos,1,,\nStage,1,,120000\nGrand total,,,174000\n"
+
+
+def read_one(tmp_path):
+    em = EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="conf")
+    vendor = next(v for v, d in em.vendor_directory().items() if d["origin"] == "seed")
+    return em, vendor, em.read_quote_document(vendor, "q.csv", QUOTE)
+
+
+def test_confirming_a_line_records_a_quote_the_user_vouches_for(tmp_path):
+    em, vendor, doc = read_one(tmp_path)
+    obs = em.confirm_quote_line(vendor, doc["document"], "1", 14)
+    assert obs.amount_inr == 54_000 and obs.basis == "total" and obs.source_type.value == "vendor_quote" and obs.evidence_ref == f"doc:{doc['document']} 1" and "14 days" in obs.note
+    assert (obs.expires_at - obs.observed_at.date()).days == 14
+    states = [r.state for r in em.evidence.records(vendor, f"quote.{doc['document']}.l1")]
+    assert states == [FactState.EXTRACTED, FactState.USER_CONFIRMED]
+
+
+def test_the_vendors_grand_total_can_be_confirmed_too(tmp_path):
+    em, vendor, doc = read_one(tmp_path)
+    assert em.confirm_quote_line(vendor, doc["document"], "grand_total", 30).amount_inr == 174_000
+
+
+@pytest.mark.parametrize("line,days,why", [("9", 14, "no such"), ("0", 14, "no such"), ("../x", 14, "no such"), ("1", 0, "1-90"), ("1", 91, "1-90"), ("1", True, "1-90")])
+def test_a_line_that_cannot_be_trusted_is_refused(tmp_path, line, days, why):
+    em, vendor, doc = read_one(tmp_path)
+    with pytest.raises(ValueError, match=why):
+        em.confirm_quote_line(vendor, doc["document"], line, days)
+    assert em.observations.quotes(vendor) == []
+
+
+def test_a_document_that_was_never_read_or_belongs_to_another_vendor_cannot_be_confirmed(tmp_path):
+    em, vendor, doc = read_one(tmp_path)
+    other = next(v for v, d in em.vendor_directory().items() if v != vendor and d["origin"] == "seed")
+    for v, d in ((vendor, "0123456789"), (other, doc["document"]), (vendor, "zz")):
+        with pytest.raises(ValueError, match="no such quote line"):
+            em.confirm_quote_line(v, d, "1", 14)
+
+
+def test_the_route_confirms_with_the_csrf_token_and_never_takes_an_amount(web):
+    c, vendor = web
+    doc = upload(c, vendor, QUOTE).get_json()["document"]
+    url = f"/api/vendors/{vendor}/quote-document/{doc}/lines/1/confirm"
+
+    def post(body, token=True):
+        return c.post(url, data=json.dumps(body), headers={"Content-Type": "application/json", **({"X-EventMate-CSRF": c.csrf} if token else {})})
+
+    assert post({"valid_days": 7}, token=False).status_code == 403
+    assert post({"valid_days": 7, "amount_inr": 1}).status_code == 422  # the amount comes from what was read, not from the caller
+    ok = post({"valid_days": 7})
+    assert ok.status_code == 201 and ok.get_json()["observation"]["amount_inr"] == 54_000
+
+
+def test_a_price_that_does_not_say_what_it_covers_cannot_be_confirmed_as_one(tmp_path):
+    em = EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="conf2")
+    vendor = next(v for v, d in em.vendor_directory().items() if d["origin"] == "seed")
+    doc = em.read_quote_document(vendor, "q.csv", b"Item,Price\nPhotography,40000\n")
+    assert doc["lines"][0]["basis"] == "unclear"
+    with pytest.raises(ValueError, match="what this price covers"):
+        em.confirm_quote_line(vendor, doc["document"], "1", 14)
+    assert em.observations.quotes(vendor) == []
+
+
+def test_a_fact_from_another_source_with_the_same_field_name_cannot_be_confirmed_as_a_quote(tmp_path):
+    em = EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="conf3")
+    vendor = next(v for v, d in em.vendor_directory().items() if d["origin"] == "seed")
+    em.evidence.record(vendor, "quote.0123456789.l1", {"label": "x", "total_inr": 99_999, "basis": "total"}, FactState.EXTRACTED, "web:abc")
+    with pytest.raises(ValueError, match="no such quote line"):
+        em.confirm_quote_line(vendor, "0123456789", "1", 14)
+    assert em.observations.quotes(vendor) == []

@@ -13,6 +13,7 @@ from eventmate.integrations.travel import check_date
 from eventmate.web.base import (
     ApplyBody,
     CheapestDatesBody,
+    ConfirmClaimBody,
     ExploreBody,
     FlightBody,
     LedgerBody,
@@ -73,6 +74,15 @@ def register(app, k):
         data = f.stream.read(sandbox.MAX_FILE_BYTES + 1)
         with lock:
             return jsonify(em.read_quote_document(pid(vendor_id), f.filename or "", data))
+
+    @app.post("/api/vendors/<vendor_id>/quote-document/<document>/lines/<line>/confirm")
+    def quote_line_confirm(vendor_id, document, line):
+        """The only place a line read from a quote file becomes a recorded quote. The user chooses how long the price is treated as valid."""
+        b = body(ConfirmClaimBody)
+        with lock:
+            obs = em.confirm_quote_line(pid(vendor_id), document, line, b.valid_days)
+            report = em.observations.report(vendor_id, today_fn())
+        return jsonify({"observation": json.loads(obs.model_dump_json()), "report": json.loads(report.model_dump_json())}), 201
 
     @app.post("/api/observations/<vendor_id>/quotes")
     def observation_add(vendor_id):

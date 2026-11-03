@@ -266,6 +266,9 @@ def test_a_quote_file_added_to_a_vendor_event_shows_its_lines_as_extracted_and_u
     text = page.inner_text("#pop-quote")
     assert page.locator("#pop-quote .pop__line").count() == 2 and "Veg buffet" in text and "₹54,000" in text and "not confirmed" in text
     assert page.locator("#pop-quote .pop__line .chip[data-s=extracted]").count() == 2
+    page.locator("#pop-quote .pop__line button >> nth=0").click()  # the user's tap is what turns a line into a recorded quote
+    page.wait_for_selector("#pop-quote .pop__line .chip[data-s=user_confirmed]")
+    assert "recorded as a quote for 14 days" in page.inner_text("#pop-quote") and page.locator("#pop-quote .pop__line .chip[data-s=extracted]").count() == 1
     page.set_input_files("#pop-quote input[type=file]", files=[{"name": "bad.exe", "mimeType": "application/octet-stream", "buffer": b"MZ"}])
     page.wait_for_selector("#pop-quote .notice.bad")
     assert "PDF, Word" in page.inner_text("#pop-quote")  # a refused file says what would be accepted

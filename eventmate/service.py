@@ -13,9 +13,10 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import time
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from collections.abc import Callable
 
@@ -60,7 +61,7 @@ from eventmate.llm import LLMClient, client_from_env
 from eventmate.logs import RunLogs
 from eventmate.planning.rules import Advisory, advisories_for
 from eventmate.plan_store import PlanStore, draft_from_plan
-from eventmate.schemas import AgentName, DecisionType, ContactFindResult, ExternalBusiness, SearchOutcome, ShortlistItem, VendorContact, VendorRef, WeatherAdvice, BookingStatus, DecisionLogEntry, SelectionQuoteStatus, LedgerEntry, LedgerSummary, Disruption, DisruptionKind, PlanDiff, PlanOutcome, PlanVersion, ReplanOutcome, TradeoffOption, TradeoffReport, ValidationReport, VendorCategory
+from eventmate.schemas import ObservationSource, AgentName, DecisionType, ContactFindResult, ExternalBusiness, SearchOutcome, ShortlistItem, VendorContact, VendorRef, WeatherAdvice, BookingStatus, DecisionLogEntry, SelectionQuoteStatus, LedgerEntry, LedgerSummary, Disruption, DisruptionKind, PlanDiff, PlanOutcome, PlanVersion, ReplanOutcome, TradeoffOption, TradeoffReport, ValidationReport, VendorCategory
 from eventmate.symbolic import SymbolicChecker
 from eventmate.integrations.deals import DealAgent
 from eventmate.integrations.discovery import OverpassSource
@@ -289,11 +290,39 @@ class EventMate:
         converted = sandbox.convert(data, filename)
         found = quotes.extract(converted.markdown)
         digest = hashlib.sha256(data).hexdigest()[:10]
+        if "grand_total" in found.summary:  # the vendor's own total can be confirmed as the price too
+            self.evidence.record(vendor_id, f"quote.{digest}.grand_total", {"label": "Grand total", "quantity": None, "unit_inr": None, "total_inr": found.summary["grand_total"], "basis": "total"},
+                                 FactState.EXTRACTED, f"doc:{digest}")
         for n, ln in enumerate(found.lines, 1):
             self.evidence.record(vendor_id, f"quote.{digest}.l{n}", {"label": ln.label, "quantity": ln.quantity, "unit_inr": ln.unit_inr, "total_inr": ln.total_inr, "basis": ln.basis},
                                  FactState.EXTRACTED, f"doc:{digest}")
         return {"document": digest, "engine": converted.engine, "truncated": converted.truncated, "summary": found.summary, "warnings": found.warnings,
                 "lines": [{"label": ln.label, "quantity": ln.quantity, "unit_inr": ln.unit_inr, "total_inr": ln.total_inr, "basis": ln.basis, "warnings": list(ln.warnings)} for ln in found.lines]}
+
+    def confirm_quote_line(self, vendor_id: str, document: str, line: str, valid_days: int):
+        """The user's tap on a line read from a quote file ("1".."n", or "grand_total"). The amount is the one this app extracted and kept, never one the caller sends, and
+        a line that does not say what it covers cannot be confirmed. It becomes a quote observation the user vouches for, valid for the days they choose."""
+        if not (isinstance(valid_days, int) and not isinstance(valid_days, bool) and 1 <= valid_days <= 90):
+            raise ValueError("say how many days (1-90) this price should be treated as valid")
+        if not re.fullmatch(r"[0-9a-f]{10}", document or "") or not re.fullmatch(r"grand_total|[1-9][0-9]{0,2}", line or ""):
+            raise ValueError("no such quote line")
+        field = f"quote.{document}.{'grand_total' if line == 'grand_total' else 'l' + line}"
+        rec = next((r for r in reversed(self.evidence.records(vendor_id, field)) if r.source == f"doc:{document}" and r.state is FactState.EXTRACTED), None)
+        if rec is None or not isinstance(rec.value, dict):
+            raise ValueError("no such quote line")
+        amount = rec.value.get("total_inr")
+        if not isinstance(amount, int) or amount <= 0:
+            raise ValueError("the document does not say what this price covers, so it cannot be confirmed as a price")
+        category = next((c for c in VendorCategory if self.repo.get(c, vendor_id)), None) or getattr(self.externals.get(vendor_id), "category", None)
+        if category is None:
+            raise ValueError("unknown vendor")
+        now = self.outreach_store.now()
+        obs = self.observe_quote(
+            vendor_id, category, source_type=ObservationSource.VENDOR_QUOTE, entered_by="user_confirmed", observed_at=now, expires_at=(now + timedelta(days=valid_days)).date(),
+            confidence=0.7, evidence_ref=f"doc:{document} {line}", amount_inr=amount, basis="total",
+            note=f"{str(rec.value.get('label', ''))[:80]}: from a quote file; valid {valid_days} days, your choice at confirmation"[:200])
+        self.evidence.record(vendor_id, field, rec.value, FactState.USER_CONFIRMED, "user_input")
+        return obs
 
     def purge_logs(self, max_age_days: int | None = None) -> list[str]:
         """Delete run logs older than the retention period (default 90 days, ``EVENTMATE_LOG_RETENTION_DAYS``) and kept voice notes older than theirs. Returns what was removed."""
