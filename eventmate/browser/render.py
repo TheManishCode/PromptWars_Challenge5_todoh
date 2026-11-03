@@ -122,9 +122,9 @@ class RenderingFetcher:
             self.static._check(final)
         except FetchError:
             raise FetchError("the page ended somewhere that is not allowed") from None
-        title, text = extract_text(html)
         try:
-            text = normalize_untrusted(text, max_len=len(text) + 1)
+            normalize_untrusted(html, max_len=len(html) + 1)  # only to count: a page full of invisible characters is refused, since the text reader would silently drop them
         except UntrustedTextRejected:
             raise FetchError("the page hides text") from None
+        title, text = extract_text(html)
         return Page(url=final, title=title, text=text)

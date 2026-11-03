@@ -82,3 +82,19 @@ def test_a_model_cannot_state_or_drop_an_allergy(tmp_path, monkeypatch):
     assert d.allergens == (A.PEANUT,)
     d = draft("50 people in Pune on 12 December, budget 1 lakh", llm=object(), tmp=tmp_path)
     assert d.allergens == ()
+
+
+def test_the_allergy_reader_never_fails_and_never_invents(tmp_path):
+    from hypothesis import given, settings, strategies as st
+
+    words = ["allergic", "allergy", "allergies", "nut", "peanut", "free", "-free", "no", "not", "but", ",", ".", "eggs", "til", "fish", "to", "\u200b", "ALLERGIC", "x" * 50]
+
+    @settings(max_examples=300, deadline=None)
+    @given(st.lists(st.sampled_from(words), max_size=14).map(" ".join) | st.text(max_size=200))
+    def check(text):
+        got = parse_allergens(text)
+        assert set(got) <= set(A) and len(got) == len(set(got))
+        if not any(w in text.lower() for w in ("allerg", "-free", " free")) and "free" not in text.lower():
+            assert got == ()  # nothing is read from a text that says neither "allergy" nor "<x>-free"
+
+    check()
