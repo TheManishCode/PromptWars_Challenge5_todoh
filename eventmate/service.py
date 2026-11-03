@@ -61,7 +61,8 @@ from eventmate.llm import LLMClient, client_from_env
 from eventmate.logs import RunLogs
 from eventmate.planning.rules import Advisory, advisories_for
 from eventmate.plan_store import PlanStore, draft_from_plan
-from eventmate.schemas import ConstraintViolation, ObservationSource, AgentName, DecisionType, ContactFindResult, ExternalBusiness, SearchOutcome, ShortlistItem, VendorContact, VendorRef, WeatherAdvice, BookingStatus, DecisionLogEntry, SelectionQuoteStatus, LedgerEntry, LedgerSummary, Disruption, DisruptionKind, PlanDiff, PlanOutcome, PlanVersion, ReplanOutcome, TradeoffOption, TradeoffReport, ValidationReport, VendorCategory
+from eventmate.schemas.integrations import MAX_DATE_RANGE_DAYS
+from eventmate.schemas import CheapestDates, GuestTravel, ConstraintViolation, ObservationSource, AgentName, DecisionType, ContactFindResult, ExternalBusiness, SearchOutcome, ShortlistItem, VendorContact, VendorRef, WeatherAdvice, BookingStatus, DecisionLogEntry, SelectionQuoteStatus, LedgerEntry, LedgerSummary, Disruption, DisruptionKind, PlanDiff, PlanOutcome, PlanVersion, ReplanOutcome, TradeoffOption, TradeoffReport, ValidationReport, VendorCategory
 from eventmate.symbolic import SymbolicChecker
 from eventmate.integrations.deals import DealAgent
 from eventmate.integrations.discovery import OverpassSource
@@ -71,7 +72,7 @@ from eventmate.env import load_env
 from eventmate.integrations.places import PlacesSource
 from eventmate.integrations.weather import OpenWeatherSource
 from eventmate.integrations.weather_advice import advise
-from eventmate.integrations.travel import FlightProvider, FliProvider, check_range, check_search, search_multi_city
+from eventmate.integrations.travel import FlightProvider, FliProvider, TravelError, check_range, check_search, search_multi_city
 from eventmate.integrations.tripsearch import search_trip
 
 
@@ -205,11 +206,22 @@ class EventMate:
             "other_unverified": [{"name": u.name, "label": u.label or u.name, "detail": u.detail} for u in report.unverified if not u.blocks_verified],
         }
 
-    def tradeoffs(self, text: str, today: date | None = None, guest_list_id: str | None = None) -> TradeoffReport:
-        """Ranked, verified ways to make a failing request plannable. Nothing is stored or applied."""
+    def tradeoffs(self, text: str, today: date | None = None, guest_list_id: str | None = None, travel: GuestTravel | None = None, fares: CheapestDates | None = None) -> TradeoffReport:
+        """Ranked, verified ways to make a failing request plannable. Nothing is stored or applied.
+
+        ``travel`` and ``fares`` (from ``guest_fares``) only add flight notes to date-shift options; they never change ranking or what is verified.
+        """
         self._today, self._guest_list_id = today or date.today(), guest_list_id
         self._clock(self._today)
-        return self.tradeoff.propose(self.manager.parse(text, self._today), self._today)
+        return self.tradeoff.propose(self.manager.parse(text, self._today), self._today, fares, travel)
+
+    def guest_fares(self, travel: GuestTravel, today: date | None = None) -> CheapestDates | None:
+        """The guests' cheapest fares for the next 61 days, or None when the flight tool fails (the trade-offs are then shown without fares)."""
+        today = today or date.today()
+        try:
+            return self.cheapest_flight_dates(travel.origin, travel.destination, today + timedelta(days=1), today + timedelta(days=MAX_DATE_RANGE_DAYS), today=today)
+        except (TravelError, ValueError):
+            return None
 
     def apply_tradeoff(self, option: TradeoffOption, today: date | None = None, guest_list_id: str | None = None) -> PlanOutcome:
         """The user chose this option: run it through the full pipeline and store the resulting plan."""

@@ -37,6 +37,7 @@ from eventmate.agents.manager import RequestParseError
 from eventmate.agents.guest import GuestDataError
 from eventmate.agents.vendor import DataIntegrityError
 from eventmate.env import load_env
+from eventmate.schemas import GuestTravel
 from eventmate.llm import client_from_env
 from eventmate.plan_store import PlanIntegrityError
 from eventmate.schemas import Disruption, DisruptionKind, VendorCategory
@@ -66,6 +67,7 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("request")
     p.add_argument("--guest-list", default=None)
     p.add_argument("--apply", type=int, default=None, metavar="N", help="apply option N (1-based) and store the resulting plan")
+    p.add_argument("--guests-fly", nargs=3, default=None, metavar=("FROM", "TO", "N"), help="N guests fly FROM -> TO (airport codes): date-shift options show the fare change")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("ledger", help="budget ledger: money you report (quotes, payments, refunds); nothing is ever paid by to;doh-the event planner")
     p.add_argument("plan_id")
@@ -741,7 +743,9 @@ def _quotes(em: EventMate, a) -> int:
 
 
 def _tradeoffs(em: EventMate, a) -> int:
-    report = em.tradeoffs(a.request, today=a.today, guest_list_id=a.guest_list)
+    travel = GuestTravel(origin=a.guests_fly[0].upper(), destination=a.guests_fly[1].upper(), guests=int(a.guests_fly[2])) if a.guests_fly else None
+    fares = em.guest_fares(travel, a.today) if travel else None
+    report = em.tradeoffs(a.request, today=a.today, guest_list_id=a.guest_list, travel=travel, fares=fares)
     if a.json:
         print(report.model_dump_json(indent=2))
     elif report.status == "not_needed":

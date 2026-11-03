@@ -18,7 +18,7 @@ from eventmate.web.base import (
     FlightBody,
     LedgerBody,
     MultiCityBody,
-    PlanBody,
+    TradeoffsBody,
     QuoteBody,
 )
 
@@ -211,9 +211,10 @@ def register(app, k):
 
     @app.post("/api/tradeoffs")
     def tradeoffs():
-        b = body(PlanBody)
+        b = body(TradeoffsBody)
+        fares = em.guest_fares(b.guest_travel, today_fn()) if b.guest_travel else None  # waits on the network: before the lock
         with lock:
-            report = em.tradeoffs(b.request, today=today_fn(), guest_list_id=b.guest_list_id)
+            report = em.tradeoffs(b.request, today=today_fn(), guest_list_id=b.guest_list_id, travel=b.guest_travel, fares=fares)
         return out(report)
 
     @app.post("/api/tradeoffs/apply")

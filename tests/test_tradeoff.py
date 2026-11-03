@@ -152,3 +152,90 @@ def test_cap_weight_rejects_non_positive_and_extra_fields():
         CapWeight(category=C.VENUE, weight=0)
     with pytest.raises(ValidationError):
         CapWeight(category=C.VENUE, weight=1, note="x")
+
+
+# ---------------------------------------------------------------- guests' flights on date shifts
+
+
+def _fares(*days_prices):
+    from datetime import datetime, UTC
+    from eventmate.schemas import CheapestDates, DateFare
+
+    return CheapestDates(origin="DEL", destination="PNQ", from_date=TODAY, to_date=TODAY, days=tuple(DateFare(day=d, price_inr=p) for d, p in days_prices), fetched_at=datetime(2026, 10, 30, tzinfo=UTC))
+
+
+def _travel(guests=40):
+    from eventmate.schemas import GuestTravel
+
+    return GuestTravel(origin="DEL", destination="PNQ", guests=guests)
+
+
+def test_a_date_shift_says_what_it_does_to_the_guests_flights(em):
+    from datetime import date
+
+    asked, moved = date(2026, 12, 13), date(2026, 12, 12)
+    r = em.tradeoffs(EXAMPLE.replace("December 12", "December 13"), today=TODAY, travel=_travel(), fares=_fares((asked, 9_000), (moved, 7_500)))
+    shift = next(o for o in r.options if o.kind == TradeoffKind.SHIFT_DATE)
+    assert shift.request.event_date == moved
+    assert "INR 7,500 each way that day, INR 1,500 less per guest (about INR 60,000 for 40) than on 2026-12-13" in shift.detail
+    assert "not a quote" in shift.detail
+
+
+def test_flight_notes_only_state_what_the_fare_grid_priced(em):
+    from datetime import date
+
+    asked, moved = date(2026, 12, 13), date(2026, 12, 12)
+    text = EXAMPLE.replace("December 12", "December 13")
+
+    def detail(fares, travel=_travel()):
+        return next(o for o in em.tradeoffs(text, today=TODAY, travel=travel, fares=fares).options if o.kind == TradeoffKind.SHIFT_DATE).detail
+
+    assert "no fare shown for 2026-12-12" in detail(_fares((asked, 9_000)))
+    assert "no fare shown for 2026-12-13 to compare" in detail(_fares((moved, 7_500)))
+    assert "the same fare" in detail(_fares((asked, 7_500), (moved, 7_500)))
+    assert "INR 500 more per guest" in detail(_fares((asked, 7_000), (moved, 7_500)))
+    for none in (detail(None), detail(_fares((moved, 7_500)), travel=None)):
+        assert "flight" not in none.lower()
+
+
+def test_flight_fares_never_change_which_options_are_offered_or_their_order(em):
+    from datetime import date
+
+    text = EXAMPLE.replace("December 12", "December 13")
+    plain = em.tradeoffs(text, today=TODAY)
+    fared = em.tradeoffs(text, today=TODAY, travel=_travel(), fares=_fares((date(2026, 12, 12), 1)))
+    assert [(o.kind, o.request.event_date, o.preference_harm, o.utility) for o in plain.options] == [(o.kind, o.request.event_date, o.preference_harm, o.utility) for o in fared.options]
+
+
+def test_guest_fares_come_from_the_flight_tool_and_a_failure_means_no_note_not_an_error(em):
+    from eventmate.integrations.travel import FlightProvider, TravelError
+
+    class Dates(FlightProvider):
+        def __init__(self, result=None):
+            self.result, self.asked = result, None
+
+        def cheapest_dates(self, origin, destination, start, end, **kw):
+            self.asked = (origin, destination, start, end)
+            if self.result is None:
+                raise TravelError("the flight tool is down")
+            return self.result
+
+    ok = Dates(_fares((TODAY, 5_000)))
+    em.flights = ok
+    assert em.guest_fares(_travel(), TODAY).days and ok.asked == ("DEL", "PNQ", date_plus(1), date_plus(61))
+    em.flights = Dates(None)
+    assert em.guest_fares(_travel(), TODAY) is None
+
+
+def date_plus(n):
+    from datetime import timedelta
+
+    return TODAY + timedelta(days=n)
+
+
+def test_guest_travel_is_validated():
+    from eventmate.schemas import GuestTravel
+
+    for bad in ({"origin": "delhi", "destination": "PNQ", "guests": 4}, {"origin": "DEL", "destination": "PNQ", "guests": 0}, {"origin": "DEL", "destination": "PNQ", "guests": 501}):
+        with pytest.raises(ValidationError):
+            GuestTravel(**bad)

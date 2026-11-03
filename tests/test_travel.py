@@ -320,3 +320,14 @@ def test_live_cheapest_days_match_a_one_way_search_for_the_same_day():
     assert len(grid.days) > 20 and len({d.price_inr for d in grid.days}) > 3
     for fare in (grid.cheapest, max(grid.days, key=lambda d: d.price_inr)):
         assert p.search_one_way("DEL", "GOI", fare.day, limit=1).options[0].price_inr == fare.price_inr
+
+
+def test_api_tradeoffs_add_guest_flight_notes_only_when_asked(client):
+    from tests.conftest import EXAMPLE
+
+    text = EXAMPLE.replace("December 12", "December 13")
+    shift = lambda r: next(o for o in r.get_json()["options"] if o["kind"] == "shift_date")["detail"]
+    assert "flight" not in shift(post(client, "/api/tradeoffs", {"request": text})).lower()
+    r = post(client, "/api/tradeoffs", {"request": text, "guest_travel": {"origin": "DEL", "destination": "BOM", "guests": 30}})
+    assert "INR 8,200 each way that day, INR 100 less per guest (about INR 3,000 for 30) than on 2026-12-13" in shift(r)
+    assert post(client, "/api/tradeoffs", {"request": text, "guest_travel": {"origin": "delhi", "destination": "BOM", "guests": 30}}).status_code in (400, 422)

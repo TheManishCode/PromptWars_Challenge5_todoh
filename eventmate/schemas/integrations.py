@@ -94,6 +94,14 @@ class CheapestDates(_Model):
     notice: str = "Indicative fares from Google Flights through fli. Fares change; to;doh-the event planner does not book or pay."
 
 
+class GuestTravel(_Model):
+    """Guests flying to the event: where from, which airport, how many. Used only to annotate date-shift options with fares."""
+
+    origin: str = Field(pattern=_IATA)
+    destination: str = Field(pattern=_IATA)
+    guests: int = Field(ge=1, le=500)
+
+
 class MultiCityResult(_Model):
     legs: tuple[FlightSearch, ...] = Field(min_length=2, max_length=MAX_MULTI_CITY_LEGS)
     method: Literal["separate_one_way_searches"] = "separate_one_way_searches"

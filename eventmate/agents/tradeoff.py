@@ -6,7 +6,7 @@ database records and then verified by a full dry run of the real pipeline
 weights are data in ``TradeoffPolicy``, not hidden constants.
 
 Moves: rebalance category caps, drop an optional service, shift the date to
-one the database has availability for, raise the budget by the minimum that
+one the database has availability for (with the guests' indicative flight fares when given), raise the budget by the minimum that
 works (binary search over the real feasibility check).
 """
 
@@ -31,7 +31,9 @@ from eventmate.schemas import (
     ConstraintCheck,
     ConstraintViolation,
     DecisionType,
+    CheapestDates,
     EventRequest,
+    GuestTravel,
     TradeoffKind,
     TradeoffOption,
     TradeoffReport,
@@ -50,6 +52,22 @@ class TradeoffPolicy(_Model):
     rebalance_harm_max: float = Field(default=0.5, ge=0.0, le=1.0)
     max_options: int = Field(default=4, ge=1, le=10)
     max_date_candidates: int = Field(default=12, ge=1, le=60)
+
+
+def _flight_note(original: date, moved: date, fares: CheapestDates | None, travel: GuestTravel | None) -> str:
+    """What moving the date does to the guests' flights, from fli's date grid. Said as fact only for days the grid priced."""
+    if fares is None or travel is None:
+        return ""
+    by_day = {f.day: f.price_inr for f in fares.days}
+    leg = f" Guest flight {travel.origin}-{travel.destination}:"
+    if moved not in by_day:
+        return f"{leg} no fare shown for {moved.isoformat()}."
+    new = by_day[moved]
+    if original not in by_day:
+        return f"{leg} INR {new:,} each way that day; no fare shown for {original.isoformat()} to compare. Indicative, not a quote."
+    diff = new - by_day[original]
+    saving = "the same fare" if diff == 0 else f"INR {abs(diff):,} {'more' if diff > 0 else 'less'} per guest (about INR {abs(diff) * travel.guests:,} for {travel.guests})"
+    return f"{leg} INR {new:,} each way that day, {saving} than on {original.isoformat()}. Indicative Google Flights fares, not a quote."
 
 
 class _Silent:
@@ -93,12 +111,12 @@ class TradeoffAgent:
         r = self.verify(request)
         return (bool(r[0]), tuple(r[1])) if isinstance(r, tuple) else (bool(r), ())
 
-    def propose(self, request: EventRequest, today: date) -> TradeoffReport:
+    def propose(self, request: EventRequest, today: date, fares: CheapestDates | None = None, travel: GuestTravel | None = None) -> TradeoffReport:
         if self._check(request)[0]:
             report = TradeoffReport(status="not_needed", request=request)
             self._log(request, report, [])
             return report
-        found = self._candidates(request, today)
+        found = self._candidates(request, today, fares, travel)
         ranked = sorted(found, key=lambda c: (-c.utility(request.budget_total), c.extra, c.kind.value, c.title))
         options: list[TradeoffOption] = []
         rejected: list[_Candidate] = []
@@ -129,11 +147,11 @@ class TradeoffAgent:
 
     # --------------------------------------------------------- candidates
 
-    def _candidates(self, request: EventRequest, today: date) -> list[_Candidate]:
+    def _candidates(self, request: EventRequest, today: date, fares: CheapestDates | None, travel: GuestTravel | None) -> list[_Candidate]:
         out: list[_Candidate] = []
         out += self._rebalance(request)
         out += self._drops(request)
-        out += self._dates(request, today)
+        out += self._dates(request, today, fares, travel)
         out += self._raise_budget(request)
         return out
 
@@ -218,7 +236,7 @@ class TradeoffAgent:
                 )
         return out
 
-    def _dates(self, request: EventRequest, today: date) -> list[_Candidate]:
+    def _dates(self, request: EventRequest, today: date, fares: CheapestDates | None = None, travel: GuestTravel | None = None) -> list[_Candidate]:
         horizon = today + timedelta(days=MAX_EVENT_AHEAD_DAYS)
         dates = {
             d
@@ -245,7 +263,7 @@ class TradeoffAgent:
                     0,
                     f"Move the event to {d.isoformat()}",
                     f"{days} day(s) {'later' if d > request.event_date else 'earlier'} than {request.event_date.isoformat()}; "
-                    "every service has an eligible vendor on that date.",
+                    "every service has an eligible vendor on that date." + _flight_note(request.event_date, d, fares, travel),
                     sum(cheapest.values()),
                 )
             )

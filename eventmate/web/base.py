@@ -25,7 +25,7 @@ from eventmate.planning import intake
 from eventmate.planning.delta import EventDelta
 from eventmate.voice import audio as voice_audio
 from eventmate import transfer
-from eventmate.schemas import MAX_BUDGET_INR, MAX_MULTI_CITY_LEGS, HiddenCost, LedgerKind, ObservationSource, TradeoffOption, VendorCategory
+from eventmate.schemas import MAX_BUDGET_INR, MAX_MULTI_CITY_LEGS, GuestTravel, HiddenCost, LedgerKind, ObservationSource, TradeoffOption, VendorCategory
 from eventmate.integrations.travel import CABINS
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -82,6 +82,10 @@ class _Strict(BaseModel):
 class PlanBody(_Strict):
     request: str = Field(min_length=1, max_length=2000)
     guest_list_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+
+
+class TradeoffsBody(PlanBody):
+    guest_travel: GuestTravel | None = None  # guests flying in: adds indicative fares to date-shift options
 
 
 class IntakeBody(_Strict):
