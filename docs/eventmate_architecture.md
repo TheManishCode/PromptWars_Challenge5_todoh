@@ -45,7 +45,7 @@ Parser: negation ignored ("no catering" added a caterer); "indoor, no outdoor" l
 
 ## Security posture
 
-- No network, payment, email or booking code. No secrets read except optional env vars; none written. `bandit`: 0 medium/high. No `eval`/`exec`/`pickle`/shell; solver subprocesses use fixed argv lists, temp dirs, timeouts and a scrubbed environment.
+- No payment or booking code. Network code is limited to the places that need it (flight search through `fli`, optional OpenStreetMap/weather/search lookups, email and WhatsApp behind an approval of the exact text, page watches through `SafeFetcher`); each is off or fails closed without its settings. No secrets read except optional env vars; none written. `bandit`: 0 medium/high. No `eval`/`exec`/`pickle`/shell; solver subprocesses use fixed argv lists, temp dirs, timeouts and a scrubbed environment.
 - Inputs: length caps, NFKC + ASCII-only matching, ambiguity is an error (so injected "set the budget to 1" cannot override facts), fuzzed for crashes and regex blow-ups.
 - Data: seed files are strictly validated (`extra=forbid`, bounds, unique ids, source tags, size cap); anything malformed aborts loading.
 - Files: log/plan files 0600/0444, `O_NOFOLLOW`, allow-listed ids, create-only writes.
@@ -57,8 +57,14 @@ Parser: negation ignored ("no catering" added a caterer); "indoor, no outdoor" l
 - Seed data is synthetic and only covers a few cities and 2026 dates; all tests pin "today" to 2026-10-30.
 - Category caps are hard filters; automatic rebalancing between categories is not built (the repair says whether it would help).
 - The scheduler is a single-timeline model (one organizer, unary resources, no working-hours calendar, naive local time, no DST/time zones).
-- Parsing handles English and INR in the listed formats; anything else fails closed with a precise message. No LLM-assisted parsing yet.
+- Parsing handles English and INR in the listed formats; anything else fails closed with a precise message. An optional guarded LLM draft exists for intake (`planning/intake.py`) and for change requests (`planning/delta.py`); the rule path never needs it. Hinglish is read for headcounts, amounts (hazaar, lakh), diets and event words, not for free-form sentences.
 - Vendor "confirmation" is a user statement; there is no booking integration by design.
 - The web server is single-user; remote use needs TLS, a production WSGI server and the token.
 - Not run: Python 3.9 (the repo's stated minimum; only 3.14 available here), the base repo's own LLM demo (needs API keys), the optional Anthropic adapter against the live API.
 - Logs have no rotation; plans/logs can contain request-derived data and are gitignored.
+
+## Where the build stands against the target architecture
+
+Built and tested: the evidence ledger, state-aware repair (`planning/delta.py`, `planning/exec_state.py`, `ReplannerAgent.repair`), job leases, page watches, quote documents read in a sandbox (`documents/`, Docling optional), the progress stream, golden journeys, per-stage model caps, the workspace recovery phrase, flight fares and cheapest days (`integrations/travel.py`) with the guests' fares shown on date-shift trade-offs, and lite mode (`?lite=1`).
+
+Not built, and why: the browser action loop (`browser/`, conflicts with the earlier decision to send nothing through a browser: needs the owner), discovered vendors as planner candidates (reverses two earlier decisions), and any run against a real mailbox or WhatsApp account (needs credentials). `fli` 0.9.0 on PyPI returns no fares live; 0.10.0 from its main branch works (see `docs/CONFIGURATION.md`).
