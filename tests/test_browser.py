@@ -194,3 +194,15 @@ def test_the_browser_and_every_reader_of_page_text_are_closed_to_models():
         for node in ast.walk(ast.parse(f.read_text())):
             mods = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""] if isinstance(node, ast.ImportFrom) else []
             assert not any(m.startswith(("eventmate.llm", "eventmate.assistant")) for m in mods), (f.name, mods)
+
+
+def test_pages_can_be_rendered_from_the_deals_worker_threads(net):
+    from concurrent.futures import ThreadPoolExecutor
+
+    pytest.importorskip("playwright.sync_api")
+    if CHROMIUM is None:
+        pytest.skip("no Chromium on this machine")
+    f = fetcher(net)
+    with ThreadPoolExecutor(4) as pool:
+        pages = list(pool.map(lambda _: f.fetch(SITE + "/"), range(4)))
+    assert all("Photo cakes from Rs 1,200 per kg" in p.text for p in pages)

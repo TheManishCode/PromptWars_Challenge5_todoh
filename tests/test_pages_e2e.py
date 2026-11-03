@@ -298,3 +298,18 @@ def test_lite_mode_drops_the_video_and_every_animation_and_still_passes_axe(serv
         assert page.evaluate("document.getAnimations().filter(a => a.playState === 'running').length") == 0
         assert axe_violations(page) == [] and seen == []
         page.close()
+
+
+def test_a_stated_allergy_shows_on_the_review_card_and_keeps_the_plan_unconfirmed(server, ctx):
+    page, seen = opened(ctx, server[0] + "/app")
+    page.click("#new-plan")
+    page.fill("#brief-input", BRIEF + ", my mother is allergic to peanuts")
+    page.click("#read-brief")
+    page.wait_for_selector("#build")
+    assert "Allergies" in page.inner_text("#brief-dialog") and "peanut" in page.inner_text("#brief-dialog").lower()
+    page.click("#build")
+    page.wait_for_selector("#eventline:has-text('version 1')")
+    page.wait_for_selector("text=allergy not confirmed with the caterer")
+    page.wait_for_selector("#brief-dialog", state="hidden")  # the closing dialog is half transparent for a moment, which the pixel contrast meter would read
+    page.wait_for_timeout(600)
+    clean(page, ctx, seen)
