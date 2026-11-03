@@ -16,7 +16,7 @@
 
 <p align="center"><a href="https://todoh.manishp.dev"><b>Live demo</b></a> &nbsp;·&nbsp; <a href="#try-it-in-60-seconds">Quick start</a> &nbsp;·&nbsp; <a href="#how-it-works">How it works</a> &nbsp;·&nbsp; <a href="docs/DEMO.md">5-minute tour</a> &nbsp;·&nbsp; <a href="#problem-statement-coverage">Problem-statement map</a></p>
 
-<p align="center"><img src="docs/assets/planner.png" alt="The to;doh planner: a brief on the left, and the plan it produced on the right with a Verified stamp, the budget and the independent checks" width="860"></p>
+<p align="center"><img src="docs/assets/planner.png" alt="The to;doh dashboard: plans and filters, a calendar of the plan with the event day marked, the vendors found with how sure we are of each fact, the budget, and an assistant" width="860"></p>
 
 ## Why to;doh
 
@@ -57,7 +57,7 @@ Asking a chatbot to plan a wedding gets you confident prices that do not exist a
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env && chmod 600 .env      # optional: add a model key for the GenAI features
-python -m eventmate.web                     # open http://127.0.0.1:8765 (the planner is at /app)
+python -m eventmate.web                     # open http://127.0.0.1:8765 (the dashboard is at /app)
 ```
 
 Then type something like *"120-person engagement party in Pune on December 12, under INR 200,000, vegetarian catering, indoor venue, photographer."* Prefer a terminal?
@@ -90,7 +90,7 @@ Python · Flask · Pydantic · Google OR-Tools (CP-SAT) · Fast Downward · VAL 
 
 ## Status
 
-A working prototype built for a hackathon. Vendor data is synthetic seed data for nine cities, and email has been tested against fake SMTP and IMAP only. The landing page (`/`) and the planner (`/app`) are the front end; the REST API and CLI drive the same engine.
+A working prototype built for a hackathon. Vendor data is synthetic seed data for nine cities, and email has been tested against fake SMTP and IMAP only. The landing page (`/`) and the dashboard (`/app`) are the front end; the REST API and CLI drive the same engine.
 
 ## Documentation
 

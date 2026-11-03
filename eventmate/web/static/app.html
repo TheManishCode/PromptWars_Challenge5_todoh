@@ -3,96 +3,233 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Planner - to;doh</title>
-<meta name="description" content="Describe an event in plain words. to;doh builds a plan with a budget and a timeline and shows it only after an independent validator has re-checked it.">
+<title>Dashboard - to;doh</title>
+<meta name="description" content="Your event on one screen: the calendar, the vendors found, the budget, what needs your approval, and an assistant. Every fact says how far to trust it.">
 <link rel="icon" href="/static/favicon.svg">
-<link rel="stylesheet" href="/static/site.css">
 <link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
 </head>
-<body class="app-body">
-<a class="skip-link" href="#main">Skip to content</a>
+<body>
+<a class="skip" href="#cal-card">Skip to calendar</a>
+<p class="sr" id="live" role="status" aria-live="polite"></p>
+<div class="frame" id="frame">
 
-<header class="app-bar">
-  <nav class="nav-grid" aria-label="Main">
-    <a class="brand" href="/">to;doh</a>
-    <span class="app-bar__title">Planner</span>
-    <div class="nav-cta">
-      <button type="button" class="btn btn--ghost btn--small" id="workspace-open" aria-haspopup="dialog">Workspace</button>
+  <!-- ===== pane 1: rail + sidebar (dark) ===== -->
+  <aside class="left" id="left" aria-label="Plans and filters">
+    <nav class="rail" aria-label="Workspace">
+      <a class="rail__logo" href="/" aria-label="t;d, to;doh home">t;d</a>
+      <button class="rail__btn" type="button" id="open-paper" aria-label="Open plan dossier" title="Plan dossier">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/></svg></button>
+      <button class="rail__btn" type="button" id="new-plan" aria-label="New plan" title="New plan">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14"/></svg></button>
+      <span class="rail__sep"></span>
+      <button class="rail__btn" type="button" id="open-workspace" aria-label="Workspace: export, recovery, delete" title="Workspace" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg></button>
+    </nav>
+
+    <div class="side">
+      <section class="card-d fold" aria-label="Plan">
+        <h2>Plan</h2>
+        <label class="sr" for="plan-select">Choose a plan</label>
+        <select id="plan-select" class="sel"></select>
+        <button class="pill pill--k wide" type="button" id="new-plan-2">New plan</button>
+      </section>
+
+      <section class="mini card-d" aria-label="Mini calendar">
+        <header><h2 id="mini-title">December 2026</h2><span><button type="button" class="ib" data-nav="-1" aria-label="Previous month">&lsaquo;</button><button type="button" class="ib" data-nav="1" aria-label="Next month">&rsaquo;</button></span></header>
+        <div class="mini__grid" id="mini-grid"></div>
+      </section>
+
+      <section class="card-d fold" aria-label="Calendar layers">
+        <h2>Calendar layers</h2>
+        <label class="chk"><input type="checkbox" data-layer="milestone" checked><span>Plan timeline</span></label>
+        <label class="chk"><input type="checkbox" data-layer="deadline" checked><span>Deadlines and watches</span></label>
+        <label class="chk"><input type="checkbox" data-layer="approval" checked><span>Approvals</span></label>
+      </section>
+
+      <section class="card-d fold" aria-label="Categories">
+        <h2>Categories</h2>
+        <label class="chk chk--dot" data-c="venue"><input type="checkbox" data-cat="venue" checked><span>Venues</span></label>
+        <label class="chk chk--dot" data-c="caterer"><input type="checkbox" data-cat="caterer" checked><span>Caterers</span></label>
+        <label class="chk chk--dot" data-c="photographer"><input type="checkbox" data-cat="photographer" checked><span>Photographers</span></label>
+        <label class="chk chk--dot" data-c="other"><input type="checkbox" data-cat="other" checked><span>Everything else</span></label>
+      </section>
+
+      <section class="card-d key" aria-label="Certainty key">
+        <h2>How sure are we?</h2>
+        <ul>
+          <li><span class="chip" data-s="suggested">Suggested</span></li>
+          <li><span class="chip" data-s="discovered">Discovered</span></li>
+          <li><span class="chip" data-s="extracted">Extracted</span></li>
+          <li><span class="chip" data-s="user_confirmed">You confirmed</span></li>
+          <li><span class="chip" data-s="verified">Verified</span></li>
+          <li><span class="chip" data-s="booked">Booked</span></li>
+        </ul>
+      </section>
     </div>
-  </nav>
-</header>
+  </aside>
 
-<p class="sr-only" id="live" role="status" aria-live="polite"></p>
+  <!-- ===== pane 2: main bento ===== -->
+  <main class="main" id="main">
+    <div class="main__in">
+      <header class="top">
+        <div class="top__l">
+          <button class="ib ib--d only-narrow" type="button" id="toggle-left" aria-label="Show plans and filters" aria-expanded="false">&#9776;</button>
+          <h1 id="cal-title">Calendar</h1>
+          <button class="pill pill--k" type="button" id="today">Today</button>
+          <button class="ib ib--d" type="button" data-nav="-1" aria-label="Previous">&lsaquo;</button>
+          <button class="ib ib--d" type="button" data-nav="1" aria-label="Next">&rsaquo;</button>
+        </div>
+        <div class="top__r">
+          <div class="seg" role="group" aria-label="Calendar view">
+            <button type="button" data-view="month" aria-pressed="true">Month</button>
+            <button type="button" data-view="week" aria-pressed="false">Week</button>
+            <button type="button" data-view="day" aria-pressed="false">Day</button>
+          </div>
+          <button class="pill pill--k" type="button" id="open-paper-2">Plan dossier</button>
+          <button class="pill pill--k only-narrow" type="button" id="toggle-right" aria-expanded="false">Assistant</button>
+        </div>
+      </header>
+      <p class="eventline mono" id="eventline">No plan yet. Press <b>New plan</b> to begin your first.</p>
 
-<main id="main" class="app">
-  <noscript><p class="notice notice--warn">The planner needs JavaScript. The landing page and the API work without it.</p></noscript>
+      <div class="bento">
+        <section class="b b--cal" id="cal-card" aria-label="Event calendar" tabindex="-1">
+          <div class="cal" id="cal"></div>
+        </section>
 
-  <section class="panel panel--brief" aria-labelledby="brief-heading">
-    <h1 id="brief-heading">Your event</h1>
-
-    <div class="field" id="plan-picker" hidden>
-      <label for="plan-select">Open an earlier plan</label>
-      <select id="plan-select"></select>
-    </div>
-
-    <form id="brief-form" novalidate>
-      <label for="brief-input">Describe your event</label>
-      <textarea id="brief-input" rows="5" maxlength="1900" placeholder="A 120-person engagement party in Pune on 12 December, budget 2 lakh, vegetarian"></textarea>
-      <p class="hint">Guests, city, date and budget are enough. Lakh and crore are fine.</p>
-      <div class="row">
-        <button type="submit" class="btn" id="read-brief">Read my brief</button>
-        <button type="button" class="btn btn--ghost" id="start-over">Start over</button>
+        <section class="b b--venue" aria-labelledby="t-venue">
+          <header><h2 id="t-venue">Venues</h2><span class="count" id="n-venue"></span></header>
+          <ul class="places places--scroll" id="p-venue" tabindex="0" aria-label="Venue list"></ul>
+          <button class="pill pill--k wide" type="button" data-find="venue">Find venues nearby</button>
+        </section>
+        <section class="b b--cat" aria-labelledby="t-cat">
+          <header><h2 id="t-cat">Caterers</h2><span class="count" id="n-caterer"></span></header>
+          <ul class="places places--scroll" id="p-caterer" tabindex="0" aria-label="Caterer list"></ul>
+          <button class="pill pill--k wide" type="button" data-find="caterer">Find caterers nearby</button>
+        </section>
+        <section class="b b--photo" aria-labelledby="t-photo">
+          <header><h2 id="t-photo">Photographers</h2><span class="count" id="n-photographer"></span></header>
+          <ul class="places places--scroll" id="p-photographer" tabindex="0" aria-label="Photographer list"></ul>
+          <button class="pill pill--k wide" type="button" data-find="photographer">Find photographers nearby</button>
+        </section>
+        <section class="b b--map" aria-labelledby="t-ev">
+          <header><h2 id="t-ev">Evidence</h2><span class="count mono" id="n-evidence"></span></header>
+          <ul class="evcounts" id="evcounts"></ul>
+          <ul class="evlist" id="evlist"></ul>
+          <p class="note">Listings are not prices. A fact is only trusted as far as its state says.</p>
+        </section>
+        <section class="b b--budget" aria-labelledby="t-bud">
+          <header><h2 id="t-bud">Budget</h2><span class="count mono" id="n-budget"></span></header>
+          <div class="donutwrap"><div class="donut" id="donut" role="img" aria-label="Budget split"></div>
+          <ul class="legend" id="legend"></ul></div>
+        </section>
+        <section class="b b--appr" aria-labelledby="t-appr">
+          <header><h2 id="t-appr">Waiting on you</h2><span class="count" id="n-appr"></span></header>
+          <ul class="appr" id="appr"></ul>
+          <button class="pill pill--k wide" type="button" id="review-appr">Review exact content</button>
+        </section>
+        <section class="b b--other" aria-labelledby="t-oth">
+          <header><h2 id="t-oth">Decor, music &amp; more</h2><span class="count" id="n-other"></span></header>
+          <ul class="places" id="p-other"></ul>
+          <button class="pill pill--k wide" type="button" id="get-ideas">Get ideas</button>
+        </section>
       </div>
-    </form>
-
-    <div id="understood" class="understood" aria-live="polite"></div>
-  </section>
-
-  <section class="panel panel--plan" aria-labelledby="plan-heading" tabindex="-1" id="plan-panel">
-    <h2 id="plan-heading" class="sr-only">Plan</h2>
-    <div id="plan-empty" class="empty">
-      <p class="empty__title">No plan yet</p>
-      <p>Describe your event first. You check what was understood, press Build my plan, and the plan appears here once it has passed every hard check.</p>
     </div>
-    <div id="plan-view" hidden></div>
-  </section>
-</main>
+  </main>
 
-<dialog id="workspace-dialog" aria-labelledby="workspace-title">
-  <button type="button" class="btn btn--ghost btn--small dialog__close" id="workspace-close">Close</button>
+  <!-- ===== pane 3: assistant ===== -->
+  <aside class="right" id="right" aria-label="Assistant">
+    <div class="right__dots" aria-hidden="true"></div>
+    <header class="ai">
+      <button class="ib only-narrow ib--l" type="button" id="close-right" aria-label="Close assistant">&times;</button>
+      <h2>Assistant</h2>
+      <p>Plan, quote, change.<br>One event.</p>
+    </header>
+    <div class="eyes" id="eyes" aria-hidden="true"><i></i><i></i></div>
+    <ol class="msgs" id="msgs" aria-live="polite" aria-label="Conversation"></ol>
+    <div class="cards">
+      <section class="mini-card" aria-label="What needs you">
+        <header><h3>Needs you</h3></header>
+        <ul id="tasks"></ul>
+      </section>
+      <section class="mini-card mini-card--doc" aria-label="Plan explanation">
+        <header><h3>Docs</h3></header>
+        <button type="button" class="doc" id="doc-btn">
+          <span class="doc__sheet"><i></i><i></i><i></i><b id="doc-v">v1</b></span>
+          <span class="doc__cap">Why this plan<br><span class="mono" id="doc-cap"></span></span>
+        </button>
+      </section>
+    </div>
+    <div class="modes" role="group" aria-label="What to send">
+      <button type="button" data-mode="ask" aria-pressed="true">Ask</button>
+      <button type="button" data-mode="change" aria-pressed="false">Change</button>
+    </div>
+    <form class="bar" id="ask" autocomplete="off">
+      <label class="sr" for="ask-in">Message the assistant</label>
+      <input id="ask-in" type="text" maxlength="900" placeholder="Ask about a place, quote or the plan">
+      <button class="bar__mic" type="submit" aria-label="Send"><i></i><i></i><i></i><i></i><i></i></button>
+    </form>
+    <p class="demo" id="ask-hint">Answers come from your plan and the knowledge base. The model never decides a price or a date.</p>
+  </aside>
+</div>
+
+<!-- event popover -->
+<div class="pop" id="pop" role="dialog" aria-modal="false" aria-labelledby="pop-t" hidden>
+  <button class="pop__x" type="button" id="pop-x" aria-label="Close details">&times;</button>
+  <h3 id="pop-t"></h3>
+  <p class="pop__when mono" id="pop-when"></p>
+  <dl class="pop__facts" id="pop-facts"></dl>
+</div>
+
+<!-- new plan -->
+<dialog class="dlg" id="brief-dialog" aria-labelledby="brief-title">
+  <button type="button" class="dlg__x" id="brief-close" aria-label="Close">&times;</button>
+  <h2 id="brief-title">New plan</h2>
+  <form id="brief-form" novalidate>
+    <label for="brief-input">Describe your event</label>
+    <textarea id="brief-input" rows="4" maxlength="1900" placeholder="A 120-person engagement party in Pune on 12 December, budget 2 lakh, vegetarian"></textarea>
+    <p class="hint">Guests, city, date and budget are enough. Lakh and crore are fine.</p>
+    <div class="row"><button type="submit" class="pill pill--k" id="read-brief">Read my brief</button><button type="button" class="pill pill--ghost" id="brief-reset">Start over</button></div>
+  </form>
+  <div id="understood" aria-live="polite"></div>
+</dialog>
+
+<!-- workspace -->
+<dialog class="dlg" id="workspace-dialog" aria-labelledby="workspace-title">
+  <button type="button" class="dlg__x" id="workspace-close" aria-label="Close">&times;</button>
   <h2 id="workspace-title">Your workspace</h2>
   <p id="workspace-mode" class="hint"></p>
-  <div class="dialog__actions">
-    <button type="button" class="btn btn--small" id="export-data">Export everything</button>
-  </div>
+  <div class="row"><button type="button" class="pill pill--k" id="export-data">Export everything</button></div>
   <div id="shared-only" hidden>
     <h3>Recovery phrase</h3>
     <p class="hint">Your workspace lives in this browser's cookie. A recovery phrase opens it from another browser if the cookie is lost. It is shown once and the server keeps only a hash.</p>
-    <div class="dialog__actions">
-      <button type="button" class="btn btn--small" id="phrase-make">Make a recovery phrase</button>
-    </div>
+    <div class="row"><button type="button" class="pill pill--k" id="phrase-make">Make a recovery phrase</button></div>
     <p id="phrase-out" class="phrase" hidden></p>
     <form id="recover-form" class="field" novalidate>
       <label for="recover-input">Recover a workspace</label>
       <input id="recover-input" type="text" autocomplete="off" spellcheck="false" maxlength="40" placeholder="XXXX-XXXX-XXXX-XXXX">
-      <button type="submit" class="btn btn--small btn--ghost">Recover</button>
+      <button type="submit" class="pill pill--ghost">Recover</button>
     </form>
     <h3>Delete</h3>
     <form id="delete-form" class="field" novalidate>
       <label for="delete-input">Type delete to remove this workspace and everything in it</label>
       <input id="delete-input" type="text" autocomplete="off" spellcheck="false" maxlength="10">
-      <button type="submit" class="btn btn--small btn--ghost">Delete workspace</button>
+      <button type="submit" class="pill pill--ghost">Delete workspace</button>
     </form>
   </div>
   <p id="workspace-msg" class="hint" role="status"></p>
 </dialog>
 
-<footer class="site-footer">
-  <span class="footer-brand">to;doh &middot; the event planner</span>
-  <span class="footer-note">Early prototype. Vendor data is synthetic. Nothing is booked, sent or paid until you approve it.</span>
-  <a class="footer-link" href="/">About</a>
-</footer>
-
-<script src="/static/app.js" defer></script>
+<!-- ===== plan dossier: the original paper, stacked, re-ordered on click ===== -->
+<div class="stage" id="stage" role="dialog" aria-modal="true" aria-label="Plan dossier" hidden>
+  <header class="stage__head mono"><span id="stage-l">PLAN DOSSIER</span><span id="stage-r"></span><button type="button" class="stage__x" id="stage-x" aria-label="Close dossier">CLOSE &times;</button></header>
+  <div class="stage__area" id="sheets"></div>
+  <aside class="note-card" id="note-card" aria-live="polite">
+    <p class="note-t" id="note-t"></p><p id="note-p"></p>
+    <button type="button" class="yellow" id="note-btn">Print sheet</button>
+  </aside>
+  <p class="stage__hint mono">Click a sheet to bring it forward &middot; arrow keys switch &middot; Esc closes</p>
+</div>
+<noscript><p class="demo">The dashboard needs JavaScript. The landing page and the API work without it.</p></noscript>
 </body>
 </html>

@@ -298,9 +298,10 @@ def test_the_old_room_assets_are_gone_and_its_address_still_leads_somewhere(clie
 
 
 def test_the_pages_name_their_assets_by_version_and_only_serve_files_that_exist(client):
-    html = client.get("/app").get_data(as_text=True)
-    version = client.get("/").get_data(as_text=True).split('name="asset-version" content="')[1].split('"')[0]
-    assert f'/static/app.js?v={version}' in html and f'/static/site.css?v={version}' in html and "style=" not in html and " onclick=" not in html
+    html, landing = client.get("/app").get_data(as_text=True), client.get("/").get_data(as_text=True)
+    version = landing.split('name="asset-version" content="')[1].split('"')[0]
+    assert f'/static/app.js?v={version}' in html and f'/static/app.css?v={version}' in html and "style=" not in html and " onclick=" not in html
+    assert f'/static/site.css?v={version}' in landing and f'/static/landing.css?v={version}' in landing
     assert client.get(f"/static/app.js?v={version}").headers["Cache-Control"] == "public, max-age=31536000, immutable"
     assert client.get("/static/app.js").headers["Cache-Control"] == "no-cache"
     assert client.get("/static/not-listed.js").status_code == 404
