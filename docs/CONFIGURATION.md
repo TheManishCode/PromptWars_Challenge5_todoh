@@ -46,6 +46,14 @@ Vendor messaging settings are in [EMAIL_SETUP.md](EMAIL_SETUP.md). Community pro
 
 Contact addresses are read only from a business's own website (the listing's, or one you type) and at most one same-domain contact page, honouring robots.txt. Found addresses are never used until you confirm them. Business addresses and the do-not-contact list are stored in the plan directory (`sourcing` data: `externals/`, `shortlist/`, `suppression/`, `unmatched/`) with no retention or deletion rules yet.
 
+## Quote files
+
+A vendor's quote can be added from the vendor's event in the dashboard ("Add a quote file"). The file is converted in a separate, resource-limited process (private temporary directory, no secrets in its environment, time, write and memory limits) and is not kept; the lines read from it are shown as unconfirmed until you confirm one, and nothing is a price until then. This runs on your own machine only, not on shared hosting.
+
+- **Text, CSV and HTML** quotes work with nothing installed.
+- **PDF, Word, Excel, PowerPoint and images** need [Docling](https://github.com/docling-project/docling): `pip install docling`, then `python -m eventmate.documents.warm` once to download its models. Reading a quote afterwards runs offline (`HF_HUB_OFFLINE=1` inside the sandbox; `HF_HOME` says where the models are). Docling is heavy (torch); to keep it out of this project's environment, install it in its own and point `EVENTMATE_DOCLING_PYTHON` at that interpreter to run its tests. A one-page PDF used about 1.5 GB of memory; the limit is 3 GB, and a file that needs more is refused with a message.
+- **Attachments on a vendor's reply** are counted and never opened unless you set `EVENTMATE_READ_QUOTE_ATTACHMENTS=1`. Then up to two attachments of a reply that matches a thread we sent, from the address we wrote to, are read the same way. A message longer than 256 KB is cut off by the mail fetch and offers no files: upload those by hand.
+
 ## Keeping secrets out of files
 
 The SMTP password, the WhatsApp gateway key and the API keys can live in `.env` (mode 600, git-ignored), but a file on disk is the weakest option. The loader reads only the 30 allow-listed names and **a value already set in the real environment wins over the file**, so any of these work with no code change: put the secret in the environment when you start the app, and leave it out of `.env`.

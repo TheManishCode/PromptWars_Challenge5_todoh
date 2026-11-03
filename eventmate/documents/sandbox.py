@@ -4,6 +4,7 @@ kind the extension says."""
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import resource
@@ -12,6 +13,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,9 +22,16 @@ from eventmate.documents.worker import BUILTIN, HEAVY
 MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_MARKDOWN_CHARS = 500_000
 TIMEOUT_S = 30.0
-MEMORY_BYTES = 2 * 1024**3  # Docling loads models; the built-in engines use a few MB
+HEAVY_TIMEOUT_S = 120.0  # Docling loads its models first
+MEMORY_BYTES = 2 * 1024**3  # built-in engines use a few MB
+HEAVY_MEMORY_BYTES = 3 * 1024**3  # resident memory Docling may use; its libraries map far more address space than they touch, so it is measured, not capped
 MAGIC = {".pdf": (b"%PDF-",), ".docx": (b"PK\x03\x04",), ".xlsx": (b"PK\x03\x04",), ".pptx": (b"PK\x03\x04",), ".png": (b"\x89PNG",), ".jpg": (b"\xff\xd8\xff",), ".jpeg": (b"\xff\xd8\xff",)}
 ROOT = str(Path(__file__).resolve().parents[2])  # so the worker imports this checkout, whatever else is installed
+
+
+def model_home() -> str:
+    """Where the downloaded models are kept: ``HF_HOME`` if set, else the Hugging Face default under the real home directory."""
+    return os.environ.get("HF_HOME") or os.path.join(os.path.expanduser("~"), ".cache", "huggingface")
 
 
 class DocumentError(ValueError):
@@ -50,22 +59,48 @@ def check(data: bytes, filename: str, max_bytes: int = MAX_FILE_BYTES) -> str:
     return ext
 
 
-def _limits(max_out: int, memory: int, cpu_s: int):
+def _limits(max_out: int, memory: int | None, cpu_s: int):
     def apply():
         os.setsid()
         resource.setrlimit(resource.RLIMIT_CPU, (cpu_s, cpu_s))
         resource.setrlimit(resource.RLIMIT_FSIZE, (max_out, max_out))  # what it may write, to its output file or anywhere else
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-        try:
-            resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
-        except (ValueError, OSError):
-            pass
+        if memory is not None:
+            try:
+                resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
+            except (ValueError, OSError):
+                pass
     return apply
 
 
-def convert(data: bytes, filename: str, *, timeout: float = TIMEOUT_S, memory: int = MEMORY_BYTES, command: list[str] | None = None) -> Converted:
-    """``command`` replaces the worker, for tests; it gets the file path and extension as its last two arguments."""
+def _group_rss(pgid: int) -> int:
+    """Resident bytes of every process in the group (the worker and anything it started), read from /proc; 0 where /proc is not there."""
+    total, page = 0, os.sysconf("SC_PAGE_SIZE")
+    try:
+        names = os.listdir("/proc")
+    except OSError:
+        return 0
+    for name in names:
+        if not name.isdigit():
+            continue
+        try:
+            with open(f"/proc/{name}/stat", "rb") as fh:
+                after = fh.read().rsplit(b")", 1)[1].split()  # state, ppid, pgrp, session, tty, tpgid, flags, minflt, ... rss is the 22nd field of the line
+            if int(after[2]) == pgid:
+                total += int(after[21]) * page
+        except (OSError, IndexError, ValueError):
+            continue
+    return total
+
+
+def convert(data: bytes, filename: str, *, timeout: float | None = None, memory: int | None = None, command: list[str] | None = None, cap_address_space: bool | None = None) -> Converted:
+    """``command`` replaces the worker, for tests; it gets the file path and extension as its last two arguments. A built-in engine is held to ``memory`` of address space; a heavy
+    one (Docling) is held to ``memory`` of resident memory, measured while it runs, and gets a longer time limit."""
     ext = check(data, filename)
+    heavy = ext in HEAVY
+    timeout = timeout if timeout is not None else (HEAVY_TIMEOUT_S if heavy else TIMEOUT_S)
+    memory = memory if memory is not None else (HEAVY_MEMORY_BYTES if heavy else MEMORY_BYTES)
+    cap_address_space = (not heavy) if cap_address_space is None else cap_address_space
     work = Path(tempfile.mkdtemp(prefix="eventmate-doc-"))
     try:
         os.chmod(work, 0o700)
@@ -73,19 +108,26 @@ def convert(data: bytes, filename: str, *, timeout: float = TIMEOUT_S, memory: i
         src.write_bytes(data)
         max_out = MAX_MARKDOWN_CHARS * 4 + 4096  # JSON escapes and multi-byte characters can quadruple a character
         env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": ROOT, "LANG": "C.UTF-8", "HOME": str(work), "TMPDIR": str(work), "PYTHONDONTWRITEBYTECODE": "1"}
+        if heavy:  # the models were fetched ahead of time (python -m eventmate.documents.warm); a conversion never reaches the network for them
+            env.update({"HF_HOME": model_home(), "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"})
         argv = (command or [sys.executable, "-m", "eventmate.documents.worker"]) + [str(src), ext]
         with open(out, "wb") as sink:
             proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=sink, stderr=subprocess.DEVNULL, cwd=work, env=env,
-                                    preexec_fn=_limits(max_out, memory, int(timeout) + 5), close_fds=True)
-            try:
-                code = proc.wait(timeout=timeout)
-            except subprocess.TimeoutExpired:
+                                    preexec_fn=_limits(max_out, memory if cap_address_space else None, int(timeout) + 5), close_fds=True)
+            deadline, code, why = time.monotonic() + timeout, None, ""
+            while code is None:
                 try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                proc.wait()
-                raise DocumentError("reading that file took too long, so it was stopped") from None
+                    code = proc.wait(timeout=0.1)
+                except subprocess.TimeoutExpired:
+                    if time.monotonic() > deadline:
+                        why = "reading that file took too long, so it was stopped"
+                    elif _group_rss(proc.pid) > memory:
+                        why = "reading that file needed too much memory, so it was stopped"
+                    if why:
+                        with contextlib.suppress(ProcessLookupError):
+                            os.killpg(proc.pid, signal.SIGKILL)
+                        proc.wait()
+                        raise DocumentError(why) from None
         raw = out.read_bytes()[: max_out]
         if code != 0 and not raw:
             raise DocumentError("that file could not be read")

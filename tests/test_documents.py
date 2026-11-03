@@ -381,3 +381,114 @@ def test_a_booking_the_user_confirmed_keeps_its_vendor_and_takes_the_confirmed_p
     out = em.reprice(plan.plan_id, today)
     kept = next(s for s in out.plan.selections if s.category.value == "caterer")
     assert out.status == "replanned" and (kept.vendor_id, kept.cost, kept.booking_status.value) == (cat.vendor_id, 55_000, "confirmed")
+
+
+# ---------------------------------------------------------------- heavy engines: measured memory, longer time
+
+
+def run_heavy(code, **kw):
+    return sandbox.convert(b"%PDF-1.4 x", "q.pdf", command=[sys.executable, "-c", code, "--"], **kw)
+
+
+def test_a_heavy_engine_is_held_to_the_memory_it_really_uses():
+    started = time.perf_counter()
+    with pytest.raises(DocumentError, match="too much memory"):
+        run_heavy("b = bytearray(400 * 1024 * 1024)\nfor i in range(0, len(b), 4096): b[i] = 1\nimport time\ntime.sleep(30)", memory=150 * 1024 * 1024)
+    assert time.perf_counter() - started < 15
+
+
+def test_a_heavy_engine_may_map_far_more_address_space_than_it_touches_but_a_built_in_one_may_not():
+    code = "import mmap\nx = mmap.mmap(-1, 6 * 1024 ** 3)\nprint('{\"ok\": true, \"engine\": \"x\", \"markdown\": \"fine\"}')"  # six GB mapped, none touched
+    assert run_heavy(code).markdown == "fine"  # what torch does at import
+    with pytest.raises(DocumentError):
+        sandbox.convert(b"x", "q.txt", command=[sys.executable, "-c", code, "--"])
+
+
+def test_a_heavy_engine_gets_a_longer_clock_and_more_memory_than_a_built_in_one():
+    assert sandbox.HEAVY_TIMEOUT_S > sandbox.TIMEOUT_S and sandbox.HEAVY_MEMORY_BYTES > sandbox.MEMORY_BYTES
+
+
+DOCLING = os.environ.get("EVENTMATE_DOCLING_PYTHON")  # an interpreter with Docling installed, kept apart from this project's environment
+
+
+@pytest.mark.skipif(not DOCLING, reason="set EVENTMATE_DOCLING_PYTHON to an interpreter that has Docling to run the real engine")
+def test_a_real_word_quote_goes_through_docling_in_the_sandbox_into_the_same_lines(tmp_path):
+    import subprocess
+
+    make = ("import docx,sys\nd=docx.Document()\nd.add_paragraph('Quotation')\nt=d.add_table(rows=1,cols=4)\n"
+            "for c,x in zip(t.rows[0].cells,['Item','Qty','Rate','Amount']): c.text=x\n"
+            "for r in [('Veg buffet','120','Rs 450','Rs 54,000'),('Live counter','1','','Rs. 12,000/-'),('Sub total','','','66,000'),('GST 18%','','','11,880'),('Grand total','','','77,880')]:\n"
+            "    cells=t.add_row().cells\n    for c,x in zip(cells,r): c.text=x\nd.save(sys.argv[1])\n")
+    path = tmp_path / "quote.docx"
+    subprocess.run([DOCLING, "-c", make, str(path)], check=True)
+    c = sandbox.convert(path.read_bytes(), "quote.docx", command=[DOCLING, "-m", "eventmate.documents.worker"])
+    found = quotes.extract(c.markdown)
+    assert c.engine == "docling" and [(ln.label, ln.quantity, ln.unit_inr, ln.total_inr) for ln in found.lines] == [("Veg buffet", 120, 450, 54_000), ("Live counter", 1, None, 12_000)]
+    assert found.summary == {"subtotal": 66_000, "tax": 11_880, "grand_total": 77_880} and found.warnings == []
+
+
+def test_a_heavy_engine_is_told_where_its_models_are_and_to_stay_off_the_network_a_built_in_one_is_not(monkeypatch):
+    monkeypatch.setenv("HF_HOME", "/models/hf")
+    code = "import os, json\nprint(json.dumps({'ok': True, 'engine': 'x', 'markdown': json.dumps({k: v for k, v in os.environ.items() if k.startswith(('HF_', 'TRANSFORMERS'))})}))"
+    heavy = json.loads(run_heavy(code).markdown)
+    assert heavy == {"HF_HOME": "/models/hf", "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"}
+    assert json.loads(sandbox.convert(b"x", "q.txt", command=[sys.executable, "-c", code, "--"]).markdown) == {}
+
+
+def test_the_model_home_is_hf_home_or_the_real_home_never_the_sandboxs(monkeypatch):
+    monkeypatch.delenv("HF_HOME", raising=False)
+    assert sandbox.model_home() == os.path.join(os.path.expanduser("~"), ".cache", "huggingface")
+    monkeypatch.setenv("HF_HOME", "/x")
+    assert sandbox.model_home() == "/x"
+
+
+def test_warming_without_docling_says_what_to_install(capsys):
+    try:
+        import docling  # noqa: F401
+        pytest.skip("docling is installed here")
+    except ImportError:
+        pass
+    from eventmate.documents import warm
+
+    assert warm.main() == 1 and "pip install docling" in capsys.readouterr().err
+
+
+def hand_made_pdf() -> bytes:
+    """A one-page PDF with a ruled quote table, written by hand so no PDF library is needed."""
+    rows = [("Item", "Qty", "Rate", "Amount"), ("Veg buffet", "120", "Rs 450", "Rs 54,000"), ("Live counter", "1", "", "Rs 12,000"), ("Sub total", "", "", "66,000"), ("GST 18%", "", "", "11,880"),
+            ("Grand total", "", "", "77,880")]
+    x0, y0, widths, rh = 60, 700, [190, 60, 90, 110], 24
+    ops = ["BT /F1 16 Tf 60 750 Td (Quotation - Royal Rasoi) Tj ET"]
+    for i in range(len(rows) + 1):
+        ops.append(f"{x0} {y0 - i * rh} m {x0 + sum(widths)} {y0 - i * rh} l S")
+    x = x0
+    for w in widths + [0]:
+        ops.append(f"{x} {y0} m {x} {y0 - len(rows) * rh} l S")
+        x += w
+    for i, row in enumerate(rows):
+        x = x0
+        for j, cell in enumerate(row):
+            ops.append(f"BT /F1 11 Tf {x + 6} {y0 - i * rh - 16} Td ({cell}) Tj ET")
+            x += widths[j]
+    stream = "\n".join(ops).encode()
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+            b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream", b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    out, offsets = b"%PDF-1.4\n", []
+    for n, body in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % n + body + b"\nendobj\n"
+    start = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1) + b"".join(b"%010d 00000 n \n" % o for o in offsets)
+    return out + b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, start)
+
+
+@pytest.mark.skipif(not DOCLING or not os.path.isdir(os.path.join(sandbox.model_home(), "hub")), reason="needs EVENTMATE_DOCLING_PYTHON and the models (python -m eventmate.documents.warm)")
+def test_a_real_pdf_goes_through_docling_offline_in_the_sandbox_into_the_same_lines():
+    c = sandbox.convert(hand_made_pdf(), "quote.pdf", command=[DOCLING, "-m", "eventmate.documents.worker"])
+    found = quotes.extract(c.markdown)
+    assert c.engine == "docling" and [(ln.label, ln.quantity, ln.unit_inr, ln.total_inr) for ln in found.lines] == [("Veg buffet", 120, 450, 54_000), ("Live counter", 1, None, 12_000)]
+    assert found.summary == {"subtotal": 66_000, "tax": 11_880, "grand_total": 77_880}
+    for bad in (b"%PDF-1.4\n garbage \x00\x01", hand_made_pdf()[:300]):
+        with pytest.raises(DocumentError, match="could not be read"):
+            sandbox.convert(bad, "q.pdf", command=[DOCLING, "-m", "eventmate.documents.worker"])
