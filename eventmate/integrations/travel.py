@@ -170,9 +170,10 @@ class FliProvider(FlightProvider):
             except Exception:
                 skipped += 1
         days = tuple(DateFare(day=d, price_inr=p) for d, p in sorted(best.items()))
+        empty = () if days else ("No fares came back for these dates: Google may not sell this route then, or the flight tool may be out of date (see docs/CONFIGURATION.md).",)
         return CheapestDates(origin=origin, destination=destination, from_date=start, to_date=end, days=days,
                              cheapest=min(days, key=lambda f: (f.price_inr, f.day), default=None), fetched_at=self._now(),
-                             warnings=(f"{skipped} price(s) could not be read and were skipped",) if skipped else ())
+                             warnings=empty + ((f"{skipped} price(s) could not be read and were skipped",) if skipped else ()))
 
     @staticmethod
     def _option(search, r, cabin: str, warnings: list[str]) -> FlightOption:

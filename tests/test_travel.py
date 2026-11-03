@@ -1,6 +1,7 @@
 """Flight fares and schedules: provider adapter, multi-city built from separate searches, hostile data."""
 
 import json
+import os
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -283,7 +284,7 @@ def test_the_cheapest_day_is_found_and_unreadable_prices_are_skipped_not_guessed
 def test_no_prices_is_an_empty_answer_and_a_failure_is_a_plain_error():
     d = date(2026, 12, 12)
     out = dates_provider(None)[0].cheapest_dates("DEL", "BOM", d, d)
-    assert out.days == () and out.cheapest is None
+    assert out.days == () and out.cheapest is None and "No fares came back" in out.warnings[0]
     with pytest.raises(TravelError, match="failed unexpectedly") as e:
         dates_provider(exc=RuntimeError("secret internals"))[0].cheapest_dates("DEL", "BOM", d, d)
     assert "secret" not in str(e.value)
@@ -309,3 +310,13 @@ def test_api_cheapest_dates(client):
     for bad in ({"origin": "DEL", "destination": "BOM", "from_date": "2026-12-14", "to_date": "2026-12-12"}, {"origin": "DEL", "destination": "BOM", "from_date": "2026-12-12", "to_date": "2027-03-01"},
                 {"origin": "del", "destination": "BOM", "from_date": "2026-12-12", "to_date": "2026-12-13"}, {"origin": "DEL", "destination": "BOM", "from_date": "2026-12-12"}):
         assert post(client, "/api/travel/cheapest-dates", bad).status_code in (400, 422)
+
+
+@pytest.mark.skipif(os.environ.get("EVENTMATE_LIVE_FLIGHTS") != "1", reason="set EVENTMATE_LIVE_FLIGHTS=1 to search real Google Flights (needs a fli that works: see docs/CONFIGURATION.md)")
+def test_live_cheapest_days_match_a_one_way_search_for_the_same_day():
+    start = date.today() + timedelta(days=20)
+    p = FliProvider()
+    grid = p.cheapest_dates("DEL", "GOI", start, start + timedelta(days=40))
+    assert len(grid.days) > 20 and len({d.price_inr for d in grid.days}) > 3
+    for fare in (grid.cheapest, max(grid.days, key=lambda d: d.price_inr)):
+        assert p.search_one_way("DEL", "GOI", fare.day, limit=1).options[0].price_inr == fare.price_inr

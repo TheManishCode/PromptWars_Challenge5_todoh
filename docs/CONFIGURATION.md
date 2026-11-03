@@ -29,6 +29,8 @@ Secrets live in `.env` at the repository root (git-ignored; copy `.env.example`,
 | Deals agent: searches the web, reads pages, ranks advertised prices | none (DuckDuckGo); optional `BRAVE_SEARCH_API_KEY` | `deals`, `/api/deals` |
 | Venue discovery (OpenStreetMap / Overpass) | none; optional `EVENTMATE_OVERPASS_URL` | `discover`, `/api/discover/venues` |
 
+**Check fli's version.** On 3 Nov 2026 the `flights` 0.9.0 on PyPI got an error answer (`[13]`, no data) from Google for every search, one-way and date-grid alike, so fares came back empty; the unreleased 0.10.0 on `main` worked: `pip install git+https://github.com/punitarani/fli.git`. If searches come back empty for routes that obviously exist, that is the first thing to try. The cheapest-day search says so when it gets nothing, and was checked live against 0.10.0 (DEL-GOI, 61 days: 32 different prices, and the cheapest, dearest and a middle day each matched a one-way search for that day).
+
 Flights never book or pay. Multi-city is built from separate one-way searches because Google does not serve multi-city results to fli. Discovery
 results are candidates, not vendor-database facts. Forecasts exist for about five days ahead only.
 
