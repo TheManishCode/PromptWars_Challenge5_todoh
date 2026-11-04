@@ -45,11 +45,57 @@ def stated_validity_days(text: str) -> int | None:
     return days if 1 <= days <= 365 else None
 
 
+# Every money amount the vendor wrote, in any of the usual forms: "Rs 78,000", "INR 1.5 lakh", "₹95k", "84000 rupaye". The reply analyser knows fewer forms than people write, so this
+# scan keeps a second price in the same reply from going unseen.
+_MONEY_ANY = re.compile(
+    r"(?:(?:rs\.?|inr|₹)\s{0,3}(?P<a>\d[\d,]{0,15}(?:\.\d{1,3})?)\s{0,2}(?P<ua>lakhs?|lacs?|crores?|cr|k)?\b|(?<![\d.,])(?P<b>\d[\d,]{0,15}(?:\.\d{1,3})?)\s{0,2}(?P<ub>lakhs?|lacs?|crores?|cr|k)?\s{0,2}(?:rupees?|rupaye|rs|inr)\b)",
+    re.I,
+)
+_SENTENCES = re.compile(r"(?<![Rr][Ss]\.)(?<=[.!?])\s+|\n+")
+# An amount the vendor names but does not offer as the price of the service: a deposit, an advance, an extra, a competitor's or last year's price, a penalty, overtime.
+_BEFORE = re.compile(
+    r"(?:advance|deposit|refundable|token|booking\s+amount|competitors?\w*|other\s+(?:vendors?|caterers?|quotes?)|last\s+(?:year|time|month|season)|previous\w*|earlier|cancell?ation|penalt\w+|overtime|"
+    r"decor\w*|transport\w*|travel\w*|additional|extra\s+\w+|add[- ]?ons?|surcharge|late\s+fee|discount\w*|refund\w*)\W+(?:\w+\W+){0,4}$",
+    re.I,
+)
+_AFTER = re.compile(r"^\W{0,3}(?:extra\b|more\b|as\s+(?:an?\s+)?(?:advance|deposit|token)|advance\b|deposit\b|per\s+(?:hour|km|day|extra)|an\s+hour|off\b|discount)", re.I)
+
+
+def _value(num: str, unit: str | None) -> int | None:
+    try:
+        return round(float(num.replace(",", "")) * (_MULT[unit.lower()] if unit else 1))
+    except (ValueError, OverflowError):
+        return None
+
+
+def _stated_amounts(body: str) -> tuple[set[int], set[int]]:
+    """(amounts offered as a price, amounts named as something else) in the vendor's own words."""
+    offered: set[int] = set()
+    other: set[int] = set()
+    for sentence in _SENTENCES.split(body):
+        for m in _MONEY_ANY.finditer(sentence):
+            v = _value(m.group("a") or m.group("b"), m.group("ua") or m.group("ub"))
+            if v is None or v <= 0:
+                continue
+            (other if _BEFORE.search(sentence[max(0, m.start() - 70): m.start()]) or _AFTER.match(sentence[m.end(): m.end() + 40]) else offered).add(v)
+    return offered, other
+
+
 def extract_claims(msg: InboundMessage) -> tuple[list[QuoteClaim], str | None]:
     """Returns (claims, problem). ``problem`` is a plain sentence for the user when the price is not clear enough to propose."""
     amounts = msg.analysis.amounts
     if not amounts:
         return [], None
+    offered, other = _stated_amounts(msg.body)
+    if len(offered | other) > 1 and not any(a.low_inr != a.high_inr for a in amounts):
+        return [], "The reply mentions several different amounts. Please read it and say which one is the quote."  # a price next to a deposit is still two amounts: a person says which
+    if not offered and other:
+        return [], "The reply names an amount, but it reads as a deposit, an extra or somebody else's price rather than the price. Please read it and say which one is the quote."
+    if len(offered) == 1:
+        (only,) = offered
+        amounts = [a for a in amounts if a.low_inr == a.high_inr == only]
+        if not amounts:
+            return [], "The reply mentions an amount, but it was not clear enough to propose. Please read it and say which one is the quote."
     if len(amounts) > 1 and len({(a.low_inr, a.high_inr) for a in amounts}) > 1:
         return [], "The reply mentions several different amounts. Please read it and say which one is the quote."
     a = amounts[0]
