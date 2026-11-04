@@ -23,6 +23,8 @@
       <button class="rail__btn" type="button" id="new-plan" aria-label="New plan" title="New plan">
         <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14"/></svg></button>
       <span class="rail__sep"></span>
+      <button class="rail__btn" type="button" id="open-sending" aria-label="Sending: pause, standing permission, do not contact" title="Sending controls" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 8.5l7 7"/></svg></button>
       <button class="rail__btn" type="button" id="open-workspace" aria-label="Workspace: export, recovery, delete" title="Workspace" aria-haspopup="dialog">
         <svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg></button>
     </nav>
@@ -86,6 +88,7 @@
             <button type="button" data-view="week" aria-pressed="false">Week</button>
             <button type="button" data-view="day" aria-pressed="false">Day</button>
           </div>
+          <button class="pill pill--k" type="button" id="sending-chip" aria-haspopup="dialog">Sending: checking</button>
           <button class="pill pill--k" type="button" id="open-paper-2">Plan dossier</button>
           <button class="pill pill--k only-narrow" type="button" id="toggle-right" aria-expanded="false">Assistant</button>
         </div>
@@ -194,6 +197,33 @@
   </form>
   <div id="understood" aria-live="polite"></div>
   <ol class="prog" id="progress" aria-label="What the planner is doing" hidden></ol>
+</dialog>
+
+<!-- sending controls -->
+<dialog class="dlg" id="sending-dialog" aria-labelledby="sending-title">
+  <button type="button" class="dlg__x" id="sending-close" aria-label="Close">&times;</button>
+  <h2 id="sending-title">Sending</h2>
+  <p class="hint" id="sending-state" role="status"></p>
+  <div class="row"><button type="button" class="pill pill--k" id="sending-toggle">Pause all sending</button></div>
+  <p class="hint">Pausing stops every message at once, including ones you already approved. Nothing is lost: approved messages wait and go out when you resume.</p>
+  <h3>Standing permission</h3>
+  <p class="hint" id="perm-state"></p>
+  <div class="row"><button type="button" class="pill pill--ghost" id="perm-revoke" disabled>Revoke standing permission</button></div>
+  <h3>Do not contact</h3>
+  <p class="hint">An address on this list is never contacted, on any plan or job, and anything already queued to it is stopped. Only you can take one off.</p>
+  <ul class="sup-list" id="sup-list"></ul>
+  <form id="sup-form" class="field" novalidate>
+    <label for="sup-channel">Channel</label>
+    <select id="sup-channel" class="sel"><option value="email">Email</option><option value="whatsapp">WhatsApp</option></select>
+    <label for="sup-value">Address or number</label>
+    <input id="sup-value" type="text" autocomplete="off" spellcheck="false" maxlength="254">
+    <label for="sup-by">Your name</label>
+    <input id="sup-by" type="text" autocomplete="off" maxlength="80">
+    <label for="sup-note">Why (optional)</label>
+    <input id="sup-note" type="text" autocomplete="off" maxlength="200">
+    <button type="submit" class="pill pill--k">Add to do not contact</button>
+  </form>
+  <p id="sending-msg" class="hint" role="status"></p>
 </dialog>
 
 <!-- workspace -->

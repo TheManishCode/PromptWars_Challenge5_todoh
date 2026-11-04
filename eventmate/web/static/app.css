@@ -337,3 +337,9 @@ dialog.dlg::backdrop { background: rgba(0,0,0,.6); }
 
 .lite *, .lite *::before, .lite *::after { transition: none !important; animation: none !important; }
 .lite .rise, .lite .site-nav, .lite .sheet.drop { opacity: 1; transform: none; }
+
+/* sending controls */
+#sending-chip[data-paused="true"] { background: #b3261e; color: #fff; }
+.dlg .sup-list { list-style: none; padding: 0; margin: 8px 0 0; } .dlg .sup { padding: 10px 0; border-top: 1px solid var(--line); }
+.dlg .sup-lift { margin-top: 8px; display: grid; gap: 8px; } .dlg .sup-lift input[type="text"] { width: 100%; font: inherit; font-size: 14px; border: 1px solid #c5c5cb; border-radius: 14px; padding: 8px 12px; background: #fafafb; }
+.dlg label.inline { display: flex; gap: 8px; align-items: center; font-weight: 400; }

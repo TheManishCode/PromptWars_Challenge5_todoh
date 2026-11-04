@@ -347,3 +347,36 @@ def test_businesses_found_on_openstreetmap_and_google_carry_their_attribution_on
     page.wait_for_selector("text=Lakeside Gardens", timeout=8000)
     body = page.inner_text("body")
     assert "© OpenStreetMap contributors (ODbL)" in body and "Powered by Google" in body
+
+
+def test_the_sending_controls_pause_everything_list_do_not_contact_addresses_and_lift_them(server, ctx):
+    url, em = server
+    page, seen = opened(ctx, url + "/app")
+    new_plan(page)
+    page.wait_for_selector("#sending-chip:has-text('Sending on')")
+    page.click("#sending-chip")
+    page.wait_for_selector("#sending-dialog[open]")
+    assert "Sending is on" in page.inner_text("#sending-state") and page.is_disabled("#perm-revoke")
+    page.click("#sending-toggle")
+    page.wait_for_selector("#sending-chip:has-text('Sending paused')")
+    assert "Sending is paused" in page.inner_text("#sending-state") and em.outreach_store.paused is True and em.outreach_store.killed is True  # the real switches, not a label
+    page.fill("#sup-value", "Stop.Me@Example.com")
+    page.fill("#sup-by", "Meera")
+    page.fill("#sup-note", "asked us to stop")
+    page.click("#sup-form button[type=submit]")
+    page.wait_for_selector("#sup-list .sup:has-text('stop.me@example.com')")
+    assert em.is_suppressed("email", "stop.me@example.com") is not None
+    page.wait_for_timeout(300)
+    found = axe_violations(page)
+    assert found == [], fmt_axe(found)
+    page.click("#sup-list .sup >> text=Lift")
+    page.fill("#sup-list .sup-lift input[aria-label='Your name']", "Meera")
+    page.fill("#sup-list .sup-lift input[aria-label='Why lift it']", "they wrote back asking for a quote")
+    page.check("#sup-list .sup-lift input[type=checkbox]")
+    page.click("#sup-list .sup-lift button[type=submit]")
+    page.wait_for_selector("#sup-list .sup:has-text('lifted by Meera')")
+    assert em.is_suppressed("email", "stop.me@example.com") is None
+    page.click("#sending-toggle")
+    page.wait_for_selector("#sending-chip:has-text('Sending on')")
+    assert em.outreach_store.killed is False and em.outreach_store.paused is False
+    assert seen == [], seen

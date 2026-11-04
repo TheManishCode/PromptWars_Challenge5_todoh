@@ -240,6 +240,9 @@ class ConversationService:
                     if not st.mandate.window_start <= local < st.mandate.window_end:
                         waiting.append(f"{d.vendor_name}: automatic messages wait for the sending window ({st.mandate.window_start:02d}:00-{st.mandate.window_end:02d}:00 IST)")
                         continue
+                if self.store.paused:  # the pause holds what a person approved as well: it waits, unsent and not denied, and goes when sending resumes
+                    waiting.append("sending is paused: nothing goes out, and what you approved waits, until you resume") if not any("paused" in w for w in waiting) else None
+                    continue
                 with self.store._locked():  # count and claim as one step across processes: two dispatchers must not both see room for one more (F-003)
                     recent = self._sent_since(day)
                     if len(recent) >= self.policy.per_day:
@@ -432,6 +435,15 @@ class ConversationService:
         self.plan_lookup(plan_id)
         self.store.revoke_mandate(plan_id)
         return self.autoreply_status(plan_id)
+
+    def pause_all(self) -> None:
+        """Stop everything: the kill switch for what happens by itself, and the pause for what a person approved."""
+        self.store.set_killed(True)
+        self.store.set_paused(True)
+
+    def resume_everything(self) -> None:
+        self.store.set_killed(False)
+        self.store.set_paused(False)
 
     def kill_all(self) -> None:
         self.store.set_killed(True)

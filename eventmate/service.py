@@ -573,6 +573,12 @@ class EventMate:
         self.store.latest(plan_id)
         return self.conversations.autoreply_status(plan_id)
 
+    def pause_sending(self):
+        self.conversations.pause_all()
+
+    def resume_sending(self):
+        self.conversations.resume_everything()
+
     def kill_all_autoreplies(self):
         self.conversations.kill_all()
 

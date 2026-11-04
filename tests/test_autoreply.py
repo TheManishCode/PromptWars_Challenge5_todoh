@@ -399,3 +399,45 @@ def test_the_permission_counts_what_it_queued_but_not_what_was_denied(em, pid, c
     assert len(queued) == 1 and em.autoreply_status(pid).sent_total == 1
     em.outreach_store.transition(pid, queued[0].draft_id, ("prepared", "approved", "sent"), status="denied")
     assert em.autoreply_status(pid).sent_total == 0
+
+
+def test_pausing_stops_what_a_person_approved_too_and_nothing_is_lost(em, pid, chans, clock):
+    """Pause is the emergency brake on all sending. A draft approved by hand waits, unsent and not denied, and goes when sending resumes. (The kill switch alone leaves approved messages to go.)"""
+    d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+    em.pause_sending()  # approving sends at once when sending is on, so the brake goes on first
+    em.approve_outreach(pid, d.draft_id, d.content_hash)
+    sent, waiting = em.conversations.dispatch()
+    assert sent == 0 and any("paused" in w for w in waiting) and chans["email"].sent == []
+    assert em.outreach_store.get(pid, d.draft_id).status == "approved"  # still approved: not denied, not blocked
+    em.resume_sending()
+    sent, _ = em.conversations.dispatch()
+    assert sent == 1 and len(chans["email"].sent) == 1 and em.outreach_store.get(pid, d.draft_id).status == "sent"
+    assert em.outreach_store.killed is False and em.outreach_store.paused is False  # resuming lifts both
+
+
+def test_the_kill_switch_alone_still_lets_an_approved_message_go(em, pid, chans, clock):
+    d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+    em.kill_all_autoreplies()
+    em.approve_outreach(pid, d.draft_id, d.content_hash)
+    assert len(chans["email"].sent) == 1  # the earlier design, kept: the kill switch is about what happens by itself
+
+
+def test_the_sending_status_and_pause_routes(client, em, pid):
+    d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+    em.suppress_address("email", "nobody@example.com", "Meera", "asked us to stop")
+    assert client.get("/api/sending").get_json() == {"paused": False, "automatic_stopped": False, "approved_waiting": 0, "suppressed_addresses": 1}
+    assert post(client, "/api/sending/pause", {}).get_json() == {"paused": True}
+    em.approve_outreach(pid, d.draft_id, d.content_hash)  # paused: approved, but it waits
+    assert client.get("/api/sending").get_json() == {"paused": True, "automatic_stopped": True, "approved_waiting": 1, "suppressed_addresses": 1}
+    assert post(client, "/api/sending/resume", {}).get_json() == {"paused": False}
+    assert client.get("/api/sending").get_json()["paused"] is False and client.get("/api/sending").get_json()["automatic_stopped"] is False
+
+
+def test_cli_pause_and_resume_set_and_lift_both_switches(em, pid, tmp_path, capsys):
+    from eventmate.__main__ import main
+
+    base = ["--plan-dir", str(tmp_path / "p"), "--log-dir", str(tmp_path / "l")]
+    assert main(base + ["inbox", "pause"]) == 0 and "paused" in capsys.readouterr().out
+    assert em.outreach_store.paused is True and em.outreach_store.killed is True
+    assert main(base + ["inbox", "resume"]) == 0
+    assert em.outreach_store.paused is False and em.outreach_store.killed is False

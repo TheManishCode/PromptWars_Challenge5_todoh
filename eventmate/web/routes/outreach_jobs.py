@@ -144,9 +144,33 @@ def register(app, k):
             st = em.revoke_autoreply(plan_id)
         return out(st)
 
+    @app.get("/api/sending")
+    def sending_get():
+        """Is sending paused, how many approved messages are waiting, and how many addresses are on the do-not-contact list."""
+        with lock:
+            approved = sum(1 for p in em.outreach_store.plan_ids() for d in em.outreach_store.list(p) if d.status == "approved")
+            blocked = sum(1 for s, _ in em.suppression_list() if s.active)
+            paused, killed = em.outreach_store.paused, em.outreach_store.killed
+        return jsonify({"paused": paused, "automatic_stopped": killed, "approved_waiting": approved, "suppressed_addresses": blocked})
+
+    @app.post("/api/sending/pause")
+    def sending_pause():
+        """Pauses all sending at once: nothing goes out, including what you approved by hand, and nothing is lost. Approved messages wait until you resume."""
+        body(EmptyBody)
+        with lock:
+            em.pause_sending()
+        return jsonify({"paused": True})
+
+    @app.post("/api/sending/resume")
+    def sending_resume():
+        body(EmptyBody)
+        with lock:
+            em.resume_sending()
+        return jsonify({"paused": False})
+
     @app.post("/api/autoreply/kill")
     def autoreply_kill():
-        """Stops every automatic message in every plan at once, including ones already queued."""
+        """Stops everything that happens by itself (standing permission, owner emails, watches). Messages you approved by hand still go: pause sending (POST /api/sending/pause) to hold those too."""
         body(EmptyBody)
         with lock:
             em.kill_all_autoreplies()

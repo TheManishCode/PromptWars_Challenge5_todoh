@@ -115,7 +115,7 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--name", required=True, help="your name, signed at the end of the message")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("inbox", help="the vendor conversations: send what you approved, read replies, show what needs you")
-    p.add_argument("what", choices=["show", "poll", "approve", "deny", "autoreply", "kill", "resume"], nargs="?", default="show")
+    p.add_argument("what", choices=["show", "poll", "approve", "deny", "autoreply", "kill", "pause", "resume"], nargs="?", default="show")
     p.add_argument("plan_id", nargs="?")
     p.add_argument("draft_id", nargs="?")
     p.add_argument("--hash", help="content hash of the draft as shown by `inbox show` (approve only)")
@@ -634,8 +634,15 @@ def _inbox_poll(em: EventMate, a) -> int:
 
 
 def _inbox_kill_switch(em: EventMate, a) -> int:
-    (em.kill_all_autoreplies if a.what == "kill" else em.resume_autoreplies)()
-    print("every automatic message is stopped" if a.what == "kill" else "automatic replies may be granted again; existing permissions apply")
+    if a.what == "kill":
+        em.kill_all_autoreplies()
+        print("every automatic message is stopped (messages you approved by hand still go: use `inbox pause` to hold those too)")
+    elif a.what == "pause":
+        em.pause_sending()
+        print("all sending is paused: nothing goes out, and approved messages wait until `inbox resume`")
+    else:
+        em.resume_sending()
+        print("sending resumed; automatic replies may be granted again, and existing permissions apply")
     return 0
 
 
@@ -685,7 +692,7 @@ def _inbox_show(em: EventMate, a) -> int:
 def _inbox(em: EventMate, a) -> int:
     if a.what == "poll":
         return _inbox_poll(em, a)
-    if a.what in ("kill", "resume"):
+    if a.what in ("kill", "pause", "resume"):
         return _inbox_kill_switch(em, a)
     if not a.plan_id:
         print("give a plan id", file=sys.stderr)

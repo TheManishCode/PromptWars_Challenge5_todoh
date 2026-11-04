@@ -689,6 +689,76 @@
     $('#delete-form').addEventListener('submit', function (ev) { ev.preventDefault(); if ($('#delete-input').value.trim() !== 'delete') { wmsg('Type the word delete to confirm.'); return; } api('/api/workspace', { method: 'DELETE', body: { confirm: 'delete' } }).then(function (r) { if (r.ok) window.location.assign('/'); else wmsg(errText(r, 'The workspace could not be deleted')); }); });
   }
 
+  /* ------------------------------------------------------------ sending controls: pause, standing permission, do not contact */
+  var SUP_WHY = { stop_request: 'they asked us to stop', user: 'you added it', bad_address: 'the address bounced' };
+  function setupSending() {
+    var dlg = $('#sending-dialog'), chipBtn = $('#sending-chip');
+    function smsg(t) { $('#sending-msg').textContent = t; }
+    function paintSending(s) {
+      st.sending = s;
+      chipBtn.textContent = s ? (s.paused ? 'Sending paused' : 'Sending on') : 'Sending: unknown';
+      chipBtn.setAttribute('data-paused', s && s.paused ? 'true' : 'false');
+      $('#sending-state').textContent = !s ? 'The sending state could not be read.' : (s.paused ? 'Sending is paused. Nothing goes out' + (s.approved_waiting ? '; ' + s.approved_waiting + ' approved message' + (s.approved_waiting === 1 ? ' is' : 's are') + ' waiting.' : '.') : 'Sending is on. Messages go out only after you approve their exact text' + (s.approved_waiting ? ' (' + s.approved_waiting + ' approved and waiting for the next send).' : '.'));
+      $('#sending-toggle').textContent = s && s.paused ? 'Resume sending' : 'Pause all sending';
+    }
+    function loadSending() { return api('/api/sending').then(function (r) { paintSending(r.ok && r.data ? r.data : null); }); }
+    function loadPermission() {
+      var btn = $('#perm-revoke'), line = $('#perm-state');
+      btn.disabled = true;
+      if (!st.plan) { line.textContent = 'Open a plan to see its standing permission.'; return Promise.resolve(); }
+      return api('/api/plans/' + encodeURIComponent(st.plan.plan_id) + '/autoreply').then(function (r) {
+        var a = r.ok && r.data ? r.data : null;
+        line.textContent = !a ? 'The standing permission could not be read.' : (a.active ? 'A standing permission is active for this plan: fixed follow-up questions may go out by themselves within its limits.' : (a.killed ? 'Paused: no automatic message goes out.' : 'None is active for this plan. Nothing goes out by itself.'));
+        btn.disabled = !(a && a.active);
+      });
+    }
+    function loadSuppressions() {
+      var ul = clear($('#sup-list'));
+      return api('/api/suppressions').then(function (r) {
+        var items = r.ok && Array.isArray(r.data) ? r.data : [];
+        if (!items.length) { ul.appendChild(h('li', { class: 'hint', text: 'No address is on the list.' })); return; }
+        items.forEach(function (s) {
+          var li = h('li', { class: 'sup' }, h('b', { class: 'mono', text: (s.channel === 'whatsapp' ? 'WhatsApp ' : 'Email ') + s.value }), ' ', h('span', { class: 'hint', text: s.active ? 'active: ' + (SUP_WHY[s.reason] || s.reason) : 'lifted by ' + (s.lifted_by || '?') + ': ' + (s.lift_reason || '') }));
+          if (s.detail) li.appendChild(h('div', { class: 'hint', text: 'Server said: ' + s.detail }));
+          if (s.active) {
+            var by = h('input', { type: 'text', maxlength: 80, 'aria-label': 'Your name', placeholder: 'Your name' }), why = h('input', { type: 'text', maxlength: 200, 'aria-label': 'Why lift it', placeholder: 'Why lift it' });
+            var ack = h('input', { type: 'checkbox', 'aria-label': 'I have read why it was added' }), form = h('form', { class: 'sup-lift', novalidate: true, hidden: true }, by, why, h('label', { class: 'inline' }, ack, ' I have read why it was added'), h('button', { type: 'submit', class: 'pill pill--k', text: 'Lift it' }));
+            var open = h('button', { type: 'button', class: 'pill pill--ghost', text: 'Lift\u2026', onclick: function () { form.hidden = !form.hidden; } });
+            form.addEventListener('submit', function (ev) {
+              ev.preventDefault();
+              api('/api/suppressions/' + encodeURIComponent(s.suppression_id) + '/lift', { method: 'POST', body: { by: by.value, reason: why.value, acknowledge_reason: ack.checked } }).then(function (r2) {
+                smsg(r2.ok ? 'Taken off the list. Messages that were stopped stay stopped: write a new one.' : errText(r2, 'It could not be lifted')); loadAll();
+              });
+            });
+            li.appendChild(h('div', { class: 'row' }, open)); li.appendChild(form);
+          }
+          ul.appendChild(li);
+        });
+      });
+    }
+    function loadAll() { return Promise.all([loadSending(), loadPermission(), loadSuppressions()]); }
+    function openIt() { smsg(''); openDialog(dlg); loadAll(); }
+    $('#open-sending').addEventListener('click', openIt); chipBtn.addEventListener('click', openIt);
+    $('#sending-close').addEventListener('click', function () { closeDialog(dlg); });
+    $('#sending-toggle').addEventListener('click', function () {
+      var pause = !(st.sending && st.sending.paused);
+      api(pause ? '/api/sending/pause' : '/api/sending/resume', { method: 'POST', body: {} }).then(function (r) { smsg(r.ok ? (pause ? 'Sending is paused.' : 'Sending resumed.') : errText(r, 'That did not work')); loadAll(); });
+    });
+    $('#perm-revoke').addEventListener('click', function () {
+      if (!st.plan) return;
+      api('/api/plans/' + encodeURIComponent(st.plan.plan_id) + '/autoreply/revoke', { method: 'POST', body: {} }).then(function (r) { smsg(r.ok ? 'The standing permission is revoked.' : errText(r, 'It could not be revoked')); loadAll(); });
+    });
+    $('#sup-form').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      api('/api/suppressions', { method: 'POST', body: { channel: $('#sup-channel').value, value: $('#sup-value').value, by: $('#sup-by').value, note: $('#sup-note').value } }).then(function (r) {
+        if (r.ok) { $('#sup-value').value = ''; $('#sup-note').value = ''; smsg('Added. Nothing more goes to that address, and anything queued to it is stopped.'); } else smsg(errText(r, 'It could not be added'));
+        loadAll();
+      });
+    });
+    loadSending();
+    window.setInterval(function () { if (!document.hidden) loadSending(); }, 30000);
+  }
+
   /* ------------------------------------------------------------ wiring */
   function init() {
     $$('[data-nav]').forEach(function (b) { b.addEventListener('click', function () { nav(+b.getAttribute('data-nav')); }); });
@@ -727,6 +797,7 @@
       if (!stage.hidden && (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { var i = front ? SHEETS.findIndex(function (s) { return s.id === front; }) : -1; i = (i + (ev.key === 'ArrowRight' ? 1 : -1) + SHEETS.length) % SHEETS.length; front = SHEETS[i].id; layout(); }
     });
     setupWorkspace();
+    setupSending();
     api('/api/session').then(function (r) {
       if (!r.ok || !r.data) { $('#eventline').textContent = errText(r, 'The dashboard could not start'); return; }
       st.csrf = r.data.csrf; st.today = r.data.today; st.mode = r.data.workspace ? r.data.workspace.mode : 'local'; st.wsId = st.mode === 'shared' ? r.data.workspace.id : null; st.cur = parse(st.today);

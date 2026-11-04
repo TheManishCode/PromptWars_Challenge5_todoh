@@ -334,6 +334,20 @@ class OutreachStore:
         else:
             self._kill_file.unlink(missing_ok=True)
 
+    @property
+    def paused(self) -> bool:
+        return (self.base / "mandates" / "PAUSE").exists()
+
+    def set_paused(self, on: bool) -> None:
+        """The pause: a file like the kill switch, but it also holds what a person approved. The kill switch stops what happens by itself (standing permission, owner emails, watches) and leaves
+        approved messages to go; the pause stops everything that would leave, and keeps what was approved so it goes when sending resumes."""
+        f = self.base / "mandates" / "PAUSE"
+        f.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if on:
+            f.touch(mode=0o600)
+        else:
+            f.unlink(missing_ok=True)
+
     # ------------------------------------------------------------ contacts
 
     def contacts(self) -> dict[str, VendorContact]:
