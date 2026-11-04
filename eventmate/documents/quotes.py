@@ -18,7 +18,7 @@ _HEADS = {
     "rate": re.compile(r"^(?:rate|price|unit (?:price|rate|cost)|cost|per (?:plate|head|unit)|rate per \w+|price per \w+)(?:\s*\(.*\))?$", re.I),
     "total": re.compile(r"^(?:total|amount|line total|sub ?total|cost|price)(?:\s*\(.*\))?$", re.I),
 }
-_SUMMARY = re.compile(r"^(?:(grand\s+)?total|sub\s*-?\s*total|net(?: total| amount)?|amount payable|balance|gst|igst|cgst|sgst|tax(?:es)?|service charge|advance|discount)\b", re.I)
+_SUMMARY = re.compile(r"^(?:(grand\s+)?total|sub\s*-?\s*total|net(?: total| amount)?|amount payable|balance|gst|igst|cgst|sgst|tax(?:es)?|service charge|advance|discount|(?:security\s+|caution\s+|refundable\s+)?deposit|token(?:\s+amount)?|booking\s+amount|round(?:ing)?[- ]?off|(?:amount\s+)?(?:paid|due))\b", re.I)
 _LOOSE = re.compile(r"^\s*(?:[-*•]\s*|\d+[.)]\s*)?(?P<label>[A-Za-z][^:–—\-=|]{2,60}?)\s*(?::|–|—|-|=)\s*(?P<rest>.*\d.*)$")
 
 
@@ -76,7 +76,7 @@ def _summary_key(label: str) -> str:
     low = label.lower()
     if re.search(r"grand|amount payable|net", low) or low.strip() == "total":
         return "grand_total"
-    return ("subtotal" if "sub" in low else "tax" if re.search(r"gst|tax", low) else "advance" if "advance" in low else "discount" if "discount" in low else "other")
+    return ("subtotal" if "sub" in low else "tax" if re.search(r"gst|tax", low) else "advance" if re.search(r"advance|deposit|token|booking", low) else "discount" if "discount" in low else "other")
 
 
 def _line(label: str, qty: int | None, rate: int | None, total: int | None) -> QuoteLine:
