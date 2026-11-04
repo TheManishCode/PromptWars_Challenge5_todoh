@@ -73,3 +73,12 @@ Decided (2026-11-04, by the owner's delegation):
 - **Allergies:** read only from the user's words (`allergic`, `<x>-free`), never proposed or dropped by a model, kept across messages. No record can show a kitchen is free of an allergen, so the plan stays provisional ("Needs verification: allergy not confirmed with the caterer") until the user has the vendor's written reply.
 
 Not built, and why: a browser that fills or submits forms (see above), any run against a real mailbox or WhatsApp account (needs credentials), and tradition packs (need a named reviewer). `fli` 0.9.0 on PyPI returns no fares live; 0.10.0 from its main branch works (see `docs/CONFIGURATION.md`).
+
+## Safety facts that must never be lost silently
+
+Allergies (`planning/allergies.py`), food requirements the vendor records cannot answer (`planning/diets.py`) and negation (`planning/negation.py`) follow one rule: a stated fact is kept, shown on the review card, and keeps the plan "Needs verification" until a caterer confirms it in writing; a statement that cannot be read is kept as the user's own words, never read as "none"; a later message or a model cannot clear it. A negation reaches only filler words and an or/and list, never another topic word ("no onion no garlic vegetarian" is still vegetarian).
+
+Vendor replies and quote files follow the mirror rule: a wrong price is never proposed. A deposit, advance, extra, penalty, overtime or someone else's price is not the price, and a reply with more than one amount goes to the user.
+
+Seeded random passes guard these: `tests/test_e2e_random.py` (brief, plan, change, trade-off), `tests/test_claims_random.py` (noisy vendor replies) and `tests/test_quotes_random.py` (quote tables and lines). Each failed on the code it was written to catch.
+
