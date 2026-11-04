@@ -327,16 +327,26 @@ class ValidatorAgent:
 
     @staticmethod
     def _allergen_items(draft: PlanDraft) -> list[UnverifiedItem]:
-        """A stated allergy is never "passed": no vendor record proves a kitchen is free of an allergen, so the plan stays provisional until the user has the vendor's written answer."""
-        if not draft.request.allergens:
-            return []
-        names = ", ".join(a.value.replace("_", " ") for a in draft.request.allergens)
-        return [UnverifiedItem(
-            name="allergens_unconfirmed",
-            detail=f"you told us about an allergy ({names}); nothing in the vendor records can show that a caterer or venue kitchen is free of it",
-            repair="ask each caterer, in writing, whether they can serve without it and how they prevent cross-contact, and keep their reply",
-            label=f"allergy not confirmed with the caterer ({names})",
-        )]
+        """A stated allergy is never "passed": no vendor record proves a kitchen is free of an allergen, so the plan stays provisional until the user has the vendor's written
+        answer. An allergy that was mentioned but could not be named keeps it provisional too: it is never read as "no allergy"."""
+        r, items = draft.request, []
+        if r.allergens:
+            names = ", ".join(a.value.replace("_", " ") for a in r.allergens)
+            items.append(UnverifiedItem(
+                name="allergens_unconfirmed",
+                detail=f"you told us about an allergy ({names}); nothing in the vendor records can show that a caterer or venue kitchen is free of it",
+                repair="ask each caterer, in writing, whether they can serve without it and how they prevent cross-contact, and keep their reply",
+                label=f"allergy not confirmed with the caterer ({names})",
+            ))
+        if r.allergy_unclear:
+            said = "; ".join(f"'{w}'" for w in r.allergy_unclear)
+            items.append(UnverifiedItem(
+                name="allergy_unclear",
+                detail=f"you mentioned an allergy we could not name: {said}. We do not treat that as no allergy",
+                repair="say exactly what the allergy is (for example 'peanut' or 'dairy'), and ask each caterer to confirm in writing that they can serve without it",
+                label=f"allergy not understood ({said})",
+            ))
+        return items
 
     def _symbolic(self, d: PlanDraft, warnings: list[str]) -> list[ConstraintCheck]:
         s = d.symbolic.status

@@ -17,13 +17,14 @@ import time
 import unicodedata
 import uuid
 from datetime import date
-from typing import Literal
+from typing import Annotated, Literal
 from collections.abc import Iterable, Sequence
 
 from pydantic import Field, ValidationError, field_validator
 
 from eventmate.agents import manager as mgr
 from eventmate.llm import LLMClient, PromptError, PromptStore
+from eventmate.planning import allergies
 from eventmate.planning import cities as city_aliases
 from eventmate.planning.community import load_profiles, match_subtype
 from eventmate.logs import RunLogs
@@ -50,7 +51,7 @@ MAX_MESSAGE_CHARS = mgr.MAX_TEXT_CHARS
 _MAX_TOKENS = 1200  # a reasoning model spends part of this thinking; 600 sometimes ended before any JSON
 _ATTEMPTS = 2  # one retry, only for a reply that is not usable JSON; a provider failure is not retried
 REQUIRED = ("guest_count", "city", "event_date", "budget_total")
-FIELDS = tuple(f for f in ("event_type", "community_subtype", "guest_count", "city", "event_date", "budget_total", "dietary", "allergens", "venue_setting", "services", "reminders"))
+FIELDS = tuple(f for f in ("event_type", "community_subtype", "guest_count", "city", "event_date", "budget_total", "dietary", "allergens", "allergy_unclear", "venue_setting", "services", "reminders"))
 _CITY = re.compile(r"[^\W\d_](?:[^\W\d_]|[ .'-])*")  # letters, spaces, . ' - only
 MAX_CITY_WORDS, MAX_CITY_CHARS = 3, 40  # "Navi Mumbai" fits; a sentence or payload does not
 _QUESTIONS = {
@@ -82,6 +83,7 @@ class IntakeDraft(_Model):
     event_date: date | None = None
     budget_total: int | None = Field(default=None, gt=0, le=MAX_BUDGET_INR)
     dietary: tuple[DietaryRequirement, ...] = ()
+    allergy_unclear: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z' -]+$")], ...] = Field(default=(), max_length=5)  # an allergy mentioned but not named; rules only
     allergens: tuple[Allergen, ...] = ()  # only ever read from the user's own words (rules), never proposed by a model
     venue_setting: VenueSetting | None = None
     services: tuple[VendorCategory, ...] = ()
@@ -197,7 +199,8 @@ def _rule_draft(text: str, today: date, notes: list[str], choices: list[IntakeCh
         event_date=when,
         budget_total=budget,
         dietary=tuple(d for rx, d in mgr._DIETS if mgr._mentioned(rx, t)),
-        allergens=mgr.parse_allergens(t),
+        allergens=allergies.read(t).allergens,
+        allergy_unclear=allergies.read(t).unclear,
         venue_setting=setting,
         services=tuple(services),
         reminders=tuple(reminders),
@@ -244,8 +247,8 @@ def _merge(base: IntakeDraft, new: IntakeDraft) -> IntakeDraft:
     """New non-empty values win; a list the new message did not mention keeps the reviewed one."""
     merged = base.model_dump()
     for name, value in new.model_dump().items():
-        if name == "allergens":
-            merged[name] = tuple(dict.fromkeys((*base.allergens, *new.allergens)))  # an allergy once stated is never replaced by a later message, only added to
+        if name in ("allergens", "allergy_unclear"):
+            merged[name] = tuple(dict.fromkeys((*getattr(base, name), *getattr(new, name))))  # an allergy once stated is never replaced by a later message, only added to
         elif value not in (None, ()):
             merged[name] = value
     return IntakeDraft.model_validate(merged)
@@ -353,7 +356,7 @@ def propose(
                 else "The AI reader was unavailable, so I used the basic reader. Please check the details."
             )
         else:
-            ai = _grounded(ai, latest, prior).model_copy(update={"allergens": ()})  # a model may not state or drop an allergy
+            ai = _grounded(ai, latest, prior).model_copy(update={"allergens": (), "allergy_unclear": ()})  # a model may not state or drop an allergy
             source, new = _source_label(llm), _merge(rules, ai)  # the parser's reading is the baseline
             flags = tuple(f for f in FIELDS if _uncorroborated(getattr(ai, f), getattr(rules, f)))
     draft = _merge(prior, new)
@@ -363,6 +366,8 @@ def propose(
         draft = draft.model_copy(update={"community_subtype": None})
     if choices:  # an ambiguity in the user's own words is theirs to settle: no earlier or AI-picked value stands in
         draft = draft.model_copy(update={c.field: None for c in choices})
+    if draft.allergy_unclear:
+        notes.append("You mentioned an allergy I could not name (" + "; ".join(draft.allergy_unclear) + "). Write what it is, for example 'peanut' or 'dairy'. Until then the plan will say the allergy was not understood.")
     cities = {c.lower() for c in known}
     if draft.city and cities and draft.city.lower() not in cities:
         notes.append(f"I have no vendor records for {draft.city} yet, so a plan there will likely fail.")
@@ -428,6 +433,7 @@ def to_request(draft: IntakeDraft, raw_text: str, today: date, source: str = "ru
             budget_total=draft.budget_total,
             dietary=draft.dietary,
             allergens=draft.allergens,
+            allergy_unclear=draft.allergy_unclear,
             venue_setting=setting,
             services=tuple(services),
             reminders=draft.reminders,

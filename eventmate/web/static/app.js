@@ -593,7 +593,7 @@
   function closeStage() { stage.hidden = true; document.body.style.overflow = ''; if (opener) opener.focus(); }
 
   /* ------------------------------------------------------------ new plan: brief, review, build */
-  var briefDlg = $('#brief-dialog'), FIELD = [['event_type', 'Event'], ['community_subtype', 'Kind of gathering'], ['guest_count', 'Guests'], ['city', 'City'], ['event_date', 'Date'], ['budget_total', 'Budget'], ['dietary', 'Food'], ['allergens', 'Allergies'], ['venue_setting', 'Setting'], ['services', 'Services'], ['reminders', 'Reminders']];
+  var briefDlg = $('#brief-dialog'), FIELD = [['event_type', 'Event'], ['community_subtype', 'Kind of gathering'], ['guest_count', 'Guests'], ['city', 'City'], ['event_date', 'Date'], ['budget_total', 'Budget'], ['dietary', 'Food'], ['allergens', 'Allergies'], ['allergy_unclear', 'Allergy to clarify'], ['venue_setting', 'Setting'], ['services', 'Services'], ['reminders', 'Reminders']];
   function openDialog(d) { if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); }
   function closeDialog(d) { if (typeof d.close === 'function') d.close(); else d.removeAttribute('open'); }
   function openBrief() { openDialog(briefDlg); $('#brief-input').focus(); }

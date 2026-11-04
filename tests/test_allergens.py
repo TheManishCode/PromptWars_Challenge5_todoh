@@ -24,9 +24,23 @@ def em(tmp_path_factory):
     ("egg allergy; veg catering, fish curry", {A.EGG}),
     ("allergy: til and soya", {A.SESAME, A.SOY}),
     ("he is allergic to cashews", {A.TREE_NUT}),
+    ("allergic to peanuts, cashews and eggs", {A.PEANUT, A.TREE_NUT, A.EGG}),  # a list stays a list
+    ("Allergic to gluten", {A.GLUTEN}),
+    ("mungfali se allergy hai", {A.PEANUT}),
+    ("kaju aur badam se allergy hai", {A.TREE_NUT}),
+    ("mujhe anda se allergy hai, veg khana", {A.EGG}),
+    ("peanut allergy, shellfish allergy", {A.PEANUT, A.SHELLFISH}),
+    ("allergic to peanuts, not cashews", {A.PEANUT}),
+    ("lactose intolerant", {A.DAIRY}),
+    ("celiac", {A.GLUTEN}),
+    ("allergic to sulphites, mustard and celery", {A.SULPHITES, A.MUSTARD, A.CELERY}),
     ("not allergic to nuts but allergic to eggs", {A.EGG}),
     ("allergic to eggs, not allergic to nuts", {A.EGG}),
     ("no allergies at all", set()),
+    ("nobody is allergic", set()),
+    ("none of the guests have any allergies", set()),
+    ("koi allergy nahi hai", set()),
+    ("allergy nahi hai", set()),
     ("not allergic to anything", set()),
     ("I love nuts and fish", set()),
 ])
@@ -84,17 +98,58 @@ def test_a_model_cannot_state_or_drop_an_allergy(tmp_path, monkeypatch):
     assert d.allergens == ()
 
 
-def test_the_allergy_reader_never_fails_and_never_invents(tmp_path):
+def test_the_allergy_reader_never_fails_never_invents_and_never_stays_silent_about_an_allergy(tmp_path):
+    import re
+
     from hypothesis import given, settings, strategies as st
 
-    words = ["allergic", "allergy", "allergies", "nut", "peanut", "free", "-free", "no", "not", "but", ",", ".", "eggs", "til", "fish", "to", "\u200b", "ALLERGIC", "x" * 50]
+    from eventmate.planning.allergies import read
 
-    @settings(max_examples=300, deadline=None)
+    words = ["allergic", "allergy", "allergies", "nut", "peanut", "free", "-free", "no", "not", "but", ",", ".", "eggs", "til", "fish", "to", "\u200b", "ALLERGIC", "x" * 50, "kiwi", "and", "gluten", "mungfali", "se", "hai", "nahi"]
+    negations = re.compile(r"\b(?:no|not|none|nobody|never|nahi|nahin|without|nope|noone)\b|\bno\s?one\b", re.I)
+
+    @settings(max_examples=500, deadline=None)
     @given(st.lists(st.sampled_from(words), max_size=14).map(" ".join) | st.text(max_size=200))
     def check(text):
-        got = parse_allergens(text)
-        assert set(got) <= set(A) and len(got) == len(set(got))
-        if not any(w in text.lower() for w in ("allerg", "-free", " free")) and "free" not in text.lower():
-            assert got == ()  # nothing is read from a text that says neither "allergy" nor "<x>-free"
+        r = read(text)
+        assert set(r.allergens) <= set(A) and len(r.allergens) == len(set(r.allergens)) and len(r.unclear) <= 5 and all(0 < len(u) <= 60 for u in r.unclear)
+        if not any(w in text.lower() for w in ("allerg", "free", "celiac", "coeliac", "intoleran", "alerji")):
+            assert r.allergens == () and r.unclear == ()  # nothing is read from a text with no allergy cue
+        if re.search(r"\ballerg(?:y|ies|ic)\b", text, re.I | re.A) and not negations.search(text):
+            assert r.allergens or r.unclear, text  # an allergy that was said is never silently dropped
 
     check()
+
+
+@pytest.mark.parametrize("text,named,unclear", [
+    ("allergic to peanuts and strawberries", {A.PEANUT}, ["strawberries"]),
+    ("allergic to peanuts, strawberries", {A.PEANUT}, ["strawberries"]),
+    ("strawberry allergy", set(), ["strawberry"]),
+    ("he has an allergy", set(), ["he has an allergy"]),
+    ("allergic to kiwi", set(), ["kiwi"]),
+    ("peanut allergy, vegetarian, indoor, Pune", {A.PEANUT}, []),  # other facts in the list are not allergies
+    ("no allergies", set(), []),
+])
+def test_an_allergy_that_cannot_be_named_is_kept_never_read_as_none(text, named, unclear):
+    from eventmate.planning.allergies import read
+
+    r = read(text)
+    assert set(r.allergens) == named and list(r.unclear) == unclear
+
+
+def test_an_unnamed_allergy_keeps_the_plan_provisional_and_tells_the_user(em, tmp_path):
+    p = plan(em, EXAMPLE + " Someone is allergic to kiwi.")
+    assert p.request.allergens == () and p.request.allergy_unclear == ("kiwi",)
+    item = next(u for u in p.validation.unverified if u.name == "allergy_unclear")
+    assert item.blocks_verified and "kiwi" in item.label and "not" in item.detail and not p.validation.fully_verified
+    d = intake.propose(["120 people in Pune on 12 December, budget 2 lakh, allergic to kiwi"], None, TODAY, ["Pune"], RunLogs.create(log_dir=tmp_path, run_id="g"))
+    assert d.draft.allergy_unclear == ("kiwi",) and any("could not name" in n and "kiwi" in n for n in d.notes)
+    d2 = intake.propose(["actually nobody is allergic"], d.draft, TODAY, ["Pune"], RunLogs.create(log_dir=tmp_path, run_id="g2"))
+    assert d2.draft.allergy_unclear == ("kiwi",)  # a later message cannot clear it
+
+
+def test_the_users_reported_cases_through_the_whole_pipeline(em):
+    for text, kinds in (("allergic to peanuts, cashews and eggs", {A.PEANUT, A.TREE_NUT, A.EGG}), ("allergic to gluten", {A.GLUTEN}), ("mungfali se allergy hai", {A.PEANUT})):
+        p = plan(em, EXAMPLE + " " + text)
+        assert set(p.request.allergens) == kinds and p.request.allergy_unclear == ()
+        assert any(u.name == "allergens_unconfirmed" and u.blocks_verified for u in p.validation.unverified), text

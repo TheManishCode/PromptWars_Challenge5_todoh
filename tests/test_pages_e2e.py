@@ -313,3 +313,19 @@ def test_a_stated_allergy_shows_on_the_review_card_and_keeps_the_plan_unconfirme
     page.wait_for_selector("#brief-dialog", state="hidden")  # the closing dialog is half transparent for a moment, which the pixel contrast meter would read
     page.wait_for_timeout(600)
     clean(page, ctx, seen)
+
+
+def test_an_allergy_the_reader_cannot_name_is_shown_to_the_user_and_keeps_the_plan_unconfirmed(server, ctx):
+    page, seen = opened(ctx, server[0] + "/app")
+    page.click("#new-plan")
+    page.fill("#brief-input", BRIEF + ", my friend is allergic to kiwi")
+    page.click("#read-brief")
+    page.wait_for_selector("#build")
+    dialog = page.inner_text("#brief-dialog")
+    assert "Allergy to clarify" in dialog and "kiwi" in dialog and "could not name" in dialog
+    page.click("#build")
+    page.wait_for_selector("#eventline:has-text('version 1')")
+    page.wait_for_selector("text=allergy not understood")
+    page.wait_for_selector("#brief-dialog", state="hidden")
+    page.wait_for_timeout(600)
+    clean(page, ctx, seen)

@@ -13,7 +13,7 @@ import re
 import unicodedata
 from datetime import date, datetime, UTC
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -61,6 +61,11 @@ class Allergen(str, Enum):
     FISH = "fish"
     SOY = "soy"
     SESAME = "sesame"
+    GLUTEN = "gluten"
+    CELERY = "celery"
+    MUSTARD = "mustard"
+    SULPHITES = "sulphites"
+    LUPIN = "lupin"
 
 
 class VenueSetting(str, Enum):
@@ -324,6 +329,8 @@ class EventRequest(_Model):
     dietary: tuple[DietaryRequirement, ...] = ()
     # allergies the user stated; no vendor record can prove a kitchen is free of one, so the plan says so instead of passing (empty for every plan made before this field)
     allergens: tuple[Allergen, ...] = ()
+    # the user's own words for an allergy we could not name: never read as "no allergy"; the plan says it was not understood
+    allergy_unclear: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z' -]+$")], ...] = Field(default=(), max_length=5)
     venue_setting: VenueSetting = VenueSetting.ANY
     services: tuple[VendorCategory, ...] = (VendorCategory.VENUE,)
     reminders: tuple[ReminderKind, ...] = ()
