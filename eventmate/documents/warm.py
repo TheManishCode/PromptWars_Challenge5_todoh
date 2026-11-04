@@ -13,7 +13,7 @@ def main() -> int:
     try:
         from docling.utils.model_downloader import download_models
     except ImportError:
-        sys.stderr.write("Docling is not installed (pip install docling); text, CSV and HTML quotes work without it.\n")
+        sys.stderr.write("Docling is not installed (pip install docling, or pip install '.[documents]'); text, CSV and HTML quotes work without it.\n")
         return 1
     download_models()
     sys.stdout.write(f"models are in {model_home()}\n")

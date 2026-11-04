@@ -103,7 +103,7 @@ def from_docling(path: str) -> str:
     try:
         from docling.document_converter import DocumentConverter
     except ImportError:
-        raise Unsupported("reading this kind of file needs Docling (pip install docling); a text, CSV or HTML quote works without it") from None
+        raise Unsupported("reading this kind of file needs Docling (pip install docling, or pip install '.[documents]'); a text, CSV or HTML quote works without it") from None
     return DocumentConverter().convert(path).document.export_to_markdown()
 
 

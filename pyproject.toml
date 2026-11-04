@@ -13,6 +13,8 @@ dependencies = ["pydantic>=2.11", "ortools>=9.12", "flask>=3.1", "langgraph>=1.2
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov", "hypothesis", "pyflakes", "ruff", "bandit", "playwright", "pip-audit"]
 flights = ["flights"]  # fli: Google Flights fares; optional
+browser = ["playwright>=1.50"]  # the read-only browser for script-rendered vendor pages (also needs a system Chromium and EVENTMATE_BROWSER=1); not in the lock files
+documents = ["docling>=2"]  # PDF, Word, Excel, PowerPoint and image quotes (heavy: torch); not in the lock files, see docs/CONFIGURATION.md
 serve = ["waitress>=3.0"]  # production server (ZPL-2.1): idle timeouts, connection limit, body limit; required for any non-loopback bind
 
 [project.scripts]

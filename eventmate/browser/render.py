@@ -32,7 +32,7 @@ def chromium_path() -> str | None:
 
 
 def available() -> bool:
-    """Opt-in (EVENTMATE_BROWSER=1), Playwright importable and a Chromium present."""
+    """Opt-in (EVENTMATE_BROWSER=1), Playwright importable (pip install '.[browser]') and a Chromium present."""
     if os.environ.get("EVENTMATE_BROWSER") != "1" or chromium_path() is None:
         return False
     try:
