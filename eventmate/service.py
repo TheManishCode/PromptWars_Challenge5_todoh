@@ -84,9 +84,9 @@ class _NoClients:
 class HeldMessages(ValueError):
     """Resuming would release approved messages the caller did not account for."""
 
-    def __init__(self, count: int):
-        self.count = count
-        super().__init__(f"{count} approved message{'s are' if count != 1 else ' is'} waiting: look at them, then resume saying release={count}")
+    def __init__(self, count: int, snapshot: str):
+        self.count, self.snapshot = count, snapshot
+        super().__init__(f"{count} approved message{'s are' if count != 1 else ' is'} waiting and the queue is not the one you reviewed: look at it, then resume naming its snapshot ({snapshot})")
 
 
 class EventMate:
@@ -586,17 +586,26 @@ class EventMate:
         self.conversations.pause()
 
     def held_messages(self) -> list[dict]:
-        """Approved messages waiting for a resume: who, how, and the subject. Never the body."""
-        return [{"plan_id": d.plan_id, "draft_id": d.draft_id, "vendor": d.vendor_name, "channel": d.channel, "subject": d.subject, "approved_by": d.approved_by} for d in self.conversations.held()]
+        """Approved messages waiting for a resume: who, how, the subject and how old the approval is. Never the body."""
+        now = self.conversations.now()
+        return [{"plan_id": d.plan_id, "draft_id": d.draft_id, "vendor": d.vendor_name, "channel": d.channel, "subject": d.subject, "approved_by": d.approved_by,
+                 "approved_hours_ago": round((now - d.decided_at).total_seconds() / 3600, 1) if d.decided_at else None} for d in self.conversations.held()]
 
-    def resume_sending(self, release: int | None = None) -> int:
-        """Lift the pause. Whatever is held then goes out, so the caller must say how many it expects to release; a different number means something changed since it looked, and nothing is released.
-        The held messages are sent now, within the usual limits. Does not touch the kill switch. Returns how many were held."""
-        held = len(self.conversations.held())
-        if held and release != held:
-            raise HeldMessages(held)
+    def held_snapshot(self) -> str:
+        return self.conversations.snapshot_of(self.conversations.held())
+
+    def lapsed_messages(self) -> list[dict]:
+        """Approvals that ran out before their message went. They will not be sent: they need a fresh draft."""
+        return [{"plan_id": d.plan_id, "draft_id": d.draft_id, "vendor": d.vendor_name, "channel": d.channel, "subject": d.subject} for d in self.conversations.lapsed()]
+
+    def resume_sending(self, snapshot: str | None = None) -> int:
+        """Lift the pause. Whatever is held then goes out, so the caller must name the exact queue it reviewed (``held_snapshot``): a different queue, even one of the same size, releases nothing.
+        An approval older than 48 hours is not part of the queue and is not sent. The held messages are sent now, within the usual limits. Does not touch the kill switch. Returns how many were held."""
+        held = self.conversations.held()
+        if held and snapshot != self.conversations.snapshot_of(held):
+            raise HeldMessages(len(held), self.conversations.snapshot_of(held))
         self.conversations.unpause()
-        return held
+        return len(held)
 
     def kill_all_autoreplies(self):
         self.conversations.kill_all()

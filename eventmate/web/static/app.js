@@ -703,15 +703,18 @@
       $('#sending-toggle').textContent = s && s.paused ? 'Resume sending' : 'Pause all sending';
       $('#auto-state').textContent = !s ? '' : (s.automatic_stopped ? 'Automatic messages are stopped.' : 'Automatic messages are allowed (only under a standing permission you granted).');
       $('#auto-toggle').textContent = s && s.automatic_stopped ? 'Allow automatic messages again' : 'Stop automatic messages';
+      var lapsed = s && s.lapsed ? s.lapsed : [], note = $('#lapsed-note');
+      note.hidden = !lapsed.length;
+      note.textContent = lapsed.length ? lapsed.length + ' approval' + (lapsed.length === 1 ? ' ran' : 's ran') + ' out before the message went, so ' + (lapsed.length === 1 ? 'it was' : 'they were') + ' not sent (' + lapsed.slice(0, 5).map(function (m) { return m.vendor + ' by ' + m.channel; }).join('; ') + (lapsed.length > 5 ? '; and more' : '') + '). Write a fresh draft for ' + (lapsed.length === 1 ? 'it' : 'each') + '.' : '';
       if (!s || !s.paused) $('#release-panel').hidden = true;
     }
     function showRelease(s, note) {
       var panel = $('#release-panel'), ul = clear($('#release-list')), n = s.approved_waiting;
       $('#release-text').textContent = (note ? note + ' ' : '') + n + ' approved message' + (n === 1 ? ' is' : 's are') + ' held. Resuming sends ' + (n === 1 ? 'it' : 'them') + ' now.';
-      (s.held || []).forEach(function (m) { ul.appendChild(h('li', null, h('b', { text: m.vendor }), ' by ' + m.channel + ': ' + m.subject + (m.approved_by === 'mandate' ? ' (under a standing permission)' : ''))); });
+      (s.held || []).forEach(function (m) { ul.appendChild(h('li', null, h('b', { text: m.vendor }), ' by ' + m.channel + ': ' + m.subject + (m.approved_by === 'mandate' ? ' (under a standing permission)' : '') + (m.approved_hours_ago !== null && m.approved_hours_ago !== undefined ? ', approved ' + m.approved_hours_ago + ' h ago' : ''))); });
       if (n > (s.held || []).length) ul.appendChild(h('li', { class: 'hint', text: 'and ' + (n - s.held.length) + ' more' }));
       $('#release-go').textContent = n === 1 ? 'Send it now' : 'Send ' + n + ' now';
-      panel.setAttribute('data-count', String(n)); panel.hidden = false;
+      panel.setAttribute('data-count', String(n)); panel.setAttribute('data-snapshot', s.held_snapshot || ''); panel.hidden = false;
     }
     function loadSending() { return api('/api/sending').then(function (r) { paintSending(r.ok && r.data ? r.data : null); }); }
     function loadPermission() {
@@ -756,18 +759,18 @@
       var cur = st.sending;
       if (cur && cur.paused) {  // resuming releases what is held: say what it is first, and send nothing until the person has seen it
         if (cur.approved_waiting > 0) { showRelease(cur, ''); smsg(''); return; }
-        api('/api/sending/resume', { method: 'POST', body: { release: 0 } }).then(function (r) { smsg(r.ok ? 'Sending resumed.' : errText(r, 'That did not work')); loadAll(); });
+        api('/api/sending/resume', { method: 'POST', body: {} }).then(function (r) { smsg(r.ok ? 'Sending resumed.' : errText(r, 'That did not work')); loadAll(); });
         return;
       }
       api('/api/sending/pause', { method: 'POST', body: {} }).then(function (r) { smsg(r.ok ? 'Sending is paused.' : errText(r, 'That did not work')); loadAll(); });
     });
     $('#release-keep').addEventListener('click', function () { $('#release-panel').hidden = true; smsg('Still paused.'); });
     $('#release-go').addEventListener('click', function () {
-      var n = parseInt($('#release-panel').getAttribute('data-count') || '0', 10);
-      api('/api/sending/resume', { method: 'POST', body: { release: n } }).then(function (r) {
+      var n = parseInt($('#release-panel').getAttribute('data-count') || '0', 10), snap = $('#release-panel').getAttribute('data-snapshot') || undefined;
+      api('/api/sending/resume', { method: 'POST', body: { snapshot: snap } }).then(function (r) {
         if (r.ok) { $('#release-panel').hidden = true; smsg('Sending resumed; ' + (r.data && r.data.released !== undefined ? r.data.released : n) + ' held message' + (n === 1 ? ' was' : 's were') + ' released.'); loadAll(); return; }
         if (r.status === 409 && r.data && r.data.waiting !== undefined) {  // something changed since the list was shown: nothing was released, so show it again
-          loadSending().then(function () { showRelease(st.sending || { approved_waiting: r.data.waiting, held: r.data.held }, 'The list changed while you were looking.'); smsg('Nothing was sent.'); });
+          loadSending().then(function () { showRelease(st.sending || { approved_waiting: r.data.waiting, held: r.data.held, held_snapshot: r.data.held_snapshot }, 'The list changed while you were looking.'); smsg('Nothing was sent.'); });
           return;
         }
         smsg(errText(r, 'That did not work'));

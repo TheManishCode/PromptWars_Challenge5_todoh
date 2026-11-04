@@ -431,6 +431,6 @@ def test_pause_alone_stops_owner_emails_without_setting_the_kill_switch(em, worl
     em.pause_sending()
     tick(em, clock)
     assert owner_mail(world) == [] and em.outreach_store.killed is False
-    em.resume_sending(len(em.held_messages()))
+    em.resume_sending(em.held_snapshot())
     tick(em, clock)
     assert owner_mail(world)  # nothing was lost: it goes out once sending resumes

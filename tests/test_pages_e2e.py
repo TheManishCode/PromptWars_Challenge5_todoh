@@ -388,19 +388,35 @@ def test_the_sending_controls_pause_and_the_kill_switch_are_independent_and_a_re
     page.click("#sending-toggle")
     page.wait_for_selector("#release-panel:not([hidden])")
     second = em.draft_outreach(plan_id, VendorCategory.CATERER, "email", "kitchen@rasoi.in", "Meera")
-    em.approve_outreach(plan_id, second.draft_id, second.content_hash)  # something changes while the person is looking
+    em.deny_outreach(plan_id, first.draft_id)  # one held message is swapped for another while the person is looking: the count is still 1
+    em.approve_outreach(plan_id, second.draft_id, second.content_hash)
     page.click("#release-go")
     page.wait_for_selector("#release-text:has-text('The list changed')")
-    assert "2 approved messages are held" in page.inner_text("#release-text")
-    assert em.outreach_store.paused is True and {d.status for d in (em.outreach_store.get(plan_id, first.draft_id), em.outreach_store.get(plan_id, second.draft_id))} == {"approved"}  # nothing was released
+    assert "1 approved message is held" in page.inner_text("#release-text") and "by email" in page.inner_text("#release-list")
+    assert em.outreach_store.paused is True and em.outreach_store.get(plan_id, second.draft_id).status == "approved"  # nothing was released, although the count had not changed
 
-    page.click("#release-go")  # now it knows the count
+    page.click("#release-go")  # now it names the queue it shows
     page.wait_for_selector("#sending-chip:has-text('Automatic stopped')")
     assert em.outreach_store.paused is False and em.outreach_store.killed is True  # resuming did not lift the independent kill switch
-    assert em.held_messages() == []
+    assert em.held_messages() == [] and em.outreach_store.get(plan_id, second.draft_id).status == "sent"
     page.click("#auto-toggle")
     page.wait_for_selector("#sending-chip:has-text('Sending on')")
     assert em.outreach_store.killed is False
+
+    page.click("#sending-toggle")  # pause again, to see an approval that ran out
+    page.wait_for_selector("#sending-chip:has-text('Sending paused')")
+    stale = em.draft_outreach(plan_id, VendorCategory.CATERER, "email", "old@kitchen.in", "Meera")
+    em.approve_outreach(plan_id, stale.draft_id, stale.content_hash)
+    from datetime import UTC, datetime, timedelta
+
+    em.outreach_store.transition(plan_id, stale.draft_id, ("approved",), decided_at=datetime.now(UTC) - timedelta(days=3))  # approved three days ago, held since
+    page.click("#sending-close")
+    page.click("#sending-chip")
+    page.wait_for_selector("#lapsed-note:not([hidden])")
+    assert "ran out" in page.inner_text("#lapsed-note") and "not sent" in page.inner_text("#lapsed-note") and "0 approved" not in page.inner_text("#sending-state")
+    page.click("#sending-toggle")  # nothing is held (the old one lapsed), so no confirmation is needed and nothing old goes
+    page.wait_for_selector("#sending-chip:has-text('Sending on')")
+    assert em.outreach_store.get(plan_id, stale.draft_id).status == "expired"
 
     page.fill("#sup-value", "Stop.Me@Example.com")
     page.fill("#sup-by", "Meera")

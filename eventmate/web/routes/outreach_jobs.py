@@ -148,16 +148,18 @@ def register(app, k):
 
     @app.get("/api/sending")
     def sending_get():
-        """Is sending paused, is the automatic-send kill switch on (a separate thing), what is held, and how many addresses are on the do-not-contact list."""
+        """Is sending paused, is the automatic-send kill switch on (a separate thing), what is held and its snapshot id, which approvals ran out, and how many addresses are on the do-not-contact list. Workspace-wide."""
         with lock:
             held = em.held_messages()
+            snapshot, lapsed = em.held_snapshot(), em.lapsed_messages()
             blocked = sum(1 for s, _ in em.suppression_list() if s.active)
             paused, killed = em.outreach_store.paused, em.outreach_store.killed
-        return jsonify({"paused": paused, "automatic_stopped": killed, "approved_waiting": len(held), "held": held[:20], "suppressed_addresses": blocked})
+        return jsonify({"paused": paused, "automatic_stopped": killed, "approved_waiting": len(held), "held": held[:20], "held_snapshot": snapshot, "lapsed": lapsed[:20],
+                        "approval_hours": 48, "suppressed_addresses": blocked})
 
     @app.post("/api/sending/pause")
     def sending_pause():
-        """Holds every message that would leave, whoever approved it, and the owner's emails. Nothing is lost: approved messages wait. Does not touch the kill switch."""
+        """Holds every message that would leave, whoever approved it, and the owner's emails, across the whole workspace. Nothing is lost: approved messages wait (an approval lasts 48 hours). Does not touch the kill switch or page watches."""
         body(EmptyBody)
         with lock:
             em.pause_sending()
@@ -165,13 +167,13 @@ def register(app, k):
 
     @app.post("/api/sending/resume")
     def sending_resume():
-        """Lifts the pause and releases what is held. With messages held it needs `release` set to exactly how many, so a resume cannot send more than the caller saw: any other number answers 409 and releases nothing. Does not touch the kill switch."""
+        """Lifts the pause and sends what is held. With anything held it needs `snapshot`, the id GET /api/sending gave for the queue you reviewed: another queue, even of the same size, answers 409 and releases nothing. Approvals older than 48 hours are not sent. Does not touch the kill switch."""
         b = body(ResumeBody)
         with lock:
             try:
-                released = em.resume_sending(b.release)
+                released = em.resume_sending(b.snapshot)
             except HeldMessages as exc:
-                return jsonify({"error": str(exc), "code": "held_messages", "waiting": exc.count, "held": em.held_messages()[:20]}), 409
+                return jsonify({"error": str(exc), "code": "held_messages", "waiting": exc.count, "held_snapshot": exc.snapshot, "held": em.held_messages()[:20], "lapsed": em.lapsed_messages()[:20]}), 409
         return jsonify({"paused": False, "released": released})
 
     @app.post("/api/autoreply/kill")

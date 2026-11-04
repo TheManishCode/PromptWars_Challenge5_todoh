@@ -37,6 +37,8 @@ def _address_key(channel: str, value: str) -> str:
 
 
 LEASE = timedelta(minutes=5)  # a send claimed longer ago than this and never finished is recorded as unknown
+APPROVAL_TTL = timedelta(hours=48)  # how long an approval stays good while its message waits (paused, held by a limit, the app down). Longer than the 24-hour send limits, so ordinary waiting never lapses; a message held longer is not sent and needs a fresh draft
+LAPSED = "the approval was more than 48 hours old when it would have gone out, so it was not sent; write a fresh draft"
 LOOKBACK = timedelta(days=30)  # threads older than this are no longer polled
 # Hints only. "is booked" alone is left out on purpose: "your slot is booked" is a confirmation, not a refusal.
 _UNAVAILABLE = re.compile(
@@ -234,12 +236,18 @@ class ConversationService:
                     if not st.active:  # revoked, expired or killed after the message was queued: it never goes out
                         self.store.transition(pid, d.draft_id, ("approved",), status="denied", error="the standing permission ended before this was sent")
                         continue
+                    if self.is_lapsed(d, now):  # before the window wait below: a message that waited too long for its window is dead, not still waiting
+                        self.store.transition(pid, d.draft_id, ("approved",), status="expired", error=LAPSED)
+                        continue
                     local = now.astimezone(IST).hour
                     if st.mandate is None:
                         continue
                     if not st.mandate.window_start <= local < st.mandate.window_end:
                         waiting.append(f"{d.vendor_name}: automatic messages wait for the sending window ({st.mandate.window_start:02d}:00-{st.mandate.window_end:02d}:00 IST)")
                         continue
+                if self.is_lapsed(d, now):  # approved too long ago to go out on that approval, whatever kept it waiting (a pause, the limits, the app down): it must be approved again
+                    self.store.transition(pid, d.draft_id, ("approved",), status="expired", error=LAPSED)
+                    continue
                 if self.store.paused:  # the pause holds what a person approved as well: it waits, unsent and not denied, and goes when sending resumes
                     waiting.append("sending is paused: nothing goes out, and what you approved waits, until you resume") if not any("paused" in w for w in waiting) else None
                     continue
@@ -446,9 +454,28 @@ class ConversationService:
         sent, _ = self.dispatch()
         return sent
 
+    def is_lapsed(self, d: OutreachDraft, now: datetime | None = None) -> bool:
+        return d.status == "approved" and d.decided_at is not None and (now or self.now()) - d.decided_at > APPROVAL_TTL
+
     def held(self) -> list[OutreachDraft]:
-        """What is approved and waiting to go: it is what a resume would release."""
-        return [d for pid in self.store.plan_ids() for d in self.store.list(pid) if d.status == "approved"]
+        """What is approved, still within its approval, and waiting to go: it is what a resume would release."""
+        now = self.now()
+        return [d for pid in self.store.plan_ids() for d in self.store.list(pid) if d.status == "approved" and not self.is_lapsed(d, now)]
+
+    def lapsed(self) -> list[OutreachDraft]:
+        """Approvals that ran out before the message went (still waiting to be swept, or swept in the last week): they will not be sent."""
+        now, week = self.now(), timedelta(days=7)
+        return [d for pid in self.store.plan_ids() for d in self.store.list(pid)
+                if self.is_lapsed(d, now) or (d.status == "expired" and d.error == LAPSED and d.decided_at is not None and now - d.decided_at < week + APPROVAL_TTL)]
+
+    @staticmethod
+    def snapshot_of(drafts: Sequence[OutreachDraft]) -> str:
+        """An id for exactly this queue: which drafts, with which text, approved when. A count cannot tell one held draft replaced by another; this can."""
+        import hashlib
+        import json
+
+        parts = sorted([d.plan_id, d.draft_id, d.content_hash, d.decided_at.isoformat() if d.decided_at else ""] for d in drafts)
+        return hashlib.sha256(json.dumps(parts, separators=(",", ":")).encode()).hexdigest()[:20]
 
     def kill_all(self) -> None:
         self.store.set_killed(True)

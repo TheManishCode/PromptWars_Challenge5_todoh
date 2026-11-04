@@ -121,7 +121,7 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--hash", help="content hash of the draft as shown by `inbox show` (approve only)")
     p.add_argument("--watch", type=int, metavar="SECONDS", help="with poll: keep polling every SECONDS until interrupted")
     p.add_argument("--name", help="autoreply: your name, signed on automatic messages (giving it grants the permission)")
-    p.add_argument("--release", type=int, default=None, help="unpause: how many held messages you expect to release (required when any are held)")
+    p.add_argument("--snapshot", default=None, help="unpause: the id of the held queue you reviewed (printed when it refuses; required when anything is held)")
     p.add_argument("--hours", type=int, default=72, help="autoreply: how long the permission lasts (1-168)")
     p.add_argument("--max-per-thread", type=int, default=3, help="autoreply: automatic messages per vendor (1-5)")
     p.add_argument("--max-total", type=int, default=10, help="autoreply: automatic messages per plan (1-30)")
@@ -648,11 +648,13 @@ def _inbox_kill_switch(em: EventMate, a) -> int:
     else:
         held = em.held_messages()
         for m in held:
-            print(f"  held: {m['vendor']} by {m['channel']}: {strip_terminal(m['subject'])[:80]}")
+            print(f"  held: {m['vendor']} by {m['channel']}: {strip_terminal(m['subject'])[:80]} (approved {m['approved_hours_ago']} h ago)")
+        for m in em.lapsed_messages():
+            print(f"  NOT sent, the approval ran out: {m['vendor']} by {m['channel']}: {strip_terminal(m['subject'])[:80]} (write a fresh draft)")
         try:
-            em.resume_sending(a.release)
+            em.resume_sending(a.snapshot)
         except HeldMessages as exc:
-            print(f"{exc.count} approved message(s) are waiting and would go out now. Run `inbox unpause --release {exc.count}` to let them go.", file=sys.stderr)
+            print(f"{exc.count} approved message(s) are waiting and would go out now. To release exactly the ones listed above run: inbox unpause --snapshot {exc.snapshot}", file=sys.stderr)
             return 3
         print(f"sending resumed; {len(held)} held message(s) released (the kill switch is not touched)")
     return 0

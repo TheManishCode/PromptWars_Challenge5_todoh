@@ -278,7 +278,7 @@ class EmptyBody(_Strict):
 
 
 class ResumeBody(_Strict):
-    release: int | None = Field(default=None, ge=0, le=100_000)  # how many held messages the caller expects to release; required when any are held
+    snapshot: str | None = Field(default=None, pattern=r"^[0-9a-f]{20}$")  # the id of the held queue the caller reviewed (GET /api/sending): required when anything is held
 
 
 class GuestCsvBody(_Strict):

@@ -401,8 +401,8 @@ def test_the_permission_counts_what_it_queued_but_not_what_was_denied(em, pid, c
     assert em.autoreply_status(pid).sent_total == 0
 
 
-def test_pausing_holds_what_a_person_approved_and_resuming_needs_the_count(em, pid, chans, clock):
-    """Pause holds every message that would leave, whoever approved it, and nothing is lost: a held draft stays approved. Lifting the pause releases them, so it needs the exact count."""
+def test_pausing_holds_what_a_person_approved_and_resuming_needs_the_reviewed_queue(em, pid, chans, clock):
+    """Pause holds every message that would leave, whoever approved it, and nothing is lost: a held draft stays approved. Lifting the pause releases them, so it names the exact queue that was reviewed."""
     from eventmate.service import HeldMessages
 
     d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
@@ -411,13 +411,65 @@ def test_pausing_holds_what_a_person_approved_and_resuming_needs_the_count(em, p
     sent, waiting = em.conversations.dispatch()
     assert sent == 0 and any("paused" in w for w in waiting) and chans["email"].sent == []
     assert em.outreach_store.get(pid, d.draft_id).status == "approved"  # still approved: not denied, not blocked
-    for wrong in (None, 0, 2):
+    snap = em.held_snapshot()
+    for wrong in (None, "", "0" * 20, "f" * 20):
         with pytest.raises(HeldMessages) as e:
             em.resume_sending(wrong)
-        assert e.value.count == 1
-    assert em.outreach_store.paused is True and chans["email"].sent == []  # nothing was released by a resume that did not know the count
-    assert em.resume_sending(1) == 1  # lifting the pause sends what is waiting, now
+        assert e.value.count == 1 and e.value.snapshot == snap
+    assert em.outreach_store.paused is True and chans["email"].sent == []  # nothing was released by a resume that did not name the queue
+    assert em.resume_sending(snap) == 1  # lifting the pause sends what is waiting, now
     assert len(chans["email"].sent) == 1 and em.outreach_store.get(pid, d.draft_id).status == "sent"
+
+
+def test_a_queue_of_the_same_size_but_different_messages_is_not_the_one_that_was_reviewed(em, pid, chans, clock):
+    """One held draft is denied and another approved: the count is still 1. The snapshot is not, so the resume that named the old queue releases nothing."""
+    from eventmate.service import HeldMessages
+
+    a = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+    em.pause_sending()
+    em.approve_outreach(pid, a.draft_id, a.content_hash)
+    reviewed = em.held_snapshot()
+    assert len(em.held_messages()) == 1
+    b = em.draft_outreach(pid, C.CATERER, "email", "kitchen@rasoi.in", "Meera")
+    em.deny_outreach(pid, a.draft_id)
+    em.approve_outreach(pid, b.draft_id, b.content_hash)
+    assert len(em.held_messages()) == 1 and em.held_snapshot() != reviewed  # same size, different message
+    with pytest.raises(HeldMessages):
+        em.resume_sending(reviewed)
+    assert chans["email"].sent == [] and em.outreach_store.paused is True
+    assert em.resume_sending(em.held_snapshot()) == 1 and [m[0] for m in chans["email"].sent] == ["kitchen@rasoi.in"]
+
+
+def test_an_approval_older_than_two_days_is_not_released_and_needs_a_fresh_draft(em, pid, chans, clock):
+
+    from eventmate.messaging.conversations import LAPSED
+
+    old = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+    em.pause_sending()
+    em.approve_outreach(pid, old.draft_id, old.content_hash)
+    clock.advance(hours=47)
+    assert [m["draft_id"] for m in em.held_messages()] == [old.draft_id] and em.lapsed_messages() == []
+    clock.advance(hours=2)  # 49 hours after the approval
+    assert em.held_messages() == [] and [m["draft_id"] for m in em.lapsed_messages()] == [old.draft_id]  # listed as not going out, before anyone sweeps it
+    fresh = em.draft_outreach(pid, C.CATERER, "email", "kitchen@rasoi.in", "Meera")
+    em.approve_outreach(pid, fresh.draft_id, fresh.content_hash)  # approved now, still paused
+    assert em.resume_sending(em.held_snapshot()) == 1
+    assert [m[0] for m in chans["email"].sent] == ["kitchen@rasoi.in"]  # only the fresh one went
+    gone = em.outreach_store.get(pid, old.draft_id)
+    assert gone.status == "expired" and gone.error == LAPSED
+    assert [m["draft_id"] for m in em.lapsed_messages()] == [old.draft_id]  # still listed for a week, so the person can see what did not go
+    clock.advance(days=9)
+    assert em.lapsed_messages() == []
+
+
+def test_a_standing_permissions_message_lapses_the_same_way(em, pid, chans, clock):
+    em.grant_autoreply(pid, "Asha", hours=168)
+    d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+    em.pause_sending()
+    em.outreach_store.transition(pid, d.draft_id, ("prepared",), status="approved", approved_by="mandate", decided_at=clock())
+    clock.advance(hours=50)
+    em.conversations.dispatch()
+    assert em.outreach_store.get(pid, d.draft_id).status == "expired" and chans["email"].sent == []
 
 
 def test_pause_and_the_kill_switch_are_independent(em, pid, chans, clock):
@@ -445,25 +497,25 @@ def test_pause_alone_holds_a_message_sent_under_a_standing_permission(em, pid, c
     assert em.outreach_store.get(pid, d.draft_id).status == "approved" and any("paused" in w for w in waiting)
 
 
-def test_the_sending_routes_report_both_switches_and_resume_needs_the_count(client, em, pid, chans):
+def test_the_sending_routes_report_both_switches_and_resume_needs_the_snapshot(client, em, pid, chans):
     d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
     em.suppress_address("email", "nobody@example.com", "Meera", "asked us to stop")
-    assert client.get("/api/sending").get_json() == {"paused": False, "automatic_stopped": False, "approved_waiting": 0, "held": [], "suppressed_addresses": 1}
+    first = client.get("/api/sending").get_json()
+    assert first["paused"] is False and first["automatic_stopped"] is False and first["approved_waiting"] == 0 and first["held"] == [] and first["lapsed"] == [] and first["approval_hours"] == 48
     assert post(client, "/api/sending/pause", {}).get_json() == {"paused": True}
     assert em.outreach_store.killed is False  # pause is not the kill switch
     em.approve_outreach(pid, d.draft_id, d.content_hash)  # paused: approved, but it waits
     s = client.get("/api/sending").get_json()
-    assert s["paused"] is True and s["automatic_stopped"] is False and s["approved_waiting"] == 1
-    assert s["held"] == [{"plan_id": pid, "draft_id": d.draft_id, "vendor": s["held"][0]["vendor"], "channel": "email", "subject": s["held"][0]["subject"], "approved_by": s["held"][0]["approved_by"]}]
-    assert "body" not in s["held"][0]  # who and what, never the text
-    for body in ({}, {"release": 0}, {"release": 2}):
+    assert s["paused"] is True and s["automatic_stopped"] is False and s["approved_waiting"] == 1 and len(s["held_snapshot"]) == 20
+    assert set(s["held"][0]) == {"plan_id", "draft_id", "vendor", "channel", "subject", "approved_by", "approved_hours_ago"}  # who and what, never the text
+    for body in ({}, {"snapshot": "0" * 20}):
         r = post(client, "/api/sending/resume", body)
-        assert r.status_code == 409 and r.get_json()["code"] == "held_messages" and r.get_json()["waiting"] == 1
+        assert r.status_code == 409 and r.get_json()["code"] == "held_messages" and r.get_json()["waiting"] == 1 and r.get_json()["held_snapshot"] == s["held_snapshot"]
     assert client.get("/api/sending").get_json()["paused"] is True and chans["email"].sent == []
-    r = post(client, "/api/sending/resume", {"release": 1})
+    assert post(client, "/api/sending/resume", {"snapshot": "not-a-snapshot"}).status_code in (400, 422)
+    r = post(client, "/api/sending/resume", {"snapshot": s["held_snapshot"]})
     assert r.status_code == 200 and r.get_json() == {"paused": False, "released": 1}
-    assert client.get("/api/sending").get_json()["paused"] is False
-    assert post(client, "/api/sending/resume", {"release": "many"}).status_code in (400, 422)
+    assert client.get("/api/sending").get_json()["paused"] is False and len(chans["email"].sent) == 1
 
 
 def test_the_kill_switch_routes_still_mean_automatic_messages_only(client, em):
@@ -473,17 +525,22 @@ def test_the_kill_switch_routes_still_mean_automatic_messages_only(client, em):
     assert post(client, "/api/autoreply/resume", {}).get_json()["killed"] is False
 
 
-def test_cli_pause_unpause_and_the_unchanged_kill_and_resume(em, pid, chans, tmp_path, capsys):
+def test_cli_pause_unpause_and_the_unchanged_kill_and_resume(em, pid, chans, clock, tmp_path, capsys):
     from eventmate.__main__ import main
 
+    from datetime import UTC, datetime
+
+    clock.t = datetime.now(UTC)  # the command line runs on the real clock; an approval made on a test clock days ago would have lapsed
     base = ["--plan-dir", str(tmp_path / "p"), "--log-dir", str(tmp_path / "l")]
     assert main(base + ["inbox", "pause"]) == 0 and "paused" in capsys.readouterr().out
     assert em.outreach_store.paused is True and em.outreach_store.killed is False
     d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
     em.approve_outreach(pid, d.draft_id, d.content_hash)
-    assert main(base + ["inbox", "unpause"]) == 3  # one is held: it says so and releases nothing
+    assert main(base + ["inbox", "unpause"]) == 3  # one is held: it lists it, gives the snapshot and releases nothing
     out = capsys.readouterr()
-    assert "1 approved message" in out.err and "--release 1" in out.err and "held:" in out.out and em.outreach_store.paused is True
-    assert main(base + ["inbox", "unpause", "--release", "1"]) == 0 and em.outreach_store.paused is False
+    snap = em.held_snapshot()
+    assert "1 approved message" in out.err and f"--snapshot {snap}" in out.err and "held:" in out.out and "approved" in out.out and em.outreach_store.paused is True
+    assert main(base + ["inbox", "unpause", "--snapshot", "0" * 20]) == 3 and em.outreach_store.paused is True
+    assert main(base + ["inbox", "unpause", "--snapshot", snap]) == 0 and em.outreach_store.paused is False
     assert main(base + ["inbox", "kill"]) == 0 and em.outreach_store.killed is True
     assert main(base + ["inbox", "resume"]) == 0 and em.outreach_store.killed is False and em.outreach_store.paused is False  # resume is the kill switch, as before
