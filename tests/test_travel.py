@@ -331,3 +331,12 @@ def test_api_tradeoffs_add_guest_flight_notes_only_when_asked(client):
     r = post(client, "/api/tradeoffs", {"request": text, "guest_travel": {"origin": "DEL", "destination": "BOM", "guests": 30}})
     assert "INR 8,200 each way that day, INR 100 less per guest (about INR 3,000 for 30) than on 2026-12-13" in shift(r)
     assert post(client, "/api/tradeoffs", {"request": text, "guest_travel": {"origin": "delhi", "destination": "BOM", "guests": 30}}).status_code in (400, 422)
+
+
+@pytest.mark.parametrize("bad", [None, "DEL", [], {}, {"origin": "DEL"}, {"origin": "DEL", "destination": "BOM", "guests": "40"}, {"origin": "DEL", "destination": "BOM", "guests": -1}, {"origin": "DEL", "destination": "BOM", "guests": 10**12},
+                                 {"origin": "DEL", "destination": "BOM", "guests": 3, "extra": 1}, {"origin": ["DEL"], "destination": "BOM", "guests": 3}, {"origin": "DEL" * 1000, "destination": "BOM", "guests": 3}])
+def test_api_tradeoffs_refuse_malformed_guest_travel_without_a_500(client, bad):
+    from tests.conftest import EXAMPLE
+
+    r = post(client, "/api/tradeoffs", {"request": EXAMPLE, "guest_travel": bad})
+    assert r.status_code in (200, 400, 422), r.status_code  # None means "not given"

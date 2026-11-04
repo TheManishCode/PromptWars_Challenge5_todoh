@@ -743,7 +743,10 @@ def _quotes(em: EventMate, a) -> int:
 
 
 def _tradeoffs(em: EventMate, a) -> int:
-    travel = GuestTravel(origin=a.guests_fly[0].upper(), destination=a.guests_fly[1].upper(), guests=int(a.guests_fly[2])) if a.guests_fly else None
+    try:
+        travel = GuestTravel(origin=a.guests_fly[0].upper(), destination=a.guests_fly[1].upper(), guests=int(a.guests_fly[2])) if a.guests_fly else None
+    except (ValueError, ValidationError):
+        raise ValueError("--guests-fly needs two three-letter airport codes and a guest count from 1 to 500, for example: --guests-fly DEL PNQ 40") from None
     fares = em.guest_fares(travel, a.today) if travel else None
     report = em.tradeoffs(a.request, today=a.today, guest_list_id=a.guest_list, travel=travel, fares=fares)
     if a.json:
