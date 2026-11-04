@@ -1,6 +1,6 @@
 """Fetch the models Docling needs, once, so that reading a PDF or an image never touches the network: ``python -m eventmate.documents.warm``.
 
-This is the one place document reading uses the network, and it runs on its own, outside the sandbox, when the person asks for it. Reading a quote file afterwards runs offline: the reader is also run in a network namespace of its own where the machine allows it (``sandbox.netless_prefix``)."""
+This is the one place document reading uses the network, and it runs on its own, outside the sandbox, when the person asks for it. Reading a quote file afterwards runs offline: the reader is also shut in as far as the machine allows (``documents/isolation.py``)."""
 
 from __future__ import annotations
 

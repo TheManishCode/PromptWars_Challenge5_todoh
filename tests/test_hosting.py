@@ -134,18 +134,20 @@ def test_allowed_hosts_can_come_from_the_environment_for_a_container(monkeypatch
 
 def test_shared_mode_refuses_to_start_where_the_file_reader_cannot_be_cut_off_from_the_network():
     found = problems(netless=False)
-    assert len(found) == 1 and "no weaker fallback" in found[0] and "unshare" in found[0]
+    assert len(found) == 1 and "no weaker fallback" in found[0] and "Landlock" in found[0] and "bubblewrap" in found[0]
     assert problems(netless=True) == []
 
 
-def test_in_shared_mode_a_reader_that_cannot_be_cut_off_is_never_run_and_locally_it_still_is_unless_required(monkeypatch):
-    from eventmate.documents import sandbox
+def test_in_shared_mode_a_reader_that_is_not_shut_in_tightly_enough_is_never_run_and_locally_it_still_is_unless_required(monkeypatch):
+    from eventmate.documents import isolation, sandbox
 
-    assert sandbox.must_be_netless({"EVENTMATE_MODE": "shared"}) and sandbox.must_be_netless({"EVENTMATE_MODE": " Shared "}) and sandbox.must_be_netless({"EVENTMATE_REQUIRE_NETLESS": "1"})
-    assert not sandbox.must_be_netless({}) and not sandbox.must_be_netless({"EVENTMATE_MODE": "local"}) and not sandbox.must_be_netless({"EVENTMATE_REQUIRE_NETLESS": "0"})
-    monkeypatch.setattr(sandbox, "netless_prefix", lambda: ())
+    assert sandbox.required_levels({"EVENTMATE_MODE": "shared"}) == isolation.SHARED_MODE_NEEDS == sandbox.required_levels({"EVENTMATE_MODE": " Shared "})
+    assert sandbox.required_levels({"EVENTMATE_REQUIRE_NETLESS": "1"}) == isolation.NETWORK_CUT
+    assert sandbox.required_levels({}) is None and sandbox.required_levels({"EVENTMATE_MODE": "local"}) is None and sandbox.required_levels({"EVENTMATE_REQUIRE_NETLESS": "0"}) is None
     monkeypatch.setenv("EVENTMATE_MODE", "shared")
-    with pytest.raises(sandbox.DocumentError, match="cannot cut the file reader off"):
-        sandbox.convert(b"Item,Qty\nA,1\n", "q.csv")
+    for weak in ("none", "no-sockets", "network"):  # a network cut alone is not enough where other visitors' files are on the same disk
+        monkeypatch.setattr(isolation, "available", lambda *a, _l=weak, **k: _l)
+        with pytest.raises(sandbox.DocumentError, match="cannot shut the file reader in"):
+            sandbox.convert(b"Item,Qty\nA,1\n", "q.csv")
     monkeypatch.setenv("EVENTMATE_MODE", "local")
     assert sandbox.convert(b"Item,Qty,Rate,Total\nBuffet,10,100,1000\n", "q.csv").markdown  # local mode still reads, as before

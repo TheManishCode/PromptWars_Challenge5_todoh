@@ -5,7 +5,6 @@ kind the extension says."""
 from __future__ import annotations
 
 import contextlib
-import functools
 import json
 import os
 import resource
@@ -18,6 +17,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from eventmate.documents import isolation
 from eventmate.documents.worker import BUILTIN, HEAVY
 
 MAX_FILE_BYTES = 5 * 1024 * 1024
@@ -94,26 +94,18 @@ def _group_rss(pgid: int) -> int:
     return total
 
 
-def must_be_netless(environ=None) -> bool:
-    """True when a reader that could not be cut off from the network must not run at all: always in shared mode (strangers' files), and wherever EVENTMATE_REQUIRE_NETLESS=1."""
+def required_levels(environ=None) -> frozenset[str] | None:
+    """The isolation levels a reader must reach before it may run, or None where a weaker one is allowed (locally, unless EVENTMATE_REQUIRE_NETLESS=1 asks for a network cut).
+    Shared mode (strangers' files) needs the network cut and the server's other files hidden; the server will not start without it (``web/hosting.py``), and no file is read without it."""
     environ = os.environ if environ is None else environ
-    return environ.get("EVENTMATE_REQUIRE_NETLESS") == "1" or environ.get("EVENTMATE_MODE", "").strip().lower() == "shared"
+    if environ.get("EVENTMATE_MODE", "").strip().lower() == "shared":
+        return isolation.SHARED_MODE_NEEDS
+    return isolation.NETWORK_CUT if environ.get("EVENTMATE_REQUIRE_NETLESS") == "1" else None
 
 
-@functools.cache
-def netless_prefix() -> tuple[str, ...]:
-    """The command prefix that runs a reader in a network namespace of its own (no interface, not even loopback), or () where this machine cannot do that. Found by trying it once.
-
-    The reader parses a file somebody else wrote, so it gets no network: a parser bug then has nowhere to send what it can read. The Hugging Face offline flags alone do not do this
-    (a clean-install check showed the OCR engine fetching its weights from inside the sandbox)."""
-    exe = shutil.which("unshare", path="/usr/bin:/bin")
-    if exe:
-        try:
-            if subprocess.run([exe, "-rn", "true"], capture_output=True, timeout=10, check=False).returncode == 0:
-                return (exe, "-rn", "--")
-        except (OSError, subprocess.TimeoutExpired):
-            pass
-    return ()
+def isolation_level(interpreter: str | None = None) -> str:
+    """How far the reader is shut in on this machine: contained, network, no-sockets or none (see ``documents/isolation.py``). Probed once."""
+    return isolation.available(interpreter or sys.executable, ROOT)
 
 
 def convert(data: bytes, filename: str, *, timeout: float | None = None, memory: int | None = None, command: list[str] | None = None, cap_address_space: bool | None = None) -> Converted:
@@ -133,13 +125,21 @@ def convert(data: bytes, filename: str, *, timeout: float | None = None, memory:
         env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": ROOT, "LANG": "C.UTF-8", "HOME": str(work), "TMPDIR": str(work), "PYTHONDONTWRITEBYTECODE": "1"}
         if heavy:  # the models were fetched ahead of time (python -m eventmate.documents.warm); a conversion never reaches the network for them
             env.update({"HF_HOME": model_home(), "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"})
-        cut = list(netless_prefix())
-        if not cut and must_be_netless():
-            raise DocumentError("this machine cannot cut the file reader off from the network, so reading files is switched off")
-        argv = cut + (command or [sys.executable, "-m", "eventmate.documents.worker"]) + [str(src), ext]
+        base = command or [sys.executable, "-m", "eventmate.documents.worker"]
+        shut = isolation.plan(base[0], ROOT, str(work), model_home() if heavy else None)
+        need = required_levels()
+        if need is not None and shut.level not in need:
+            raise DocumentError("this machine cannot shut the file reader in as far as this setup requires (no network, and the server's other files out of reach), so reading files is switched off")
+        argv = [*shut.prefix, *base, str(src), ext]
+        limits = _limits(max_out, memory if cap_address_space else None, int(timeout) + 5)
+
+        def shut_in():
+            limits()
+            if shut.preexec:
+                shut.preexec()
         with open(out, "wb") as sink:
             proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=sink, stderr=subprocess.DEVNULL, cwd=work, env=env,
-                                    preexec_fn=_limits(max_out, memory if cap_address_space else None, int(timeout) + 5), close_fds=True)
+                                    preexec_fn=shut_in, close_fds=True)
             deadline, code, why = time.monotonic() + timeout, None, ""
             while code is None:
                 try:

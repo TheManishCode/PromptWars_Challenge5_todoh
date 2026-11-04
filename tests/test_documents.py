@@ -99,7 +99,10 @@ def run(code, **kw):
     return sandbox.convert(b"x", "q.txt", command=[sys.executable, "-c", code, "--"], **kw)  # the two trailing arguments (path, extension) land in sys.argv
 
 
-def test_a_worker_that_never_finishes_is_killed_with_its_children(tmp_path):
+def test_a_worker_that_never_finishes_is_killed_with_its_children(tmp_path, monkeypatch):
+    from eventmate.documents import isolation
+
+    monkeypatch.setattr(isolation, "available", lambda *a, **k: "none")  # this one watches a pid file in tmp_path from outside; the contained level has its own test below
     pidfile = tmp_path / "child.pid"
     started = time.perf_counter()
     with pytest.raises(DocumentError, match="too long"):
@@ -508,27 +511,90 @@ def test_the_warm_up_sample_is_a_well_formed_pdf():
     assert len(offsets) == 5 and all(pdf[o:].startswith(b"%d 0 obj" % i) for i, o in enumerate(offsets, 1))
 
 
-def test_the_reader_is_cut_off_from_the_network_where_the_machine_allows_it(tmp_path):
-    """A listener on loopback is reachable from a plain child process and not from one run under the prefix the sandbox puts in front of the reader."""
-    import socket
+def _run(plan, code, *args, work=None):
     import subprocess
-    import sys
 
-    prefix = list(sandbox.netless_prefix())
-    if not prefix:
-        pytest.skip("this machine cannot create a network namespace")
-    probe = "import socket,sys; s=socket.socket(); s.settimeout(3)\ntry:\n    s.connect(('127.0.0.1', int(sys.argv[1]))); print('connected')\nexcept OSError:\n    print('refused')"
+    return subprocess.run([*plan.prefix, sys.executable, "-c", code, *args], capture_output=True, text=True, timeout=60, preexec_fn=plan.preexec, cwd=work).stdout.strip()
+
+
+NET_PROBE = "import socket,sys\ntry:\n    s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1', int(sys.argv[1]))); print('connected')\nexcept OSError:\n    print('refused')"
+
+
+@pytest.mark.parametrize("level", ["contained", "confined", "network", "no-sockets"])
+def test_each_isolation_level_cuts_the_reader_off_from_the_network(level, tmp_path, monkeypatch):
+    """A listener on loopback is reachable from a plain child and not from a child shut in at this level."""
+    import socket
+
+    from eventmate.documents import isolation
+
+    usable = {"contained": lambda: isolation._bwrap_works(sys.executable, sandbox.ROOT), "confined": lambda: isolation._landlock_works(sys.executable, sandbox.ROOT) and isolation._seccomp_works(),
+              "network": lambda: bool(isolation._unshare_works()), "no-sockets": isolation._seccomp_works}
+    if not usable[level]():
+        pytest.skip(f"this machine cannot set up the {level} level")
+    monkeypatch.setattr(isolation, "available", lambda *a, **k: level)
+    plan = isolation.plan(sys.executable, sandbox.ROOT, str(tmp_path), None)
+    assert plan.level == level
     with socket.socket() as srv:
         srv.bind(("127.0.0.1", 0))
         srv.listen(4)
         port = str(srv.getsockname()[1])
-        plain = subprocess.run([sys.executable, "-c", probe, port], capture_output=True, text=True, timeout=20).stdout.strip()
-        cut = subprocess.run([*prefix, sys.executable, "-c", probe, port], capture_output=True, text=True, timeout=20).stdout.strip()
-    assert (plain, cut) == ("connected", "refused")
+        assert _run(isolation.Plan("none"), NET_PROBE, port) == "connected"
+        assert _run(plan, NET_PROBE, port, work=tmp_path) == "refused"
 
 
-def test_a_machine_that_cannot_cut_the_network_can_be_made_to_refuse_to_read_files(monkeypatch):
-    monkeypatch.setattr(sandbox, "netless_prefix", lambda: ())
+def test_the_socket_filter_refuses_socket_and_keeps_local_pairs(tmp_path):
+    from eventmate.documents import isolation
+
+    if not isolation._seccomp_works():
+        pytest.skip("this machine cannot install a seccomp filter")
+    code = "import socket\ntry:\n    socket.socket(socket.AF_UNIX); print('socket allowed')\nexcept PermissionError:\n    a, b = socket.socketpair(); a.send(b'x'); print('denied, pair ok', b.recv(1))"
+    assert _run(isolation.Plan("no-sockets", (), isolation._seccomp_no_sockets), code) == "denied, pair ok b'x'"
+
+
+@pytest.mark.parametrize("level", ["contained", "confined"])
+def test_the_levels_that_hide_files_leave_the_reader_only_its_own_directory(level, tmp_path, monkeypatch):
+    from eventmate.documents import isolation
+
+    if level == "contained" and not isolation._bwrap_works(sys.executable, sandbox.ROOT) or level == "confined" and not isolation._landlock_works(sys.executable, sandbox.ROOT):
+        pytest.skip(f"this machine cannot set up the {level} level")
+    monkeypatch.setattr(isolation, "available", lambda *a, **k: level)
+    secret = tmp_path / "workspaces" / "other-visitor" / "plan.json"
+    secret.parent.mkdir(parents=True)
+    secret.write_text("private")
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "input.pdf").write_text("mine")
+    plan = isolation.plan(sys.executable, sandbox.ROOT, str(work), None)
+    assert plan.level == level
+    code = ("import os,sys\ndef can(p):\n    try:\n        open(p).read(); return True\n    except OSError:\n        return False\n"
+            "print(can(sys.argv[1]), can('/etc/passwd'), can(os.path.expanduser('~/.ssh/id_rsa')), can(sys.argv[2]))\nopen(os.path.join(sys.argv[3], 'out'), 'w').write('ok')")
+    assert _run(plan, code, str(secret), str(work / "input.pdf"), str(work), work=work) == "False False False True"
+    assert (work / "out").read_text() == "ok"  # the reader can write its own directory
+
+
+def test_a_machine_that_cannot_shut_the_reader_in_can_be_made_to_refuse_to_read_files(monkeypatch):
+    from eventmate.documents import isolation
+
+    monkeypatch.setattr(isolation, "available", lambda *a, **k: "none")
     monkeypatch.setenv("EVENTMATE_REQUIRE_NETLESS", "1")
-    with pytest.raises(DocumentError, match="cannot cut the file reader off from the network"):
+    with pytest.raises(DocumentError, match="cannot shut the file reader in"):
         sandbox.convert(b"x", "q.csv", command=[sys.executable, "-c", "pass"])
+
+
+def test_a_contained_worker_and_its_children_die_with_the_timeout():
+    import subprocess
+
+    from eventmate.documents import isolation
+
+    if not isolation._bwrap_works(sys.executable, sandbox.ROOT):
+        pytest.skip("bubblewrap is not usable here")
+    marker = "61.7"  # a sleep length nothing else on the machine uses
+    with pytest.raises(DocumentError, match="too long"):
+        run(f"import subprocess,time\nsubprocess.Popen(['sleep','{marker}'])\ntime.sleep(60)", timeout=1.5)
+    for _ in range(50):
+        if subprocess.run(["pgrep", "-f", f"sleep {marker}"], capture_output=True).returncode != 0:
+            break
+        time.sleep(0.1)
+    else:
+        subprocess.run(["pkill", "-f", f"sleep {marker}"])
+        pytest.fail("a child of the contained reader outlived the timeout")
