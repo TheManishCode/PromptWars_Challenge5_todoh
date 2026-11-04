@@ -174,7 +174,7 @@ def _budget_question(said: str, why: str) -> str:
 
 def screen_budget(text: str, guests: int | None = None) -> Unresolved | None:
     """The first thing in a budget that cannot be read safely: a foreign currency, a misspelled unit, an amount per person, a range, or a number too small to be a total."""
-    text = " ".join(mgr._blank_dates(text).split())  # a date's numbers are not money; one space between words, so the patterns below need no unbounded \s*
+    text = " ".join(mgr._blank_paid(mgr._blank_dates(text)).split())  # a date's numbers and an amount already paid are not the budget; one space between words, so the patterns below need no unbounded \s*
     per_person: list[Unresolved] = []
     clean_total = False
     for m in _AMOUNT.finditer(text):
@@ -184,7 +184,8 @@ def screen_budget(text: str, guests: int | None = None) -> Unresolved | None:
         unit = _unit_of(word_text)
         c2 = word_text.lower() if word_text.lower() in _FOREIGN or word_text.lower() in _RUPEE else ""
         at_budget = bool(_BUDGET_CONTEXT.search(before))
-        if not (c1 or c2 or unit or at_budget):
+        ranged = bool((to := _at(_RANGE_TO, rest)) and _unit_of(to.group("u2") or ""))  # "8 to 10 lakh": the 8 is money too, the unit comes with the second number
+        if not (c1 or c2 or unit or at_budget or ranged):
             continue  # a number that is not money here: a date, a guest count, a phone number
         shown = clip(text[m.start(): m.end() + (word.end() if word and (unit or c2) else 0)].strip(), 40)
         currency = _FOREIGN.get(c1) or _FOREIGN.get(c2)
@@ -237,6 +238,23 @@ def lone_number(text: str) -> int | None:
     """The whole message is one number with at most a few filler words ("make it 150", "now 80", "about 100"): the number, else None."""
     m = _LONE_NUMBER.match(text.strip())
     return _int(m.group("n")) if m else None
+
+
+_CHANGE_CUE = re.compile(r"\b(?:now|actually|instead|make\s+(?:it|that|this)|chang(?:e|ed|ing)\s+(?:it\s+|that\s+|this\s+)?to|updat(?:e|ed|ing)|it'?s|its|it\s+is|revised|new\s+(?:number|count|total))\b", re.I | re.A)
+_BARE_NUMBER = re.compile(r"(?<![\w.,/:-])\d[\d,]*(?![\w.,/:%-])(?!\s*(?:am|pm|days?|hours?|hrs?|minutes?|mins?|weeks?|months?|years?|km|kg|%))", re.I | re.A)
+
+
+def cued_number(text: str) -> int | None:
+    """A longer message that changes a number without saying what it counts ("ok its 180 now, more cousins said yes", "actually make that 25"): the one number, else None. The number is
+    never one a date, an amount, an amount already paid or a guest word owns, and a message with two numbers or no change word is not read this way."""
+    t = mgr._blank_paid(mgr._blank_dates(number_words_to_digits(mgr._ascii_digits(text.strip(), [], []))))
+    if not _CHANGE_CUE.search(t):
+        return None
+    found = {m.group(0).replace(",", "") for m in _BARE_NUMBER.finditer(t)}
+    if len(found) != 1:
+        return None
+    n = int(next(iter(found)))
+    return n if n >= 1 else None
 
 
 def bare_guests(text: str) -> tuple[int | None, Unresolved | None]:

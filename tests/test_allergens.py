@@ -161,7 +161,10 @@ def test_an_unnamed_allergy_keeps_the_plan_provisional_and_tells_the_user(em, tm
     item = next(u for u in p.validation.unverified if u.name == "allergy_unclear")
     assert item.blocks_verified and "kiwi" in item.label and "not" in item.detail and not p.validation.fully_verified
     d = intake.propose(["120 people in Pune on 12 December, budget 2 lakh, allergic to kiwi"], None, TODAY, ["Pune"], RunLogs.create(log_dir=tmp_path, run_id="g"))
-    assert d.draft.allergy_unclear == ("kiwi",) and any("could not name" in n and "kiwi" in n for n in d.notes)
+    question = next(u for u in d.draft.unresolved if u.key.startswith("allergy_unclear:"))  # asked, so the draft is not ready beside an allergy nobody named
+    assert not d.ready and "kiwi" in question.said and d.draft.allergy_unclear == ()
+    d = intake.propose(["Keep as written"], d.draft, TODAY, ["Pune"], RunLogs.create(log_dir=tmp_path, run_id="g1"), expecting=d.asking, answer=intake.IntakeAnswer(key=question.key, pick=0))
+    assert d.ready and d.draft.allergy_unclear == ("kiwi",) and any("could not name" in n and "kiwi" in n for n in d.notes)
     d2 = intake.propose(["actually nobody is allergic"], d.draft, TODAY, ["Pune"], RunLogs.create(log_dir=tmp_path, run_id="g2"))
     assert d2.draft.allergy_unclear == ("kiwi",)  # a later message cannot clear it
 

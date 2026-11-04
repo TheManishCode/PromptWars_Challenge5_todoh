@@ -94,6 +94,12 @@ def _phrase(words: list[str]) -> str:
     return " ".join(words)[:MAX_PHRASE].strip()
 
 
+# What follows these words is another clause ("2 guests have an egg allergy so the kitchen must be careful"), not more of what they are allergic to.
+_CLAUSE_AFTER = re.compile(r"\b(?:so|because|since|therefore|hence|which\s+means|that\s+is\s+why)\b", _F)
+# An item that opens with its own subject is a new statement, not one more item of the list ("allergic to eggs, everyone else eats anything").
+_NEW_SUBJECT = re.compile(r"^\W*(?:everyone|everybody|anyone|anybody|others?|rest|the\s+rest|baaki|baki|sab|all|we|they|he|she|i|you|my|our|their|no\s?one|nobody)\b", _F)
+
+
 def _words(text: str) -> list[str]:
     return re.findall(r"[^\W\d_]+", text, re.A)
 
@@ -113,6 +119,8 @@ def read(text: str) -> AllergyReading:
             negated = bool(_NEG_CUE.search(item)) if cue else bool(_NEG_START.search(item))  # a leading "no" negates a continuation ("not cashews"), not a statement with its own cue
             if cue:
                 before, after = item[: cue.start()], item[cue.end():]
+                if clause := _CLAUSE_AFTER.search(after):
+                    after = after[: clause.start()]
                 answer = [w.lower() for w in _words(after)]
                 if negated or (answer and all(w in _NO_ANSWER for w in answer)):
                     in_list, pending = False, ""
@@ -130,6 +138,8 @@ def read(text: str) -> AllergyReading:
                 in_list = True
             elif _FREE_OF.search(item) and not negated:
                 found += _named(" ".join(m.group(0).replace("-free", " ").replace(" free", " ") for m in _FREE_OF.finditer(item)))
+            elif in_list and not negated and _NEW_SUBJECT.match(item) and not _named(item):
+                in_list = False  # "everyone else eats anything": a new statement, so the list is over and nothing in it is an allergy
             elif in_list and not negated:
                 answer = [w.lower() for w in _words(item)]
                 if answer and all(w in _NO_ANSWER for w in answer):
@@ -251,6 +261,23 @@ def question_for(s: Suspect) -> Unresolved:
         return Unresolved(key=key, field="allergens", said=clip(s.said, 40), question=f'You wrote "{clip(s.said, 40)}". Is anyone allergic to {_names(s.allergens)}, or is it only a preference?',
                           picks=(*yes, Pick(label="Only a preference", field="allergens")))
     return Unresolved(key=key, field="allergens", said=clip(s.said, 40), question=f'You mentioned "{clip(s.said, 40)}", which is a serious reaction, but not to what. What is the allergy? Write the food, for example "peanuts".')
+
+
+def unnamed_question(phrase: str) -> Unresolved:
+    """An allergy was written but this reader cannot name it ("allergic to kiwi"). It is asked about, so the draft is not ready until the user names it or keeps their words: the plan then
+    says the allergy was not understood. It is never left as a row beside a draft that looks finished."""
+    word = re.sub(r"[^A-Za-z' -]", "", phrase).strip()[:40] or "allergy"
+    return Unresolved(
+        key=f"allergy_unclear:{word}", field="allergens", said=clip(word, 40),
+        question=f'You mentioned an allergy to "{clip(word, 40)}", which I could not name. What is the allergy? Write the food, for example "peanuts", or keep your words as written and the plan will say the allergy was not understood.',
+        picks=(Pick(label=f"Keep as written ({clip(word, 30)})", field="allergens", keep_words=True),),
+    )
+
+
+def unnamed_questions(text: str) -> list[Unresolved]:
+    """The questions for allergies in ``text`` that were written but not named, leaving out words already offered back as "did you mean peanut?"."""
+    consumed = {s.said.lower() for s in suspects(text) if s.kind == "typo_word"}
+    return [unnamed_question(u) for u in read(text).unclear if not consumed & {w.lower() for w in u.split()}]
 
 
 # ------------------------------------------------------------------------------------------------ asking to remove a stated allergy

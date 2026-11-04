@@ -275,3 +275,45 @@ def test_the_card_always_says_when_no_allergy_was_captured_so_a_miss_does_not_lo
     assert row(page, "Allergies").startswith("None stated") and "write it above" in row(page, "Allergies")
     page.say("one guest is allergic to peanuts")
     assert row(page, "Allergies") == "Peanut"
+
+
+# ------------------------------------------------------------------ what the reader keeps instead of choosing (tests/test_intake_next_reader.py, on the page)
+
+
+def test_a_diet_about_some_guests_is_asked_and_only_some_keeps_the_words(dialog):
+    page = dialog
+    page.say("party in Pune for 40 people on 12 December 2026, budget 1 lakh, a few guests are vegan")
+    assert "Is everyone vegan" in card(page) and row(page, "Food") is None and not can_build(page)
+    page.get_by_role("button", name="Only some guests").click()
+    page.wait_for_selector("#build")
+    assert row(page, "Food") is None and "a few guests are vegan" in card(page), "nothing is set for everyone, and the words are kept for the caterer"
+
+
+def test_a_range_of_dates_offers_both_ends_and_the_pressed_one_is_set(dialog):
+    page = dialog
+    page.say("wedding in Pune for 100 guests, 4-6 may 2027, budget 3 lakh")
+    assert row(page, "Date") is None and not can_build(page)
+    assert page.get_by_role("button", name="4 May 2027").count() == 1
+    page.get_by_role("button", name="6 May 2027").click()
+    page.wait_for_selector("#build")
+    assert row(page, "Date") == "6 May 2027"
+
+
+def test_a_correction_with_no_field_word_is_asked_while_another_question_is_open(dialog):
+    page = dialog
+    page.say("wedding for 100 guests on 12 December 2026, budget 2 lakh")
+    assert "Which city is it in?" in card(page)
+    page.say("ok its 150 now since more cousins said yes")
+    assert row(page, "Guests") == "100" and page.get_by_role("button", name="150 guests").count() == 1 and not can_build(page)
+    page.get_by_role("button", name="150 guests").click()
+    page.wait_for_function("() => !document.querySelector('#read-brief').disabled")
+    assert row(page, "Guests") == "150" and "Which city is it in?" in card(page) and not can_build(page), "the city question is still open"
+
+
+def test_an_allergy_that_cannot_be_named_is_asked_before_build_is_offered(dialog):
+    page = dialog
+    page.say("party in Pune for 40 people on 12 December 2026, budget 1 lakh, my aunt is allergic to kiwi")
+    assert not can_build(page) and page.get_by_role("button", name="Keep as written").count() == 1
+    page.get_by_role("button", name="Keep as written").click()
+    page.wait_for_selector("#build")
+    assert "kiwi" in card(page)

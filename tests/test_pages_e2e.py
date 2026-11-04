@@ -320,6 +320,9 @@ def test_an_allergy_the_reader_cannot_name_is_shown_to_the_user_and_keeps_the_pl
     page.click("#new-plan")
     page.fill("#brief-input", BRIEF + ", my friend is allergic to kiwi")
     page.click("#read-brief")
+    page.get_by_role("button", name="Keep as written").wait_for()  # the allergy is a question first: Build is not offered beside it
+    assert page.locator("#build").count() == 0 and "kiwi" in page.inner_text("#brief-dialog")
+    page.get_by_role("button", name="Keep as written").click()
     page.wait_for_selector("#build")
     dialog = page.inner_text("#brief-dialog")
     assert "Allergy to clarify" in dialog and "kiwi" in dialog and "could not name" in dialog

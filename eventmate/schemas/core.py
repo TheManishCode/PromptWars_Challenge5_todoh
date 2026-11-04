@@ -332,7 +332,7 @@ class EventRequest(_Model):
     # the user's own words for an allergy we could not name: never read as "no allergy"; the plan says it was not understood
     allergy_unclear: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z' -]+$")], ...] = Field(default=(), max_length=5)
     # food requirements the vendor records cannot answer (sattvic, no onion or garlic, kosher...), as fixed labels; and the user's own words for a restriction we could not place
-    diet_notes: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z' -]+$")], ...] = Field(default=(), max_length=5)
+    diet_notes: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z0-9' %-]+$")], ...] = Field(default=(), max_length=5)
     diet_unclear: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z' -]+$")], ...] = Field(default=(), max_length=5)
     venue_setting: VenueSetting = VenueSetting.ANY
     services: tuple[VendorCategory, ...] = (VendorCategory.VENUE,)

@@ -24,7 +24,7 @@ from pydantic import Field, StrictInt, ValidationError, field_validator
 
 from eventmate.agents import manager as mgr
 from eventmate.llm import LLMClient, PromptError, PromptStore
-from eventmate.planning import allergies, diets, reading
+from eventmate.planning import allergies, diets, partial_diets, reading
 from eventmate.planning import cities as city_aliases
 from eventmate.planning.questions import EXPECTABLE, Pick, Unresolved, clip, describe_changes, long_date, money
 from eventmate.planning.community import load_profiles, match_subtype
@@ -88,7 +88,7 @@ class IntakeDraft(_Model):
     budget_total: int | None = Field(default=None, gt=0, le=MAX_BUDGET_INR)
     dietary: tuple[DietaryRequirement, ...] = ()
     allergy_unclear: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z' -]+$")], ...] = Field(default=(), max_length=5)  # an allergy mentioned but not named; rules only
-    diet_notes: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z' -]+$")], ...] = Field(default=(), max_length=5)  # rules only
+    diet_notes: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z0-9' %-]+$")], ...] = Field(default=(), max_length=5)  # rules only; the user's words about some guests may hold a number
     diet_unclear: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z' -]+$")], ...] = Field(default=(), max_length=5)
     allergens: tuple[Allergen, ...] = ()  # only ever read from the user's own words (rules), never proposed by a model
     venue_setting: VenueSetting | None = None
@@ -216,6 +216,8 @@ def _rule_draft(text: str, today: date, notes: list[str], known: tuple[str, ...]
     t = mgr._ascii_digits(t, problems, assumptions)
     t = reading.number_words_to_digits(t)
     asked: list[Unresolved] = []
+    for paid in mgr.paid_amounts(t):
+        notes.append(f"I did not use {money(paid)} as the budget, because you wrote that it was already paid.")
     guest_question = reading.screen_guests(t, has_total=prior.guest_count is not None)
     guests = None if guest_question else mgr._parse_guests(t, [])
     budget_question = reading.screen_budget(t, guests or prior.guest_count)
@@ -241,14 +243,16 @@ def _rule_draft(text: str, today: date, notes: list[str], known: tuple[str, ...]
     suspects = allergies.suspects(t)
     asked += [allergies.question_for(sus) for sus in suspects]
     consumed = {sus.said.lower() for sus in suspects if sus.kind == "typo_word"}
-    allergy_unclear = tuple(u for u in allergy.unclear if not consumed & {w.lower() for w in u.split()})  # a word offered back as "did you mean peanut?" is not also reported as an allergy that was not understood
-    dietary = tuple(d for rx, d in mgr._DIETS if mgr._mentioned(rx, t))
+    unnamed = [allergies.unnamed_question(u) for u in allergy.unclear if not consumed & {w.lower() for w in u.split()}]  # a word offered back as "did you mean peanut?" is not also an allergy that was not understood
+    asked += unnamed  # an allergy that cannot be named is a question, so the draft is not ready beside it; "keep as written" moves the words into the draft
+    dietary, diet_questions = partial_diets.split(t)  # a diet said about some guests is asked about, not set for everyone
+    asked += diet_questions
     if not dietary and (misspelt := diets.misspelt_diet(t)):
         asked.append(misspelt)
     return RuleReading(
         draft=_safe_draft(
             event_type=event_type, community_subtype=subtype, guest_count=guests, city=city.city, event_date=when, budget_total=budget, dietary=dietary, allergens=allergy.allergens,
-            allergy_unclear=allergy_unclear, diet_notes=diet.notes, diet_unclear=diet.unclear, venue_setting=setting, services=tuple(services), reminders=tuple(reminders),
+            allergy_unclear=(), diet_notes=diet.notes, diet_unclear=diet.unclear, venue_setting=setting, services=tuple(services), reminders=tuple(reminders),
         ),
         unresolved=tuple({u.key: u for u in asked}.values())[:MAX_OPEN_QUESTIONS],
         removed_cities=city.removed,
@@ -408,7 +412,10 @@ def propose(
     if prior.allergens and allergies.removal_requested(latest):
         asked.append(allergies.removal_question(prior.allergens))  # an allergy leaves only when the user says "remove it" to this question
     new, asked = _bare_answer(expecting, latest, known, prior, new, asked, notes)
-    if not asked and not new_found(new) and (number := reading.lone_number(latest)) is not None and prior_has_facts(prior) and not _answered(expecting, new):
+    number = reading.lone_number(latest)
+    if number is None:
+        number = reading.cued_number(latest)
+    if not asked and not new_found(new) and number is not None and prior_has_facts(prior) and not _answered(expecting, new):
         asked = [reading.number_question(number, prior.guest_count, prior.budget_total)]  # before any model is asked, so the model cannot answer it
     if llm is not None:
         ai, reason = _llm_draft(llm, prompts or PromptStore(), logs, latest, prior, today, "intake")
@@ -435,7 +442,7 @@ def propose(
     if draft.city and city_aliases.canonical(draft.city) in gone and not new.city:
         draft = draft.model_copy(update={"city": None})  # "not Pune": the earlier city does not stand in
     # an ambiguity in the user's own words is theirs to settle: no earlier or AI-picked value stands in, and the question stays open until they answer
-    open_now = _still_open(prior.unresolved, asked, new)
+    open_now = _still_open(prior.unresolved, asked, new, expecting)
     draft = draft.model_copy(update={"unresolved": open_now, "settled": _settled(prior, open_now), **{q.field: None for q in asked if q.field in _SCALARS}})
     return _turn(draft, prior, notes, known, source, flags, read.removed_cities, latest, new)
 
@@ -474,8 +481,9 @@ def prior_has_facts(prior: IntakeDraft) -> bool:
 
 def asking_of(draft: IntakeDraft) -> str | None:
     """The fact the draft's open question is about (the first open question, else the first missing fact), or None when the question is not one a bare answer can fill."""
-    if draft.unresolved:
-        first = draft.unresolved[0]
+    open_questions = [q for q in draft.unresolved if q.field != "dietary"]  # who a diet is for is pressed or said plainly; it does not stand in the way of the next fact a bare answer fills
+    if open_questions:
+        first = open_questions[0]
         return first.field if first.field in EXPECTABLE and first.key != "allergy_remove" else None  # a yes/no about removing an allergy is pressed, never read as the name of one
     missing = draft.missing()
     return missing[0] if missing else None
@@ -516,7 +524,7 @@ def _safe_merge(base: IntakeDraft, update: dict) -> IntakeDraft:
         return base
 
 
-def _still_open(before: Sequence[Unresolved], asked: Sequence[Unresolved], new: IntakeDraft) -> tuple[Unresolved, ...]:
+def _still_open(before: Sequence[Unresolved], asked: Sequence[Unresolved], new: IntakeDraft, expecting: str | None = None) -> tuple[Unresolved, ...]:
     """The questions that stay open: the old ones the message did not settle, and the new ones. Asking about a key again replaces it; giving the value plainly closes it."""
     renewed = {q.key for q in asked}
     kept = []
@@ -524,8 +532,10 @@ def _still_open(before: Sequence[Unresolved], asked: Sequence[Unresolved], new: 
         gave_value = q.field in _SCALARS and getattr(new, q.field) is not None
         gave_number = q.field == "number" and (new.guest_count is not None or new.budget_total is not None)
         named_allergy = q.field == "allergens" and q.key.startswith("allergy:") and not q.picks and bool(new.allergens)
-        said_diet = q.field == "dietary" and bool(new.dietary)
-        if q.key in renewed or gave_value or gave_number or named_allergy or said_diet:
+        said_diet = q.field == "dietary" and not q.key.startswith(partial_diets.KEY) and bool(new.dietary)
+        said_for_all = q.key.startswith(partial_diets.KEY) and any(p.value and DietaryRequirement(p.value) in new.dietary for p in q.picks)  # only the diet asked about, said for everyone, closes it
+        named_unclear = q.key.startswith("allergy_unclear:") and expecting == "allergens" and bool(new.allergens)  # only the answer to that question closes it: "also eggs" does not
+        if q.key in renewed or gave_value or gave_number or named_allergy or said_diet or said_for_all or named_unclear:
             continue
         kept.append(q)
     return tuple([*kept, *asked])[:MAX_OPEN_QUESTIONS]
@@ -563,6 +573,9 @@ def _apply_answer(prior: IntakeDraft, answer: IntakeAnswer, today: date) -> Inta
                 fields["allergens"] = tuple(a for a in dict.fromkeys((*prior.allergens, *added)) if a not in removed)
             elif pick.field == "dietary":
                 fields["dietary"] = tuple(dict.fromkeys((*prior.dietary, DietaryRequirement(pick.value))))
+        elif pick.keep_words and item.field == "dietary":
+            words = re.sub(r"[^A-Za-z0-9' %-]", "", item.said).strip()[:60]  # "only some": the user's words go to the caterer as a food note, and nothing is set for everyone
+            fields["diet_notes"] = tuple(dict.fromkeys((*prior.diet_notes, *([words] if words else ()))))[:5]
         elif pick.keep_words:
             words = re.sub(r"[^A-Za-z' -]", "", item.said).strip()[:60]
             fields["allergy_unclear"] = tuple(dict.fromkeys((*prior.allergy_unclear, *([words] if words else ()))))[:5]
@@ -589,6 +602,9 @@ def _turn(draft: IntakeDraft, prior: IntakeDraft, notes: list[str], known: tuple
     changes = describe_changes(prior, draft) if prior_has_facts(prior) else ()
     if prior_has_facts(prior) and latest and not changes and not draft.unresolved and not notes:
         notes.append("I could not find a change in that message. Say what to change, for example “150 guests”, “budget 3 lakh”, “move it to 19 December 2026” or “not Pune, Mumbai”.")
+    raised_now = {q.key for q in draft.unresolved} - {q.key for q in prior.unresolved}  # a question this message raised is its answer: it was used
+    if prior_has_facts(prior) and latest and new is not None and draft.unresolved and not raised_now and not changes and not notes and not new_found(new):
+        notes.append(f'I could not use "{clip(latest, 40)}" for the question above. Press one of the options, or say it another way.')  # an open question never swallows a message without saying so
     if not prior_has_facts(prior) and latest and new is not None and not new_found(new) and not draft.unresolved:
         notes.append("I could not find any event details in that message. Try something like: 120 guests in Pune on 12 December, budget 2 lakh.")
     if draft.event_type is None and (new_found(draft) or draft.unresolved):
@@ -597,8 +613,8 @@ def _turn(draft: IntakeDraft, prior: IntakeDraft, notes: list[str], known: tuple
     first = draft.unresolved[0] if draft.unresolved else None
     question = first.question if first else _QUESTIONS[missing[0]] if missing else None
     choices = tuple(
-        IntakeChoice(field=u.field, prompt=u.question, options=tuple(p.value for p in u.picks if p.value is not None), key=u.key, labels=tuple(p.label for p in u.picks))
-        for u in draft.unresolved if any(p.value is not None for p in u.picks)
+        IntakeChoice(field=u.field, prompt=u.question, options=tuple(p.value for p in u.picks if p.value is not None) or tuple(p.label for p in u.picks), key=u.key, labels=tuple(p.label for p in u.picks))
+        for u in draft.unresolved if u.picks  # a question whose only button keeps the user's words ("keep as written") has no value to show, so its labels stand in
     )
     return IntakeTurn(
         draft=draft, choices=choices, changes=changes, asking=asking_of(draft), missing=missing, flags=flags, notes=tuple(dict.fromkeys(notes)), question=question, ready=not missing and not draft.unresolved, source=source
@@ -630,6 +646,8 @@ def raised_by(messages: Sequence[str], draft: IntakeDraft, today: date) -> list[
         t = mgr._ascii_digits(t, [], [])
         out += [q for q in (reading.screen_guests(t, has_total=draft.guest_count is not None), reading.screen_budget(t, draft.guest_count)) if q]
         out += [allergies.question_for(s) for s in allergies.suspects(t)]
+        out += allergies.unnamed_questions(t)
+        out += partial_diets.questions(t)
         if not any(rx.search(t) for rx, _ in mgr._DIETS) and (misspelt := diets.misspelt_diet(t)):
             out.append(misspelt)
     return list({q.key: q for q in out}.values())

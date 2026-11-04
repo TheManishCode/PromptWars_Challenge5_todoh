@@ -80,6 +80,10 @@ _MONTH_RE = (
 _YEAR = r"(?:,?\s+(20\d{2})(?!\d))?"
 _DATE_MD = re.compile(rf"\b({_MONTH_RE})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?\b(?!\s*:){_YEAR}", re.I | re.A)
 _DATE_DM = re.compile(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?({_MONTH_RE})\b{_YEAR}", re.I | re.A)
+# "4-6 may 2027", "7th & 8th jan", "feb 7 to 9 2027": two days of one month. Both ends are read, so the event date is asked about and no end is chosen for the user.
+_RANGE_SEP = r"\s{0,2}(?:-|–|—|to|and|&)\s{0,2}"
+_DATE_RANGE_DM = re.compile(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?{_RANGE_SEP}(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?({_MONTH_RE})\b{_YEAR}", re.I | re.A)
+_DATE_RANGE_MD = re.compile(rf"\b({_MONTH_RE})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?{_RANGE_SEP}(\d{{1,2}})(?:st|nd|rd|th)?\b(?!\s*:){_YEAR}", re.I | re.A)
 _DATE_ISO = re.compile(r"\b(20\d{2})-(\d{2})-(\d{2})\b", re.A)
 # 12/12/2026, 12-12-2026, 12.12.2026: day first (Indian convention), 4-digit year required, same separator twice
 _DATE_NUMERIC = re.compile(r"(?<![\d./-])(\d{1,2})([/.-])(\d{1,2})\2(20\d{2})(?![\d/.-])", re.A)
@@ -199,10 +203,20 @@ def _parse_dates(text: str, today: date, problems: list[str], assumptions: list[
             problems.append(f"ambiguous date {m.group(0)!r} (day-first or month-first); write it as {day_first} or {month_first}")
             return None
         raw.append((int(m.group(4)), month, day))
+    ranges = [m.span() for rx in (_DATE_RANGE_DM, _DATE_RANGE_MD) for m in rx.finditer(text)]
+    inside = lambda m: any(a <= m.start() and m.end() <= b for a, b in ranges)  # noqa: E731  a day a range already read, with the range's own year
     for m in _DATE_MD.finditer(text):
-        raw.append((int(m.group(3)) if m.group(3) else None, _MONTHS[m.group(1)[:3].lower()], int(m.group(2))))
+        if not inside(m):
+            raw.append((int(m.group(3)) if m.group(3) else None, _MONTHS[m.group(1)[:3].lower()], int(m.group(2))))
     for m in _DATE_DM.finditer(text):
-        raw.append((int(m.group(3)) if m.group(3) else None, _MONTHS[m.group(2)[:3].lower()], int(m.group(1))))
+        if not inside(m):
+            raw.append((int(m.group(3)) if m.group(3) else None, _MONTHS[m.group(2)[:3].lower()], int(m.group(1))))
+    for m in _DATE_RANGE_DM.finditer(text):  # "4-6 may 2027": both days of the one month, in the one year
+        year, month = (int(m.group(4)) if m.group(4) else None), _MONTHS[m.group(3)[:3].lower()]
+        raw += [(year, month, int(m.group(1))), (year, month, int(m.group(2)))]
+    for m in _DATE_RANGE_MD.finditer(text):  # "feb 7 to 9 2027"
+        year, month = (int(m.group(4)) if m.group(4) else None), _MONTHS[m.group(1)[:3].lower()]
+        raw += [(year, month, int(m.group(2))), (year, month, int(m.group(3)))]
     for m in _DATE_ISO.finditer(text):
         raw.append((int(m.group(1)), int(m.group(2)), int(m.group(3))))
     found = set()
@@ -264,7 +278,7 @@ def _stands_for_budget(text: str, m: re.Match) -> bool:
 
 def _blank_dates(text: str) -> str:
     """``text`` with each date written in it replaced by spaces of the same length: the numbers of a date (day, year) belong to the date and are no other fact's candidate."""
-    spans = [m.span() for rx in (_DATE_NUMERIC, _DATE_MD, _DATE_DM, _DATE_ISO) for m in rx.finditer(text)]
+    spans = [m.span() for rx in (_DATE_NUMERIC, _DATE_RANGE_DM, _DATE_RANGE_MD, _DATE_MD, _DATE_DM, _DATE_ISO) for m in rx.finditer(text)]
     if not spans:
         return text
     chars = list(text)
@@ -273,8 +287,44 @@ def _blank_dates(text: str) -> str:
     return "".join(chars)
 
 
+# An amount the user says was already paid ("rs 40,000 as advance", "advance of 25000 paid", "20000 is already paid to the hall") is money spent, not the total budget.
+_PAID_AMT = rf"(?P<amt>(?:(?:rs\.?|inr|₹|rupees?)\s{{0,2}})?(?:{_NUM})(?:\s{{0,2}}(?:lakhs?|lacs?|crores?|cr|k|thousand|l)\b)?(?:\s{{0,2}}(?:rs|inr|rupees?)\b)?)"
+_PAID_WORD = r"(?:paid|advance|advanced|deposit|deposited|token|booking(?:\s+amount)?)"
+_PAID_BEFORE = re.compile(rf"\b{_PAID_WORD}(?:\s+(?:of|amount\s+of|is|was|as|:))?\s{{0,2}}{_PAID_AMT}", re.I | re.A)
+_PAID_AFTER = re.compile(rf"(?<![\d,.]){_PAID_AMT}(?:\s+(?:is|was|has\s+been|have\s+been|already|as|towards|for\s+the|given\s+as)){{0,3}}\s+(?:already\s+)?{_PAID_WORD}\b", re.I | re.A)
+
+
+def _paid_spans(text: str) -> list[tuple[int, int, str]]:
+    return sorted({(m.start(), m.end(), m.group("amt").strip()) for rx in (_PAID_BEFORE, _PAID_AFTER) for m in rx.finditer(text)})
+
+
+def _blank_paid(text: str) -> str:
+    """``text`` with each amount that was already paid replaced by spaces: it is not a candidate for the budget."""
+    spans = _paid_spans(text)
+    if not spans:
+        return text
+    chars = list(text)
+    for start, end, _ in spans:
+        chars[start:end] = " " * (end - start)
+    return "".join(chars)
+
+
+def paid_amounts(text: str) -> list[int]:
+    """The rupee amounts the user wrote as already paid (advance, deposit, token), so the review can say they were not used as the budget."""
+    out = []
+    for _, _, amt in _paid_spans(text):
+        m = _MONEY.search(amt)
+        try:
+            value = Decimal(m.group("num").replace(",", "")) * (_UNIT[m.group("unit").lower().rstrip("s")] if m.group("unit") else 1) if m else None
+        except (InvalidOperation, KeyError):
+            value = None
+        if value is not None and value == value.to_integral_value() and value > 0:
+            out.append(int(value))
+    return list(dict.fromkeys(out))
+
+
 def _parse_budget(text: str, problems: list[str]) -> int | None:
-    text = _blank_dates(text)
+    text = _blank_paid(_blank_dates(text))
     values = set()
     for m in _MONEY.finditer(text):
         marked = m.group("cur") or m.group("unit") or m.group("cur2") or _stands_for_budget(text, m) or _BUDGET_WORD.match(m.group(0))
@@ -314,6 +364,7 @@ _HEALTH_AFTER = re.compile(_PREDICATE.format(_COND), re.I | re.A)
 _DIET_AFTER = re.compile(_PREDICATE.format(_DIET_WORD), re.I | re.A)
 _HEALTH_BEFORE = re.compile(rf"(?:{_COND})(?:\s+(?:to|for|in|of|from))?(?:\s+(?!and\b|or\b|with\b)\w+){{0,2}}\s?[:=-]?\s?$", re.I | re.A)  # "Allergic to peanuts: 2 people"
 _SOME_BEFORE = re.compile(r"\bsome\b(?:\s+\w+){0,2}\s*$", re.I | re.A)
+_EXCEPT_BEFORE = re.compile(r"\b(?:except(?:ing)?|apart\s+from|other\s+than|excluding|besides|barring)\s+(?:for\s+)?(?:about\s+|around\s+)?$", re.I | re.A)  # "everyone eats veg except 5 people": the 5 is the exception
 _WHOLE_BEFORE = re.compile(r"\b(?:of|out\s+of|among|amongst)\s+(?:(?:the|these|our|my|all)\s+)?$", re.I | re.A)
 _NEGATED_AFTER = re.compile(r"\b(?:no|not|none|never|nahi|nahin|without)\b", re.I | re.A)
 
@@ -338,7 +389,7 @@ def _guest_candidates(rx: "re.Pattern[str]", text: str) -> list[tuple[int, str, 
             kind = "health"
         elif _DIET_AFTER.match(after):
             kind = "diet"
-        elif _SOME_BEFORE.search(before):
+        elif _SOME_BEFORE.search(before) or _EXCEPT_BEFORE.search(before):
             kind = "some"
         else:
             kind = ""
