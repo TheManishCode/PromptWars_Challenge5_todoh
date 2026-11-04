@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 from collections.abc import Mapping, Sequence
 
+from eventmate.documents import sandbox
 from eventmate.web import limits
 
 WORKSPACES_IMPLEMENTED = True  # per-visitor workspaces exist (eventmate/workspaces.py) and the two-workspace suite covers every plan-scoped route
@@ -28,7 +29,7 @@ def mode(environ: Mapping[str, str]) -> str:
     return raw
 
 
-def shared_mode_problems(environ: Mapping[str, str], allowed_hosts: Sequence[str], env_file: Path | None = None, workspaces_implemented: bool | None = None) -> list[str]:
+def shared_mode_problems(environ: Mapping[str, str], allowed_hosts: Sequence[str], env_file: Path | None = None, workspaces_implemented: bool | None = None, netless: bool | None = None) -> list[str]:
     """What stops shared mode from starting. An empty list means it may start."""
     problems: list[str] = []
     if not (WORKSPACES_IMPLEMENTED if workspaces_implemented is None else workspaces_implemented):
@@ -46,6 +47,8 @@ def shared_mode_problems(environ: Mapping[str, str], allowed_hosts: Sequence[str
         problems.append("set EVENTMATE_PUBLIC_URL to the https:// address people will use; plain http is not served in shared mode")
     if len(environ.get("EVENTMATE_OWNER_TOKEN", "")) < 16:
         problems.append("set EVENTMATE_OWNER_TOKEN (at least 16 characters) so the status route is yours alone")
+    if not (bool(sandbox.netless_prefix()) if netless is None else netless):
+        problems.append("shared mode reads files that strangers upload or that vendors email, and only in a reader with no network; this machine cannot make one (it needs `unshare` and unprivileged user namespaces), so there is no weaker fallback: run where it works")
     if env_file is not None and env_file.exists():
         problems.append(f"a .env file exists at {env_file}: in shared mode secrets come from the real environment only; remove the file")
     return problems

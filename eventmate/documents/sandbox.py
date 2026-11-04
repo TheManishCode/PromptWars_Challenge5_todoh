@@ -94,6 +94,12 @@ def _group_rss(pgid: int) -> int:
     return total
 
 
+def must_be_netless(environ=None) -> bool:
+    """True when a reader that could not be cut off from the network must not run at all: always in shared mode (strangers' files), and wherever EVENTMATE_REQUIRE_NETLESS=1."""
+    environ = os.environ if environ is None else environ
+    return environ.get("EVENTMATE_REQUIRE_NETLESS") == "1" or environ.get("EVENTMATE_MODE", "").strip().lower() == "shared"
+
+
 @functools.cache
 def netless_prefix() -> tuple[str, ...]:
     """The command prefix that runs a reader in a network namespace of its own (no interface, not even loopback), or () where this machine cannot do that. Found by trying it once.
@@ -128,8 +134,8 @@ def convert(data: bytes, filename: str, *, timeout: float | None = None, memory:
         if heavy:  # the models were fetched ahead of time (python -m eventmate.documents.warm); a conversion never reaches the network for them
             env.update({"HF_HOME": model_home(), "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"})
         cut = list(netless_prefix())
-        if not cut and os.environ.get("EVENTMATE_REQUIRE_NETLESS") == "1":
-            raise DocumentError("this machine cannot cut the file reader off from the network, so reading that kind of file is switched off")
+        if not cut and must_be_netless():
+            raise DocumentError("this machine cannot cut the file reader off from the network, so reading files is switched off")
         argv = cut + (command or [sys.executable, "-m", "eventmate.documents.worker"]) + [str(src), ext]
         with open(out, "wb") as sink:
             proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=sink, stderr=subprocess.DEVNULL, cwd=work, env=env,

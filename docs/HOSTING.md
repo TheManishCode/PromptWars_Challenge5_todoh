@@ -2,7 +2,7 @@
 
 This page says what the application needs from whoever runs it, and what it does not do. It does not choose a provider, and it does not assume any cost: free and paid hosts differ, and the owner has to check the price, the limits and the terms of the one they pick.
 
-**Today the application is for one person on one machine (`EVENTMATE_MODE=local`, the default).** Shared mode (other people can reach it) is *not available in this build*: it refuses to start, because the per-visitor workspaces it needs do not exist yet (`hosting.WORKSPACES_IMPLEMENTED` is False). Everything below about shared mode describes what is already enforced at start-up, so the day workspaces land the checks are already in place. Until then, do not put this server where other people can reach it: every plan is visible to anyone who can reach the port.
+**The application is built for one person on one machine (`EVENTMATE_MODE=local`, the default).** Shared mode (other people can reach it) starts only when every check below passes, and its behaviour behind a real reverse proxy has not been verified. Per-visitor workspaces exist (`hosting.WORKSPACES_IMPLEMENTED` is True). Do not put the server where other people can reach it without shared mode: every plan is visible to anyone who can reach the port.
 
 ## What the server is
 - One Python process, `python -m eventmate.web`. State lives in files under the plan and log directories (JSONL, SQLite, one file per plan version) guarded by file locks, so run **one** process per data directory. Several processes on the same files are tolerated by the locks (they are tested), but a second host on a copy of the files is not supported.
@@ -19,6 +19,7 @@ This page says what the application needs from whoever runs it, and what it does
 | `EVENTMATE_TRUSTED_PROXY` = the proxy's address or network (comma separated) | The only source of client addresses (`X-Forwarded-For`, read from the right) and of "this was HTTPS" (`X-Forwarded-Proto`). Without it forwarded headers are ignored, so every caller looks like the proxy. |
 | `EVENTMATE_PUBLIC_URL` starting `https://` | Shared mode is not served over plain HTTP. |
 | `EVENTMATE_OWNER_TOKEN`, at least 16 characters | The owner-only status route. |
+| `unshare` and unprivileged user namespaces on the host | The file reader (PDF, Word, text, CSV and HTML quotes) runs with no network. If the host cannot do that, shared mode refuses to start, and a reader that cannot be cut off from the network is never run in shared mode. There is no weaker fallback. Locally the reader still runs without it unless `EVENTMATE_REQUIRE_NETLESS=1`. |
 | No `.env` file | Secrets (model keys, mailbox, gateway) come from the real environment only. |
 | Sending off | Real email and WhatsApp sending stays off for visitors; it needs its own explicit setting that is not built yet. |
 
