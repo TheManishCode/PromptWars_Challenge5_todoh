@@ -477,3 +477,82 @@ def test_two_flushes_at_once_email_the_owner_one_copy_not_two(tmp_path, em, worl
     for t in threads:
         t.join(10)
     assert sorted(results) == [0, 1] and len(owner_mail(world)) == 1, (results, len(owner_mail(world)))
+
+
+class FileChannel:
+    """An email channel whose outbox is a file, so separate processes can send through "the same mailbox" and be counted. ``delay`` slows the send so two flushes overlap."""
+
+    def __init__(self, outbox, delay=0.0):
+        self.outbox, self.delay = outbox, delay
+
+    def status(self):
+        from eventmate.schemas import ChannelStatus
+
+        return ChannelStatus(channel="email", can_send=True, can_receive=False, detail="ready")
+
+    def send(self, recipient, subject, body, thread=None):
+        import time
+
+        time.sleep(self.delay)
+        with open(self.outbox, "a") as f:
+            f.write(json.dumps({"to": recipient, "subject": subject}) + "\n")
+        return "<file-1@x.test>"
+
+
+def test_two_processes_flush_at_once_one_email_and_the_next_flush_sees_the_first_ones_send(tmp_path, em, pid, clock):
+    """Two operating-system processes flush the same digest together: exactly one email, the other steps aside. Then this process, which never saw that send in memory, flushes a second digest at once and
+    is held by the minimum gap, read from the log the other process wrote after the lock was taken; after the gap it sends. Nothing real is contacted: the mailbox is a file."""
+    import subprocess
+    import sys
+    import time
+    from pathlib import Path
+
+    outbox = tmp_path / "outbox.jsonl"
+    root = str(Path(__file__).resolve().parent.parent)
+    started(em, pid, clock)  # the digest to be emailed
+    enable(em)
+    go = tmp_path / "go"
+    script = f"""
+import sys, time
+from datetime import datetime
+from pathlib import Path
+sys.path.insert(0, {root!r})
+from eventmate.service import EventMate
+from tests.test_digest_notify import FileChannel
+from tests.test_jobs_worker import NoWhatsApp
+em = EventMate(log_dir={str(tmp_path / "l")!r}, plan_dir={str(tmp_path / "p")!r}, run_id="proc-" + sys.argv[1], channels={{"email": FileChannel({str(outbox)!r}, 1.0), "whatsapp": NoWhatsApp()}}, require_symbolic=False)
+at = datetime.fromisoformat({clock().isoformat()!r})
+em.notifier.now = em.digest_store.now = lambda: at
+Path({str(tmp_path)!r}, "ready-" + sys.argv[1]).write_text("ok")
+while not Path({str(go)!r}).exists():
+    time.sleep(0.02)
+Path({str(tmp_path)!r}, "result-" + sys.argv[1]).write_text(str(em.notifier.flush()))
+"""
+    procs = [subprocess.Popen([sys.executable, "-c", script, str(i)], stderr=subprocess.PIPE, text=True) for i in (1, 2)]
+    try:
+        for _ in range(800):
+            if all((tmp_path / f"ready-{i}").exists() for i in (1, 2)):
+                break
+            for p in procs:
+                if p.poll() is not None:
+                    pytest.fail("a flusher died: " + p.stderr.read()[-600:])
+            time.sleep(0.05)
+        else:
+            pytest.fail("the flushers never became ready")
+        go.write_text("go")
+        for p in procs:
+            p.wait(timeout=30)
+            assert p.returncode == 0, p.stderr.read()[-600:]
+    finally:
+        for p in procs:
+            if p.poll() is None:
+                p.kill()
+    results = sorted(int((tmp_path / f"result-{i}").read_text()) for i in (1, 2))
+    assert results == [0, 1], results  # one sent, one stepped aside
+    assert len(outbox.read_text().splitlines()) == 1  # the owner has one copy
+
+    started(em, pid, clock, goal="a second quote request")  # a new digest, unsent
+    em.notifier._channel = lambda: FileChannel(outbox)
+    assert em.notifier.flush() == 0 and len(outbox.read_text().splitlines()) == 1  # held by the minimum gap that the other process's send set
+    clock.advance(minutes=31)
+    assert em.notifier.flush() == 1 and len(outbox.read_text().splitlines()) == 2
