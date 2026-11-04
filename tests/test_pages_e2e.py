@@ -325,7 +325,7 @@ def test_an_allergy_the_reader_cannot_name_is_shown_to_the_user_and_keeps_the_pl
     assert "Allergy to clarify" in dialog and "kiwi" in dialog and "could not name" in dialog
     page.click("#build")
     page.wait_for_selector("#eventline:has-text('version 1')")
-    page.wait_for_selector("text=allergy not understood")
+    page.wait_for_selector("text=allergy or food restriction not understood")
     page.wait_for_selector("#brief-dialog", state="hidden")
     page.wait_for_timeout(600)
     clean(page, ctx, seen)

@@ -17,7 +17,7 @@ from eventmate.planning.cities import BARE as _CITY
 from eventmate.schemas import Allergen as A
 
 _F = re.I | re.A
-_CUE = re.compile(r"\b(?:allerg\w*|alerji|elerji|celiac|coeliac|intoleran\w*)\b", _F)
+_CUE = re.compile(r"\b(?:allerg\w*|alerji|elerji|celiac|coeliac|intoleran\w*|(?:can'?t|cannot|can\s+not|doesn'?t|does\s+not|won'?t|unable\s+to)\s+(?:eat|have|take|touch|digest)|avoid(?:s|ing)?)\b", _F)  # "can't eat X" and "avoid X" are read as an allergy: the harmful error is to miss one
 _NEG_START = re.compile(r"^\W*(?:no|not|without|never|don'?t|dont|nahi|nahin|nope|nobody|none|nothing|no\s?one|noone)\b", _F)
 _NEG_CUE = re.compile(r"\b(?:nobody|none|no\s?one|noone|koi\s+nahi)\b.{0,80}?(?:allerg|alerji|intoleran)|(?:allerg|alerji|intoleran)\w*\s+(?:\w+\s+){0,2}(?:nobody|none)\b|\b(?:no|not|never|nahi|nahin|without)\s+(?:\w+\s+){0,2}(?:allerg|alerji|intoleran)|\b(?:allerg\w*|alerji)\s+(?:\w+\s+){0,2}(?:nahi|nahin|nope)\b", _F)
 _SPLIT_SENTENCE = re.compile(r"[.;!?\n]|\b(?:but|however|although|except|yet|lekin|magar)\b", _F)
@@ -42,12 +42,13 @@ _VOCAB: list[tuple[re.Pattern[str], tuple[A, ...]]] = [
     (re.compile(r"\blupins?\b", _F), (A.LUPIN,)),
 ]
 # "<x>-free" outside an allergy sentence: read only for the foods that are not already a diet here ("gluten free" is the gluten-free diet, handled there)
-_FREE_OF = re.compile(r"\b(?:peanut|groundnut|nut|tree[- ]?nut|dairy|egg|shellfish|fish|soy|soya|sesame|mustard|celery|lupin|sulph?ite)[- ]free\b", _F)
+_FREE_OF = re.compile(r"\b(?:lactose|peanut|groundnut|nut|tree[- ]?nut|dairy|egg|shellfish|fish|soy|soya|sesame|mustard|celery|lupin|sulph?ite)[- ]free\b", _F)
 _STOP = frozenset("""a an the to of and or also is are was has have had hai hain se ko ka ki ke bhi aur my his her their our your its i we he she they me us him them it
  some any many few very too so more most mild severe serious bad slight little especially mainly mostly really quite extremely badly highly seriously hugely
  allergic allergy allergies alerji intolerant intolerance for from with in on at by as be been being that this these those there here who whom which what when where
  guest guests people person persons kids kid child children son daughter mother father mom dad wife husband friend friends family anyone someone everyone one two three
- mere meri mera hamare humare unhe unko usse unse uska uski""".split())
+ mere meri mera hamare humare unhe unko usse unse uska uski
+ spicy spice spices food foods meat chicken mutton lamb beef pork onion onions garlic alcohol sugar salt oil sweets sweet non veg vegetarian""".split())
 _BENIGN = re.compile(
     r"\d|\b(?:veg\w*|non|vegan|jain|halal|gluten|indoor|outdoor|cater\w*|food|meals?|photo\w*|reminders?|invit\w*|budget|rs|inr|rupees?|lakh|lac|crore|k|party|wedding|birthday|"
     r"engagement|conference|corporate|event|venue|please|thanks|thank|jan\w*|feb\w*|mar\w*|apr\w*|may|jun\w*|jul\w*|aug\w*|sep\w*|oct\w*|nov\w*|dec\w*|in|at|on|for|under|around|about)\b",
@@ -93,8 +94,8 @@ def read(text: str) -> AllergyReading:
                 before, after = item[: cue.start()], item[cue.end():]
                 named = _named(item)  # the cue itself can name one ("celiac")
                 words = _leftover(after) or (_leftover(before)[-1:] if not named else [])
-                if not named and not words:
-                    words = [item.strip()]  # "he has an allergy": said, not named
+                if not named and not words and re.match(r"allerg|alerji|elerji|intoleran", cue.group(0), _F):
+                    words = [item.strip()]  # "he has an allergy": said, not named ("avoid onion" is a diet, read elsewhere)
                 found += named
                 if words:
                     unclear.append(_phrase(words))

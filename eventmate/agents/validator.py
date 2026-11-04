@@ -344,7 +344,23 @@ class ValidatorAgent:
                 name="allergy_unclear",
                 detail=f"you mentioned an allergy we could not name: {said}. We do not treat that as no allergy",
                 repair="say exactly what the allergy is (for example 'peanut' or 'dairy'), and ask each caterer to confirm in writing that they can serve without it",
-                label=f"allergy not understood ({said})",
+                label=f"allergy or food restriction not understood ({said})",
+            ))
+        if r.diet_notes:
+            what = ", ".join(r.diet_notes)
+            items.append(UnverifiedItem(
+                name="diet_unconfirmed",
+                detail=f"you asked for: {what}. Vendor records do not say whether a caterer can do this, so it is neither passed nor failed",
+                repair="ask each caterer, in writing, whether they can do it and keep their reply",
+                label=f"food requirement not confirmed with the caterer ({what})",
+            ))
+        if r.diet_unclear:
+            said = "; ".join(f"'{w}'" for w in r.diet_unclear)
+            items.append(UnverifiedItem(
+                name="diet_unclear",
+                detail=f"you mentioned a food restriction we could not place: {said}. We do not treat that as no restriction",
+                repair="say plainly what the restriction is, and ask each caterer to confirm in writing that they can meet it",
+                label=f"food restriction not understood ({said})",
             ))
         return items
 

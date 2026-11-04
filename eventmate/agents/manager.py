@@ -19,7 +19,7 @@ from collections.abc import Iterable, Sequence
 
 from pydantic import ValidationError
 
-from eventmate.planning import allergies
+from eventmate.planning import allergies, diets
 from eventmate.planning import cities as city_aliases
 from eventmate.planning.community import load_profiles, match_subtype
 from eventmate.agents.budget import BudgetAgent
@@ -122,10 +122,10 @@ _EVENT_TYPES = [
 ]
 _DIETS = [
     (re.compile(r"\b(?:non[- ]?veg(?:etarian)?|maansahari|mansahari)\b", re.I | re.A), DietaryRequirement.NON_VEGETARIAN),
-    (re.compile(r"(?<!non-)(?<!non )\b(?:veg(?:etarian)?|shakahari|shaakahaari)\b", re.I | re.A), DietaryRequirement.VEGETARIAN),
+    (re.compile(r"(?<!non-)(?<!non )\b(?:veg(?:etarian)?|veggie|shakahari|shaakahaari)\b|\b(?:doesn'?t|does\s+not|don'?t|do\s+not)\s+eat\s+(?:any\s+)?(?:meat|non[- ]?veg|chicken|mutton)\b", re.I | re.A), DietaryRequirement.VEGETARIAN),
     (re.compile(r"\bvegan\b", re.I | re.A), DietaryRequirement.VEGAN),
     (re.compile(r"\bjain\b", re.I | re.A), DietaryRequirement.JAIN),
-    (re.compile(r"\bhalal\b", re.I | re.A), DietaryRequirement.HALAL),
+    (re.compile(r"\bhal+a+l\b", re.I | re.A), DietaryRequirement.HALAL),
     (re.compile(r"\bgluten[- ]free\b", re.I | re.A), DietaryRequirement.GLUTEN_FREE),
 ]
 _CATERER = re.compile(r"\b(?:cater(?:er|ers|ing)?|food|meals?)\b", re.I | re.A)
@@ -423,6 +423,7 @@ def parse_request(
     setting = _parse_setting(text, assumptions)
     services, dietary = _parse_services(text, assumptions)
     allergy = allergies.read(text)
+    diet_more = diets.read(text)
     reminders = _parse_reminders(text, assumptions)
 
     assumptions = list(dict.fromkeys(assumptions))
@@ -438,6 +439,8 @@ def parse_request(
             dietary=dietary,
             allergens=allergy.allergens,
             allergy_unclear=allergy.unclear,
+            diet_notes=diet_more.notes,
+            diet_unclear=diet_more.unclear,
             venue_setting=setting,
             services=tuple(services),
             reminders=tuple(reminders),
