@@ -177,9 +177,11 @@ class EventMate:
         self._clock(today)
         return self.manager.run(text, today=today, guest_list_id=guest_list_id)
 
-    def intake_turn(self, messages, prior: intake.IntakeDraft | None = None, today: date | None = None) -> intake.IntakeTurn:
-        """Propose a draft from the organiser's words. Nothing is planned or stored until ``confirm_intake``."""
-        return intake.propose(messages, prior, today or date.today(), self.repo.cities(), self.logs, self.llm)
+    def intake_turn(self, messages, prior: intake.IntakeDraft | None = None, today: date | None = None, expecting: str | None = None, answer: intake.IntakeAnswer | None = None) -> intake.IntakeTurn:
+        """Propose a draft from the organiser's words. Nothing is planned or stored until ``confirm_intake``.
+
+        ``expecting`` is the fact the last question was about; ``answer`` is an option the user pressed (see ``intake.propose``)."""
+        return intake.propose(messages, prior, today or date.today(), self.repo.cities(), self.logs, self.llm, expecting=expecting, answer=answer)
 
     def confirm_intake(self, draft: intake.IntakeDraft, raw_text: str, today: date | None = None, guest_list_id: str | None = None, source: str = "rule:parser") -> PlanOutcome:
         """The user confirmed the review card: run the full pipeline on exactly what they approved."""

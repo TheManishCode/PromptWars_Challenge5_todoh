@@ -24,8 +24,9 @@ from pydantic import Field, ValidationError, field_validator
 
 from eventmate.agents import manager as mgr
 from eventmate.llm import LLMClient, PromptError, PromptStore
-from eventmate.planning import allergies, diets
+from eventmate.planning import allergies, diets, reading
 from eventmate.planning import cities as city_aliases
+from eventmate.planning.questions import EXPECTABLE, Pick, Unresolved, clip, describe_changes, long_date, money
 from eventmate.planning.community import load_profiles, match_subtype
 from eventmate.logs import RunLogs
 from eventmate.env import redact_secrets
@@ -55,11 +56,14 @@ FIELDS = tuple(f for f in ("event_type", "community_subtype", "guest_count", "ci
 _CITY = re.compile(r"[^\W\d_](?:[^\W\d_]|[ .'-])*")  # letters, spaces, . ' - only
 MAX_CITY_WORDS, MAX_CITY_CHARS = 3, 40  # "Navi Mumbai" fits; a sentence or payload does not
 _QUESTIONS = {
-    "guest_count": "How many guests are you expecting?",
-    "city": "Which city is it in?",
-    "event_date": "What date is the event?",
-    "budget_total": "What is your total budget in rupees?",
+    "guest_count": f"How many guests are you expecting? {reading.EXAMPLE_GUESTS}",
+    "city": "Which city is it in? Type just the city name, for example Pune.",
+    "event_date": f"What date is the event? {reading.EXAMPLE_DATE}",
+    "budget_total": f"What is your total budget in rupees? {reading.EXAMPLE_BUDGET}",
 }
+_SCALARS = ("guest_count", "budget_total", "event_date", "city")  # facts with one value: an open question about one of them leaves it empty until the user answers
+_WHAT = {"guest_count": "a guest count", "budget_total": "a budget", "event_date": "a date", "city": "a city", "allergens": "an allergy"}
+MAX_OPEN_QUESTIONS = 6
 _FENCE = re.compile(r"<<<|>>>")
 
 
@@ -90,6 +94,7 @@ class IntakeDraft(_Model):
     venue_setting: VenueSetting | None = None
     services: tuple[VendorCategory, ...] = ()
     reminders: tuple[ReminderKind, ...] = ()
+    unresolved: tuple[Unresolved, ...] = Field(default=(), max_length=MAX_OPEN_QUESTIONS)  # what the user wrote that could not be read safely; the draft is not ready while any is open
 
     _check = field_validator("city")(_plain)
 
@@ -114,14 +119,25 @@ class IntakeDraft(_Model):
 class IntakeChoice(_Model):
     """The organiser gave two different values for one fact. They pick; we never resolve it for them."""
 
-    field: Literal["guest_count", "budget_total", "event_date"]
-    prompt: str = Field(max_length=120)
-    options: tuple[str, ...] = Field(min_length=2, max_length=6)
+    field: Literal["guest_count", "budget_total", "event_date", "city", "allergens", "dietary", "number"]
+    prompt: str = Field(max_length=320)
+    options: tuple[str, ...] = Field(min_length=1, max_length=6)  # the values the user can choose, as text
+    key: str = ""  # which open question this is: the page sends it back with the number of the option pressed
+    labels: tuple[str, ...] = ()  # what each button says, including "not that"; the number of a label is the number of its pick
+
+
+class IntakeAnswer(_Model):
+    """The user pressed one of the options of an open question. Sent instead of reading any text: the chosen value is applied exactly."""
+
+    key: str = Field(min_length=1, max_length=60)
+    pick: int = Field(ge=0, lt=MAX_OPEN_QUESTIONS)
 
 
 class IntakeTurn(_Model):
     draft: IntakeDraft
     choices: tuple[IntakeChoice, ...] = ()
+    changes: tuple[str, ...] = ()  # what this message changed in the draft, in words ("Guests changed from 100 to 150")
+    asking: str | None = None  # the fact the question is about: the page sends it back as ``expecting`` so a bare answer ("100") lands in the right field
     missing: tuple[str, ...] = ()
     flags: tuple[str, ...] = ()  # fields the AI filled that the parser could not corroborate: ask the user to check
     notes: tuple[str, ...] = ()
@@ -133,24 +149,33 @@ class IntakeTurn(_Model):
 # ------------------------------------------------------------ deterministic
 
 
-def _ambiguity_choices(t: str, problems: list[str], budget_problems: list[str]) -> list[IntakeChoice]:
-    """A question with options for each field the text gave several values for (at most six)."""
-    out: list[IntakeChoice] = []
+def _ambiguity_questions(t: str, problems: list[str], budget_problems: list[str], skip: set[str]) -> list[Unresolved]:
+    """A question with a button for each value, for each fact the text gave several different values for (at most six). ``skip``: facts a safety check already asked about."""
+    out: list[Unresolved] = []
     counts = {int(m.group(1)) for rx in mgr._GUESTS for m in rx.finditer(t)}
-    if 1 < len(counts) <= 6:
-        out.append(IntakeChoice(field="guest_count", prompt="Which guest count is right?", options=tuple(str(c) for c in sorted(counts))))
+    if "guest_count" not in skip and 1 < len(counts) <= 6:
+        out.append(Unresolved(key="guest_count", field="guest_count", said=", ".join(map(str, sorted(counts))), question="Which guest count is right?",
+                              picks=tuple(Pick(label=f"{c} guests", field="guest_count", value=str(c)) for c in sorted(counts))))
     dates = sorted(set(re.findall(r"\d{4}-\d{2}-\d{2}", next((p for p in problems if p.startswith("multiple different event dates")), ""))))
-    if 1 < len(dates) <= 6:
-        out.append(IntakeChoice(field="event_date", prompt="Which date is right?", options=tuple(dates)))
-    budgets = re.findall(r"\d[\d,]*", next((p for p in budget_problems if p.startswith("multiple different budgets")), ""))
-    if 1 < len(budgets) <= 6:
-        out.append(IntakeChoice(field="budget_total", prompt="Which budget is right?", options=tuple(b.replace(",", "") for b in budgets)))
+    if "event_date" not in skip and 1 < len(dates) <= 6:
+        out.append(Unresolved(key="event_date", field="event_date", said=", ".join(dates), question="Which date is right?",
+                              picks=tuple(Pick(label=long_date(date.fromisoformat(d)), field="event_date", value=d) for d in dates)))
+    budgets = [b.replace(",", "") for b in re.findall(r"\d[\d,]*", next((p for p in budget_problems if p.startswith("multiple different budgets")), ""))]
+    if "budget_total" not in skip and 1 < len(budgets) <= 6:
+        out.append(Unresolved(key="budget_total", field="budget_total", said=", ".join(budgets), question="Which budget is right?",
+                              picks=tuple(Pick(label=money(int(b)), field="budget_total", value=b) for b in budgets)))
     return out
+
+
+_WEDDING_FUNCTION = re.compile(r"\b(?:mehn?dee?|mehendi|sangeet|haldi|reception)\b", re.I | re.A)
+_WEDDING_WORD = re.compile(r"\b(?:wedding|shaa?di|marriage|vivah|nikah)\b", re.I | re.A)
 
 
 def _read_event_type(t: str, notes: list[str]) -> tuple[EventType | None, str | None]:
     """(event type, community subtype); a community reading from a keyword other than "community" is flagged for the user to check."""
     event_type = next((et for rx, et in mgr._EVENT_TYPES if rx.search(t)), None)
+    if event_type is EventType.WEDDING and (m := _WEDDING_FUNCTION.search(t)) and not _WEDDING_WORD.search(t):
+        notes.append(f'I read "{m.group(0)}" as part of a wedding. Please check that it is right.')
     if event_type is not None or (hit := match_subtype(t)) is None:
         return event_type, None
     label = load_profiles().get(hit[0]).label
@@ -174,40 +199,58 @@ def _read_services_and_reminders(t: str) -> tuple[list[VendorCategory], list[Rem
     return services, reminders
 
 
-def _rule_draft(text: str, today: date, notes: list[str], choices: list[IntakeChoice]) -> IntakeDraft:
-    """Best-effort field-by-field read of ``text`` with the deterministic parser; failures become notes."""
+class RuleReading(_Model):
+    """What the rule reader made of one message: the facts it is sure of, the questions it could not settle, and the cities the user said it is not."""
+
+    draft: IntakeDraft
+    unresolved: tuple[Unresolved, ...] = ()
+    removed_cities: tuple[str, ...] = ()
+
+
+def _rule_draft(text: str, today: date, notes: list[str], known: tuple[str, ...], prior: IntakeDraft, answering: str | None = None) -> RuleReading:
+    """Best-effort field-by-field read of ``text`` with the deterministic parser. A fact that cannot be read safely is left empty and becomes a question, never a guess; failures become notes."""
     t = unicodedata.normalize("NFKC", text)
     problems: list[str] = []
     assumptions: list[str] = []
     t = mgr._ascii_digits(t, problems, assumptions)
-    guests = mgr._parse_guests(t, [])
-    city = mgr._parse_city(t, (), [])
+    t = reading.number_words_to_digits(t)
+    asked: list[Unresolved] = []
+    guest_question = reading.screen_guests(t)
+    guests = None if guest_question else mgr._parse_guests(t, [])
+    budget_question = reading.screen_budget(t, guests or prior.guest_count)
+    city = city_aliases.read(t, known, answer=answering == "city")
     when = mgr._parse_dates(t, today, problems, assumptions)
     budget_problems: list[str] = []
-    budget = mgr._parse_budget(t, budget_problems)
+    budget = None if budget_question else mgr._parse_budget(t, budget_problems)
+    asked += [q for q in (guest_question, budget_question, city.unresolved) if q]
+    if when is None and not any("multiple different" in p for p in problems):
+        if typo := reading.month_typo(t, today):
+            asked.append(typo)
+        elif hint := reading.date_hint(t):
+            notes.append(hint)
     # only ambiguity or invalid values deserve a note; plain absence becomes a question
     notes.extend(p for p in problems if "not found" not in p and not p.startswith("multiple different event dates"))
     notes.extend(a for a in assumptions if a.startswith("year not given"))
-    choices.extend(_ambiguity_choices(t, problems, budget_problems))
+    asked += _ambiguity_questions(t, problems, budget_problems, {q.field for q in asked})
     event_type, subtype = _read_event_type(t, notes)
     wants_in, wants_out = mgr._mentioned(mgr._INDOOR, t), mgr._mentioned(mgr._OUTDOOR, t)
     setting = VenueSetting.INDOOR if wants_in and not wants_out else VenueSetting.OUTDOOR if wants_out and not wants_in else None
     services, reminders = _read_services_and_reminders(t)
-    return _safe_draft(
-        event_type=event_type,
-        community_subtype=subtype,
-        guest_count=guests,
-        city=city,
-        event_date=when,
-        budget_total=budget,
-        dietary=tuple(d for rx, d in mgr._DIETS if mgr._mentioned(rx, t)),
-        allergens=allergies.read(t).allergens,
-        allergy_unclear=allergies.read(t).unclear,
-        diet_notes=diets.read(t).notes,
-        diet_unclear=diets.read(t).unclear,
-        venue_setting=setting,
-        services=tuple(services),
-        reminders=tuple(reminders),
+    allergy, diet = allergies.read(t), diets.read(t)
+    suspects = allergies.suspects(t)
+    asked += [allergies.question_for(sus) for sus in suspects]
+    consumed = {sus.said.lower() for sus in suspects if sus.kind == "typo_word"}
+    allergy_unclear = tuple(u for u in allergy.unclear if not consumed & {w.lower() for w in u.split()})  # a word offered back as "did you mean peanut?" is not also reported as an allergy that was not understood
+    dietary = tuple(d for rx, d in mgr._DIETS if mgr._mentioned(rx, t))
+    if not dietary and (misspelt := diets.misspelt_diet(t)):
+        asked.append(misspelt)
+    return RuleReading(
+        draft=_safe_draft(
+            event_type=event_type, community_subtype=subtype, guest_count=guests, city=city.city, event_date=when, budget_total=budget, dietary=dietary, allergens=allergy.allergens,
+            allergy_unclear=allergy_unclear, diet_notes=diet.notes, diet_unclear=diet.unclear, venue_setting=setting, services=tuple(services), reminders=tuple(reminders),
+        ),
+        unresolved=tuple({u.key: u for u in asked}.values())[:MAX_OPEN_QUESTIONS],
+        removed_cities=city.removed,
     )
 
 
@@ -273,7 +316,7 @@ def _llm_draft(llm: LLMClient, prompts: PromptStore, logs: RunLogs, message: str
         return None, f"message not sent to a model: {exc}"
     user = render_template(body, {
         "today": today.isoformat(),
-        "draft": _FENCE.sub("", prior.model_dump_json(exclude_none=True)),
+        "draft": _FENCE.sub("", prior.model_dump_json(exclude_none=True, exclude={"unresolved"})),
         "message": _FENCE.sub("", Placeholders().mask(clean_message)),  # contact details never reach the model
         "community_subtypes": ", ".join(load_profiles().profiles),
     })
@@ -340,17 +383,28 @@ def propose(
     logs: RunLogs,
     llm: LLMClient | None = None,
     prompts: PromptStore | None = None,
+    *,
+    expecting: str | None = None,
+    answer: IntakeAnswer | None = None,
 ) -> IntakeTurn:
-    """Read the newest message, merge it into the reviewed draft and say what is still needed. Pure proposal."""
+    """Read the newest message, merge it into the reviewed draft and say what is still needed. Pure proposal.
+
+    Only the newest message is read: everything earlier is in ``prior``. ``expecting`` is the fact the last question was about (the page sends back ``IntakeTurn.asking``), so a bare
+    "100" answers "how many guests?". ``answer`` is an option the user pressed: it is applied exactly and no text is read."""
     clean = check_messages(messages)
     latest, prior = clean[-1], prior or IntakeDraft()
+    if expecting is not None and expecting not in EXPECTABLE:
+        raise IntakeError(f"cannot expect {expecting!r}; it is one of: " + ", ".join(EXPECTABLE))
     known = tuple(known_cities)
+    expecting = expecting or asking_of(prior)
     notes: list[str] = []
-    choices: list[IntakeChoice] = []
-    rules = _rule_draft(latest, today, notes, choices)
-    source = "rule:parser"
-    flags: tuple[str, ...] = ()
-    new = rules
+    source, flags = "rule:parser", ()
+    if answer is not None:
+        draft = _apply_answer(prior, answer)
+        return _turn(draft, prior, notes, known, source, flags)
+    read = _rule_draft(latest, today, notes, known, prior, expecting)
+    new, asked = read.draft, list(read.unresolved)
+    new, asked = _bare_answer(expecting, latest, known, prior, new, asked, notes)
     if llm is not None:
         ai, reason = _llm_draft(llm, prompts or PromptStore(), logs, latest, prior, today, "intake")
         if ai is None:
@@ -361,15 +415,134 @@ def propose(
             )
         else:
             ai = _grounded(ai, latest, prior).model_copy(update={"allergens": (), "allergy_unclear": (), "diet_notes": (), "diet_unclear": ()})  # a model may not state or drop an allergy
-            source, new = _source_label(llm), _merge(rules, ai)  # the parser's reading is the baseline
-            flags = tuple(f for f in FIELDS if _uncorroborated(getattr(ai, f), getattr(rules, f)))
+            source, new_ai = _source_label(llm), _merge(new, ai)  # the parser's reading is the baseline
+            flags = tuple(f for f in FIELDS if _uncorroborated(getattr(ai, f), getattr(new, f)))
+            new = new_ai
     draft = _merge(prior, new)
-    if rules.event_type == EventType.COMMUNITY and any("I read this as a community event" in n for n in notes) and "event_type" not in flags:
+    if new.event_type == EventType.COMMUNITY and any("I read this as a community event" in n for n in notes) and "event_type" not in flags:
         flags = tuple(flags) + ("event_type",)  # inferred from a keyword, not stated: the review card asks the user to check it
     if draft.event_type != EventType.COMMUNITY and draft.community_subtype is not None:
         draft = draft.model_copy(update={"community_subtype": None})
-    if choices:  # an ambiguity in the user's own words is theirs to settle: no earlier or AI-picked value stands in
-        draft = draft.model_copy(update={c.field: None for c in choices})
+    if draft.event_date and draft.event_date < today:
+        notes.append(f"{draft.event_date.isoformat()} is in the past. Please correct the date.")
+        draft = draft.model_copy(update={"event_date": None})
+    gone = {city_aliases.canonical(c) for c in read.removed_cities}
+    if draft.city and city_aliases.canonical(draft.city) in gone and not new.city:
+        draft = draft.model_copy(update={"city": None})  # "not Pune": the earlier city does not stand in
+    # an ambiguity in the user's own words is theirs to settle: no earlier or AI-picked value stands in, and the question stays open until they answer
+    draft = draft.model_copy(update={"unresolved": _still_open(prior.unresolved, asked, new), **{q.field: None for q in asked if q.field in _SCALARS}})
+    if not asked and not new_found(new) and (number := reading.lone_number(latest)) is not None and prior_has_facts(prior) and not _answered(expecting, new):
+        asked = [reading.number_question(number, prior.guest_count, prior.budget_total)]
+        draft = draft.model_copy(update={"unresolved": _still_open(prior.unresolved, asked, new)})
+    return _turn(draft, prior, notes, known, source, flags, read.removed_cities, latest, new)
+
+
+def _answered(field: str | None, new: IntakeDraft) -> bool:
+    return field is not None and getattr(new, field, None) not in (None, ())
+
+
+def new_found(new: IntakeDraft) -> bool:
+    """Did the message give any fact at all?"""
+    return any(getattr(new, f) not in (None, ()) for f in FIELDS if f not in ("services", "reminders"))
+
+
+def prior_has_facts(prior: IntakeDraft) -> bool:
+    return any(getattr(prior, f) not in (None, ()) for f in ("guest_count", "city", "event_date", "budget_total", "event_type"))
+
+
+def asking_of(draft: IntakeDraft) -> str | None:
+    """The fact the draft's open question is about (the first open question, else the first missing fact), or None when the question is not one a bare answer can fill."""
+    if draft.unresolved:
+        field = draft.unresolved[0].field
+        return field if field in EXPECTABLE else None
+    missing = draft.missing()
+    return missing[0] if missing else None
+
+
+def _bare_answer(expecting, text, known, prior, new: IntakeDraft, asked: list[Unresolved], notes: list[str]) -> tuple[IntakeDraft, list[Unresolved]]:
+    """The message as the answer to the question that was open: "100" for guests, "2 lakh" for the budget, "thane" for the city, "peanuts" for an allergy. Only fills a fact the message
+    did not already give by its own words, and only when the whole message is plausibly that answer."""
+    if expecting is None or _answered(expecting, new) or any(q.field == expecting for q in asked):
+        return new, asked
+    if expecting == "guest_count":
+        value, question = reading.bare_guests(text)
+        update = {"guest_count": value} if value else {}
+    elif expecting == "budget_total":
+        value, question = reading.bare_budget(text, prior.guest_count)
+        update = {"budget_total": value} if value else {}
+    elif expecting == "city":
+        got = city_aliases.read(text, known, answer=True)
+        question, update = got.unresolved, ({"city": got.city} if got.city else {})
+    elif expecting == "allergens":
+        got = allergies.read("allergic to " + text)
+        suspects = allergies.suspects("allergic to " + text)
+        question = allergies.question_for(suspects[0]) if suspects else None
+        update = {"allergens": got.allergens, "allergy_unclear": got.unclear} if (got.allergens or got.unclear) and not suspects else {}
+    else:
+        return new, asked
+    if question:
+        asked = [*asked, question]
+    elif not update and not new_found(new) and prior_has_facts(prior):
+        notes.append(f'I could not read "{clip(text, 40)}" as {_WHAT[expecting]}.' + (" Type just the city name, for example Pune." if expecting == "city" else ""))
+    return (_safe_merge(new, update) if update else new), asked
+
+
+def _safe_merge(base: IntakeDraft, update: dict) -> IntakeDraft:
+    try:
+        return IntakeDraft.model_validate({**base.model_dump(), **update})
+    except ValidationError:
+        return base
+
+
+def _still_open(before: Sequence[Unresolved], asked: Sequence[Unresolved], new: IntakeDraft) -> tuple[Unresolved, ...]:
+    """The questions that stay open: the old ones the message did not settle, and the new ones. Asking about a key again replaces it; giving the value plainly closes it."""
+    renewed = {q.key for q in asked}
+    kept = []
+    for q in before:
+        gave_value = q.field in _SCALARS and getattr(new, q.field) is not None
+        gave_number = q.field == "number" and (new.guest_count is not None or new.budget_total is not None)
+        named_allergy = q.field == "allergens" and q.key.startswith("allergy:") and not q.picks and bool(new.allergens)
+        said_diet = q.field == "dietary" and bool(new.dietary)
+        if q.key in renewed or gave_value or gave_number or named_allergy or said_diet:
+            continue
+        kept.append(q)
+    return tuple([*kept, *asked])[:MAX_OPEN_QUESTIONS]
+
+
+def _apply_answer(prior: IntakeDraft, answer: IntakeAnswer) -> IntakeDraft:
+    """Apply the option the user pressed. Nothing is read from text: the value is the one the question offered, checked as any draft is."""
+    item = next((u for u in prior.unresolved if u.key == answer.key), None)
+    if item is None:
+        raise IntakeError("that question is not open any more; answer the one shown")
+    if answer.pick >= len(item.picks):
+        raise IntakeError("that is not one of the options")
+    pick = item.picks[answer.pick]
+    fields = prior.model_dump()
+    try:
+        if pick.value is not None:
+            if pick.field in ("guest_count", "budget_total"):
+                fields[pick.field] = int(pick.value)
+            elif pick.field == "event_date":
+                fields["event_date"] = date.fromisoformat(pick.value)
+            elif pick.field == "city":
+                fields["city"] = pick.value
+            elif pick.field == "allergens":
+                fields["allergens"] = tuple(dict.fromkeys((*prior.allergens, *(Allergen(v) for v in pick.value.split(",")))))
+            elif pick.field == "dietary":
+                fields["dietary"] = tuple(dict.fromkeys((*prior.dietary, DietaryRequirement(pick.value))))
+        elif pick.keep_words:
+            words = re.sub(r"[^A-Za-z' -]", "", item.said).strip()[:60]
+            fields["allergy_unclear"] = tuple(dict.fromkeys((*prior.allergy_unclear, *([words] if words else ()))))[:5]
+        fields["unresolved"] = tuple(u for u in prior.unresolved if u.key != item.key)
+        return IntakeDraft.model_validate(fields)
+    except ValidationError as exc:
+        raise IntakeError("that option cannot be applied: " + "; ".join(e["msg"] for e in exc.errors())) from exc
+    except ValueError as exc:  # a number, a date or a name in the option that does not parse
+        raise IntakeError("that option cannot be applied") from exc
+
+
+def _turn(draft: IntakeDraft, prior: IntakeDraft, notes: list[str], known: tuple[str, ...], source: str, flags: tuple[str, ...], removed: tuple[str, ...] = (), latest: str = "", new: IntakeDraft | None = None) -> IntakeTurn:
+    """Everything the page needs after a message: the draft, what it changed, the one question to answer next, and the notes."""
     if draft.allergy_unclear:
         notes.append("You mentioned an allergy I could not name (" + "; ".join(draft.allergy_unclear) + "). Write what it is, for example 'peanut' or 'dairy'. Until then the plan will say the allergy was not understood.")
     if draft.diet_notes:
@@ -379,12 +552,23 @@ def propose(
     cities = {c.lower() for c in known}
     if draft.city and cities and draft.city.lower() not in cities:
         notes.append(f"I have no vendor records for {draft.city} yet, so a plan there will likely fail.")
-    if draft.event_date and draft.event_date < today:
-        notes.append(f"{draft.event_date.isoformat()} is in the past. Please correct the date.")
-        draft = draft.model_copy(update={"event_date": None})
+    changes = describe_changes(prior, draft) if prior_has_facts(prior) else ()
+    if prior_has_facts(prior) and latest and not changes and not draft.unresolved and not notes:
+        notes.append("I could not find a change in that message. Say what to change, for example “150 guests”, “budget 3 lakh”, “move it to 19 December 2026” or “not Pune, Mumbai”.")
+    if not prior_has_facts(prior) and latest and new is not None and not new_found(new) and not draft.unresolved:
+        notes.append("I could not find any event details in that message. Try something like: 120 guests in Pune on 12 December, budget 2 lakh.")
+    if draft.event_type is None and (new_found(draft) or draft.unresolved):
+        notes.append('I did not recognise the event type, so it will be planned as "other". Say, for example, wedding, birthday, engagement, corporate or conference.')
     missing = draft.missing()
-    question = choices[0].prompt if choices else _QUESTIONS[missing[0]] if missing else None
-    return IntakeTurn(draft=draft, choices=tuple(choices), missing=missing, flags=flags, notes=tuple(dict.fromkeys(notes)), question=question, ready=not missing, source=source)
+    first = draft.unresolved[0] if draft.unresolved else None
+    question = first.question if first else _QUESTIONS[missing[0]] if missing else None
+    choices = tuple(
+        IntakeChoice(field=u.field, prompt=u.question, options=tuple(p.value for p in u.picks if p.value is not None), key=u.key, labels=tuple(p.label for p in u.picks))
+        for u in draft.unresolved if any(p.value is not None for p in u.picks)
+    )
+    return IntakeTurn(
+        draft=draft, choices=choices, changes=changes, asking=asking_of(draft), missing=missing, flags=flags, notes=tuple(dict.fromkeys(notes)), question=question, ready=not missing and not draft.unresolved, source=source
+    )
 
 
 def check_messages(messages: Sequence[str]) -> list[str]:
@@ -407,11 +591,13 @@ def to_request(draft: IntakeDraft, raw_text: str, today: date, source: str = "ru
     """Build the planning request from a draft the user confirmed. Fails closed on anything missing."""
     if draft.missing():
         raise IntakeError("still needed: " + ", ".join(draft.missing()))
+    if draft.unresolved:
+        raise IntakeError("still unresolved, answer these first: " + "; ".join(u.question for u in draft.unresolved))
     if draft.event_date < today:
         raise IntakeError("event date is in the past")
     if (draft.event_date - today).days > mgr.MAX_EVENT_AHEAD_DAYS:
         raise IntakeError("event date is more than 3 years away")
-    digest = hashlib.sha256(draft.model_dump_json().encode()).hexdigest()[:12]
+    digest = hashlib.sha256(draft.model_dump_json(exclude={"unresolved"}).encode()).hexdigest()[:12]  # the receipt names the facts approved; open questions cannot be, so there are none
     assumptions: list[str] = [f"details approved by the user on the review card (read by {source}; draft sha256:{digest})"]
     services = list(dict.fromkeys((VendorCategory.VENUE, *draft.services)))
     if VendorCategory.VENUE not in draft.services:

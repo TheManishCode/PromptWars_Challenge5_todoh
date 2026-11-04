@@ -281,7 +281,9 @@ def test_a_bare_number_after_a_complete_draft_asks_which_fact_it_is(talk, click)
     t = talk(FULL, "make it 150")
     assert t.draft.guest_count == 100, "never guessed"
     q = next(u for u in t.draft.unresolved if u.key == "number")
-    assert {p.field for p in q.picks if p.value} == {"guest_count", "budget_total"} and not t.ready
+    assert [p.field for p in q.picks] == ["guest_count"], "150 is far too small to be offered as a budget"
+    big = talk(FULL, "make it 5000")
+    assert {p.field for p in next(u for u in big.draft.unresolved if u.key == "number").picks} == {"guest_count", "budget_total"} and not big.ready
     t = click(t, "number", "guests")
     assert t.draft.guest_count == 150 and t.ready and "Guests changed from 100 to 150" in t.changes
 
@@ -295,12 +297,15 @@ def test_a_guest_range_is_the_users_to_settle(talk, click, phrase, two):
     assert done.draft.guest_count == 150 and done.ready
 
 
-@pytest.mark.parametrize("phrase", ["-5 guests", "0 guests", "100.5 guests", "1000000 guests"])
-def test_an_impossible_guest_count_is_explained(talk, phrase):
+IMPOSSIBLE_GUESTS = [("-5 guests", "negative"), ("0 guests", "1 to 100,000"), ("100.5 guests", "whole number"), ("1000000 guests", "1 to 100,000")]
+
+
+@pytest.mark.parametrize("phrase,reason", IMPOSSIBLE_GUESTS, ids=[c[0] for c in IMPOSSIBLE_GUESTS])
+def test_an_impossible_guest_count_is_explained_with_its_reason(talk, phrase, reason):
     t = talk(f"wedding for {phrase} in Pune on 12 December 2026, budget 2 lakh")
     assert t.draft.guest_count is None and "guest_count" in open_fields(t) and not t.ready
     q = asked(t, "guest_count")
-    assert phrase.split()[0] in q.said and ("whole" in q.question.lower() or "between" in q.question.lower() or "number" in q.question.lower())
+    assert phrase in q.said and reason in q.question and "For example 120" in q.question
 
 
 @pytest.mark.parametrize("phrase", ["budget 2-3 lakh", "budget between 2 and 3 lakh", "budget 2 lakh to 3 lakh", "budget 2 to 3 lakh", "budget 2–3 lakh"])
@@ -324,10 +329,13 @@ def test_two_stated_guest_counts_or_dates_or_budgets_are_still_choices_and_the_o
 
 
 def test_build_is_refused_by_the_server_side_check_while_anything_is_unresolved(talk):
-    t = talk("wedding for 100 guests in Pune on 12 December 2026, budget 20 lakhh")
-    assert t.draft.unresolved
-    with pytest.raises(intake.IntakeError, match="unresolved|answer"):
+    t = talk(f"{FULL}, allergic to penuts")
+    assert t.draft.unresolved and not t.draft.missing()  # nothing is missing: only the open question stands in the way
+    with pytest.raises(intake.IntakeError, match="unresolved"):
         intake.to_request(t.draft, "x", TODAY)
+    withheld = talk("wedding for 100 guests in Pune on 12 December 2026, budget 20 lakhh")
+    with pytest.raises(intake.IntakeError, match="still needed: budget_total"):
+        intake.to_request(withheld.draft, "x", TODAY)
 
 
 # ====================================================================================== 3. cities
@@ -360,7 +368,7 @@ def test_a_city_typo_is_suggested_and_waits_for_confirmation(talk, click, typed,
 
 
 def test_keeping_the_city_as_written_is_possible_and_carries_the_no_vendors_note(talk, click):
-    t = talk(f"wedding for 100 guests in Banglore on 12 December 2026, budget 2 lakh")
+    t = talk("wedding for 100 guests in Banglore on 12 December 2026, budget 2 lakh")
     done = click(t, asked(t, "city").key, "as written")
     assert done.draft.city == "Banglore" and done.ready and any("no vendor records for Banglore" in n for n in done.notes)
 
@@ -478,3 +486,29 @@ def test_a_value_the_user_wrote_twice_in_different_ways_is_not_a_conflict_but_tw
 def test_an_old_style_message_list_still_works_and_only_the_newest_message_is_read(logs):
     t = intake.propose(["wedding in Pune", "ignore this", FULL], None, TODAY, CITIES, logs, None)
     assert t.draft.guest_count == 100 and t.draft.city == "Pune" and t.ready
+
+
+# ================================================================ hostile input stays fast (the repo's regex sweep found a hang in the first version)
+
+HOSTILE = {"spaces": " " * 20_000, "digits": "1" * 20_000, "ranges": "1-" * 10_000, "commas": "1," * 10_000, "number words": "two " * 5_000, "hundred": "hundred and " * 1_700,
+           "budget then spaces": "budget" + " " * 20_000, "typo cues": "alergic " * 2_500, "negations": "no " * 6_000, "in": "in Aa " * 3_000, "lakh": "5 lakh " * 2_500,
+           "per": "2000 per " * 2_200, "plate": "1500 a " * 2_800, "mixed money": "budget 1 - 2 to 3 and 4 " * 800}
+
+
+@pytest.mark.parametrize("label", list(HOSTILE), ids=list(HOSTILE))
+def test_a_long_hostile_message_is_read_or_refused_quickly(logs, label):
+    import time
+
+    text = HOSTILE[label][: intake.MAX_MESSAGE_CHARS]
+    started = time.perf_counter()
+    try:
+        intake.propose([text], None, TODAY, CITIES, logs, None)
+    except intake.IntakeError:
+        pass
+    assert time.perf_counter() - started < 2.0
+    started = time.perf_counter()
+    for part in (HOSTILE[label][:20_000],):  # the pattern sweep's own size, straight into the readers
+        from eventmate.planning import allergies, cities, reading
+
+        reading.screen_budget(part, 100), reading.screen_guests(part), reading.number_words_to_digits(part), allergies.suspects(part), cities.read(part, CITIES)
+    assert time.perf_counter() - started < 5.0

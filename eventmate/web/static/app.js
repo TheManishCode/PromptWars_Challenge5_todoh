@@ -58,7 +58,11 @@
   function hours(isoTime) { var t = String(isoTime).slice(11, 16).split(':'); return (+t[0]) + (+t[1]) / 60; }
   function hhmm(x) { var hh = Math.floor(x), mm = Math.round((x - hh) * 60); return ('0' + hh).slice(-2) + ':' + ('0' + mm).slice(-2); }
   function weekStart(d) { var x = new Date(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
-  function errText(r, fb) { return r && r.data && (r.data.error || r.data.detail) ? String(r.data.error || r.data.detail) : fb + ' (' + (r ? r.status : '?') + ').'; }
+  function errText(r, fb) {
+    var d = r && r.data; if (!d || !(d.error || d.detail)) return fb + ' (' + (r ? r.status : '?') + ').';
+    var why = Array.isArray(d.details) ? d.details.map(function (x) { return (x.field ? words(String(x.field).split('.').pop()) + ': ' : '') + x.message; }).join('; ') : '';
+    return String(d.error || d.detail) + (why ? ': ' + why : '');  // the server names the field it refused; "invalid input" alone does not say which
+  }
 
   /* ------------------------------------------------------------ API */
   function api(path, opts) {
@@ -609,17 +613,27 @@
     var box = clear($('#understood')), t = st.turn; if (!t) return;
     var dl = h('dl', { class: 'facts' }); FIELD.forEach(function (p) { var v = fieldValue(t.draft, p[0]); if (v !== null) { dl.appendChild(h('dt', { text: p[1] })); dl.appendChild(h('dd', { text: v })); } });
     var card = h('div', { class: 'card' }, h('h2', { text: 'What I understood' }), dl), notes = [].concat(t.flags && t.flags.length ? ['Please double-check: ' + t.flags.map(fieldLabel).join(', ')] : [], t.notes || []);
+    if (t.changes && t.changes.length) card.appendChild(h('ul', { class: 'list changes', 'aria-label': 'What changed' }, t.changes.map(function (c) { return h('li', { text: c }); })));
     if (notes.length) card.appendChild(h('ul', { class: 'list' }, notes.map(function (n) { return h('li', { text: n }); }))); box.appendChild(card);
-    if (t.choices && t.choices.length) { t.choices.forEach(function (c) { box.appendChild(h('div', { class: 'card', role: 'group', 'aria-label': c.prompt }, h('p', { text: c.prompt }), h('div', { class: 'chips' }, c.options.map(function (o) { return h('button', { type: 'button', text: o, onclick: function () { sendBrief(o); } }); })))); }); return; }
+    var open = (t.draft && t.draft.unresolved) || [];
+    open.forEach(function (q) {
+      var c = (t.choices || []).filter(function (x) { return x.key === q.key; })[0];
+      if (!c) { box.appendChild(h('p', { class: 'hint q', role: 'status', text: q.question })); return; }  // a question with nothing to press: the user types the answer
+      box.appendChild(h('div', { class: 'card', role: 'group', 'aria-label': q.question }, h('p', { text: q.question }), h('div', { class: 'chips' }, c.labels.map(function (label, i) {
+        return h('button', { type: 'button', text: label, onclick: function () { sendBrief(label, { key: q.key, pick: i }); } });  // the number of the option is sent, not text to be read again
+      }))));
+    });
     if (t.ready) { box.appendChild(h('div', { class: 'row' }, h('button', { type: 'button', class: 'pill pill--k', id: 'build', text: 'Build my plan', onclick: build }))); box.appendChild(h('p', { class: 'hint', text: 'Nothing is planned until you press this. Add more detail above to change what was understood.' })); }
-    else { box.appendChild(h('p', { class: 'hint', text: t.question || 'Tell me more about the event.' })); }
+    else if (!open.length) { box.appendChild(h('p', { class: 'hint', text: t.question || 'Tell me more about the event.' })); }
   }
   function busy(on) { st.busy = on; ['#read-brief', '#build'].forEach(function (s) { var b = $(s); if (b) b.disabled = on; }); $('#read-brief').textContent = on ? 'Reading...' : 'Read my brief'; }
-  function sendBrief(text) {
-    text = String(text || '').trim(); if (!text || st.busy) return; st.messages.push(text); $('#brief-input').value = ''; busy(true);
-    api('/api/intake', { method: 'POST', body: { messages: st.messages, draft: st.draft } }).then(function (r) {
+  function sendBrief(text, answer) {
+    text = String(text || '').trim(); if (st.busy) return;
+    if (!text) { renderUnderstood(); $('#understood').appendChild(h('p', { class: 'notice bad', role: 'alert', text: 'Type a few words about the event first, for example: 120 guests in Pune on 12 December, budget 2 lakh.' })); return; }
+    if (!answer) st.messages.push(text); $('#brief-input').value = ''; busy(true);  // the history is kept only for the plan's own record of what was typed; the server reads just the newest message
+    api('/api/intake', { method: 'POST', body: { messages: [text], draft: st.draft, expecting: (st.turn && st.turn.asking) || undefined, answer: answer } }).then(function (r) {
       busy(false);
-      if (!r.ok || !r.data) { st.messages.pop(); if (!r.lost) { clear($('#understood')); $('#understood').appendChild(h('p', { class: 'notice bad', role: 'alert', text: errText(r, 'The brief could not be read') })); } return; }
+      if (!r.ok || !r.data) { if (!answer) st.messages.pop(); if (!r.lost) { clear($('#understood')); $('#understood').appendChild(h('p', { class: 'notice bad', role: 'alert', text: errText(r, 'The brief could not be read') })); } return; }
       st.turn = r.data; st.draft = r.data.draft; renderUnderstood(); announce(r.data.ready ? 'Everything needed is understood. Press Build my plan.' : (r.data.question || 'Tell me more.'));
       var f = $('#build') || $('#brief-input'); if (f) f.focus();
     });

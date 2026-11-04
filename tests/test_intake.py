@@ -60,7 +60,7 @@ def test_plain_words_become_a_complete_draft(logs):
 def test_missing_facts_become_a_question_never_a_guess(logs):
     t = turn(logs, ["a birthday in Pune"])
     assert not t.ready and set(t.missing) == {"guest_count", "event_date", "budget_total"}
-    assert t.question == "How many guests are you expecting?"
+    assert t.question.startswith("How many guests are you expecting?") and "For example 120" in t.question  # the question shows an accepted format
 
 
 def test_follow_up_message_fills_the_gap_and_keeps_reviewed_values(logs):

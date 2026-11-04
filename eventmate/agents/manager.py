@@ -82,6 +82,7 @@ _DATE_DM = re.compile(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?({_MONTH_RE})
 _DATE_ISO = re.compile(r"\b(20\d{2})-(\d{2})-(\d{2})\b", re.A)
 # 12/12/2026, 12-12-2026, 12.12.2026: day first (Indian convention), 4-digit year required, same separator twice
 _DATE_NUMERIC = re.compile(r"(?<![\d./-])(\d{1,2})([/.-])(\d{1,2})\2(20\d{2})(?![\d/.-])", re.A)
+_FULL_MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
 _DIGIT_RUN = re.compile(r"\d+")  # unicode \d: any decimal digit, including Devanagari, Bengali, Arabic-Indic
 
 _NUM = r"\d{1,3}(?:,\d{2,3})+(?:\.\d+)?|\d+(?:\.\d+)?"
@@ -96,7 +97,7 @@ _UNIT = {"k": 1_000, "lakh": 100_000, "lac": 100_000, "crore": 10_000_000, "cr":
          "thousand": 1_000, "hazaar": 1_000, "hazar": 1_000, "hajaar": 1_000, "hajar": 1_000}
 
 _GUESTS = [
-    re.compile(r"(?<![\d,.])(\d{1,12})\s*-?\s*(?:person|persons|people|guests?|pax|attendees?|log|logon|logo|mehmaan|mehman|aadmi)\b", re.I | re.A),
+    re.compile(r"(?<![\d,.])(\d{1,12})\s*-?\s*(?:person|persons|people|guests?|pax|ppl|heads|attendees?|log|logon|logo|mehmaan|mehman|aadmi)\b", re.I | re.A),
     re.compile(r"\bguests?(?:\s+count)?\s*(?:of|:|=)\s*(\d{1,12})\b", re.I | re.A),
 ]
 # Used only when no explicit "guests / people / pax" count exists, so "2 kids and 40 guests" is never read as a conflict.
@@ -114,9 +115,9 @@ _CLAUSE_BREAK = re.compile(r"[.;,!?\n]")
 
 _EVENT_TYPES = [
     (re.compile(r"\bengagement\b", re.I | re.A), EventType.ENGAGEMENT_PARTY),
-    (re.compile(r"\b(?:wedding|shaa?di)\b", re.I | re.A), EventType.WEDDING),
+    (re.compile(r"\b(?:wedding|shaa?di|marriage|vivah|nikah|mehn?dee?|mehendi|sangeet|haldi|reception)\b", re.I | re.A), EventType.WEDDING),
     (re.compile(r"\bsagai\b", re.I | re.A), EventType.ENGAGEMENT_PARTY),
-    (re.compile(r"\bbirthday\b", re.I | re.A), EventType.BIRTHDAY),
+    (re.compile(r"\b(?:birthday|b'?day|birth\s+day)\b", re.I | re.A), EventType.BIRTHDAY),
     (re.compile(r"\bconference\b", re.I | re.A), EventType.CONFERENCE),
     (re.compile(r"\b(?:corporate|offsite|company)\b", re.I | re.A), EventType.CORPORATE),
 ]
@@ -192,7 +193,9 @@ def _parse_dates(text: str, today: date, problems: list[str], assumptions: list[
     for m in _DATE_NUMERIC.finditer(text):
         day, month = int(m.group(1)), int(m.group(3))
         if day <= 12 and month <= 12 and day != month:
-            problems.append(f"ambiguous date {m.group(0)!r} (day-first or month-first); write it as 2026-12-05 or 5 December 2026")
+            year = int(m.group(4))
+            day_first, month_first = f"{day} {_FULL_MONTHS[month - 1]} {year}", f"{month} {_FULL_MONTHS[day - 1]} {year}"
+            problems.append(f"ambiguous date {m.group(0)!r} (day-first or month-first); write it as {day_first} or {month_first}")
             return None
         raw.append((int(m.group(4)), month, day))
     for m in _DATE_MD.finditer(text):

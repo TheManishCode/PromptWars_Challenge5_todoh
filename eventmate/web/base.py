@@ -89,8 +89,10 @@ class TradeoffsBody(PlanBody):
 
 
 class IntakeBody(_Strict):
-    messages: list[str] = Field(min_length=1, max_length=intake.MAX_MESSAGES)
+    messages: list[str] = Field(min_length=1, max_length=intake.MAX_MESSAGES)  # only the newest is read; the page sends just that one
     draft: intake.IntakeDraft | None = None
+    expecting: Literal["guest_count", "budget_total", "event_date", "city", "allergens"] | None = None  # the fact the last question was about
+    answer: intake.IntakeAnswer | None = None  # an option of an open question the user pressed
 
 
 class IntakeConfirmBody(_Strict):

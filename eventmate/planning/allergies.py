@@ -10,14 +10,17 @@ names. Nothing here is inferred from anything but the user's words; a model neit
 
 from __future__ import annotations
 
+import difflib
 import re
 from dataclasses import dataclass
+from typing import Literal
 
 from eventmate.planning.cities import BARE as _CITY
+from eventmate.planning.questions import Pick, Unresolved, clip
 from eventmate.schemas import Allergen as A
 
 _F = re.I | re.A
-_CUE = re.compile(r"\b(?:allerg\w*|alerji|elerji|celiac|coeliac|intoleran\w*|(?:can'?t|cannot|can\s+not|doesn'?t|does\s+not|won'?t|unable\s+to)\s+(?:eat|have|take|touch|digest)|avoid(?:s|ing)?)\b", _F)  # "can't eat X" and "avoid X" are read as an allergy: the harmful error is to miss one
+_CUE = re.compile(r"\b(?:allerg(?:y|ies|ic|ics|en|ens|ist|ists)|alerji|elerji|celiac|coeliac|intoleran\w*|(?:can'?t|cannot|can\s+not|doesn'?t|does\s+not|won'?t|unable\s+to)\s+(?:eat|have|take|touch|digest)|avoid(?:s|ing)?)\b", _F)  # "can't eat X" and "avoid X" are read as an allergy: the harmful error is to miss one
 _NEG_START = re.compile(r"^\W*(?:no|not|without|never|don'?t|dont|nahi|nahin|nope|nobody|none|nothing|no\s?one|noone)\b", _F)
 # A negation counts only when nothing but filler words stand between it and the cue: "no known allergies", "guests are not allergic", "none of the guests have any allergies".
 # Anything else between them ("no onion no garlic lactose intolerant") is another statement, and the allergy in it is still read.
@@ -153,3 +156,80 @@ def read(text: str) -> AllergyReading:
         carry = in_list
     safe = tuple(dict.fromkeys(re.sub(r"[^A-Za-z' -]", "", p).strip() for p in unclear if re.sub(r"[^A-Za-z' -]", "", p).strip()))[:MAX_UNCLEAR]
     return AllergyReading(tuple(dict.fromkeys(found)), safe)
+
+
+# ------------------------------------------------------------------------------------------------ words that look like an allergy but are not read as one
+#
+# Everything above reads an allergy only from the exact words it knows. That is deliberate: an allergy is never invented from a word that merely resembles one. But a person who
+# types "alergic to peanuts" or "allergic to penuts" has said something about an allergy, and dropping it silently is the harmful error. ``suspects`` finds those places so the
+# intake can ask ("did you mean peanut?") instead of guessing either way.
+
+# a spelling of "allergy", "anaphylaxis" or an auto-injector that is not one of the exact cue words: alergic, allergik, alerjy, anaphalaxis, epipen
+_CUE_TYPO = re.compile(r"\b(?:a[l1]+[ae]?r+[gj]\w*|el+[ae]?r+[gj]\w*|anap\w*|anaf\w*|epi[- ]?pens?|epinephrine)\b", _F)
+_EXCLUSION = re.compile(r"\b(?:no|without|zero)\s+(?:any\s+)?(?P<food>peanuts?|ground\s?nuts?|tree\s?nuts?|nuts?|shellfish|sesame)\b", _F)
+_FUZZY_WORDS = ("peanut", "peanuts", "groundnut", "almond", "almonds", "cashew", "cashews", "walnut", "walnuts", "pistachio", "hazelnut", "shellfish", "prawns", "shrimp", "lobster", "oysters",
+                "sesame", "gluten", "wheat", "celery", "mustard", "lupin", "sulphite", "sulphites", "eggs", "milk", "dairy", "lactose", "soya", "seafood", "tofu", "walnut")
+FUZZY_CUTOFF = 0.8
+Kind = Literal["typo_cue", "typo_word", "unnamed", "exclusion"]
+
+
+@dataclass(frozen=True)
+class Suspect:
+    kind: Kind
+    said: str  # the user's words
+    allergens: tuple[A, ...] = ()  # what they may have meant; empty when nothing can be offered
+
+
+def _near_food(word: str) -> tuple[A, ...]:
+    """The allergens a misspelled food word looks like ("penuts" -> peanut), or (). Offered to the user, never applied."""
+    w = word.lower()
+    if len(w) < 5 or _named(w):
+        return ()
+    best = difflib.get_close_matches(w, _FUZZY_WORDS, n=1, cutoff=FUZZY_CUTOFF)
+    return tuple(dict.fromkeys(_named(best[0]))) if best else ()
+
+
+def suspects(text: str) -> list[Suspect]:
+    """Places where the user seems to have written about an allergy but nothing was read: a misspelled cue, a misspelled food after a correct cue, a serious reaction with no food named,
+    or "no peanuts" with nothing to say whether it is an allergy."""
+    out: list[Suspect] = []
+    reading = read(text)
+    for phrase in reading.unclear:
+        for word in _words(phrase):
+            if near := _near_food(word):
+                out.append(Suspect("typo_word", word, near))
+                break
+    for sentence in _SPLIT_SENTENCE.split(_NA.sub("none", text)):
+        if _CUE.search(sentence):
+            continue  # an exact cue: the reader above handled it, and the loop over its unclear words handled any typo in the food
+        if cue := _CUE_TYPO.search(sentence):
+            named = tuple(dict.fromkeys(_named(sentence)))
+            near = () if named else next((n for n in (_near_food(w) for w in _words(sentence)) if n), ())
+            if named or near:
+                out.append(Suspect("typo_cue", cue.group(0), named or near))
+            else:
+                out.append(Suspect("unnamed", cue.group(0)))
+        elif m := _EXCLUSION.search(sentence):
+            out.append(Suspect("exclusion", m.group(0), tuple(dict.fromkeys(_named(m.group("food"))))))
+    return out
+
+
+def _names(allergens: tuple[A, ...]) -> str:
+    return " and ".join(a.value.replace("_", " ") for a in allergens)
+
+
+def question_for(s: Suspect) -> Unresolved:
+    """The question the intake asks for one suspect: what was written, what it may mean, and a way to say it is something else."""
+    word = re.sub(r"[^A-Za-z' -]", "", s.said).strip()[:40] or "allergy"
+    key = f"allergy:{word}"
+    yes = (Pick(label=f"Yes, {_names(s.allergens)}", field="allergens", value=",".join(a.value for a in s.allergens)),) if s.allergens else ()
+    if s.kind == "typo_word":
+        return Unresolved(key=key, field="allergens", said=clip(s.said, 40), question=f'I do not know the word "{clip(s.said, 40)}" as a food. Did you mean {_names(s.allergens)}? An allergy is never guessed, so please press it or say it is something else.',
+                          picks=(*yes, Pick(label=f"Something else (keep my words: {clip(s.said, 30)})", field="allergens", keep_words=True)))
+    if s.kind == "typo_cue":
+        return Unresolved(key=key, field="allergens", said=clip(s.said, 40), question=f'I read "{clip(s.said, 40)}" as an allergy, but I only record an allergy when it is spelled out. Is anyone allergic to {_names(s.allergens)}?',
+                          picks=(*yes, Pick(label="No, it is not an allergy", field="allergens")))
+    if s.kind == "exclusion":
+        return Unresolved(key=key, field="allergens", said=clip(s.said, 40), question=f'You wrote "{clip(s.said, 40)}". Is anyone allergic to {_names(s.allergens)}, or is it only a preference?',
+                          picks=(*yes, Pick(label="Only a preference", field="allergens")))
+    return Unresolved(key=key, field="allergens", said=clip(s.said, 40), question=f'You mentioned "{clip(s.said, 40)}", which is a serious reaction, but not to what. What is the allergy? Write the food, for example "peanuts".')

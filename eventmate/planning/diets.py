@@ -7,10 +7,12 @@ it in writing. A restriction worded in a way this reader does not know ("can't e
 
 from __future__ import annotations
 
+import difflib
 import re
 from dataclasses import dataclass
 
 from eventmate.planning import allergies, negation
+from eventmate.planning.questions import Pick, Unresolved, clip
 
 _F = re.I | re.A
 # (words, the label kept). A positive word is ignored when the clause before it says no/not/without ("no satvik" is not a request for it).
@@ -67,3 +69,25 @@ def read(text: str) -> DietReading:
             unclear.append(" ".join(words)[:MAX_PHRASE])
     clean = tuple(dict.fromkeys(re.sub(r"[^A-Za-z' -]", "", u).strip() for u in unclear if re.sub(r"[^A-Za-z' -]", "", u).strip()))[:MAX_NOTES]
     return DietReading(tuple(dict.fromkeys(notes))[:MAX_NOTES], clean)
+
+
+# ---------------------------------------------------------------------------------------------------------------- a diet word spelled wrongly
+# "vegiterian" matches none of the diet words, so the requirement vanished without a trace. It is now offered back as the diet it looks like, and applied only when pressed.
+_DIET_WORDS = {"vegetarian": "vegetarian", "vegetarians": "vegetarian"}
+DIET_CUTOFF = 0.78
+_LOOKS_LIKE_VEGETARIAN = re.compile(r"veg[a-z]*(?:ian|ain|ean)s?", re.I)  # vegetation and vegetable score as high as vegiterian: the shape separates them
+
+
+def misspelt_diet(text: str) -> Unresolved | None:
+    """A word of six or more letters that is not a diet word but looks like "vegetarian". One question for the first such word."""
+    for word in re.findall(r"[^\W\d_]{6,}", text, re.A):
+        w = word.lower()
+        if w in _DIET_WORDS or re.search(r"\bveg(?:etarian)?\b", w):
+            continue
+        if _LOOKS_LIKE_VEGETARIAN.fullmatch(w) and difflib.get_close_matches(w, list(_DIET_WORDS), n=1, cutoff=DIET_CUTOFF):
+            return Unresolved(
+                key=f"diet:{word[:40]}", field="dietary", said=clip(word, 40),
+                question=f'I do not know the word "{clip(word, 40)}" as a diet. Did you mean vegetarian? A food requirement is never guessed, so please press it or say it another way.',
+                picks=(Pick(label="Yes, vegetarian", field="dietary", value="vegetarian"), Pick(label="No, something else", field="dietary")),
+            )
+    return None
