@@ -205,7 +205,16 @@
   <h2 id="sending-title">Sending</h2>
   <p class="hint" id="sending-state" role="status"></p>
   <div class="row"><button type="button" class="pill pill--k" id="sending-toggle">Pause all sending</button></div>
-  <p class="hint">Pausing stops every message at once, including ones you already approved. Nothing is lost: approved messages wait and go out when you resume.</p>
+  <p class="hint">Pausing holds every message that would leave: ones you approved, ones sent under a standing permission, and the emails to you. Nothing is lost: approved messages wait. Resuming sends what is waiting, so it shows you the list first.</p>
+  <div class="card" id="release-panel" hidden>
+    <p id="release-text" role="alert"></p>
+    <ul class="held-list" id="release-list"></ul>
+    <div class="row"><button type="button" class="pill pill--k" id="release-go">Send them now</button><button type="button" class="pill pill--ghost" id="release-keep">Keep paused</button></div>
+  </div>
+  <h3>Automatic messages only</h3>
+  <p class="hint" id="auto-state"></p>
+  <div class="row"><button type="button" class="pill pill--ghost" id="auto-toggle">Stop automatic messages</button></div>
+  <p class="hint">Stops follow-up questions sent under a standing permission, the emails to you and page watches. Messages you approve yourself still go out. This is separate from pausing: pausing never changes it, and resuming never lifts it.</p>
   <h3>Standing permission</h3>
   <p class="hint" id="perm-state"></p>
   <div class="row"><button type="button" class="pill pill--ghost" id="perm-revoke" disabled>Revoke standing permission</button></div>

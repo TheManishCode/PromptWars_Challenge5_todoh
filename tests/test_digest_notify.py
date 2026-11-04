@@ -421,3 +421,16 @@ def test_the_confirmation_text_names_exactly_what_the_owner_allowed_and_what_it_
     contain, left = split(em.notifier.propose(OWNER, include_vendor_names=True, include_amounts=True, include_raw_text=True).summary)
     assert "vendor names" in contain and "confirmed amounts" in contain and "the vendors' own wording" in contain
     assert left.startswith("or your budget") and "vendor names" not in left  # the budget is never an option
+
+
+def test_pause_alone_stops_owner_emails_without_setting_the_kill_switch(em, world, pid, clock):
+    """Owner emails are messages that leave: the pause holds them, and it does so on its own, with the kill switch off."""
+    enable(em)
+    started(em, pid, clock)  # sending is on: the vendor requests go out
+    world.reply("r@rasoi.test", "Total INR 78,000 for the event. Valid for 10 days.")
+    em.pause_sending()
+    tick(em, clock)
+    assert owner_mail(world) == [] and em.outreach_store.killed is False
+    em.resume_sending(len(em.held_messages()))
+    tick(em, clock)
+    assert owner_mail(world)  # nothing was lost: it goes out once sending resumes

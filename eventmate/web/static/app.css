@@ -343,3 +343,5 @@ dialog.dlg::backdrop { background: rgba(0,0,0,.6); }
 .dlg .sup-list { list-style: none; padding: 0; margin: 8px 0 0; } .dlg .sup { padding: 10px 0; border-top: 1px solid var(--line); }
 .dlg .sup-lift { margin-top: 8px; display: grid; gap: 8px; } .dlg .sup-lift input[type="text"] { width: 100%; font: inherit; font-size: 14px; border: 1px solid #c5c5cb; border-radius: 14px; padding: 8px 12px; background: #fafafb; }
 .dlg label.inline { display: flex; gap: 8px; align-items: center; font-weight: 400; }
+
+.dlg .held-list { list-style: none; padding: 0; margin: 8px 0 0; font-size: 13.5px; } .dlg .held-list li { padding: 4px 0; }

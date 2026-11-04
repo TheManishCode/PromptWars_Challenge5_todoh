@@ -436,14 +436,19 @@ class ConversationService:
         self.store.revoke_mandate(plan_id)
         return self.autoreply_status(plan_id)
 
-    def pause_all(self) -> None:
-        """Stop everything: the kill switch for what happens by itself, and the pause for what a person approved."""
-        self.store.set_killed(True)
+    def pause(self) -> None:
+        """Hold every message that would leave, whoever approved it, and the owner's own emails. Independent of the kill switch: it neither sets nor clears it."""
         self.store.set_paused(True)
 
-    def resume_everything(self) -> None:
-        self.store.set_killed(False)
+    def unpause(self) -> int:
+        """Lift the pause and send what is waiting, within the usual limits (what the limits hold back goes on a later dispatch). Returns how many went out now."""
         self.store.set_paused(False)
+        sent, _ = self.dispatch()
+        return sent
+
+    def held(self) -> list[OutreachDraft]:
+        """What is approved and waiting to go: it is what a resume would release."""
+        return [d for pid in self.store.plan_ids() for d in self.store.list(pid) if d.status == "approved"]
 
     def kill_all(self) -> None:
         self.store.set_killed(True)

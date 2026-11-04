@@ -41,7 +41,7 @@ from eventmate.schemas import GuestTravel
 from eventmate.llm import client_from_env
 from eventmate.plan_store import PlanIntegrityError
 from eventmate.schemas import Disruption, DisruptionKind, VendorCategory
-from eventmate.service import EventMate
+from eventmate.service import EventMate, HeldMessages
 from eventmate.untrusted import strip_terminal
 from eventmate.integrations.discovery import DiscoveryError
 from eventmate.integrations.travel import TravelError, check_date
@@ -115,12 +115,13 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--name", required=True, help="your name, signed at the end of the message")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("inbox", help="the vendor conversations: send what you approved, read replies, show what needs you")
-    p.add_argument("what", choices=["show", "poll", "approve", "deny", "autoreply", "kill", "pause", "resume"], nargs="?", default="show")
+    p.add_argument("what", choices=["show", "poll", "approve", "deny", "autoreply", "kill", "resume", "pause", "unpause"], nargs="?", default="show")
     p.add_argument("plan_id", nargs="?")
     p.add_argument("draft_id", nargs="?")
     p.add_argument("--hash", help="content hash of the draft as shown by `inbox show` (approve only)")
     p.add_argument("--watch", type=int, metavar="SECONDS", help="with poll: keep polling every SECONDS until interrupted")
     p.add_argument("--name", help="autoreply: your name, signed on automatic messages (giving it grants the permission)")
+    p.add_argument("--release", type=int, default=None, help="unpause: how many held messages you expect to release (required when any are held)")
     p.add_argument("--hours", type=int, default=72, help="autoreply: how long the permission lasts (1-168)")
     p.add_argument("--max-per-thread", type=int, default=3, help="autoreply: automatic messages per vendor (1-5)")
     p.add_argument("--max-total", type=int, default=10, help="autoreply: automatic messages per plan (1-30)")
@@ -634,15 +635,26 @@ def _inbox_poll(em: EventMate, a) -> int:
 
 
 def _inbox_kill_switch(em: EventMate, a) -> int:
+    """``kill`` and ``resume`` are the automatic-send kill switch, as they always were. ``pause`` and ``unpause`` are the separate pause that holds everything, approved messages included."""
     if a.what == "kill":
         em.kill_all_autoreplies()
-        print("every automatic message is stopped (messages you approved by hand still go: use `inbox pause` to hold those too)")
+        print("every automatic message is stopped (messages you approved by hand still go: `inbox pause` holds those too)")
+    elif a.what == "resume":
+        em.resume_autoreplies()
+        print("automatic replies may be granted again; existing permissions apply (this does not lift a pause: `inbox unpause`)")
     elif a.what == "pause":
         em.pause_sending()
-        print("all sending is paused: nothing goes out, and approved messages wait until `inbox resume`")
+        print("sending is paused: nothing goes out, whoever approved it, and approved messages wait until `inbox unpause` (the kill switch is not touched)")
     else:
-        em.resume_sending()
-        print("sending resumed; automatic replies may be granted again, and existing permissions apply")
+        held = em.held_messages()
+        for m in held:
+            print(f"  held: {m['vendor']} by {m['channel']}: {strip_terminal(m['subject'])[:80]}")
+        try:
+            em.resume_sending(a.release)
+        except HeldMessages as exc:
+            print(f"{exc.count} approved message(s) are waiting and would go out now. Run `inbox unpause --release {exc.count}` to let them go.", file=sys.stderr)
+            return 3
+        print(f"sending resumed; {len(held)} held message(s) released (the kill switch is not touched)")
     return 0
 
 
@@ -692,7 +704,7 @@ def _inbox_show(em: EventMate, a) -> int:
 def _inbox(em: EventMate, a) -> int:
     if a.what == "poll":
         return _inbox_poll(em, a)
-    if a.what in ("kill", "pause", "resume"):
+    if a.what in ("kill", "resume", "pause", "unpause"):
         return _inbox_kill_switch(em, a)
     if not a.plan_id:
         print("give a plan id", file=sys.stderr)

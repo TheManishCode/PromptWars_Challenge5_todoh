@@ -81,6 +81,14 @@ class _NoClients:
     clients: list = []
 
 
+class HeldMessages(ValueError):
+    """Resuming would release approved messages the caller did not account for."""
+
+    def __init__(self, count: int):
+        self.count = count
+        super().__init__(f"{count} approved message{'s are' if count != 1 else ' is'} waiting: look at them, then resume saying release={count}")
+
+
 class EventMate:
     def __init__(
         self,
@@ -144,7 +152,7 @@ class EventMate:
         self.notifier = OwnerNotifier(
             self.store.root, self.digest_store, lambda: self.conversations.channels["email"], self._jobs_of, self._vendor_names, self._vendor_addresses,
             self._own_addresses,
-            lambda: self.outreach_store.killed,
+            lambda: self.outreach_store.killed or self.outreach_store.paused,  # owner emails are messages: the pause holds them too
         )
         decisions = self.logs.decisions
         scheduler = SchedulingAgent(decisions)
@@ -574,10 +582,21 @@ class EventMate:
         return self.conversations.autoreply_status(plan_id)
 
     def pause_sending(self):
-        self.conversations.pause_all()
+        """Hold everything that would leave (messages a person approved, a standing permission's, the owner's emails). Does not touch the kill switch."""
+        self.conversations.pause()
 
-    def resume_sending(self):
-        self.conversations.resume_everything()
+    def held_messages(self) -> list[dict]:
+        """Approved messages waiting for a resume: who, how, and the subject. Never the body."""
+        return [{"plan_id": d.plan_id, "draft_id": d.draft_id, "vendor": d.vendor_name, "channel": d.channel, "subject": d.subject, "approved_by": d.approved_by} for d in self.conversations.held()]
+
+    def resume_sending(self, release: int | None = None) -> int:
+        """Lift the pause. Whatever is held then goes out, so the caller must say how many it expects to release; a different number means something changed since it looked, and nothing is released.
+        The held messages are sent now, within the usual limits. Does not touch the kill switch. Returns how many were held."""
+        held = len(self.conversations.held())
+        if held and release != held:
+            raise HeldMessages(held)
+        self.conversations.unpause()
+        return held
 
     def kill_all_autoreplies(self):
         self.conversations.kill_all()

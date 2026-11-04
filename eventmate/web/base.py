@@ -277,6 +277,10 @@ class EmptyBody(_Strict):
     pass
 
 
+class ResumeBody(_Strict):
+    release: int | None = Field(default=None, ge=0, le=100_000)  # how many held messages the caller expects to release; required when any are held
+
+
 class GuestCsvBody(_Strict):
     csv: str = Field(min_length=1, max_length=600_000)
 

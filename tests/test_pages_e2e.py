@@ -349,17 +349,59 @@ def test_businesses_found_on_openstreetmap_and_google_carry_their_attribution_on
     assert "© OpenStreetMap contributors (ODbL)" in body and "Powered by Google" in body
 
 
-def test_the_sending_controls_pause_everything_list_do_not_contact_addresses_and_lift_them(server, ctx):
+def test_the_sending_controls_pause_and_the_kill_switch_are_independent_and_a_resume_shows_what_it_releases(server, ctx):
+    from eventmate.schemas import VendorCategory
+
+    from tests.test_conversations import FakeChannel
+
     url, em = server
+    real_channels = dict(em.conversations.channels)
+    em.conversations.channels["email"] = FakeChannel("email")  # a drafted message needs a configured channel; nothing real is contacted
     page, seen = opened(ctx, url + "/app")
     new_plan(page)
+    plan_id = em.store.list_plans()[-1]
     page.wait_for_selector("#sending-chip:has-text('Sending on')")
     page.click("#sending-chip")
     page.wait_for_selector("#sending-dialog[open]")
-    assert "Sending is on" in page.inner_text("#sending-state") and page.is_disabled("#perm-revoke")
-    page.click("#sending-toggle")
+    assert "Sending is on" in page.inner_text("#sending-state") and page.is_disabled("#perm-revoke") and "allowed" in page.inner_text("#auto-state")
+
+    page.click("#sending-toggle")  # pause
     page.wait_for_selector("#sending-chip:has-text('Sending paused')")
-    assert "Sending is paused" in page.inner_text("#sending-state") and em.outreach_store.paused is True and em.outreach_store.killed is True  # the real switches, not a label
+    assert em.outreach_store.paused is True and em.outreach_store.killed is False  # pausing does not touch the kill switch
+    page.click("#auto-toggle")  # the kill switch, on its own
+    page.wait_for_selector("#auto-state:has-text('stopped')")
+    assert em.outreach_store.paused is True and em.outreach_store.killed is True
+
+    first = em.draft_outreach(plan_id, VendorCategory.CATERER, "email", "sales@annapurna.in", "Meera")
+    em.approve_outreach(plan_id, first.draft_id, first.content_hash)  # approved while paused: it is held, not sent
+    page.click("#sending-close")
+    page.click("#sending-chip")
+    page.wait_for_selector("#sending-state:has-text('1 approved message is held')")
+
+    page.click("#sending-toggle")  # resume: it must show what is held, and release nothing yet
+    page.wait_for_selector("#release-panel:not([hidden])")
+    assert "1 approved message is held" in page.inner_text("#release-text") and "email" in page.inner_text("#release-list")
+    assert em.outreach_store.paused is True and em.outreach_store.get(plan_id, first.draft_id).status == "approved"
+    page.click("#release-keep")
+    assert em.outreach_store.paused is True and page.locator("#release-panel").is_hidden()
+
+    page.click("#sending-toggle")
+    page.wait_for_selector("#release-panel:not([hidden])")
+    second = em.draft_outreach(plan_id, VendorCategory.CATERER, "email", "kitchen@rasoi.in", "Meera")
+    em.approve_outreach(plan_id, second.draft_id, second.content_hash)  # something changes while the person is looking
+    page.click("#release-go")
+    page.wait_for_selector("#release-text:has-text('The list changed')")
+    assert "2 approved messages are held" in page.inner_text("#release-text")
+    assert em.outreach_store.paused is True and {d.status for d in (em.outreach_store.get(plan_id, first.draft_id), em.outreach_store.get(plan_id, second.draft_id))} == {"approved"}  # nothing was released
+
+    page.click("#release-go")  # now it knows the count
+    page.wait_for_selector("#sending-chip:has-text('Automatic stopped')")
+    assert em.outreach_store.paused is False and em.outreach_store.killed is True  # resuming did not lift the independent kill switch
+    assert em.held_messages() == []
+    page.click("#auto-toggle")
+    page.wait_for_selector("#sending-chip:has-text('Sending on')")
+    assert em.outreach_store.killed is False
+
     page.fill("#sup-value", "Stop.Me@Example.com")
     page.fill("#sup-by", "Meera")
     page.fill("#sup-note", "asked us to stop")
@@ -376,7 +418,6 @@ def test_the_sending_controls_pause_everything_list_do_not_contact_addresses_and
     page.click("#sup-list .sup-lift button[type=submit]")
     page.wait_for_selector("#sup-list .sup:has-text('lifted by Meera')")
     assert em.is_suppressed("email", "stop.me@example.com") is None
-    page.click("#sending-toggle")
-    page.wait_for_selector("#sending-chip:has-text('Sending on')")
-    assert em.outreach_store.killed is False and em.outreach_store.paused is False
-    assert seen == [], seen
+    assert [m for m in seen if "409" not in m] == [], seen  # the one 409 is the test's own: a resume that did not know the new count
+    em.conversations.channels.clear()
+    em.conversations.channels.update(real_channels)

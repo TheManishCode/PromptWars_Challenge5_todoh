@@ -6,12 +6,14 @@ import json
 from datetime import datetime, timedelta, UTC
 from flask import g, jsonify
 from eventmate.followthrough.worker import digest
+from eventmate.service import HeldMessages
 from eventmate.web.base import (
     ApproveBody,
     AutoreplyBody,
     ConfirmClaimBody,
     DeletePlanBody,
     EmptyBody,
+    ResumeBody,
     FollowupBody,
     JobBody,
     OutreachBody,
@@ -146,16 +148,16 @@ def register(app, k):
 
     @app.get("/api/sending")
     def sending_get():
-        """Is sending paused, how many approved messages are waiting, and how many addresses are on the do-not-contact list."""
+        """Is sending paused, is the automatic-send kill switch on (a separate thing), what is held, and how many addresses are on the do-not-contact list."""
         with lock:
-            approved = sum(1 for p in em.outreach_store.plan_ids() for d in em.outreach_store.list(p) if d.status == "approved")
+            held = em.held_messages()
             blocked = sum(1 for s, _ in em.suppression_list() if s.active)
             paused, killed = em.outreach_store.paused, em.outreach_store.killed
-        return jsonify({"paused": paused, "automatic_stopped": killed, "approved_waiting": approved, "suppressed_addresses": blocked})
+        return jsonify({"paused": paused, "automatic_stopped": killed, "approved_waiting": len(held), "held": held[:20], "suppressed_addresses": blocked})
 
     @app.post("/api/sending/pause")
     def sending_pause():
-        """Pauses all sending at once: nothing goes out, including what you approved by hand, and nothing is lost. Approved messages wait until you resume."""
+        """Holds every message that would leave, whoever approved it, and the owner's emails. Nothing is lost: approved messages wait. Does not touch the kill switch."""
         body(EmptyBody)
         with lock:
             em.pause_sending()
@@ -163,14 +165,18 @@ def register(app, k):
 
     @app.post("/api/sending/resume")
     def sending_resume():
-        body(EmptyBody)
+        """Lifts the pause and releases what is held. With messages held it needs `release` set to exactly how many, so a resume cannot send more than the caller saw: any other number answers 409 and releases nothing. Does not touch the kill switch."""
+        b = body(ResumeBody)
         with lock:
-            em.resume_sending()
-        return jsonify({"paused": False})
+            try:
+                released = em.resume_sending(b.release)
+            except HeldMessages as exc:
+                return jsonify({"error": str(exc), "code": "held_messages", "waiting": exc.count, "held": em.held_messages()[:20]}), 409
+        return jsonify({"paused": False, "released": released})
 
     @app.post("/api/autoreply/kill")
     def autoreply_kill():
-        """Stops everything that happens by itself (standing permission, owner emails, watches). Messages you approved by hand still go: pause sending (POST /api/sending/pause) to hold those too."""
+        """Stops what happens by itself (standing permission, owner emails, watches). Messages you approved by hand still go: pause sending (POST /api/sending/pause) to hold those too. Independent of the pause."""
         body(EmptyBody)
         with lock:
             em.kill_all_autoreplies()

@@ -401,43 +401,89 @@ def test_the_permission_counts_what_it_queued_but_not_what_was_denied(em, pid, c
     assert em.autoreply_status(pid).sent_total == 0
 
 
-def test_pausing_stops_what_a_person_approved_too_and_nothing_is_lost(em, pid, chans, clock):
-    """Pause is the emergency brake on all sending. A draft approved by hand waits, unsent and not denied, and goes when sending resumes. (The kill switch alone leaves approved messages to go.)"""
+def test_pausing_holds_what_a_person_approved_and_resuming_needs_the_count(em, pid, chans, clock):
+    """Pause holds every message that would leave, whoever approved it, and nothing is lost: a held draft stays approved. Lifting the pause releases them, so it needs the exact count."""
+    from eventmate.service import HeldMessages
+
     d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
     em.pause_sending()  # approving sends at once when sending is on, so the brake goes on first
     em.approve_outreach(pid, d.draft_id, d.content_hash)
     sent, waiting = em.conversations.dispatch()
     assert sent == 0 and any("paused" in w for w in waiting) and chans["email"].sent == []
     assert em.outreach_store.get(pid, d.draft_id).status == "approved"  # still approved: not denied, not blocked
-    em.resume_sending()
-    sent, _ = em.conversations.dispatch()
-    assert sent == 1 and len(chans["email"].sent) == 1 and em.outreach_store.get(pid, d.draft_id).status == "sent"
-    assert em.outreach_store.killed is False and em.outreach_store.paused is False  # resuming lifts both
+    for wrong in (None, 0, 2):
+        with pytest.raises(HeldMessages) as e:
+            em.resume_sending(wrong)
+        assert e.value.count == 1
+    assert em.outreach_store.paused is True and chans["email"].sent == []  # nothing was released by a resume that did not know the count
+    assert em.resume_sending(1) == 1  # lifting the pause sends what is waiting, now
+    assert len(chans["email"].sent) == 1 and em.outreach_store.get(pid, d.draft_id).status == "sent"
 
 
-def test_the_kill_switch_alone_still_lets_an_approved_message_go(em, pid, chans, clock):
-    d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+def test_pause_and_the_kill_switch_are_independent(em, pid, chans, clock):
+    """Pause does not set the kill switch, and lifting it does not clear one that was set on its own. The kill switch alone still lets an approved message go."""
+    em.pause_sending()
+    assert em.outreach_store.paused is True and em.outreach_store.killed is False
     em.kill_all_autoreplies()
+    em.resume_sending()  # nothing held, so no count is needed
+    assert em.outreach_store.paused is False and em.outreach_store.killed is True  # the independently set kill switch survives
+    d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
     em.approve_outreach(pid, d.draft_id, d.content_hash)
     assert len(chans["email"].sent) == 1  # the earlier design, kept: the kill switch is about what happens by itself
+    em.resume_autoreplies()
+    assert em.outreach_store.killed is False
 
 
-def test_the_sending_status_and_pause_routes(client, em, pid):
+def test_pause_alone_holds_a_message_sent_under_a_standing_permission(em, pid, chans, clock):
+    """A standing permission's message is approved by the mandate, not by a person; the pause holds it too, without the kill switch being on."""
+    em.grant_autoreply(pid, "Asha", hours=24)
+    d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+    em.pause_sending()
+    em.outreach_store.transition(pid, d.draft_id, ("prepared",), status="approved", approved_by="mandate", decided_at=clock())
+    sent, waiting = em.conversations.dispatch()
+    assert sent == 0 and chans["email"].sent == [] and em.outreach_store.killed is False
+    assert em.outreach_store.get(pid, d.draft_id).status == "approved" and any("paused" in w for w in waiting)
+
+
+def test_the_sending_routes_report_both_switches_and_resume_needs_the_count(client, em, pid, chans):
     d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
     em.suppress_address("email", "nobody@example.com", "Meera", "asked us to stop")
-    assert client.get("/api/sending").get_json() == {"paused": False, "automatic_stopped": False, "approved_waiting": 0, "suppressed_addresses": 1}
+    assert client.get("/api/sending").get_json() == {"paused": False, "automatic_stopped": False, "approved_waiting": 0, "held": [], "suppressed_addresses": 1}
     assert post(client, "/api/sending/pause", {}).get_json() == {"paused": True}
+    assert em.outreach_store.killed is False  # pause is not the kill switch
     em.approve_outreach(pid, d.draft_id, d.content_hash)  # paused: approved, but it waits
-    assert client.get("/api/sending").get_json() == {"paused": True, "automatic_stopped": True, "approved_waiting": 1, "suppressed_addresses": 1}
-    assert post(client, "/api/sending/resume", {}).get_json() == {"paused": False}
-    assert client.get("/api/sending").get_json()["paused"] is False and client.get("/api/sending").get_json()["automatic_stopped"] is False
+    s = client.get("/api/sending").get_json()
+    assert s["paused"] is True and s["automatic_stopped"] is False and s["approved_waiting"] == 1
+    assert s["held"] == [{"plan_id": pid, "draft_id": d.draft_id, "vendor": s["held"][0]["vendor"], "channel": "email", "subject": s["held"][0]["subject"], "approved_by": s["held"][0]["approved_by"]}]
+    assert "body" not in s["held"][0]  # who and what, never the text
+    for body in ({}, {"release": 0}, {"release": 2}):
+        r = post(client, "/api/sending/resume", body)
+        assert r.status_code == 409 and r.get_json()["code"] == "held_messages" and r.get_json()["waiting"] == 1
+    assert client.get("/api/sending").get_json()["paused"] is True and chans["email"].sent == []
+    r = post(client, "/api/sending/resume", {"release": 1})
+    assert r.status_code == 200 and r.get_json() == {"paused": False, "released": 1}
+    assert client.get("/api/sending").get_json()["paused"] is False
+    assert post(client, "/api/sending/resume", {"release": "many"}).status_code in (400, 422)
 
 
-def test_cli_pause_and_resume_set_and_lift_both_switches(em, pid, tmp_path, capsys):
+def test_the_kill_switch_routes_still_mean_automatic_messages_only(client, em):
+    assert post(client, "/api/autoreply/kill", {}).get_json()["killed"] is True
+    s = client.get("/api/sending").get_json()
+    assert s["automatic_stopped"] is True and s["paused"] is False
+    assert post(client, "/api/autoreply/resume", {}).get_json()["killed"] is False
+
+
+def test_cli_pause_unpause_and_the_unchanged_kill_and_resume(em, pid, chans, tmp_path, capsys):
     from eventmate.__main__ import main
 
     base = ["--plan-dir", str(tmp_path / "p"), "--log-dir", str(tmp_path / "l")]
     assert main(base + ["inbox", "pause"]) == 0 and "paused" in capsys.readouterr().out
-    assert em.outreach_store.paused is True and em.outreach_store.killed is True
-    assert main(base + ["inbox", "resume"]) == 0
-    assert em.outreach_store.paused is False and em.outreach_store.killed is False
+    assert em.outreach_store.paused is True and em.outreach_store.killed is False
+    d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+    em.approve_outreach(pid, d.draft_id, d.content_hash)
+    assert main(base + ["inbox", "unpause"]) == 3  # one is held: it says so and releases nothing
+    out = capsys.readouterr()
+    assert "1 approved message" in out.err and "--release 1" in out.err and "held:" in out.out and em.outreach_store.paused is True
+    assert main(base + ["inbox", "unpause", "--release", "1"]) == 0 and em.outreach_store.paused is False
+    assert main(base + ["inbox", "kill"]) == 0 and em.outreach_store.killed is True
+    assert main(base + ["inbox", "resume"]) == 0 and em.outreach_store.killed is False and em.outreach_store.paused is False  # resume is the kill switch, as before
