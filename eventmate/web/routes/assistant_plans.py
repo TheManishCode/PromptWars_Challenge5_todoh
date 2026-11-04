@@ -152,7 +152,7 @@ def register(app, k):
         _arcade_pulse.begin_run("intake confirm: full plan run")
         try:
             with lock:
-                outcome = em.confirm_intake(b.draft, b.raw_text, today=today_fn(), guest_list_id=b.guest_list_id, source=b.source)
+                outcome = em.confirm_intake(b.draft, b.raw_text, today=today_fn(), guest_list_id=b.guest_list_id, source=b.source, messages=b.messages)
         except Exception as exc:
             _arcade_pulse.finish(False, str(exc))
             raise

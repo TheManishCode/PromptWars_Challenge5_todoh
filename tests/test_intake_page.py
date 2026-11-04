@@ -46,10 +46,11 @@ def dialog(browser, server):
     """The New plan dialog, open. ``dialog.say(text)`` types and reads; ``dialog.sent`` holds the body of every /api/intake call the page made."""
     ctx = browser.new_context(viewport={"width": 1440, "height": 900})
     page = ctx.new_page()
-    page.sent, page.problems = [], []
+    page.sent, page.problems, page.tradeoffs = [], [], []
     page.on("console", lambda m: page.problems.append(m.text) if m.type in ("error", "warning") and not any(n in m.text for n in NOISE) and "422" not in m.text else None)
     page.on("pageerror", lambda e: page.problems.append(str(e)))
     page.on("request", lambda r: page.sent.append(json.loads(r.post_data)) if r.url.endswith("/api/intake") and r.method == "POST" else None)
+    page.on("response", lambda r: page.tradeoffs.append((json.loads(r.request.post_data), r.json())) if r.url.endswith("/api/tradeoffs") else None)
     page.goto(server + "/app", wait_until="networkidle")
     page.click("#new-plan")
 
@@ -215,3 +216,54 @@ def test_an_empty_message_is_answered_not_ignored(dialog):
     page.wait_for_timeout(300)
     assert len(page.sent) == n, "nothing is sent for a blank message"
     assert "type" in card(page).lower() or "describe" in card(page).lower(), card(page)
+
+
+# ------------------------------------------------------------------ the round trip in the page: tabs, reload, trade-offs
+
+TIGHT = "wedding for 120 guests in Pune on 12 December 2026, budget 60 thousnd, vegetarian"
+
+
+def test_a_reload_throws_the_draft_away_and_nothing_can_be_built_from_the_empty_page(dialog, browser, server):
+    page = dialog
+    page.say(FULL + ", one guest is alergic to peanuts")
+    assert not can_build(page)
+    page.reload(wait_until="networkidle")
+    page.click("#new-plan")
+    assert page.locator("#understood").inner_text().strip() == "" and not can_build(page)
+
+
+def test_a_second_tab_keeps_its_own_open_question_and_a_press_there_does_not_touch_the_first(browser, server):
+    ctx = browser.new_context(viewport={"width": 1200, "height": 800})
+    a, b = ctx.new_page(), ctx.new_page()
+    for p in (a, b):
+        p.goto(server + "/app", wait_until="networkidle")
+        p.click("#new-plan")
+    for p in (a, b):
+        p.fill("#brief-input", "wedding for 100 guests in Pune on 12 December 2026, budget 20 lakhh")
+        p.click("#read-brief")
+        p.wait_for_selector("#understood button")
+    a.get_by_role("button", name="20 lakh").click()
+    a.wait_for_selector("#build")
+    a.fill("#brief-input", "sorry, 150 guests")
+    a.click("#read-brief")
+    a.wait_for_function("() => document.querySelector('#understood').innerText.includes('150')")
+    assert not can_build(b) and row(b, "Budget") is None, "tab B still shows its own open question"
+    b.get_by_role("button", name="20 lakh").click()
+    b.wait_for_selector("#build")
+    assert row(b, "Guests") == "100" and row(b, "Budget") == "₹20,00,000", "tab B got only its own answer, not tab A's guest change"
+    assert row(a, "Guests") == "150"
+    ctx.close()
+
+
+def test_trade_offs_keep_the_unit_the_user_pressed(dialog):
+    page = dialog
+    page.say(TIGHT)
+    page.get_by_role("button", name="60 thousand").click()
+    page.wait_for_selector("#build")
+    page.click("#build")
+    page.wait_for_selector("text=Show verified trade-offs", timeout=20000)
+    page.click("text=Show verified trade-offs")
+    page.wait_for_selector("text=Use this option", timeout=20000)
+    asked_with, got = page.tradeoffs[-1]
+    assert asked_with["draft"]["budget_total"] == 60_000 and asked_with["draft"]["unresolved"] == []
+    assert got["request"]["budget_total"] == 60_000, "the typed words alone read as ₹60"

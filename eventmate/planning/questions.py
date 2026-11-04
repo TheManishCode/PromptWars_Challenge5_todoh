@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from eventmate.schemas import _Model
 
@@ -37,6 +37,16 @@ class Unresolved(_Model):
     said: str = Field(min_length=1, max_length=80)  # the user's own words, so the question can quote them
     question: str = Field(min_length=1, max_length=320)
     picks: tuple[Pick, ...] = Field(default=(), max_length=6)
+
+    @model_validator(mode="after")
+    def _picks_are_about_this_question(self):
+        """An option may only set the fact its question is about ("number" is the one question that offers two facts). A draft that carries a button for another fact is refused."""
+        for p in self.picks:
+            if self.field != "number" and p.field != self.field:
+                raise ValueError(f"an option of the {self.field} question cannot set {p.field}")
+            if self.field == "number" and p.field not in ("guest_count", "budget_total"):
+                raise ValueError("a number question offers guests or a budget only")
+        return self
 
 
 def indian(n: int) -> str:

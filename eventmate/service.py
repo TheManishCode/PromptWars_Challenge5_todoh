@@ -183,11 +183,11 @@ class EventMate:
         ``expecting`` is the fact the last question was about; ``answer`` is an option the user pressed (see ``intake.propose``)."""
         return intake.propose(messages, prior, today or date.today(), self.repo.cities(), self.logs, self.llm, expecting=expecting, answer=answer)
 
-    def confirm_intake(self, draft: intake.IntakeDraft, raw_text: str, today: date | None = None, guest_list_id: str | None = None, source: str = "rule:parser") -> PlanOutcome:
+    def confirm_intake(self, draft: intake.IntakeDraft, raw_text: str, today: date | None = None, guest_list_id: str | None = None, source: str = "rule:parser", messages=None) -> PlanOutcome:
         """The user confirmed the review card: run the full pipeline on exactly what they approved."""
         today = today or date.today()
         self._clock(today)
-        request = intake.to_request(draft, raw_text, today, source)
+        request = intake.to_request(draft, raw_text, today, source, messages)
         return self.manager.run_request(request, today=today, guest_list_id=guest_list_id, change_reason="initial plan from the intake conversation, confirmed by the user")
 
     def _dry_run_ok(self, request):
@@ -217,6 +217,14 @@ class EventMate:
         self._today, self._guest_list_id = today or date.today(), guest_list_id
         self._clock(self._today)
         return self.tradeoff.propose(self.manager.parse(text, self._today), self._today, fares, travel)
+
+    def tradeoffs_for_draft(self, draft: intake.IntakeDraft, raw_text: str, today: date | None = None, guest_list_id: str | None = None, travel: GuestTravel | None = None, fares: CheapestDates | None = None, messages=None) -> TradeoffReport:
+        """The same as ``tradeoffs``, starting from the draft the user confirmed instead of re-reading what they typed, so an option they pressed (a unit, a city, a guest count) is kept.
+        The draft passes the same check as a confirm: nothing open, nothing skipped."""
+        self._today, self._guest_list_id = today or date.today(), guest_list_id
+        self._clock(self._today)
+        request = intake.to_request(draft, raw_text, self._today, messages=messages)
+        return self.tradeoff.propose(request, self._today, fares, travel)
 
     def guest_fares(self, travel: GuestTravel, today: date | None = None) -> CheapestDates | None:
         """The guests' cheapest fares for the next 61 days, or None when the flight tool fails (the trade-offs are then shown without fares)."""

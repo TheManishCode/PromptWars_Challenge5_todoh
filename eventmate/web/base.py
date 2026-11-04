@@ -19,8 +19,8 @@ import logging
 import re
 from datetime import date
 from pathlib import Path
-from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
+from typing import Annotated, Literal
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 from eventmate.planning import intake
 from eventmate.planning.delta import EventDelta
 from eventmate.voice import audio as voice_audio
@@ -84,8 +84,18 @@ class PlanBody(_Strict):
     guest_list_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
 
-class TradeoffsBody(PlanBody):
+class TradeoffsBody(_Strict):
+    request: str = Field(default="", max_length=2000)  # the words, read from scratch (no draft)
+    draft: intake.IntakeDraft | None = None  # or the draft the user confirmed: then it is used as it stands and the words are only checked against it
+    messages: list[Annotated[str, Field(max_length=2000)]] | None = Field(default=None, max_length=intake.MAX_MESSAGES)
+    guest_list_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
     guest_travel: GuestTravel | None = None  # guests flying in: adds indicative fares to date-shift options
+
+    @model_validator(mode="after")
+    def _one_source(self):
+        if self.draft is None and not self.request.strip():
+            raise ValueError("send the draft or the request text")
+        return self
 
 
 class IntakeBody(_Strict):
@@ -98,6 +108,7 @@ class IntakeBody(_Strict):
 class IntakeConfirmBody(_Strict):
     draft: intake.IntakeDraft
     raw_text: str = Field(default="", max_length=2000)
+    messages: list[Annotated[str, Field(max_length=2000)]] | None = Field(default=None, max_length=intake.MAX_MESSAGES)  # what the user typed, one message each: read again to check no answer was lost
     source: str = Field(default="rule:parser", max_length=80, pattern=r"^[A-Za-z0-9:._-]+$")
     guest_list_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
 

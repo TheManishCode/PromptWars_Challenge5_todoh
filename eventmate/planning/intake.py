@@ -20,7 +20,7 @@ from datetime import date
 from typing import Annotated, Literal
 from collections.abc import Iterable, Sequence
 
-from pydantic import Field, ValidationError, field_validator
+from pydantic import Field, StrictInt, ValidationError, field_validator
 
 from eventmate.agents import manager as mgr
 from eventmate.llm import LLMClient, PromptError, PromptStore
@@ -95,6 +95,7 @@ class IntakeDraft(_Model):
     services: tuple[VendorCategory, ...] = ()
     reminders: tuple[ReminderKind, ...] = ()
     unresolved: tuple[Unresolved, ...] = Field(default=(), max_length=MAX_OPEN_QUESTIONS)  # what the user wrote that could not be read safely; the draft is not ready while any is open
+    settled: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[a-z_]+(?::[A-Za-z' -]{1,40})?$")], ...] = Field(default=(), max_length=40)  # the questions the user has answered; confirm refuses a message that raises one that is not here
 
     _check = field_validator("city")(_plain)
 
@@ -130,7 +131,7 @@ class IntakeAnswer(_Model):
     """The user pressed one of the options of an open question. Sent instead of reading any text: the chosen value is applied exactly."""
 
     key: str = Field(min_length=1, max_length=60)
-    pick: int = Field(ge=0, lt=MAX_OPEN_QUESTIONS)
+    pick: StrictInt = Field(ge=0, lt=MAX_OPEN_QUESTIONS)  # a number, not "0"
 
 
 class IntakeTurn(_Model):
@@ -316,7 +317,7 @@ def _llm_draft(llm: LLMClient, prompts: PromptStore, logs: RunLogs, message: str
         return None, f"message not sent to a model: {exc}"
     user = render_template(body, {
         "today": today.isoformat(),
-        "draft": _FENCE.sub("", prior.model_dump_json(exclude_none=True, exclude={"unresolved"})),
+        "draft": _FENCE.sub("", prior.model_dump_json(exclude_none=True, exclude={"unresolved", "settled"})),
         "message": _FENCE.sub("", Placeholders().mask(clean_message)),  # contact details never reach the model
         "community_subtypes": ", ".join(load_profiles().profiles),
     })
@@ -400,11 +401,13 @@ def propose(
     notes: list[str] = []
     source, flags = "rule:parser", ()
     if answer is not None:
-        draft = _apply_answer(prior, answer)
+        draft = _apply_answer(prior, answer, today)
         return _turn(draft, prior, notes, known, source, flags)
     read = _rule_draft(latest, today, notes, known, prior, expecting)
     new, asked = read.draft, list(read.unresolved)
     new, asked = _bare_answer(expecting, latest, known, prior, new, asked, notes)
+    if not asked and not new_found(new) and (number := reading.lone_number(latest)) is not None and prior_has_facts(prior) and not _answered(expecting, new):
+        asked = [reading.number_question(number, prior.guest_count, prior.budget_total)]  # before any model is asked, so the model cannot answer it
     if llm is not None:
         ai, reason = _llm_draft(llm, prompts or PromptStore(), logs, latest, prior, today, "intake")
         if ai is None:
@@ -414,7 +417,7 @@ def propose(
                 else "The AI reader was unavailable, so I used the basic reader. Please check the details."
             )
         else:
-            ai = _grounded(ai, latest, prior).model_copy(update={"allergens": (), "allergy_unclear": (), "diet_notes": (), "diet_unclear": ()})  # a model may not state or drop an allergy
+            ai = _constrain_model(_grounded(ai, latest, prior), new, prior, asked, read.removed_cities)
             source, new_ai = _source_label(llm), _merge(new, ai)  # the parser's reading is the baseline
             flags = tuple(f for f in FIELDS if _uncorroborated(getattr(ai, f), getattr(new, f)))
             new = new_ai
@@ -430,11 +433,28 @@ def propose(
     if draft.city and city_aliases.canonical(draft.city) in gone and not new.city:
         draft = draft.model_copy(update={"city": None})  # "not Pune": the earlier city does not stand in
     # an ambiguity in the user's own words is theirs to settle: no earlier or AI-picked value stands in, and the question stays open until they answer
-    draft = draft.model_copy(update={"unresolved": _still_open(prior.unresolved, asked, new), **{q.field: None for q in asked if q.field in _SCALARS}})
-    if not asked and not new_found(new) and (number := reading.lone_number(latest)) is not None and prior_has_facts(prior) and not _answered(expecting, new):
-        asked = [reading.number_question(number, prior.guest_count, prior.budget_total)]
-        draft = draft.model_copy(update={"unresolved": _still_open(prior.unresolved, asked, new)})
+    open_now = _still_open(prior.unresolved, asked, new)
+    draft = draft.model_copy(update={"unresolved": open_now, "settled": _settled(prior, open_now), **{q.field: None for q in asked if q.field in _SCALARS}})
     return _turn(draft, prior, notes, known, source, flags, read.removed_cities, latest, new)
+
+
+_SCALAR_FACTS = ("event_type", "community_subtype", "guest_count", "city", "event_date", "budget_total", "venue_setting")
+
+
+def _constrain_model(ai: IntakeDraft, rules: IntakeDraft, prior: IntakeDraft, asked: Sequence[Unresolved], removed: Sequence[str]) -> IntakeDraft:
+    """What a model may add. It fills a fact only when the rules left it empty, and never one with an open question (this message's or an earlier one's): a question is closed by the user,
+    not by a model repeating its guess. It cannot state or drop an allergy or a food note, cannot keep a city the user ruled out, and cannot set the questions themselves."""
+    open_fields = {q.field for q in (*asked, *prior.unresolved)}
+    if "number" in open_fields:
+        open_fields |= {"guest_count", "budget_total"}
+    empty = {f: (() if isinstance(getattr(ai, f), tuple) else None) for f in FIELDS}
+    drop = {f for f in _SCALAR_FACTS if getattr(rules, f) is not None} | (open_fields & set(FIELDS))
+    gone = {city_aliases.canonical(c) for c in removed}
+    if ai.city and city_aliases.canonical(ai.city) in gone:
+        drop.add("city")
+    update = {f: empty[f] for f in drop}
+    update |= {"allergens": (), "allergy_unclear": (), "diet_notes": (), "diet_unclear": (), "unresolved": (), "settled": ()}
+    return ai.model_copy(update=update)
 
 
 def _answered(field: str | None, new: IntakeDraft) -> bool:
@@ -509,7 +529,14 @@ def _still_open(before: Sequence[Unresolved], asked: Sequence[Unresolved], new: 
     return tuple([*kept, *asked])[:MAX_OPEN_QUESTIONS]
 
 
-def _apply_answer(prior: IntakeDraft, answer: IntakeAnswer) -> IntakeDraft:
+def _settled(prior: IntakeDraft, open_now: Sequence[Unresolved]) -> tuple[str, ...]:
+    """The keys of questions the user has answered: every question that was open before this message and is not open now, plus what was settled before, minus any that is open again."""
+    now = {q.key for q in open_now}
+    closed = [q.key for q in prior.unresolved if q.key not in now]
+    return tuple(k for k in dict.fromkeys((*prior.settled, *closed)) if k not in now)[-40:]
+
+
+def _apply_answer(prior: IntakeDraft, answer: IntakeAnswer, today: date) -> IntakeDraft:
     """Apply the option the user pressed. Nothing is read from text: the value is the one the question offered, checked as any draft is."""
     item = next((u for u in prior.unresolved if u.key == answer.key), None)
     if item is None:
@@ -524,6 +551,8 @@ def _apply_answer(prior: IntakeDraft, answer: IntakeAnswer) -> IntakeDraft:
                 fields[pick.field] = int(pick.value)
             elif pick.field == "event_date":
                 fields["event_date"] = date.fromisoformat(pick.value)
+                if fields["event_date"] < today:
+                    raise IntakeError(f"{pick.value} is in the past")
             elif pick.field == "city":
                 fields["city"] = pick.value
             elif pick.field == "allergens":
@@ -534,6 +563,7 @@ def _apply_answer(prior: IntakeDraft, answer: IntakeAnswer) -> IntakeDraft:
             words = re.sub(r"[^A-Za-z' -]", "", item.said).strip()[:60]
             fields["allergy_unclear"] = tuple(dict.fromkeys((*prior.allergy_unclear, *([words] if words else ()))))[:5]
         fields["unresolved"] = tuple(u for u in prior.unresolved if u.key != item.key)
+        fields["settled"] = tuple(dict.fromkeys((*(k for k in prior.settled if k not in {u.key for u in fields["unresolved"]}), item.key)))[-40:]
         return IntakeDraft.model_validate(fields)
     except ValidationError as exc:
         raise IntakeError("that option cannot be applied: " + "; ".join(e["msg"] for e in exc.errors())) from exc
@@ -587,17 +617,36 @@ def check_messages(messages: Sequence[str]) -> list[str]:
 # ------------------------------------------------------------------ confirm
 
 
-def to_request(draft: IntakeDraft, raw_text: str, today: date, source: str = "rule:parser") -> EventRequest:
-    """Build the planning request from a draft the user confirmed. Fails closed on anything missing."""
+def raised_by(messages: Sequence[str], draft: IntakeDraft, today: date) -> list[Unresolved]:
+    """The safety questions the user's own messages raise, read again from the words: a budget or guest count that was unreadable, an allergy or diet word that was not spelled out. The
+    page sends the messages it typed, one by one, so each is read as it was when it was sent. Used by confirm and trade-offs to check that none was skipped."""
+    out: list[Unresolved] = []
+    for m in messages:
+        t = reading.number_words_to_digits(unicodedata.normalize("NFKC", m))
+        t = mgr._ascii_digits(t, [], [])
+        out += [q for q in (reading.screen_guests(t), reading.screen_budget(t, draft.guest_count)) if q]
+        out += [allergies.question_for(s) for s in allergies.suspects(t)]
+        if not any(rx.search(t) for rx, _ in mgr._DIETS) and (misspelt := diets.misspelt_diet(t)):
+            out.append(misspelt)
+    return list({q.key: q for q in out}.values())
+
+
+def to_request(draft: IntakeDraft, raw_text: str, today: date, source: str = "rule:parser", messages: Sequence[str] | None = None) -> EventRequest:
+    """Build the planning request from a draft the user confirmed. Fails closed on anything missing, open or skipped.
+
+    ``messages`` are the words the user typed (``raw_text`` stands in when there are none). A question those words raise that the draft neither holds open nor records as answered
+    was lost on the way here, so the request is refused rather than planned without the user's answer."""
     if draft.missing():
         raise IntakeError("still needed: " + ", ".join(draft.missing()))
     if draft.unresolved:
         raise IntakeError("still unresolved, answer these first: " + "; ".join(u.question for u in draft.unresolved))
+    if skipped := [q for q in raised_by(list(messages) if messages else [raw_text], draft, today) if q.key not in draft.settled]:
+        raise IntakeError("still unresolved (an answer was lost), answer these first: " + "; ".join(q.question for q in skipped))
     if draft.event_date < today:
         raise IntakeError("event date is in the past")
     if (draft.event_date - today).days > mgr.MAX_EVENT_AHEAD_DAYS:
         raise IntakeError("event date is more than 3 years away")
-    digest = hashlib.sha256(draft.model_dump_json(exclude={"unresolved"}).encode()).hexdigest()[:12]  # the receipt names the facts approved; open questions cannot be, so there are none
+    digest = hashlib.sha256(draft.model_dump_json(exclude={"unresolved", "settled"}).encode()).hexdigest()[:12]  # the receipt names the facts approved; open questions cannot be, so there are none
     assumptions: list[str] = [f"details approved by the user on the review card (read by {source}; draft sha256:{digest})"]
     services = list(dict.fromkeys((VendorCategory.VENUE, *draft.services)))
     if VendorCategory.VENUE not in draft.services:

@@ -214,7 +214,10 @@ def register(app, k):
         b = body(TradeoffsBody)
         fares = em.guest_fares(b.guest_travel, today_fn()) if b.guest_travel else None  # waits on the network: before the lock
         with lock:
-            report = em.tradeoffs(b.request, today=today_fn(), guest_list_id=b.guest_list_id, travel=b.guest_travel, fares=fares)
+            if b.draft is not None:
+                report = em.tradeoffs_for_draft(b.draft, b.request, today=today_fn(), guest_list_id=b.guest_list_id, travel=b.guest_travel, fares=fares, messages=b.messages)
+            else:
+                report = em.tradeoffs(b.request, today=today_fn(), guest_list_id=b.guest_list_id, travel=b.guest_travel, fares=fares)
         return out(report)
 
     @app.post("/api/tradeoffs/apply")

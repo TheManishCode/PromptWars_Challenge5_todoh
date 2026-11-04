@@ -656,7 +656,7 @@
   function build() {
     if (st.busy || !st.draft) return; busy(true); var src = st.turn && /^[A-Za-z0-9:._-]+$/.test(st.turn.source || '') ? st.turn.source : 'rule:parser';
     announce('Building the plan and checking every hard constraint.'); startProgress();
-    api('/api/intake/confirm', { method: 'POST', body: { draft: st.draft, raw_text: st.messages.join('\n').slice(0, 2000), source: src } }).then(function (r) {
+    api('/api/intake/confirm', { method: 'POST', body: { draft: st.draft, raw_text: st.messages.join('\n').slice(0, 2000), messages: st.messages, source: src } }).then(function (r) {
       busy(false); window.setTimeout(stopProgress, 600);
       if (r.ok && r.data && r.data.plan) { st.reality = r.data.reality || null; window.setTimeout(function () { closeDialog(briefDlg); }, reduce.matches ? 0 : 450); st.messages = []; st.draft = null; st.turn = null; clear($('#understood')); refreshAll(r.data.plan.plan_id).then(function () { announce('Plan ready.'); openAssistant(); say('ai', (r.data.reality && r.data.reality.message) || 'Plan ready.'); }); return; }
       if (!r.lost) failure(r);
@@ -672,7 +672,7 @@
   }
   function tradeoffs(btn, out) {
     btn.disabled = true; clear(out);
-    api('/api/tradeoffs', { method: 'POST', body: { request: st.messages.join('\n').slice(0, 2000) } }).then(function (r) {
+    api('/api/tradeoffs', { method: 'POST', body: { request: st.messages.join('\n').slice(0, 2000), draft: st.draft, messages: st.messages } }).then(function (r) {
       btn.disabled = false;
       if (!r.ok || !r.data) { out.appendChild(h('p', { class: 'notice bad', text: errText(r, 'Trade-offs could not be worked out') })); return; }
       var t = r.data;
