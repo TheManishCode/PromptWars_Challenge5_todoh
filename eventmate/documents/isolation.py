@@ -123,14 +123,15 @@ def _landlock_enter(read_dirs: list[str], read_files: list[str], work: str, list
 
 
 def _confinement_paths(interpreter: str, package_root: str, model_home: str | None) -> tuple[list[str], list[str]]:
-    dirs = ["/usr", "/lib", "/lib64", "/bin", "/sbin", "/proc", "/sys/devices/system/cpu", os.path.join(package_root, "eventmate")]
+    # /proc is not granted whole: another process of the same user (the server) has its environment, command line and memory there. Only the reader's own entry, and the two files that describe the machine.
+    dirs = ["/usr", "/lib", "/lib64", "/bin", "/sbin", "/proc/self", "/sys/devices/system/cpu", os.path.join(package_root, "eventmate")]
     venv = Path(interpreter).parent.parent
     for p in (venv if (venv / "pyvenv.cfg").exists() else None, Path(os.path.realpath(interpreter)).parent.parent, Path(sys.base_prefix)):
         if p is not None and str(p) != "/":
             dirs.append(str(p))
     if model_home:
         dirs.append(model_home)
-    return list(dict.fromkeys(dirs)), ["/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/mime.types", "/etc/localtime", "/dev/urandom", "/dev/random", "/dev/zero"]
+    return list(dict.fromkeys(dirs)), ["/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/mime.types", "/etc/localtime", "/proc/cpuinfo", "/proc/meminfo", "/dev/urandom", "/dev/random", "/dev/zero"]
 
 
 def _binds(interpreter: str, package_root: str, work: str, model_home: str | None) -> list[str]:

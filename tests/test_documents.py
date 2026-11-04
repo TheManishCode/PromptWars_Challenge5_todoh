@@ -514,7 +514,8 @@ def test_the_warm_up_sample_is_a_well_formed_pdf():
 def _run(plan, code, *args, work=None):
     import subprocess
 
-    return subprocess.run([*plan.prefix, sys.executable, "-c", code, *args], capture_output=True, text=True, timeout=60, preexec_fn=plan.preexec, cwd=work).stdout.strip()
+    r = subprocess.run([*plan.prefix, sys.executable, "-c", code, *args], capture_output=True, text=True, timeout=60, preexec_fn=plan.preexec, cwd=work)
+    return (r.stdout.strip() or "STDERR:" + r.stderr.strip()[-300:])
 
 
 NET_PROBE = "import socket,sys\ntry:\n    s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1', int(sys.argv[1]))); print('connected')\nexcept OSError:\n    print('refused')"
@@ -598,3 +599,74 @@ def test_a_contained_worker_and_its_children_die_with_the_timeout():
     else:
         subprocess.run(["pkill", "-f", f"sleep {marker}"])
         pytest.fail("a child of the contained reader outlived the timeout")
+
+
+def test_the_confined_reader_cannot_read_another_processes_proc_entry_whatever_ptrace_scope_says(tmp_path):
+    """Landlock, not the kernel's ptrace rules, keeps the reader out of the server's /proc entry. /proc/<pid>/cmdline is readable by any user, so only the reader's own rules can refuse it."""
+    import subprocess
+
+    from eventmate.documents import isolation
+
+    if not isolation._landlock_works(sys.executable, sandbox.ROOT):
+        pytest.skip("Landlock is not usable here")
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)", "another-process-marker"])
+    try:
+        dirs, files = isolation._confinement_paths(sys.executable, sandbox.ROOT, None)
+        plan = isolation.Plan("confined", (), isolation._landlock_enter(dirs, files, str(tmp_path), (sandbox.ROOT,)))
+        code = ("import os,sys\ndef can(p):\n    try:\n        open(p,'rb').read(); return True\n    except OSError:\n        return False\n"
+                "print(can('/proc/%s/cmdline' % sys.argv[1]), can('/proc/%s/status' % sys.argv[1]), can('/proc/self/status'), can('/proc/cpuinfo'))")
+        assert _run(plan, code, str(other.pid), work=tmp_path) == "False False True True"
+        assert subprocess.run([sys.executable, "-c", code, str(other.pid)], capture_output=True, text=True).stdout.strip() == "True True True True"  # without the rules it is readable
+    finally:
+        other.kill()
+        other.wait()
+
+
+@pytest.mark.parametrize("level", ["contained", "confined", "no-sockets"])
+def test_a_process_the_reader_starts_is_shut_in_the_same_way(level, tmp_path, monkeypatch):
+    """The restrictions are inherited by every child: a grandchild started by the reader cannot reach the network or the server's files either."""
+    import socket
+
+    from eventmate.documents import isolation
+
+    usable = {"contained": lambda: isolation._bwrap_works(sys.executable, sandbox.ROOT), "confined": lambda: isolation._landlock_works(sys.executable, sandbox.ROOT) and isolation._seccomp_works(),
+              "no-sockets": isolation._seccomp_works}
+    if not usable[level]():
+        pytest.skip(f"this machine cannot set up the {level} level")
+    monkeypatch.setattr(isolation, "available", lambda *a, **k: level)
+    secret = tmp_path / "outside" / "plan.json"
+    secret.parent.mkdir()
+    secret.write_text("private")
+    work = tmp_path / "work"
+    work.mkdir()
+    plan = isolation.plan(sys.executable, sandbox.ROOT, str(work), None)
+    with socket.socket() as srv:
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(4)
+        port = srv.getsockname()[1]
+        grandchild = (f"import socket\ntry:\n    s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1',{port})); n='connected'\nexcept OSError:\n    n='refused'\n"
+                      f"try:\n    open({str(secret)!r}).read(); f='read'\nexcept OSError:\n    f='denied'\nprint(n, f)")
+        child = f"import subprocess,sys\nprint(subprocess.run([sys.executable,'-c',{grandchild!r}],capture_output=True,text=True).stdout.strip())"  # a grandchild, through a shell as well
+        out = _run(plan, child, work=work)
+    assert out.split()[0] == "refused"  # the network is cut for the grandchild
+    if level != "no-sockets":
+        assert out == "refused denied"  # and, where files are hidden, so are they
+
+
+@pytest.mark.parametrize("how", ["restriction fails to apply", "wrapper cannot start", "wrapper exits at once"])
+def test_when_the_restrictions_fail_at_read_time_the_file_is_not_read(how, tmp_path, monkeypatch):
+    """The probe passed at start-up, but at read time the setup breaks: the reader must not run, and the person is told, not given a weaker reader."""
+    from eventmate.documents import isolation
+
+    marker = tmp_path / "reader-ran"
+
+    def broken():
+        raise OSError(1, "could not install the restriction")
+
+    plans = {"restriction fails to apply": isolation.Plan("confined", (), broken), "wrapper cannot start": isolation.Plan("contained", ("/nonexistent/bwrap",)),
+             "wrapper exits at once": isolation.Plan("contained", ("/usr/bin/false",))}
+    monkeypatch.setattr(isolation, "plan", lambda *a, **k: plans[how])
+    monkeypatch.setenv("EVENTMATE_MODE", "shared")
+    with pytest.raises(DocumentError, match="could not be (started with its restrictions in place|read)"):
+        sandbox.convert(b"Item,Qty\nA,1\n", "q.csv", command=[sys.executable, "-c", f"open({str(marker)!r}, 'w').write('ran')"])
+    assert not marker.exists()  # the reader never ran

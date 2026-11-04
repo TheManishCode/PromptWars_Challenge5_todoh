@@ -138,8 +138,11 @@ def convert(data: bytes, filename: str, *, timeout: float | None = None, memory:
             if shut.preexec:
                 shut.preexec()
         with open(out, "wb") as sink:
-            proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=sink, stderr=subprocess.DEVNULL, cwd=work, env=env,
-                                    preexec_fn=shut_in, close_fds=True)
+            try:
+                proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=sink, stderr=subprocess.DEVNULL, cwd=work, env=env,
+                                        preexec_fn=shut_in, close_fds=True)
+            except (OSError, subprocess.SubprocessError):
+                raise DocumentError("the file reader could not be started with its restrictions in place, so the file was not read") from None  # the restrictions failed to apply: nothing ran
             deadline, code, why = time.monotonic() + timeout, None, ""
             while code is None:
                 try:
