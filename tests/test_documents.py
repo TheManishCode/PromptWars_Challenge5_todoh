@@ -670,3 +670,26 @@ def test_when_the_restrictions_fail_at_read_time_the_file_is_not_read(how, tmp_p
     with pytest.raises(DocumentError, match="could not be (started with its restrictions in place|read)"):
         sandbox.convert(b"Item,Qty\nA,1\n", "q.csv", command=[sys.executable, "-c", f"open({str(marker)!r}, 'w').write('ran')"])
     assert not marker.exists()  # the reader never ran
+
+
+def test_the_socket_filter_also_refuses_the_x32_system_call_range():
+    """On x86-64 the x32 ABI reports the same architecture with 0x40000000 set in the call number, so a filter that matches socket() as 41 alone is bypassed by 0x40000029."""
+    import platform
+    import subprocess
+
+    from eventmate.documents import isolation
+
+    if platform.machine() != "x86_64" or not isolation._seccomp_works():
+        pytest.skip("x32 exists only on x86-64, and needs the seccomp filter")
+    code = ("import ctypes, os\nlibc = ctypes.CDLL(None, use_errno=True)\n"
+            "x32_socket = libc.syscall(0x40000000 + 41, 2, 1, 0)\n"
+            "print('x32 socket fd' if x32_socket >= 0 else 'x32 socket refused', ctypes.get_errno() if x32_socket < 0 else 0)\n"
+            "plain_socket = libc.syscall(41, 2, 1, 0)\nprint('plain socket fd' if plain_socket >= 0 else 'plain socket refused', ctypes.get_errno() if plain_socket < 0 else 0)\n"
+            "uring = libc.syscall(0x40000000 + 425, 8, 0)\nprint('x32 io_uring ok' if uring >= 0 else 'x32 io_uring refused', ctypes.get_errno() if uring < 0 else 0)")
+    unfiltered = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True).stdout.splitlines()
+    filtered = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, preexec_fn=isolation._seccomp_no_sockets).stdout.splitlines()
+    assert filtered == ["x32 socket refused 1", "plain socket refused 1", "x32 io_uring refused 1"], filtered  # EPERM (1) for all three
+    if unfiltered[0].startswith("x32 socket fd"):
+        assert True  # this kernel has x32, so the assertion above was a real test of the range
+    else:
+        pytest.skip("this kernel has no x32 ABI: the filter is correct, but the test could not show the bypass it prevents")

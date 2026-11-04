@@ -7,7 +7,7 @@ Three ways, tried in this order, each probed once on this machine (a probe that 
 * ``confined``: Landlock (a Linux security module that needs no privilege) plus the socket filter below. The reader can open only the same short list of paths, read only, and its own
   directory read-write; everything else, including the server's data and ``.env``, is refused with EPERM. Works in the locked-down container, where bubblewrap cannot run.
 * ``network``: ``unshare -rn``. No network, not even loopback. The reader still sees the files the server's user can read.
-* ``no-sockets``: a seccomp filter that makes ``socket()`` fail (and io_uring, which can open sockets). Needs no namespace and no privilege, so it works in the locked-down container
+* ``no-sockets``: a seccomp filter that makes ``socket()`` fail (and io_uring, which can open sockets), and that refuses the whole x32 system-call range on x86-64, where an exact match on the call number is bypassed by setting the x32 bit. Needs no namespace and no privilege, so it works in the locked-down container
   the Dockerfile builds (all capabilities dropped, no-new-privileges), where the first two cannot. Same limit as ``network``: files are not hidden.
 
 ``none`` means nothing could be set up. Shared mode refuses to start then (``web/hosting.py``); locally the reader still runs unless ``EVENTMATE_REQUIRE_NETLESS=1``.
@@ -52,11 +52,13 @@ def _seccomp_no_sockets() -> None:
     def ins(code, jt, jf, k):
         return struct.pack("HBBI", code, jt, jf, k)
 
-    LD_W_ABS, JEQ_K, RET_K = 0x20, 0x15, 0x06
+    LD_W_ABS, JEQ_K, JGE_K, RET_K = 0x20, 0x15, 0x35, 0x06
     ALLOW, KILL, DENY = 0x7FFF0000, 0x00000000, 0x00050000 | EPERM
+    X32_BIT = 0x40000000  # on x86-64 the x32 ABI reports the same architecture and sets this bit in the call number: socket() is then 0x40000029 and an exact match on 41 misses it
     prog = b"".join([
         ins(LD_W_ABS, 0, 0, 4), ins(JEQ_K, 1, 0, audit), ins(RET_K, 0, 0, KILL),  # a different architecture: refuse to guess
         ins(LD_W_ABS, 0, 0, 0),  # the system call number
+        *([ins(JGE_K, 0, 1, X32_BIT), ins(RET_K, 0, 0, DENY)] if platform.machine() == "x86_64" else []),  # the whole x32 range, not only the two calls: nothing here needs it
         ins(JEQ_K, 0, 1, nr_socket), ins(RET_K, 0, 0, DENY),
         ins(JEQ_K, 0, 1, nr_uring), ins(RET_K, 0, 0, DENY),
         ins(RET_K, 0, 0, ALLOW),
