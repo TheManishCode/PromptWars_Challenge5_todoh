@@ -167,14 +167,14 @@ def register(app, k):
 
     @app.post("/api/sending/resume")
     def sending_resume():
-        """Lifts the pause and sends what is held. With anything held it needs `snapshot`, the id GET /api/sending gave for the queue you reviewed: another queue, even of the same size, answers 409 and releases nothing. Approvals older than 48 hours are not sent. Does not touch the kill switch."""
+        """Lifts the pause for exactly the queue you reviewed. With anything held it needs `snapshot`, the id GET /api/sending gave for it: another queue, even of the same size, answers 409 and releases nothing, and the check and the lift are atomic against every approval and sender. The reviewed messages still go through the daily and per-vendor limits, the plan check, the do-not-contact list and the 48-hour approval, so the answer says how many were queued, sent, are still waiting, and were stopped (and why). `queued` is not a promise that many will be sent. Does not touch the kill switch."""
         b = body(ResumeBody)
         with lock:
             try:
-                released = em.resume_sending(b.snapshot)
+                outcome = em.resume_sending(b.snapshot)
             except HeldMessages as exc:
                 return jsonify({"error": str(exc), "code": "held_messages", "waiting": exc.count, "held_snapshot": exc.snapshot, "held": em.held_messages()[:20], "lapsed": em.lapsed_messages()[:20]}), 409
-        return jsonify({"paused": False, "released": released})
+        return jsonify({"paused": False, **outcome})
 
     @app.post("/api/autoreply/kill")
     def autoreply_kill():

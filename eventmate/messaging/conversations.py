@@ -36,6 +36,14 @@ def _address_key(channel: str, value: str) -> str:
         return (value or "").strip().casefold()
 
 
+class HeldMessages(ValueError):
+    """Resuming would release approved messages the caller did not review: the queue is not the one they named."""
+
+    def __init__(self, count: int, snapshot: str):
+        self.count, self.snapshot = count, snapshot
+        super().__init__(f"{count} approved message{'s are' if count != 1 else ' is'} waiting and the queue is not the one you reviewed: look at it, then resume naming its snapshot ({snapshot})")
+
+
 LEASE = timedelta(minutes=5)  # a send claimed longer ago than this and never finished is recorded as unknown
 APPROVAL_TTL = timedelta(hours=48)  # how long an approval stays good while its message waits (paused, held by a limit, the app down). Longer than the 24-hour send limits, so ordinary waiting never lapses; a message held longer is not sent and needs a fresh draft
 LAPSED = "the approval was more than 48 hours old when it would have gone out, so it was not sent; write a fresh draft"
@@ -252,6 +260,9 @@ class ConversationService:
                     waiting.append("sending is paused: nothing goes out, and what you approved waits, until you resume") if not any("paused" in w for w in waiting) else None
                     continue
                 with self.store._locked():  # count and claim as one step across processes: two dispatchers must not both see room for one more (F-003)
+                    if self.store.paused:  # the pause may have been set after the check above, by another process: nothing is claimed once it is on
+                        waiting.append("sending is paused: nothing goes out, and what you approved waits, until you resume") if not any("paused" in w for w in waiting) else None
+                        continue
                     recent = self._sent_since(day)
                     if len(recent) >= self.policy.per_day:
                         waiting.append(f"daily limit of {self.policy.per_day} messages reached")
@@ -449,10 +460,28 @@ class ConversationService:
         self.store.set_paused(True)
 
     def unpause(self) -> int:
-        """Lift the pause and send what is waiting, within the usual limits (what the limits hold back goes on a later dispatch). Returns how many went out now."""
-        self.store.set_paused(False)
+        """Lift the pause with no review. Only for a queue that is empty; ``release`` is the way to lift it when anything is held. Returns how many went out now."""
+        with self.store._locked():
+            if self.held():
+                raise HeldMessages(len(self.held()), self.snapshot_of(self.held()))
+            self.store.set_paused(False)
         sent, _ = self.dispatch()
         return sent
+
+    def release(self, snapshot: str | None) -> list[OutreachDraft]:
+        """Lift the pause for exactly the queue that was reviewed, and send it (within the usual limits, staleness and do-not-contact checks, and the approval's age).
+
+        The check and the lift happen under the store's cross-process lock, which every approval, every claim and the worker's dispatch also take: no approval from the web server, the command line
+        or the worker can fall between "this is the queue" and "the pause is off", so nothing that was not reviewed is carried out with it. A queue that differs in any draft, text or approval
+        time, even one of the same size, raises ``HeldMessages`` and changes nothing. What is approved after the lift is ordinary approval with sending on. Returns the reviewed drafts."""
+        with self.store._locked():
+            held = self.held()
+            current = self.snapshot_of(held)
+            if held and snapshot != current:
+                raise HeldMessages(len(held), current)
+            self.store.set_paused(False)
+        self.dispatch()
+        return held
 
     def is_lapsed(self, d: OutreachDraft, now: datetime | None = None) -> bool:
         return d.status == "approved" and d.decided_at is not None and (now or self.now()) - d.decided_at > APPROVAL_TTL

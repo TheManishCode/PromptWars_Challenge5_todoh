@@ -417,7 +417,8 @@ def test_pausing_holds_what_a_person_approved_and_resuming_needs_the_reviewed_qu
             em.resume_sending(wrong)
         assert e.value.count == 1 and e.value.snapshot == snap
     assert em.outreach_store.paused is True and chans["email"].sent == []  # nothing was released by a resume that did not name the queue
-    assert em.resume_sending(snap) == 1  # lifting the pause sends what is waiting, now
+    out = em.resume_sending(snap)  # lifting the pause sends what is waiting, now
+    assert out == {"queued": 1, "sent": 1, "waiting": 0, "stopped": []}
     assert len(chans["email"].sent) == 1 and em.outreach_store.get(pid, d.draft_id).status == "sent"
 
 
@@ -437,7 +438,7 @@ def test_a_queue_of_the_same_size_but_different_messages_is_not_the_one_that_was
     with pytest.raises(HeldMessages):
         em.resume_sending(reviewed)
     assert chans["email"].sent == [] and em.outreach_store.paused is True
-    assert em.resume_sending(em.held_snapshot()) == 1 and [m[0] for m in chans["email"].sent] == ["kitchen@rasoi.in"]
+    assert em.resume_sending(em.held_snapshot())["queued"] == 1 and [m[0] for m in chans["email"].sent] == ["kitchen@rasoi.in"]
 
 
 def test_an_approval_older_than_two_days_is_not_released_and_needs_a_fresh_draft(em, pid, chans, clock):
@@ -453,7 +454,7 @@ def test_an_approval_older_than_two_days_is_not_released_and_needs_a_fresh_draft
     assert em.held_messages() == [] and [m["draft_id"] for m in em.lapsed_messages()] == [old.draft_id]  # listed as not going out, before anyone sweeps it
     fresh = em.draft_outreach(pid, C.CATERER, "email", "kitchen@rasoi.in", "Meera")
     em.approve_outreach(pid, fresh.draft_id, fresh.content_hash)  # approved now, still paused
-    assert em.resume_sending(em.held_snapshot()) == 1
+    assert em.resume_sending(em.held_snapshot())["queued"] == 1
     assert [m[0] for m in chans["email"].sent] == ["kitchen@rasoi.in"]  # only the fresh one went
     gone = em.outreach_store.get(pid, old.draft_id)
     assert gone.status == "expired" and gone.error == LAPSED
@@ -514,7 +515,7 @@ def test_the_sending_routes_report_both_switches_and_resume_needs_the_snapshot(c
     assert client.get("/api/sending").get_json()["paused"] is True and chans["email"].sent == []
     assert post(client, "/api/sending/resume", {"snapshot": "not-a-snapshot"}).status_code in (400, 422)
     r = post(client, "/api/sending/resume", {"snapshot": s["held_snapshot"]})
-    assert r.status_code == 200 and r.get_json() == {"paused": False, "released": 1}
+    assert r.status_code == 200 and r.get_json() == {"paused": False, "queued": 1, "sent": 1, "waiting": 0, "stopped": []}
     assert client.get("/api/sending").get_json()["paused"] is False and len(chans["email"].sent) == 1
 
 
@@ -544,3 +545,76 @@ def test_cli_pause_unpause_and_the_unchanged_kill_and_resume(em, pid, chans, clo
     assert main(base + ["inbox", "unpause", "--snapshot", snap]) == 0 and em.outreach_store.paused is False
     assert main(base + ["inbox", "kill"]) == 0 and em.outreach_store.killed is True
     assert main(base + ["inbox", "resume"]) == 0 and em.outreach_store.killed is False and em.outreach_store.paused is False  # resume is the kill switch, as before
+
+
+def test_an_approval_that_arrives_while_the_release_is_being_checked_cannot_join_it(em, pid, chans, clock, monkeypatch):
+    """The check and the lift are one step under the store lock that every approval takes. A second approval started right after the queue was read must wait until the pause is off:
+    it is then an ordinary approval with sending on, never a message approved while paused and carried out with the reviewed ones."""
+    import threading
+    import time
+
+    a = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+    b = em.draft_outreach(pid, C.CATERER, "email", "kitchen@rasoi.in", "Meera")
+    em.pause_sending()
+    em.approve_outreach(pid, a.draft_id, a.content_hash)
+    reviewed = em.held_snapshot()
+    events, store = [], em.outreach_store
+    real_transition, real_set_paused, real_held = store.transition, store.set_paused, em.conversations.held
+
+    def transition(plan_id, draft_id, allowed, **changes):
+        out = real_transition(plan_id, draft_id, allowed, **changes)
+        if draft_id == b.draft_id and changes.get("status") == "approved":
+            events.append("b approved")
+        return out
+
+    def set_paused(on):
+        events.append("pause on" if on else "pause lifted")
+        return real_set_paused(on)
+
+    started = []
+
+    def held_then_a_late_approval():
+        result = real_held()
+        if not started:  # once, right after the release has read the queue and holds the lock
+            t = threading.Thread(target=lambda: em.approve_outreach(pid, b.draft_id, b.content_hash))
+            t.start()
+            started.append(t)
+            time.sleep(0.3)  # long enough for it to reach the lock and wait there
+        return result
+
+    monkeypatch.setattr(store, "transition", transition)
+    monkeypatch.setattr(store, "set_paused", set_paused)
+    monkeypatch.setattr(em.conversations, "held", held_then_a_late_approval)
+    outcome = em.resume_sending(reviewed)
+    started[0].join(5)
+    assert outcome["queued"] == 1  # only what was reviewed
+    assert events.index("pause lifted") < events.index("b approved"), events  # it waited: it was not approved while the pause was on
+    assert em.outreach_store.get(pid, b.draft_id).status == "sent"  # and then, with sending on, it went like any approval
+    assert [m[0] for m in chans["email"].sent][0] == "sales@annapurna.in"  # the reviewed one went first
+
+
+def test_the_claim_rechecks_the_pause_so_a_dispatcher_that_read_it_earlier_sends_nothing(em, pid, chans, clock, monkeypatch):
+    """The worker reads the pause, then claims. If another process sets the pause in between, the claim itself must refuse."""
+    d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+    em.pause_sending()
+    em.approve_outreach(pid, d.draft_id, d.content_hash)
+    em.outreach_store.set_paused(False)  # the state the dispatcher saw when it looked
+    reads = iter([False, True, True, True])
+    monkeypatch.setattr(type(em.outreach_store), "paused", property(lambda self: next(reads, True)))  # ...and the state by the time it claims
+    sent, waiting = em.conversations.dispatch()
+    assert sent == 0 and chans["email"].sent == [] and em.outreach_store.get(pid, d.draft_id).status == "approved" and any("paused" in w for w in waiting)
+
+
+def test_a_release_says_what_became_of_each_queued_message_and_queued_is_not_sent(em, pid, chans, clock):
+    """N is how many were queued. A check can stop one: here an address was put on the do-not-contact list after the message was approved."""
+    ok = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+    stopped = em.draft_outreach(pid, C.CATERER, "email", "kitchen@rasoi.in", "Meera")
+    em.pause_sending()
+    em.approve_outreach(pid, ok.draft_id, ok.content_hash)
+    em.approve_outreach(pid, stopped.draft_id, stopped.content_hash)
+    reviewed = em.held_snapshot()
+    em.suppressions.add("email", "kitchen@rasoi.in", "user", "asked us to stop", "Meera")  # added after the review, by a path that did not stop the held draft itself
+    outcome = em.resume_sending(reviewed)
+    assert outcome["queued"] == 2 and outcome["sent"] == 1 and outcome["waiting"] == 0
+    assert len(outcome["stopped"]) == 1 and outcome["stopped"][0]["status"] == "blocked" and "do-not-contact" in outcome["stopped"][0]["why"].lower()
+    assert [m[0] for m in chans["email"].sent] == ["sales@annapurna.in"]

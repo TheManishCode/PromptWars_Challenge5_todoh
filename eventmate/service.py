@@ -42,7 +42,7 @@ from eventmate.messaging.digests import DigestStore
 from eventmate.messaging.notify import OwnerNotifier
 from eventmate.planning.ideas import IdeaService
 from eventmate.messaging.channels import Channel, channels_from_env
-from eventmate.messaging.conversations import ConversationService
+from eventmate.messaging.conversations import ConversationService, HeldMessages  # noqa: F401  (HeldMessages is re-exported: callers import it from here)
 from eventmate.messaging.outreach import OutreachStore
 from eventmate.followthrough.worker import JobWorker
 from eventmate.followthrough.jobs import JobStore
@@ -79,14 +79,6 @@ from eventmate.integrations.tripsearch import search_trip
 
 class _NoClients:
     clients: list = []
-
-
-class HeldMessages(ValueError):
-    """Resuming would release approved messages the caller did not account for."""
-
-    def __init__(self, count: int, snapshot: str):
-        self.count, self.snapshot = count, snapshot
-        super().__init__(f"{count} approved message{'s are' if count != 1 else ' is'} waiting and the queue is not the one you reviewed: look at it, then resume naming its snapshot ({snapshot})")
 
 
 class EventMate:
@@ -598,14 +590,21 @@ class EventMate:
         """Approvals that ran out before their message went. They will not be sent: they need a fresh draft."""
         return [{"plan_id": d.plan_id, "draft_id": d.draft_id, "vendor": d.vendor_name, "channel": d.channel, "subject": d.subject} for d in self.conversations.lapsed()]
 
-    def resume_sending(self, snapshot: str | None = None) -> int:
-        """Lift the pause. Whatever is held then goes out, so the caller must name the exact queue it reviewed (``held_snapshot``): a different queue, even one of the same size, releases nothing.
-        An approval older than 48 hours is not part of the queue and is not sent. The held messages are sent now, within the usual limits. Does not touch the kill switch. Returns how many were held."""
-        held = self.conversations.held()
-        if held and snapshot != self.conversations.snapshot_of(held):
-            raise HeldMessages(len(held), self.conversations.snapshot_of(held))
-        self.conversations.unpause()
-        return len(held)
+    def resume_sending(self, snapshot: str | None = None) -> dict:
+        """Lift the pause for exactly the queue the caller reviewed (``held_snapshot``): a different queue, even one of the same size, releases nothing (``HeldMessages``). The check and the lift are
+        atomic against every approval and every sender (``ConversationService.release``). The reviewed messages then go through the same limits and checks as any message: the daily and per-vendor
+        caps, the plan still matching the text, the do-not-contact list and the 48-hour approval, so some may wait or be stopped. Returns how many were queued and what happened to each; it does not touch the kill switch."""
+        reviewed = self.conversations.release(snapshot)
+        sent, waiting, stopped = 0, 0, []
+        for d in reviewed:
+            now = self.outreach_store.get(d.plan_id, d.draft_id)
+            if now is not None and now.status in ("sent", "marked_sent"):
+                sent += 1
+            elif now is None or now.status in ("approved", "sending"):
+                waiting += 1
+            else:
+                stopped.append({"vendor": d.vendor_name, "channel": d.channel, "subject": d.subject, "status": now.status, "why": (now.error or "")[:200]})
+        return {"queued": len(reviewed), "sent": sent, "waiting": waiting, "stopped": stopped}
 
     def kill_all_autoreplies(self):
         self.conversations.kill_all()

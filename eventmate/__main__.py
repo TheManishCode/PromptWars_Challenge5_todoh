@@ -648,15 +648,17 @@ def _inbox_kill_switch(em: EventMate, a) -> int:
     else:
         held = em.held_messages()
         for m in held:
-            print(f"  held: {m['vendor']} by {m['channel']}: {strip_terminal(m['subject'])[:80]} (approved {m['approved_hours_ago']} h ago)")
+            print(f"  held: {m['vendor']} by {m['channel']}: {strip_terminal(m['subject'])[:80]} (approved {m['approved_hours_ago']} h ago, plan {m['plan_id'][:8]})")
         for m in em.lapsed_messages():
             print(f"  NOT sent, the approval ran out: {m['vendor']} by {m['channel']}: {strip_terminal(m['subject'])[:80]} (write a fresh draft)")
         try:
-            em.resume_sending(a.snapshot)
+            outcome = em.resume_sending(a.snapshot)
         except HeldMessages as exc:
-            print(f"{exc.count} approved message(s) are waiting and would go out now. To release exactly the ones listed above run: inbox unpause --snapshot {exc.snapshot}", file=sys.stderr)
+            print(f"{exc.count} approved message(s) are waiting, across every plan in this workspace, and the queue is not the one you named. To release exactly the ones listed above run: inbox unpause --snapshot {exc.snapshot}", file=sys.stderr)
             return 3
-        print(f"sending resumed; {len(held)} held message(s) released (the kill switch is not touched)")
+        print(f"sending resumed (the kill switch is not touched). Of {outcome['queued']} queued: {outcome['sent']} sent, {outcome['waiting']} still waiting (a limit or the sending window), {len(outcome['stopped'])} stopped by a check")
+        for m in outcome["stopped"]:
+            print(f"  stopped: {m['vendor']} by {m['channel']}: {strip_terminal(m['subject'])[:60]} ({m['status']}: {strip_terminal(m['why'])[:100]})")
     return 0
 
 

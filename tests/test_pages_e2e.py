@@ -380,7 +380,8 @@ def test_the_sending_controls_pause_and_the_kill_switch_are_independent_and_a_re
 
     page.click("#sending-toggle")  # resume: it must show what is held, and release nothing yet
     page.wait_for_selector("#release-panel:not([hidden])")
-    assert "1 approved message is held" in page.inner_text("#release-text") and "email" in page.inner_text("#release-list")
+    assert "1 approved message is held, across every plan in this workspace" in page.inner_text("#release-text") and "email" in page.inner_text("#release-list")
+    assert "not how many will be sent" in page.inner_text("#release-note") and "Release 1 queued message" in page.inner_text("#release-go")
     assert em.outreach_store.paused is True and em.outreach_store.get(plan_id, first.draft_id).status == "approved"
     page.click("#release-keep")
     assert em.outreach_store.paused is True and page.locator("#release-panel").is_hidden()
@@ -397,6 +398,7 @@ def test_the_sending_controls_pause_and_the_kill_switch_are_independent_and_a_re
 
     page.click("#release-go")  # now it names the queue it shows
     page.wait_for_selector("#sending-chip:has-text('Automatic stopped')")
+    assert "Of 1 queued: 1 sent" in page.inner_text("#sending-msg")  # what became of the queued message, not just that it was released
     assert em.outreach_store.paused is False and em.outreach_store.killed is True  # resuming did not lift the independent kill switch
     assert em.held_messages() == [] and em.outreach_store.get(plan_id, second.draft_id).status == "sent"
     page.click("#auto-toggle")
