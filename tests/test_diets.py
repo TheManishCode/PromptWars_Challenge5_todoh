@@ -89,3 +89,26 @@ def test_the_reader_never_fails_and_says_something_whenever_a_requirement_word_i
             assert r.notes, text
 
     check()
+
+
+B = "Plan a 100-person party in Pune on December 12 under INR 200,000. "
+
+
+@pytest.mark.parametrize("text,diet,notes", [
+    ("no onion no garlic vegetarian", [D.VEGETARIAN], ["no onion or garlic"]),  # the "no" belongs to garlic: vegetarian is a request
+    ("no pork vegetarian", [D.VEGETARIAN], ["no pork"]),
+    ("no onion no garlic satvik", [], ["sattvic", "no onion or garlic"]),
+    ("no beef or pork, halal", [D.HALAL], ["no beef", "no pork"]),
+    ("without any satvik", [], []),
+    ("not jain, vegetarian", [D.VEGETARIAN], []),
+    ("not vegetarian", [], []),
+    ("no vegetarian food", [], []),
+])
+def test_a_negation_reaches_only_the_word_it_belongs_to(text, diet, notes):
+    r = parse_request(B + text, TODAY)
+    assert set(r.dietary) == set(diet) and list(r.diet_notes) == notes
+
+
+def test_a_negation_still_covers_a_list_joined_by_or():
+    r = parse_request("Plan a 100-person party in Pune on December 12 under INR 200,000. Indoor venue, without food or photographer.", TODAY)
+    assert [s.value for s in r.services] == ["venue"]

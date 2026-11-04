@@ -19,7 +19,14 @@ from eventmate.schemas import Allergen as A
 _F = re.I | re.A
 _CUE = re.compile(r"\b(?:allerg\w*|alerji|elerji|celiac|coeliac|intoleran\w*|(?:can'?t|cannot|can\s+not|doesn'?t|does\s+not|won'?t|unable\s+to)\s+(?:eat|have|take|touch|digest)|avoid(?:s|ing)?)\b", _F)  # "can't eat X" and "avoid X" are read as an allergy: the harmful error is to miss one
 _NEG_START = re.compile(r"^\W*(?:no|not|without|never|don'?t|dont|nahi|nahin|nope|nobody|none|nothing|no\s?one|noone)\b", _F)
-_NEG_CUE = re.compile(r"\b(?:nobody|none|no\s?one|noone|koi\s+nahi)\b.{0,80}?(?:allerg|alerji|intoleran)|(?:allerg|alerji|intoleran)\w*\s+(?:\w+\s+){0,2}(?:nobody|none)\b|\b(?:no|not|never|nahi|nahin|without)\s+(?:\w+\s+){0,2}(?:allerg|alerji|intoleran)|\b(?:allerg\w*|alerji)\s+(?:\w+\s+){0,2}(?:nahi|nahin|nope)\b", _F)
+# A negation counts only when nothing but filler words stand between it and the cue: "no known allergies", "guests are not allergic", "none of the guests have any allergies".
+# Anything else between them ("no onion no garlic lactose intolerant") is another statement, and the allergy in it is still read.
+_FILL = r"(?:(?:any|known|food|at|all|really|so|very|that|of|the|a|an|is|are|was|were|am|be|been|to|anything|such|kind|sort|type|guests?|people|persons?|here|has|have|had|with|in|our|us|them|family|friends?|hai|hain|koi|ko|ke|mein|mere|meri|unhe|dikkat|problem|issue|as|far|we|know|i|he|she|they|you|my|his|her|their|him|need|needed|worry|about|special)\s+)"
+_NEG_CUE = re.compile(
+    rf"\b(?:nobody|none|no\s?one|noone|koi\s+nahi|(?:no|not|never|nahi|nahin|without)|(?:isn'?t|aren'?t|wasn'?t|weren'?t|doesn'?t|don'?t|do\s+not|does\s+not|did\s+not|didn'?t)\s+(?:have\s+|has\s+)?)\s+{_FILL}{{0,6}}(?:allerg|alerji|intoleran|avoid)"
+    rf"|\b(?:allerg\w*|alerji)\s+{_FILL}{{0,3}}(?:nahi|nahin|nope)\b|\b(?:allerg\w*|alerji)\s+{_FILL}{{0,3}}(?:nobody|none)\b",
+    _F,
+)
 _SPLIT_SENTENCE = re.compile(r"[.;!?\n]|\b(?:but|however|although|except|yet|lekin|magar)\b", _F)
 _SPLIT_ITEM = re.compile(r"[,/&]|\b(?:and|or|aur|plus|also)\b", _F)  # no leading \s*: on a long run of spaces that is quadratic
 
@@ -47,7 +54,7 @@ _STOP = frozenset("""a an the to of and or also is are was has have had hai hain
  some any many few very too so more most mild severe serious bad slight little especially mainly mostly really quite extremely badly highly seriously hugely
  allergic allergy allergies alerji intolerant intolerance for from with in on at by as be been being that this these those there here who whom which what when where
  guest guests people person persons kids kid child children son daughter mother father mom dad wife husband friend friends family anyone someone everyone one two three
- mere meri mera hamare humare unhe unko usse unse uska uski
+ mere meri mera hamare humare unhe unko usse unse uska uski anything nothing something
  spicy spice spices food foods meat chicken mutton lamb beef pork onion onions garlic alcohol sugar salt oil sweets sweet non veg vegetarian""".split())
 _BENIGN = re.compile(
     r"\d|\b(?:veg\w*|non|vegan|jain|halal|gluten|indoor|outdoor|cater\w*|food|meals?|photo\w*|reminders?|invit\w*|budget|rs|inr|rupees?|lakh|lac|crore|k|party|wedding|birthday|"
@@ -86,7 +93,7 @@ def read(text: str) -> AllergyReading:
         in_list = False  # the previous item was an allergy statement: an item with no cue of its own may continue its list
         for item in (i for i in _SPLIT_ITEM.split(sentence) if i and i.strip()):
             cue = _CUE.search(item)
-            negated = bool(_NEG_START.search(item) or _NEG_CUE.search(item))
+            negated = bool(_NEG_CUE.search(item)) if cue else bool(_NEG_START.search(item))  # a leading "no" negates a continuation ("not cashews"), not a statement with its own cue
             if cue:
                 if negated:
                     in_list = False

@@ -10,11 +10,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from eventmate.planning import allergies
+from eventmate.planning import allergies, negation
 
 _F = re.I | re.A
-_NEG = re.compile(r"\b(?:no|not|without|never|nahi|nahin|nope)\b", _F)
-_BREAK = re.compile(r"[.;,!?\n]")
 # (words, the label kept). A positive word is ignored when the clause before it says no/not/without ("no satvik" is not a request for it).
 _POSITIVE: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b(?:satt?v(?:ik|ic)|satwik)\b", _F), "sattvic"),
@@ -25,10 +23,11 @@ _POSITIVE: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b(?:low[- ](?:salt|sodium)|keto|low[- ]carb)\b", _F), "low salt or low carb"),
 ]
 # a requirement worded as an exclusion: it is the request itself, so no negation check
+_EXCL = r"\b(?:no|without|avoid|skip|zero)\s+(?:(?:any|the|a)\s+)?(?:(?:beef|pork|ham|bacon|onions?|garlic|pyaa?z|lehsun|meat|alcohol)\s{0,3}(?:or|and|nor|aur)\s{1,3}){0,3}"  # "no beef or pork" is one list
 _EXCLUDE: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"\b(?:no|without|avoid|skip|zero)\s+(?:\w+\s+)?(?:onions?|garlic|pyaa?z|lehsun)\b|\b(?:onion|garlic)(?:[- ](?:and|&|or)?[- ]?(?:onion|garlic))?[- ]free\b", _F), "no onion or garlic"),
-    (re.compile(r"\b(?:no|without|avoid|skip)\s+(?:\w+\s+)?beef\b|\bbeef[- ]free\b", _F), "no beef"),
-    (re.compile(r"\b(?:no|without|avoid|skip)\s+(?:\w+\s+)?(?:pork|ham|bacon)\b|\bpork[- ]free\b", _F), "no pork"),
+    (re.compile(rf"{_EXCL}(?:onions?|garlic|pyaa?z|lehsun)\b|\b(?:onion|garlic)(?:[- ](?:and|&|or)?[- ]?(?:onion|garlic))?[- ]free\b", _F), "no onion or garlic"),
+    (re.compile(rf"{_EXCL}beef\b|\bbeef[- ]free\b", _F), "no beef"),
+    (re.compile(rf"{_EXCL}(?:pork|ham|bacon)\b|\bpork[- ]free\b", _F), "no pork"),
     (re.compile(r"\b(?:no|without|avoid)\s+(?:any\s+)?alcohol\b|\balcohol[- ]free\b|\bdry\s+(?:event|party|wedding)\b", _F), "no alcohol"),
 ]
 # "dietary restriction: X" in words this reader may not know. X is kept unless it is something already read elsewhere ("can't eat X" and "avoid X" are read as allergies, which is the safer reading).
@@ -50,15 +49,11 @@ class DietReading:
     unclear: tuple[str, ...] = ()  # the user's own words for a restriction this reader could not place
 
 
-def _negated(text: str, start: int) -> bool:
-    return bool(_NEG.search(_BREAK.split(text[max(0, start - 40) : start])[-1]))
-
-
 def read(text: str) -> DietReading:
     notes: list[str] = []
     unclear: list[str] = []
     for rx, label in _POSITIVE:
-        if any(not _negated(text, m.start()) for m in rx.finditer(text)):
+        if negation.mentioned(rx, text):
             notes.append(label)
     for rx, label in _EXCLUDE:
         if rx.search(text):

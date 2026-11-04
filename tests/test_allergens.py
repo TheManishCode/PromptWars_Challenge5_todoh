@@ -37,6 +37,12 @@ def em(tmp_path_factory):
     ("not allergic to nuts but allergic to eggs", {A.EGG}),
     ("allergic to eggs, not allergic to nuts", {A.EGG}),
     ("no allergies at all", set()),
+    ("no onion no garlic lactose intolerant guests", {A.DAIRY}),  # a "no" for something else does not cancel the allergy
+    ("indoor venue no onion no garlic lactose intolerant guests", {A.DAIRY}),
+    ("no known allergies", set()),
+    ("he doesn't have any allergies", set()),
+    ("nobody can come late, lactose intolerant guests", {A.DAIRY}),
+    ("no veg, allergic to peanuts", {A.PEANUT}),
     ("nobody is allergic", set()),
     ("none of the guests have any allergies", set()),
     ("koi allergy nahi hai", set()),

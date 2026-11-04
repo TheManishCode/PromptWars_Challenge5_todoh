@@ -19,7 +19,7 @@ from collections.abc import Iterable, Sequence
 
 from pydantic import ValidationError
 
-from eventmate.planning import allergies, diets
+from eventmate.planning import allergies, diets, negation
 from eventmate.planning import cities as city_aliases
 from eventmate.planning.community import load_profiles, match_subtype
 from eventmate.agents.budget import BudgetAgent
@@ -142,12 +142,8 @@ def parse_allergens(text: str) -> tuple[Allergen, ...]:
 
 
 def _mentioned(rx: re.Pattern[str], text: str) -> bool:
-    """True if ``rx`` matches somewhere that is not negated ("no", "without", ...) in its clause."""
-    for m in rx.finditer(text):
-        clause = _CLAUSE_BREAK.split(text[max(0, m.start() - 40) : m.start()])[-1]
-        if not _NEGATION.search(clause):
-            return True
-    return False
+    """True if ``rx`` matches somewhere that is not negated ("no", "without", ...) just before it; see ``planning.negation``."""
+    return negation.mentioned(rx, text)
 
 
 # Digit scripts of Indian languages. Anything else non-ASCII (e.g. Arabic-Indic) stays unread and fails closed.
