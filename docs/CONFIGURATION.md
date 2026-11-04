@@ -24,13 +24,13 @@ Secrets live in `.env` at the repository root (git-ignored; copy `.env.example`,
 | Feature | Needs | Command / endpoint |
 |---|---|---|
 | Weather (OpenWeather) | `OPENWEATHER_API_KEY` | `python -m eventmate weather CITY YYYY-MM-DD`, Overview card |
-| Flight fares and schedules (fli, Google Flights) | `pip install flights` (no key) | `flights`, `multicity`, `/api/travel/*` |
+| Flight fares and schedules (fli, Google Flights) | `pip install '.[flights]'` (no key; a pinned fli commit, see below) | `flights`, `multicity`, `/api/travel/*` |
 | Free-text search (Explore) | `NVIDIA_API_KEY` and/or `OPENROUTER_API_KEY` | `/api/explore`, Explore view (forms work without a key) |
 | Ratings and reviews (Google Places) | `GOOGLE_PLACES_API_KEY` | `/api/places`, Explore view |
 | Deals agent: searches the web, reads pages, ranks advertised prices | none (DuckDuckGo); optional `BRAVE_SEARCH_API_KEY` | `deals`, `/api/deals` |
 | Venue discovery (OpenStreetMap / Overpass) | none; optional `EVENTMATE_OVERPASS_URL` | `discover`, `/api/discover/venues` |
 
-**Check fli's version.** On 3 Nov 2026 the `flights` 0.9.0 on PyPI got an error answer (`[13]`, no data) from Google for every search, one-way and date-grid alike, so fares came back empty; the unreleased 0.10.0 on `main` worked: `pip install git+https://github.com/punitarani/fli.git`. If searches come back empty for routes that obviously exist, that is the first thing to try. The cheapest-day search says so when it gets nothing, and was checked live against 0.10.0 (DEL-GOI, 61 days: 32 different prices, and the cheapest, dearest and a middle day each matched a one-way search for that day).
+**Install fli from the extra, not from PyPI.** `pip install '.[flights]'` installs fli 0.10.0 at a pinned upstream commit (`881aee5`, 2026-09-20), because the `flights` 0.9.0 on PyPI got an error answer (`[13]`, no data) from Google for every search on 3 Nov 2026, so fares came back empty. The pinned commit was checked live on 4 Nov 2026 (DEL-GOI, 31 days priced). A search that comes back empty on 0.9.0 says so and says what to install. The hash-pinned lock files still list `flights==0.9.0`: that is for the offline tests, which use fakes, not for real searches. Google can change what it answers at any time; if searches come back empty for routes that obviously exist, check fli first. The cheapest-day search was checked live against 0.10.0 (DEL-GOI, 61 days: 32 different prices, and the cheapest, dearest and a middle day each matched a one-way search for that day).
 
 Flights never book or pay. Multi-city is built from separate one-way searches because Google does not serve multi-city results to fli. Discovery
 results are candidates, not vendor-database facts. Forecasts exist for about five days ahead only.

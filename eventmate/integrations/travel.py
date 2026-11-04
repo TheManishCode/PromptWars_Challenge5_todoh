@@ -84,6 +84,21 @@ def check_search(origin: str, destination: str, adults: int, cabin: str, limit: 
         raise ValueError(f"limit must be 1-{MAX_FLIGHT_OPTIONS}")
 
 
+KNOWN_NO_DATA = frozenset({"0.9.0"})  # the PyPI release of `flights` that got an error answer and no fares from Google Flights on 2026-11-03 (fixed on fli's main, 0.10.0)
+
+
+def stale_tool_hint() -> str:
+    """When no fares came back and the installed fli is a release known to get none, say what to install. Empty otherwise."""
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+
+        v = version("flights")
+    except (ImportError, PackageNotFoundError):
+        return ""
+    return (f" The installed flights {v} was getting no fares from Google Flights on 2026-11-03; install the pinned version with pip install '.[flights]' (docs/CONFIGURATION.md)."
+            if v in KNOWN_NO_DATA else "")
+
+
 class FliProvider(FlightProvider):
     """Wraps ``fli.search.SearchFlights``. fli is an optional dependency and is imported on first use."""
 
@@ -127,6 +142,8 @@ class FliProvider(FlightProvider):
             except Exception:
                 warnings.append("one result could not be read and was skipped")
         options.sort(key=lambda o: (o.price_inr is None, o.price_inr or 0, o.duration_min))
+        if not options and (hint := stale_tool_hint()):
+            warnings.append("No fares came back." + hint)
         warnings = list(dict.fromkeys(warnings))
         return FlightSearch(
             origin=origin, destination=destination, travel_date=day, options=tuple(options[:limit]), fetched_at=self._now(), source=SOURCE, warnings=tuple(warnings)
@@ -170,7 +187,7 @@ class FliProvider(FlightProvider):
             except Exception:
                 skipped += 1
         days = tuple(DateFare(day=d, price_inr=p) for d, p in sorted(best.items()))
-        empty = () if days else ("No fares came back for these dates: Google may not sell this route then, or the flight tool may be out of date (see docs/CONFIGURATION.md).",)
+        empty = () if days else ("No fares came back for these dates: Google may not sell this route then, or the flight tool may be out of date (see docs/CONFIGURATION.md)." + stale_tool_hint(),)
         return CheapestDates(origin=origin, destination=destination, from_date=start, to_date=end, days=days,
                              cheapest=min(days, key=lambda f: (f.price_inr, f.day), default=None), fetched_at=self._now(),
                              warnings=empty + ((f"{skipped} price(s) could not be read and were skipped",) if skipped else ()))

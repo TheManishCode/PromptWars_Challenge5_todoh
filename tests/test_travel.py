@@ -340,3 +340,18 @@ def test_api_tradeoffs_refuse_malformed_guest_travel_without_a_500(client, bad):
 
     r = post(client, "/api/tradeoffs", {"request": EXAMPLE, "guest_travel": bad})
     assert r.status_code in (200, 400, 422), r.status_code  # None means "not given"
+
+
+def test_an_empty_answer_from_the_release_known_to_get_no_fares_says_what_to_install(monkeypatch):
+    import importlib.metadata as md
+
+    from eventmate.integrations import travel as t
+
+    real = md.version
+    monkeypatch.setattr(md, "version", lambda name: "0.9.0" if name == "flights" else real(name))
+    assert "pip install '.[flights]'" in t.stale_tool_hint() and "0.9.0" in t.stale_tool_hint()
+    d = date(2026, 12, 12)
+    out = dates_provider(None)[0].cheapest_dates("DEL", "BOM", d, d)
+    assert out.days == () and "pip install '.[flights]'" in out.warnings[0]
+    monkeypatch.setattr(md, "version", lambda name: "0.10.0" if name == "flights" else real(name))
+    assert t.stale_tool_hint() == "" and "pip install" not in dates_provider(None)[0].cheapest_dates("DEL", "BOM", d, d).warnings[0]
