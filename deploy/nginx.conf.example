@@ -1,0 +1,65 @@
+# A reference nginx front for to;doh in shared mode. tests/test_proxy_deploy.py runs THIS file (with the {{placeholders}} filled in) in front of the real application, so what is
+# tested is what is written here. Replace the names, certificate paths and addresses; keep every directive that has a comment.
+#
+# It does what docs/HOSTING.md says a proxy must do: terminate TLS, set X-Forwarded-For and X-Forwarded-Proto itself (never pass the client's),
+# forward only the allowed Host, frame requests strictly, limit body size and time, rate-limit, and not buffer the progress stream.
+#
+# Placeholders: {{server_name}}, {{https_listen}}, {{cert}}, {{key}}, {{backend}}. The application listens on {{backend}} (waitress; never expose it directly). EVENTMATE_TRUSTED_PROXY must name the address nginx connects from.
+
+limit_req_zone $binary_remote_addr zone=todoh_api:10m rate=30r/s;   # one address, 30 requests a second; the application also limits writes per minute
+
+server {
+    listen {{https_listen}} ssl;
+    server_name {{server_name}};
+    ssl_certificate     {{cert}};
+    ssl_certificate_key {{key}};
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    # Anything addressed to another name is refused: the application also checks Host, but a proxy that forwards any name hands that check every guess.
+    if ($host != "{{server_name}}") { return 421; }
+
+    client_max_body_size 6m;              # 5 MB audio upload plus its multipart wrapper; the application holds every other route to 64 KB
+    client_header_timeout 10s;
+    client_body_timeout  15s;
+    send_timeout         30s;
+    keepalive_timeout    20s;
+
+    location / {                                                         # the pages and static files: the application sets their cache headers (static files are cached by version)
+        limit_req zone=todoh_api burst=60 nodelay;
+        proxy_pass http://{{backend}};
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";                                  # keep-alive to the backend; also drops a client's Connection header
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For   $remote_addr;                  # set, not appended: whatever the client sent is dropped
+        proxy_set_header X-Forwarded-Proto $scheme;                       # https here, because TLS ends here
+        proxy_read_timeout 90s;
+        proxy_send_timeout 30s;
+        proxy_connect_timeout 5s;
+    }
+
+    location ^~ /api/ {                                                  # the application answers every /api/ route with Cache-Control: no-store; nginx does not cache unless asked to (no proxy_cache here), so keep it that way
+        limit_req zone=todoh_api burst=60 nodelay;
+        proxy_pass http://{{backend}};
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For   $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 90s;
+        proxy_send_timeout 30s;
+        proxy_connect_timeout 5s;
+    }
+
+    # The live progress stream is server-sent events. With nginx's default buffering the first event is held back until the response ends, so the page shows nothing while a plan is made.
+    location = /api/pulse/stream {
+        proxy_pass http://{{backend}};
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For   $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;                                              # the point of this block
+        proxy_cache off;
+        proxy_read_timeout 75s;                                           # a stream lives up to 60 s
+    }
+}

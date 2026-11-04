@@ -1,4 +1,4 @@
-.PHONY: install test lint security check web redteam
+.PHONY: install test lint security check web redteam deploy-check
 install:
 	pip install -e ".[dev]"
 test:
@@ -16,3 +16,8 @@ web:
 
 redteam:
 	python -m pytest -q tests/pentest
+
+# what can be checked before a real host: the reference proxy configuration in front of the real application, then the container image
+deploy-check:
+	python -m pytest -q tests/test_proxy_deploy.py tests/pentest/test_proxy_smuggling.py
+	tools/check_image.sh

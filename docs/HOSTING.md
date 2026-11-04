@@ -38,9 +38,13 @@ Writes: 60 per minute per client address (`create_app(rate_limit_per_minute=...)
 ## Disk, backups, deletion
 A persistent disk path for the plan and log directories is required; the plaintext files are the product's memory. Disk encryption of the host is not checked by the code. Backups are the operator's to make; deleting a plan removes this application's files only and cannot reach a backup until it expires, so write down how long backups are kept.
 
-## Not verified
-Nothing on this page has been run behind a real proxy, on a real host, with real TLS or under real load. The start-up checks are tested with fake environments; the limits are tested with fake clocks and a local server.
+## Repeatable checks to run before a real host
+- `deploy/nginx.conf.example` is a reference proxy configuration. `python -m pytest tests/test_proxy_deploy.py` runs **that file** in front of the real application in shared mode, with real TLS (a self-signed certificate), and checks: the probes; the security headers and HSTS (believed only because the proxy says https); that a client-supplied `X-Forwarded-For` and `X-Forwarded-Proto` do not get through; that another Host name is refused; the cookie flags (Secure, HttpOnly, SameSite=Strict); a write without the CSRF header; a body over the application's 64 KB limit; the owner route being invisible without its token; and that the progress stream reaches the browser as it is written. Changing the shipped proxy file to forward the client's own `X-Forwarded-For`, to stop saying "https", or to drop the Host check makes the matching test fail (each was tried).
+- `tests/pentest/test_proxy_smuggling.py` sends four request-smuggling shapes through nginx.
+- `tools/check_image.sh` builds the image and checks it the way the compose file runs it (non-root, all capabilities dropped, no-new-privileges, read-only): licences and Fast Downward's source are in the image; shared mode refuses to start without its settings; the file reader is shut in at a level shared mode accepts; a plan is validated by the pinned Fast Downward and VAL; and a shared-mode container starts, answers `/healthz` and `/readyz`, serves only its Host name, hides the owner route and stops cleanly. `make deploy-check` runs all of it.
 
+## Not verified
+These checks run on one machine with a self-signed certificate, one nginx version and no load. They do not replace a run on the real host with its real proxy, certificate, DNS, firewall and clock, and they do not cover another proxy (Caddy, a cloud load balancer), real traffic, backups, or the mailbox and WhatsApp accounts.
 
 ## Request framing: the proxy must reject ambiguous requests (red-team F-021)
 
