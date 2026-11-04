@@ -168,6 +168,8 @@ class OwnerNotifier:
         return 0
 
     def _send(self, cur: NotifySetting, channel: Channel, d, body: str, goal: str, now: datetime) -> int:
+        if self._killed():  # the switch or the pause came since flush() looked: nothing is handed to the channel
+            return 0
         log = self._log()
         result = "sent"
         try:

@@ -45,7 +45,7 @@ class HeldMessages(ValueError):
 
 
 LEASE = timedelta(minutes=5)  # a send claimed longer ago than this and never finished is recorded as unknown
-APPROVAL_TTL = timedelta(hours=48)  # how long an approval stays good while its message waits (paused, held by a limit, the app down). Longer than the 24-hour send limits, so ordinary waiting never lapses; a message held longer is not sent and needs a fresh draft
+APPROVAL_TTL = timedelta(hours=48)  # PROVISIONAL: how long an approval stays good while its message waits (paused, held by a limit, the app down). Chosen as longer than the 24-hour send limits so ordinary waiting never lapses, not validated against real use; a message held longer is not sent and needs a fresh draft
 LAPSED = "the approval was more than 48 hours old when it would have gone out, so it was not sent; write a fresh draft"
 LOOKBACK = timedelta(days=30)  # threads older than this are no longer polled
 # Hints only. "is booked" alone is left out on purpose: "your slot is booked" is a confirmation, not a refusal.
@@ -286,6 +286,9 @@ class ConversationService:
             parent = self.store.get(pid, d.parent_id) if d.parent_id else None
             if parent and parent.external_id:
                 thread = ThreadRef(in_reply_to=parent.external_id, references=parent.external_id)
+        if self.store.paused:  # the pause came after the claim but before anything was handed to the channel: put it back, send nothing (the claim overwrote decided_at: restore the approval time)
+            self.store.transition(pid, d.draft_id, ("sending",), status="approved", decided_at=d.decided_at)
+            return 0
         try:
             ext = self.channels[d.channel].send(d.recipient, d.subject, d.body, thread)
         except OutcomeUnknown as exc:

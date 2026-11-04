@@ -618,3 +618,85 @@ def test_a_release_says_what_became_of_each_queued_message_and_queued_is_not_sen
     assert outcome["queued"] == 2 and outcome["sent"] == 1 and outcome["waiting"] == 0
     assert len(outcome["stopped"]) == 1 and outcome["stopped"][0]["status"] == "blocked" and "do-not-contact" in outcome["stopped"][0]["why"].lower()
     assert [m[0] for m in chans["email"].sent] == ["sales@annapurna.in"]
+
+
+def test_a_pause_set_after_the_claim_but_before_the_channel_call_sends_nothing_and_keeps_the_approval_time(em, pid, chans, clock, monkeypatch):
+    """The pause is checked at the claim and again immediately before the message is handed to the channel; only a message already handed over cannot be recalled."""
+    d = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+    em.pause_sending()
+    em.approve_outreach(pid, d.draft_id, d.content_hash)
+    approved_at = em.outreach_store.get(pid, d.draft_id).decided_at
+    em.outreach_store.set_paused(False)
+    clock.advance(hours=3)
+    reads = iter([False, False, True, True, True])  # the dispatch check, the claim's check, then the pre-send check
+    monkeypatch.setattr(type(em.outreach_store), "paused", property(lambda self: next(reads, True)))
+    sent, _ = em.conversations.dispatch()
+    got = em.outreach_store.get(pid, d.draft_id)
+    assert sent == 0 and chans["email"].sent == [] and got.status == "approved"
+    assert got.decided_at == approved_at  # the approval clock was not reset by the claim that was backed out
+
+
+def test_a_separate_process_approving_during_the_release_waits_for_the_lift(em, pid, chans, clock, tmp_path, monkeypatch):
+    """Cross-process: a second OS process approves a draft while the release holds the store lock. Threads in one process share a lock object; two processes share only the file lock, so this is
+    the case that matters for the web server, the command line and the worker. The other process records whether the pause file still exists when its approval has been written: it must not."""
+    import json
+    import subprocess
+    import sys
+    import time
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    clock.t = datetime.now(UTC)  # the other process runs on the real clock: drafts made on the test clock days ago would already have expired
+    a = em.draft_outreach(pid, C.CATERER, "email", "sales@annapurna.in", "Meera")
+    b = em.draft_outreach(pid, C.CATERER, "email", "kitchen@rasoi.in", "Meera")
+    em.pause_sending()
+    em.approve_outreach(pid, a.draft_id, a.content_hash)
+    reviewed = em.held_snapshot()
+    go, ready, result = tmp_path / "go", tmp_path / "ready", tmp_path / "result.json"
+    pause_file = em.outreach_store.base / "mandates" / "PAUSE"
+    here = str(Path(__file__).resolve().parent.parent)
+    script = f"""
+import json, sys, time
+from pathlib import Path
+sys.path.insert(0, {here!r})
+from eventmate.service import EventMate
+from tests.test_conversations import FakeChannel
+em = EventMate(log_dir={str(em.logs.decisions.log_dir)!r}, plan_dir={str(em.store.root)!r}, run_id="other-process", channels={{"email": FakeChannel("email"), "whatsapp": FakeChannel("whatsapp")}})
+Path({str(ready)!r}).write_text("ready")
+while not Path({str(go)!r}).exists():
+    time.sleep(0.02)
+started = time.monotonic()
+em.approve_outreach({pid!r}, {b.draft_id!r}, {b.content_hash!r})  # blocks on the file lock while the release holds it
+Path({str(result)!r}).write_text(json.dumps({{"pause_file_present_after_approval": Path({str(pause_file)!r}).exists(), "waited_s": time.monotonic() - started}}))
+"""
+    proc = subprocess.Popen([sys.executable, "-c", script], stderr=subprocess.PIPE, text=True)
+    try:
+        for _ in range(600):  # the other process imports the application first
+            if ready.exists():
+                break
+            if proc.poll() is not None:
+                pytest.fail("the other process died: " + proc.stderr.read())
+            time.sleep(0.05)
+        else:
+            pytest.fail("the other process never became ready")
+        real_held, fired = em.conversations.held, []
+
+        def held_then_release_the_other_process():
+            queue = real_held()
+            if not fired:  # inside the critical section: tell the other process to approve now, and give it time to reach the lock
+                fired.append(go.write_text("go"))
+                time.sleep(1.0)
+            return queue
+
+        monkeypatch.setattr(em.conversations, "held", held_then_release_the_other_process)
+        outcome = em.resume_sending(reviewed)
+        proc.wait(timeout=30)
+        assert proc.returncode == 0, "the other process failed: " + proc.stderr.read()[-800:]
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+    seen = json.loads(result.read_text())
+    assert outcome["queued"] == 1
+    assert seen["pause_file_present_after_approval"] is False, seen  # the other process's approval was written after the pause was lifted
+    assert seen["waited_s"] >= 0.5, seen  # and it really did wait for the lock
+    assert em.outreach_store.get(pid, b.draft_id).status in ("approved", "sent")

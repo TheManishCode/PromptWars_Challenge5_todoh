@@ -434,3 +434,14 @@ def test_pause_alone_stops_owner_emails_without_setting_the_kill_switch(em, worl
     em.resume_sending(em.held_snapshot())
     tick(em, clock)
     assert owner_mail(world)  # nothing was lost: it goes out once sending resumes
+
+
+def test_the_owner_email_sender_checks_the_switch_again_right_before_it_sends(em, world, pid, clock):
+    """flush() looks at the switch and the pause once; the send checks again, so one that was set in between hands nothing to the channel."""
+    enable(em)
+    started(em, pid, clock)
+    world.reply("r@rasoi.test", "Total INR 78,000 for the event. Valid for 10 days.")
+    reads = iter([False])  # flush() sees "off"...
+    em.notifier._killed = lambda: next(reads, True)  # ...and by the time of the send it is on
+    tick(em, clock)
+    assert owner_mail(world) == []
