@@ -622,6 +622,7 @@ def _apply_answer(prior: IntakeDraft, answer: IntakeAnswer, today: date) -> Inta
 
 def _turn(draft: IntakeDraft, prior: IntakeDraft, notes: list[str], known: tuple[str, ...], source: str, flags: tuple[str, ...], removed: tuple[str, ...] = (), latest: str = "", new: IntakeDraft | None = None) -> IntakeTurn:
     """Everything the page needs after a message: the draft, what it changed, the one question to answer next, and the notes."""
+    said_something = bool(notes)  # notes this message produced; the standing ones added below (a food note, no vendor records) say nothing about whether it was understood
     if draft.allergy_unclear:
         notes.append("You mentioned an allergy I could not name (" + "; ".join(draft.allergy_unclear) + "). Write what it is, for example 'peanut' or 'dairy'. Until then the plan will say the allergy was not understood.")
     if draft.diet_notes:
@@ -632,10 +633,10 @@ def _turn(draft: IntakeDraft, prior: IntakeDraft, notes: list[str], known: tuple
     if draft.city and cities and draft.city.lower() not in cities:
         notes.append(f"I have no vendor records for {draft.city} yet, so a plan there will likely fail.")
     changes = describe_changes(prior, draft) if prior_has_facts(prior) else ()
-    if prior_has_facts(prior) and latest and not changes and not draft.unresolved and not notes:
+    if prior_has_facts(prior) and latest and not changes and not draft.unresolved and not said_something:
         notes.append("I could not find a change in that message. Say what to change, for example “150 guests”, “budget 3 lakh”, “move it to 19 December 2026” or “not Pune, Mumbai”.")
     raised_now = {q.key for q in draft.unresolved} - {q.key for q in prior.unresolved}  # a question this message raised is its answer: it was used
-    if prior_has_facts(prior) and latest and new is not None and draft.unresolved and not raised_now and not changes and not notes and not new_found(new):
+    if prior_has_facts(prior) and latest and new is not None and draft.unresolved and not raised_now and not changes and not said_something and not new_found(new):
         notes.append(f'I could not use "{clip(latest, 40)}" for the question above. Press one of the options, or say it another way.')  # an open question never swallows a message without saying so
     if not prior_has_facts(prior) and latest and new is not None and not new_found(new) and not draft.unresolved:
         notes.append("I could not find any event details in that message. Try something like: 120 guests in Pune on 12 December, budget 2 lakh.")

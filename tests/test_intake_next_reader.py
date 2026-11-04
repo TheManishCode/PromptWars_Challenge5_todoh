@@ -412,6 +412,12 @@ def test_a_message_that_is_not_a_city_is_not_reported_as_an_unreadable_city(talk
     assert any("could not find a change" in n.lower() or "could not use" in n.lower() for n in t.notes), t.notes
 
 
+def test_a_message_that_changes_nothing_is_said_so_even_when_the_draft_carries_standing_notes(talk):
+    t = talk("engagement for 200 guests on 8 March 2027, budget 6 lakh, no onion garlic", "actually just for the family lunch, others are fine")
+    assert t.draft.diet_notes, "the draft carries a standing food note"
+    assert any("could not" in n.lower() for n in t.notes if "caterer" not in n), t.notes
+
+
 def test_a_bare_non_answer_to_the_city_question_is_still_named(talk):
     t = talk("wedding for 100 guests on 12 December 2026, budget 2 lakh", "???")
     assert any("???" in n and "city" in n for n in t.notes), t.notes
