@@ -4,8 +4,9 @@ A question the reader could not settle lives in the draft the page holds. These 
 to the server: an old or repeated press, a press from a second tab, an invalid option number, a draft that has lost its open question, and the trade-offs call, which used to
 re-read the typed words and so could undo a button the user pressed. Every test goes through ``/api/intake``, ``/api/intake/confirm`` or ``/api/tradeoffs`` as the page does.
 
-What this does not claim: the draft is held by the browser, so someone who edits their own request by hand can still say what they like about their own plan. The checks are
-for the accidental paths (a stale tab, a bug, another client) and for the order of the steps. The limits are written out in docs/intake-state.md.
+What this does not claim: the draft is held by the browser, so someone who edits their own request *and* the text they send with it can still say what they like about their own
+plan (in shared mode that is only their own workspace). The checks are for the accidental paths (a stale tab, a bug, another client) and for the order of the steps. Closing it
+fully would need the server to sign the draft it returns; that is not done. ``settled`` is a record the client carries, not proof of a click. A refresh loses the draft.
 """
 
 import copy
