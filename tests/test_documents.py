@@ -492,3 +492,17 @@ def test_a_real_pdf_goes_through_docling_offline_in_the_sandbox_into_the_same_li
     for bad in (b"%PDF-1.4\n garbage \x00\x01", hand_made_pdf()[:300]):
         with pytest.raises(DocumentError, match="could not be read"):
             sandbox.convert(bad, "q.pdf", command=[DOCLING, "-m", "eventmate.documents.worker"])
+
+
+def test_the_warm_up_sample_is_a_well_formed_pdf():
+    """``warm`` converts this once, with the network, so the OCR weights Docling fetches lazily are in place before the offline sandbox needs them."""
+    import re
+
+    from eventmate.documents import warm
+
+    pdf = warm._sample_pdf()
+    assert pdf.startswith(b"%PDF-1.4") and pdf.rstrip().endswith(b"%%EOF")
+    start = int(re.search(rb"startxref\n(\d+)\n", pdf).group(1))
+    assert pdf[start:start + 4] == b"xref"
+    offsets = [int(m) for m in re.findall(rb"^(\d{10}) 00000 n ", pdf[start:], re.M)]
+    assert len(offsets) == 5 and all(pdf[o:].startswith(b"%d 0 obj" % i) for i, o in enumerate(offsets, 1))

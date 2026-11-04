@@ -35,7 +35,7 @@ def chans():
 @pytest.fixture
 def em(tmp_path, chans, clock):
     e = EventMate(log_dir=tmp_path / "logs", plan_dir=tmp_path / "plans", run_id="state", channels=chans)
-    e.outreach_store.now = e.conversations.now = clock
+    e.outreach_store.now = e.conversations.now = e.jobs_clock = clock  # the job worker too: its deadline check must use the test clock, not the wall clock
     return e
 
 
