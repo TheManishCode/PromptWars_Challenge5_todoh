@@ -1,0 +1,15 @@
+Planning tools shipped in this image
+====================================
+
+Fast Downward 24.06.1   /opt/solvers/downward
+  Licence:  GNU General Public License, version 3 or later. The licence text is /opt/solvers/downward/LICENSE.md.
+  Source:   /opt/solvers/downward/src, with build.py, build_configs.py and BUILD.md in the same directory, is the complete source of the binary in
+            /opt/solvers/downward/builds/release/bin. It is the unmodified upstream tag release-24.06.1, commit 1eef26b2cbf599a1894606aa898d9d49e1034cb9,
+            https://github.com/aibasel/downward . The binary is built with `python3 build.py`, as the Dockerfile shows.
+  Use:      to;doh runs it as a separate program with a fixed command line and reads its output. It is not linked into to;doh.
+
+VAL   /opt/solvers/VAL/build/bin/Validate
+  Licence:  BSD 3-Clause, Copyright 2019 University of Strathclyde, King's College London and Schlumberger Ltd. The licence text is /opt/solvers/VAL/LICENSE.
+  Source:   https://github.com/KCL-Planning/VAL , commit 3c7a1f330bdab0ba28a4762bb45c3f06c27fb6d4, unmodified.
+
+The Python packages in this image and their licences are listed in docs/LICENSES.md in the source repository.

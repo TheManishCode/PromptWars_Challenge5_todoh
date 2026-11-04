@@ -329,3 +329,21 @@ def test_an_allergy_the_reader_cannot_name_is_shown_to_the_user_and_keeps_the_pl
     page.wait_for_selector("#brief-dialog", state="hidden")
     page.wait_for_timeout(600)
     clean(page, ctx, seen)
+
+
+def test_businesses_found_on_openstreetmap_and_google_carry_their_attribution_on_screen(server, ctx):
+    """ODbL 1.0 asks for "© OpenStreetMap contributors" wherever its data appears; Google Maps Platform asks for its attribution next to Places results."""
+    from eventmate.schemas import VendorCategory
+
+    url, em = server
+    page, seen = opened(ctx, url + "/app")
+    new_plan(page)
+    osm = em.externals.add("osm:node/1", "Lakeside Gardens", "Pune", VendorCategory.VENUE, "osm", source_url="https://www.openstreetmap.org/node/1")
+    gplaces = em.externals.add("gplaces:ChIJabcdefgh12345", "Orchid Hall", "Pune", VendorCategory.VENUE, "gplaces", source_url="https://maps.google.com/?cid=1")
+    for plan_id in em.store.list_plans():  # the module shares one server: whichever plan the page opens carries them
+        em.shortlist.add_entry(plan_id, VendorCategory.VENUE, osm.vendor_id)
+        em.shortlist.add_entry(plan_id, VendorCategory.VENUE, gplaces.vendor_id)
+    page.reload(wait_until="networkidle")
+    page.wait_for_selector("text=Lakeside Gardens", timeout=8000)
+    body = page.inner_text("body")
+    assert "© OpenStreetMap contributors (ODbL)" in body and "Powered by Google" in body

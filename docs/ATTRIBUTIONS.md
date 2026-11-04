@@ -21,7 +21,8 @@ The fonts are served from this origin (the page's CSP allows no third party). Th
 
 Each is also credited in the docstring of the module that uses it, and in the ADR that adopted it.
 
-- jiayizx/async_planning (MIT): the CP-SAT model design, and the state-aware repair and delta ideas (`cpsat.py`, `planning/exec_state.py`, `planning/delta.py`).
+- jiayizx/async_planning (MIT, code; its datasets are CC BY 4.0 and unused): the CP-SAT model design, and the state-aware repair and delta ideas (`cpsat.py`, `planning/exec_state.py`, `planning/delta.py`).
 - CopilotKit/openmuse (MIT): job leases, the monitor shape and the page comparison (`followthrough/jobs.py`, `followthrough/watches.py`, `followthrough/pagediff.py`).
 - langgenius/dify, guardrails-ai/guardrails (annotation reply, sensitive-word moderation, re-ask once): `assistant/`.
-- Fast Downward 24.06.1 and VAL are built and run as separate programs (`solvers/`, git-ignored); they are not part of this repository.
+- Fast Downward 24.06.1 (GPL-3.0-or-later) and VAL (BSD-3-Clause) are built and run as separate programs (`solvers/` when built by hand, git-ignored). They are not part of this repository, **but the container image ships both**: see `docs/LICENSES.md` for what that obliges and how the Dockerfile meets it.
+- jiayizx/async_planning is MIT for its code and CC BY 4.0 for its datasets (none used). The full audit of every upstream's licence, with the overlap measured against our code, is `docs/LICENSES.md`.

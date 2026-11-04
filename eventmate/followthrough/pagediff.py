@@ -1,6 +1,6 @@
 """What changed between two readings of a page, ignoring what changes by itself.
 
-Ported from openmuse's ``page-diff.ts`` (MIT, ``pageLines``, ``withoutRelativeTimes``, ``diffPage``; nothing copied, re-written for Python). A line that only differs in a
+Ported from openmuse's ``page-diff.ts`` (MIT, Copyright (c) 2026 OpenMuse contributors: ``pageLines``, ``withoutRelativeTimes``, ``diffPage``), re-written for Python. A comparison against upstream found no copied lines; the one stretch they share is the relative-time pattern below ("5 minutes ago"), which is the same expression, so the upstream notice is kept in docs/LICENSES.md. A line that only differs in a
 relative time ("posted 2 days ago" to "posted 3 days ago") is not news; a line whose only change is a number (a price, a count) is news and is listed as updated; a
 line that was there and is gone is removed. Each previous line can account for at most one current line, so one leftover cannot explain two changes.
 

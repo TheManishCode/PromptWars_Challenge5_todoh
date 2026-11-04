@@ -6,11 +6,13 @@ FROM python:3.14-slim-bookworm AS solvers
 ARG BUILD_JOBS=2
 RUN apt-get update && apt-get install -y --no-install-recommends cmake g++ make flex bison git ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
-RUN git clone --depth 1 --branch release-24.06.1 https://github.com/aibasel/downward.git && cd downward && python3 build.py -j"${BUILD_JOBS}"
-RUN git clone --depth 1 https://github.com/KCL-Planning/VAL.git && cd VAL && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j"${BUILD_JOBS}"
+# Both tools are pinned to the exact commits that were tested (docs/LICENSES.md says why): Fast Downward is GPL-3.0, VAL is BSD-3-Clause, and a build that can drift is not one whose source can be named.
+RUN git clone --depth 1 --branch release-24.06.1 https://github.com/aibasel/downward.git && cd downward && test "$(git rev-parse HEAD)" = 1eef26b2cbf599a1894606aa898d9d49e1034cb9 && python3 build.py -j"${BUILD_JOBS}"
+RUN git init -q VAL && cd VAL && git remote add origin https://github.com/KCL-Planning/VAL.git && git fetch -q --depth 1 origin 3c7a1f330bdab0ba28a4762bb45c3f06c27fb6d4 && git checkout -q FETCH_HEAD && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j"${BUILD_JOBS}"
 
-# What the planner needs at run time is the translate script and the stripped search binary; the compile tree (about 400 MB of object files), the sources and the git history are not.
-RUN cd downward && strip builds/release/bin/downward && rm -rf builds/release/search builds/release/CMakeFiles src misc .git
+# What the planner needs at run time is the translate script and the stripped search binary; the compile tree (about 400 MB of object files) and the git history are not.
+# `src` stays (3 MB): the image carries a GPL-3.0 binary, and the source that built it travels with it (docs/LICENSES.md).
+RUN cd downward && strip builds/release/bin/downward && rm -rf builds/release/search builds/release/CMakeFiles misc .git
 
 FROM python:3.14-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 EVENTMATE_FD=/opt/solvers/downward/fast-downward.py EVENTMATE_VAL=/opt/solvers/VAL/build/bin/Validate \
@@ -18,6 +20,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 EVENTMATE_FD
 RUN useradd --system --uid 10001 --create-home todoh && mkdir /data && chown todoh /data && chmod 700 /data
 COPY --from=solvers /build/downward /opt/solvers/downward
 COPY --from=solvers /build/VAL/build/bin /opt/solvers/VAL/build/bin
+COPY --from=solvers /build/VAL/LICENSE /opt/solvers/VAL/LICENSE
+COPY deploy/solvers-NOTICE.txt /opt/solvers/NOTICE.txt
 WORKDIR /app
 COPY requirements-runtime.lock pyproject.toml README.md ./
 COPY eventmate ./eventmate

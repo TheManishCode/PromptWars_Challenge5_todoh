@@ -9,6 +9,8 @@
   var $ = function (s, c) { return (c || document).querySelector(s); };
   var $$ = function (s, c) { return Array.prototype.slice.call((c || document).querySelectorAll(s)); };
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  /* what a data source's licence or terms ask to be shown wherever its data appears (OpenStreetMap: ODbL 1.0; Google Maps Platform: its attribution rule) */
+  var ATTRIBUTION = { osm: ' \u00b7 \u00a9 OpenStreetMap contributors (ODbL)', gplaces: ' \u00b7 Powered by Google' };
   var UNK = 'Unknown \u2014 request quote';
   var LABEL = { suggested: 'Suggested', discovered: 'Discovered', extracted: 'Extracted', user_confirmed: 'You confirmed', verified: 'Verified', booked: 'Booked' };
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -123,7 +125,7 @@
     });
     (st.shortlist || []).forEach(function (i) {
       var b = i.business, ok = !!i.contact;
-      pl[i.category].push({ n: b.name, s: ok ? 'user_confirmed' : 'discovered', v: ok ? 'Contact confirmed by ' + i.contact.confirmed_by : null, label: 'Price', src: 'tool:' + b.source + (b.website ? ' \u00b7 ' + b.website.replace(/^https?:\/\//, '').slice(0, 30) : '') });
+      pl[i.category].push({ n: b.name, s: ok ? 'user_confirmed' : 'discovered', v: ok ? 'Contact confirmed by ' + i.contact.confirmed_by : null, label: 'Price', src: 'tool:' + b.source + (ATTRIBUTION[b.source] || '') + (b.website ? ' \u00b7 ' + b.website.replace(/^https?:\/\//, '').slice(0, 30) : '') });
     });
     ((st.ideas || [])).forEach(function (i) { pl.other.push({ n: i.title, s: 'suggested', v: i.est_cost_note, label: 'Cost', src: i.source }); });
     st.places = pl;
