@@ -181,7 +181,7 @@ def test_pressing_the_suggested_unit_fixes_the_budget_and_returns_build(dialog):
 def test_an_allergy_typo_blocks_build_until_the_user_answers(dialog):
     page = dialog
     page.say(f"{FULL}, one guest is alergic to peanuts")
-    assert not can_build(page) and "peanut" in card(page).lower() and row(page, "Allergies") is None
+    assert not can_build(page) and "peanut" in card(page).lower() and row(page, "Allergies").startswith("None stated")
     page.get_by_role("button", name="peanut").first.click()
     page.wait_for_selector("#build")
     assert row(page, "Allergies") == "Peanut"
@@ -267,3 +267,11 @@ def test_trade_offs_keep_the_unit_the_user_pressed(dialog):
     asked_with, got = page.tradeoffs[-1]
     assert asked_with["draft"]["budget_total"] == 60_000 and asked_with["draft"]["unresolved"] == []
     assert got["request"]["budget_total"] == 60_000, "the typed words alone read as ₹60"
+
+
+def test_the_card_always_says_when_no_allergy_was_captured_so_a_miss_does_not_look_like_none(dialog):
+    page = dialog
+    page.say(FULL)
+    assert row(page, "Allergies").startswith("None stated") and "write it above" in row(page, "Allergies")
+    page.say("one guest is allergic to peanuts")
+    assert row(page, "Allergies") == "Peanut"

@@ -405,6 +405,8 @@ def propose(
         return _turn(draft, prior, notes, known, source, flags)
     read = _rule_draft(latest, today, notes, known, prior, expecting)
     new, asked = read.draft, list(read.unresolved)
+    if prior.allergens and allergies.removal_requested(latest):
+        asked.append(allergies.removal_question(prior.allergens))  # an allergy leaves only when the user says "remove it" to this question
     new, asked = _bare_answer(expecting, latest, known, prior, new, asked, notes)
     if not asked and not new_found(new) and (number := reading.lone_number(latest)) is not None and prior_has_facts(prior) and not _answered(expecting, new):
         asked = [reading.number_question(number, prior.guest_count, prior.budget_total)]  # before any model is asked, so the model cannot answer it
@@ -473,8 +475,8 @@ def prior_has_facts(prior: IntakeDraft) -> bool:
 def asking_of(draft: IntakeDraft) -> str | None:
     """The fact the draft's open question is about (the first open question, else the first missing fact), or None when the question is not one a bare answer can fill."""
     if draft.unresolved:
-        field = draft.unresolved[0].field
-        return field if field in EXPECTABLE else None
+        first = draft.unresolved[0]
+        return first.field if first.field in EXPECTABLE and first.key != "allergy_remove" else None  # a yes/no about removing an allergy is pressed, never read as the name of one
     missing = draft.missing()
     return missing[0] if missing else None
 
@@ -556,7 +558,9 @@ def _apply_answer(prior: IntakeDraft, answer: IntakeAnswer, today: date) -> Inta
             elif pick.field == "city":
                 fields["city"] = pick.value
             elif pick.field == "allergens":
-                fields["allergens"] = tuple(dict.fromkeys((*prior.allergens, *(Allergen(v) for v in pick.value.split(",")))))
+                added = {Allergen(v) for v in pick.value.split(",") if not v.startswith("-")}
+                removed = {Allergen(v[1:]) for v in pick.value.split(",") if v.startswith("-")}
+                fields["allergens"] = tuple(a for a in dict.fromkeys((*prior.allergens, *added)) if a not in removed)
             elif pick.field == "dietary":
                 fields["dietary"] = tuple(dict.fromkeys((*prior.dietary, DietaryRequirement(pick.value))))
         elif pick.keep_words:

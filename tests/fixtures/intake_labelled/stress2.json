@@ -1,0 +1,8397 @@
+[
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 30 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 30,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-000-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 30 guests in Pune on 12 December 2026, budget 2L"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 30,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-001-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 30 guests in Pune on 12 December 2026, budget 200000"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 30,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-002-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 30 guests in Pune on 12 December 2026, budget ₹2,00,000"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 30,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-003-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 30 guests in Pune on 12 December 2026, budget 1.5 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 30,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 150000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-004-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 30 guests in Pune on 12 December 2026, budget 50k"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 30,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 50000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-005-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 50 people in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 50,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-006-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 50 people in Pune on 12 December 2026, budget 2L"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 50,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-007-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 50 people in Pune on 12 December 2026, budget 200000"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 50,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-008-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 50 people in Pune on 12 December 2026, budget ₹2,00,000"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 50,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-009-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 50 people in Pune on 12 December 2026, budget 1.5 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 50,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 150000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-010-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 50 people in Pune on 12 December 2026, budget 50k"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 50,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 50000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-011-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 120 pax in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 120,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-012-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 120 pax in Pune on 12 December 2026, budget 2L"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 120,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-013-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 120 pax in Pune on 12 December 2026, budget 200000"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 120,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-014-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 120 pax in Pune on 12 December 2026, budget ₹2,00,000"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 120,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-015-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 120 pax in Pune on 12 December 2026, budget 1.5 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 120,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 150000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-016-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 120 pax in Pune on 12 December 2026, budget 50k"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 120,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 50000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-017-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 80 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 80,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-018-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 80 guests in Pune on 12 December 2026, budget 2L"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 80,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-019-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 80 guests in Pune on 12 December 2026, budget 200000"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 80,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-020-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 80 guests in Pune on 12 December 2026, budget ₹2,00,000"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 80,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-021-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 80 guests in Pune on 12 December 2026, budget 1.5 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 80,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 150000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-022-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 80 guests in Pune on 12 December 2026, budget 50k"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 80,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 50000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-023-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 200 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 200,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-024-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 200 guests in Pune on 12 December 2026, budget 2L"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 200,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-025-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 200 guests in Pune on 12 December 2026, budget 200000"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 200,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-026-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 200 guests in Pune on 12 December 2026, budget ₹2,00,000"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 200,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-027-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 200 guests in Pune on 12 December 2026, budget 1.5 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 200,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 150000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-028-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean",
+  "steps": [
+   {
+    "say": "wedding for 200 guests in Pune on 12 December 2026, budget 50k"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 200,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 50000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-029-clean"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_city",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in mumbai on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Mumbai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-030-clean_city"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_city",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Bangalore on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Bengaluru",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-031-clean_city"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_city",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in BLR on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Bengaluru",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-032-clean_city"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_city",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in hyd on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Hyderabad",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-033-clean_city"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_city",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in jaipur on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Jaipur",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-034-clean_city"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_city",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in ahmedabad on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Ahmedabad",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-035-clean_city"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_city",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Calcutta on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Kolkata",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-036-clean_city"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_city",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in new delhi on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Delhi",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-037-clean_city"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_date",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12/12/2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-038-clean_date"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_date",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 2026-12-12, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-039-clean_date"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_date",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12th December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-040-clean_date"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_date",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on Dec 12 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-041-clean_date"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_date",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 19 Dec 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-19",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-042-clean_date"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_type",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-043-clean_type"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_type",
+  "steps": [
+   {
+    "say": "birthday party for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-044-clean_type"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_type",
+  "steps": [
+   {
+    "say": "engagement for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-045-clean_type"
+ },
+ {
+  "split": "stress2",
+  "group": "clean_type",
+  "steps": [
+   {
+    "say": "corporate offsite for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-046-clean_type"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget $5000"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "say": "2 lakh"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-047-budget_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 5000 dollars"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "say": "2 lakh"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-048-budget_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget €4000"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "say": "2 lakh"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-049-budget_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 15000 AED"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "say": "2 lakh"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-050-budget_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 million"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "say": "2 lakh"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-051-budget_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2000 per person"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-052-budget_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2000 per head"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-053-budget_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 1500 a plate"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-054-budget_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 50"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "say": "2 lakh"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-055-budget_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "say": "2 lakh"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-056-budget_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 1e6"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "say": "2 lakh"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-057-budget_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2-3 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-058-budget_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget between 2 and 3 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-059-budget_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unit_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 laah"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "budget 2 laah",
+  "id": "stress2-060-budget_unit_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unit_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 ksskh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "budget 2 ksskh",
+  "id": "stress2-061-budget_unit_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unit_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 laalh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "budget 2 laalh",
+  "id": "stress2-062-budget_unit_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unit_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lahl"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "budget 2 lahl",
+  "id": "stress2-063-budget_unit_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unit_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 laqkh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "budget 2 laqkh",
+  "id": "stress2-064-budget_unit_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unit_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 kallh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "budget 2 kallh",
+  "id": "stress2-065-budget_unit_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unit_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 llah"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "budget 2 llah",
+  "id": "stress2-066-budget_unit_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unit_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lkqh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "budget 2 lkqh",
+  "id": "stress2-067-budget_unit_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unit_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lkaah"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "budget 2 lkaah",
+  "id": "stress2-068-budget_unit_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unit_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 laalh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "budget 2 laalh",
+  "id": "stress2-069-budget_unit_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unit_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lhak"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "budget 2 lhak",
+  "id": "stress2-070-budget_unit_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "budget_unit_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lshk"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "press": "2,00,000"
+   }
+  ],
+  "safety": null,
+  "note": "budget 2 lshk",
+  "id": "stress2-071-budget_unit_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "guests_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100-150 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 150,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "guest_count"
+  ],
+  "resolve": [
+   {
+    "press": "150"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-072-guests_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "guests_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100 to 150 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 150,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "guest_count"
+  ],
+  "resolve": [
+   {
+    "press": "150"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-073-guests_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "guests_unsafe",
+  "steps": [
+   {
+    "say": "wedding for between 100 and 150 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 150,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "guest_count"
+  ],
+  "resolve": [
+   {
+    "press": "150"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-074-guests_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "guests_unsafe",
+  "steps": [
+   {
+    "say": "wedding for -5 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 150,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "guest_count"
+  ],
+  "resolve": [
+   {
+    "say": "150 guests"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-075-guests_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "guests_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 0 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 150,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "guest_count"
+  ],
+  "resolve": [
+   {
+    "say": "150 guests"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-076-guests_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "guests_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 100.5 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 150,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "guest_count"
+  ],
+  "resolve": [
+   {
+    "say": "150 guests"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-077-guests_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "guests_unsafe",
+  "steps": [
+   {
+    "say": "wedding for 1000000 guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 150,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "guest_count"
+  ],
+  "resolve": [
+   {
+    "say": "150 guests"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-078-guests_unsafe"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Puuen on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Puuen for Pune",
+  "id": "stress2-079-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Puuen"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Puuen for Pune",
+  "id": "stress2-080-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Puunne on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Puunne for Pune",
+  "id": "stress2-081-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Puunne"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Puunne for Pune",
+  "id": "stress2-082-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Mubmi on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Mumbai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Mubmi for Mumbai",
+  "id": "stress2-083-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Mubmi"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Mumbai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Mubmi for Mumbai",
+  "id": "stress2-084-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Muvai on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Mumbai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Muvai for Mumbai",
+  "id": "stress2-085-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Muvai"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Mumbai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Muvai for Mumbai",
+  "id": "stress2-086-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in vengaluuuru on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Bengaluru",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "vengaluuuru for Bengaluru",
+  "id": "stress2-087-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "vengaluuuru"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Bengaluru",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "vengaluuuru for Bengaluru",
+  "id": "stress2-088-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Bengakjru on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Bengaluru",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Bengakjru for Bengaluru",
+  "id": "stress2-089-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Bengakjru"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Bengaluru",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Bengakjru for Bengaluru",
+  "id": "stress2-090-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in jyderbda on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Hyderabad",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "jyderbda for Hyderabad",
+  "id": "stress2-091-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "jyderbda"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Hyderabad",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "jyderbda for Hyderabad",
+  "id": "stress2-092-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Hydrbaad on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Hyderabad",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Hydrbaad for Hyderabad",
+  "id": "stress2-093-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Hydrbaad"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Hyderabad",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Hydrbaad for Hyderabad",
+  "id": "stress2-094-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in xeennai on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Chennai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "xeennai for Chennai",
+  "id": "stress2-095-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "xeennai"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Chennai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "xeennai for Chennai",
+  "id": "stress2-096-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Chdnnnai on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Chennai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Chdnnnai for Chennai",
+  "id": "stress2-097-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Chdnnnai"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Chennai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Chdnnnai for Chennai",
+  "id": "stress2-098-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Kilkaga on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Kolkata",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Kilkaga for Kolkata",
+  "id": "stress2-099-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Kilkaga"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Kolkata",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Kilkaga for Kolkata",
+  "id": "stress2-100-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in jollata on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Kolkata",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "jollata for Kolkata",
+  "id": "stress2-101-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "jollata"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Kolkata",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "jollata for Kolkata",
+  "id": "stress2-102-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Dlei on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Delhi",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Dlei for Delhi",
+  "id": "stress2-103-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Dlei"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Delhi",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Dlei for Delhi",
+  "id": "stress2-104-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Dlhhi on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Delhi",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Dlhhi for Delhi",
+  "id": "stress2-105-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Dlhhi"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Delhi",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Dlhhi for Delhi",
+  "id": "stress2-106-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Jaaiupr on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Jaipur",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Jaaiupr for Jaipur",
+  "id": "stress2-107-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Jaaiupr"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Jaipur",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Jaaiupr for Jaipur",
+  "id": "stress2-108-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Jaiulr on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Jaipur",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Jaiulr for Jaipur",
+  "id": "stress2-109-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Jaiulr"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Jaipur",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Jaiulr for Jaipur",
+  "id": "stress2-110-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Ahmeabd on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Ahmedabad",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Ahmeabd for Ahmedabad",
+  "id": "stress2-111-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Ahmeabd"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Ahmedabad",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Ahmeabd for Ahmedabad",
+  "id": "stress2-112-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in zhhmedaabad on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Ahmedabad",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "zhhmedaabad for Ahmedabad",
+  "id": "stress2-113-city_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "city_typo_answer",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "zhhmedaabad"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Ahmedabad",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "zhhmedaabad for Ahmedabad",
+  "id": "stress2-114-city_typo_answer"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Nagpur on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Nagpur",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Nagpur",
+  "id": "stress2-115-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in nagpur on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Nagpur",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "nagpur",
+  "id": "stress2-116-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Surat on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Surat",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Surat",
+  "id": "stress2-117-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in surat on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Surat",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "surat",
+  "id": "stress2-118-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Thane on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Thane",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Thane",
+  "id": "stress2-119-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in thane on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Thane",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "thane",
+  "id": "stress2-120-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Nashik on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Nashik",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Nashik",
+  "id": "stress2-121-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in nashik on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Nashik",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "nashik",
+  "id": "stress2-122-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Indore on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Indore",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Indore",
+  "id": "stress2-123-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in indore on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Indore",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "indore",
+  "id": "stress2-124-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Goa on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Goa",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Goa",
+  "id": "stress2-125-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in goa on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Goa",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "goa",
+  "id": "stress2-126-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Navi Mumbai on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Navi Mumbai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "Navi Mumbai",
+  "id": "stress2-127-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_unknown",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in navi mumbai on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "city_ok",
+  "truth": {
+   "guest_count": 100,
+   "city": "Navi Mumbai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "navi mumbai",
+  "id": "stress2-128-city_unknown"
+ },
+ {
+  "split": "stress2",
+  "group": "city_two",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune or Mumbai on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Mumbai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [
+   {
+    "press": "Mumbai"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-129-city_two"
+ },
+ {
+  "split": "stress2",
+  "group": "city_two",
+  "steps": [
+   {
+    "say": "wedding for 100 guests from Mumbai to Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "city"
+  ],
+  "resolve": [
+   {
+    "press": "Pune"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-130-city_two"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allergic to peanuts"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-131-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, peanuts allergy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-132-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to peanuts"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-133-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allergic to cashews"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "tree_nut"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-134-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, cashews allergy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "tree_nut"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-135-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to cashews"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "tree_nut"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-136-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allergic to dairy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "dairy"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-137-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, dairy allergy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "dairy"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-138-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to dairy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "dairy"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-139-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allergic to eggs"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-140-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, eggs allergy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-141-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to eggs"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-142-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allergic to shellfish"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-143-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, shellfish allergy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-144-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to shellfish"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-145-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allergic to fish"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "fish"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-146-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, fish allergy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "fish"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-147-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to fish"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "fish"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-148-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allergic to soy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "soy"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-149-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, soy allergy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "soy"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-150-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to soy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "soy"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-151-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allergic to sesame"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "sesame"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-152-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, sesame allergy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "sesame"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-153-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to sesame"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "sesame"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-154-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allergic to gluten"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-155-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, gluten allergy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-156-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to gluten"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-157-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allergic to celery"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "celery"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-158-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, celery allergy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "celery"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-159-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to celery"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "celery"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-160-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allergic to mustard"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "mustard"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-161-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, mustard allergy"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "mustard"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-162-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to mustard"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "mustard"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-163-allergy_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, mungfali se allergy hai"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-164-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, mungfali ki allergy"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "peanut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-165-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, doodh se allergy hai"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "dairy"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-166-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, doodh ki allergy"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "dairy"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "dairy"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-167-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, anda se allergy hai"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-168-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, anda ki allergy"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "egg"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-169-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, jhinga se allergy hai"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-170-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, jhinga ki allergy"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "shellfish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-171-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, machli se allergy hai"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "fish"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-172-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, machli ki allergy"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "fish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "fish"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-173-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, gehu se allergy hai"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-174-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, gehu ki allergy"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "gluten"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-175-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, til se allergy hai"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "sesame"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-176-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, til ki allergy"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "sesame"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "sesame"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-177-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, kaju se allergy hai"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "tree_nut"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-178-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_hinglish",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, kaju ki allergy"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "tree nut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "tree_nut"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-179-allergy_hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is qergic to peanuts"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "peanut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "one guest is qergic to peanuts",
+  "id": "stress2-180-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is qergic to eggs"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "egg"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "one guest is qergic to eggs",
+  "id": "stress2-181-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is qergic to prawns"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "shellfish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "one guest is qergic to prawns",
+  "id": "stress2-182-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is qergic to gluten"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "gluten"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "one guest is qergic to gluten",
+  "id": "stress2-183-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, peanuts alelrrgy"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "peanut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "peanuts alelrrgy",
+  "id": "stress2-184-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, eggs alelrrgy"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "egg"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "eggs alelrrgy",
+  "id": "stress2-185-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, prawns alelrrgy"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "shellfish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "prawns alelrrgy",
+  "id": "stress2-186-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, gluten alelrrgy"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "gluten"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "gluten alelrrgy",
+  "id": "stress2-187-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is aletgic to peanuts"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "peanut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "one guest is aletgic to peanuts",
+  "id": "stress2-188-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is aletgic to eggs"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "egg"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "one guest is aletgic to eggs",
+  "id": "stress2-189-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is aletgic to prawns"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "shellfish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "one guest is aletgic to prawns",
+  "id": "stress2-190-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is aletgic to gluten"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "gluten"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "one guest is aletgic to gluten",
+  "id": "stress2-191-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, peanuts alrgy"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "peanut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "peanuts alrgy",
+  "id": "stress2-192-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, eggs alrgy"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "egg"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "eggs alrgy",
+  "id": "stress2-193-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, prawns alrgy"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "shellfish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "prawns alrgy",
+  "id": "stress2-194-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, gluten alrgy"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "gluten"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "gluten alrgy",
+  "id": "stress2-195-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, peanuts allegrci"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "peanut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "peanuts allegrci",
+  "id": "stress2-196-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, eggs allegrci"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "egg"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "eggs allegrci",
+  "id": "stress2-197-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, prawns allegrci"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "shellfish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "prawns allegrci",
+  "id": "stress2-198-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, gluten allegrci"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "gluten"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "gluten allegrci",
+  "id": "stress2-199-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, peanuts alldryg"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "peanut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "peanuts alldryg",
+  "id": "stress2-200-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, eggs alldryg"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "egg"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "eggs alldryg",
+  "id": "stress2-201-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, prawns alldryg"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "shellfish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "prawns alldryg",
+  "id": "stress2-202-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, gluten alldryg"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "gluten"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "gluten alldryg",
+  "id": "stress2-203-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allrregic to peanuts"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "peanut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "one guest is allrregic to peanuts",
+  "id": "stress2-204-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allrregic to eggs"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "egg"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "one guest is allrregic to eggs",
+  "id": "stress2-205-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allrregic to prawns"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "shellfish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "one guest is allrregic to prawns",
+  "id": "stress2-206-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, one guest is allrregic to gluten"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "gluten"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "one guest is allrregic to gluten",
+  "id": "stress2-207-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, peanuts alleeryg"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "peanut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "peanuts alleeryg",
+  "id": "stress2-208-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, eggs alleeryg"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "egg"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "eggs alleeryg",
+  "id": "stress2-209-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, prawns alleeryg"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "shellfish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "prawns alleeryg",
+  "id": "stress2-210-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_cue_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, gluten alleeryg"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "gluten"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "gluten alleeryg",
+  "id": "stress2-211-allergy_cue_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to peanrus"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "peanut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "peanrus",
+  "id": "stress2-212-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to pnuts"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "peanut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "pnuts",
+  "id": "stress2-213-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to sellfiwh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "shellfish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "sellfiwh",
+  "id": "stress2-214-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to shellifish"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "shellfish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "shellifish",
+  "id": "stress2-215-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to prwawns"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "shellfish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "prwawns",
+  "id": "stress2-216-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to paawns"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "shellfish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "shellfish"
+   ],
+   "mention": true
+  },
+  "note": "paawns",
+  "id": "stress2-217-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to hljgen"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "gluten"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "hljgen",
+  "id": "stress2-218-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to gkuen"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "gluten"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "gluten"
+   ],
+   "mention": true
+  },
+  "note": "gkuen",
+  "id": "stress2-219-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to sessme"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "sesame"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "sesame"
+   ],
+   "mention": true
+  },
+  "note": "sessme",
+  "id": "stress2-220-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to sesqqme"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "sesame"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "sesame"
+   ],
+   "mention": true
+  },
+  "note": "sesqqme",
+  "id": "stress2-221-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to ehggs"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "egg"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "ehggs",
+  "id": "stress2-222-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to dffgs"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "egg"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "dffgs",
+  "id": "stress2-223-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to cashheews"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "tree nut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "tree_nut"
+   ],
+   "mention": true
+  },
+  "note": "cashheews",
+  "id": "stress2-224-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to casshdws"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "tree nut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "tree_nut"
+   ],
+   "mention": true
+  },
+  "note": "casshdws",
+  "id": "stress2-225-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to almmons"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "tree nut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "tree_nut"
+   ],
+   "mention": true
+  },
+  "note": "almmons",
+  "id": "stress2-226-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to aloonds"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "tree nut"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "tree_nut"
+   ],
+   "mention": true
+  },
+  "note": "aloonds",
+  "id": "stress2-227-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to daiary"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "dairy"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "dairy"
+   ],
+   "mention": true
+  },
+  "note": "daiary",
+  "id": "stress2-228-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to darry"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "dairy"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "dairy"
+   ],
+   "mention": true
+  },
+  "note": "darry",
+  "id": "stress2-229-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to fkssh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "fish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "fish"
+   ],
+   "mention": true
+  },
+  "note": "fkssh",
+  "id": "stress2-230-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_food_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to fkhs"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "fish"
+   }
+  ],
+  "safety": {
+   "allergens": [
+    "fish"
+   ],
+   "mention": true
+  },
+  "note": "fkhs",
+  "id": "stress2-231-allergy_food_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_unnamed_or_exclusion",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, anaphylaxis"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "say": "peanuts"
+   }
+  ],
+  "safety": {
+   "allergens": null,
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-232-allergy_unnamed_or_exclusion"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_unnamed_or_exclusion",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, carries an epipen"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "say": "peanuts"
+   }
+  ],
+  "safety": {
+   "allergens": null,
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-233-allergy_unnamed_or_exclusion"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_unnamed_or_exclusion",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, no peanuts please"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "preference"
+   }
+  ],
+  "safety": {
+   "allergens": null,
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-234-allergy_unnamed_or_exclusion"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_unnamed_or_exclusion",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, without nuts"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "preference"
+   }
+  ],
+  "safety": {
+   "allergens": null,
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-235-allergy_unnamed_or_exclusion"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_unnamed_or_exclusion",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, no shellfish"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "press": "preference"
+   }
+  ],
+  "safety": {
+   "allergens": null,
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-236-allergy_unnamed_or_exclusion"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_unnamed_or_exclusion",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, severe reaction to something"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [
+   {
+    "say": "peanuts"
+   }
+  ],
+  "safety": {
+   "allergens": null,
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-237-allergy_unnamed_or_exclusion"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_none",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, no allergies"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-238-allergy_none"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_none",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, nobody is allergic"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-239-allergy_none"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_none",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, no one has any allergies"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-240-allergy_none"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_none",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, koi allergy nahi hai"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-241-allergy_none"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_none",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergies: none"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-242-allergy_none"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_none",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, not allergic to peanuts"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-243-allergy_none"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_negation_mixed",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, not allergic to peanuts but allergic to eggs"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "egg"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-244-allergy_negation_mixed"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_negation_mixed",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to peanuts, not eggs"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-245-allergy_negation_mixed"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_lookalike_no_mention",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, peanut butter sandwich counter"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "mention": false
+  },
+  "note": "peanut butter sandwich counter",
+  "id": "stress2-246-allergy_lookalike_no_mention"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_lookalike_no_mention",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, a pancake station"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "mention": false
+  },
+  "note": "a pancake station",
+  "id": "stress2-247-allergy_lookalike_no_mention"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_lookalike_no_mention",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, penguin themed cake"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "mention": false
+  },
+  "note": "penguin themed cake",
+  "id": "stress2-248-allergy_lookalike_no_mention"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_lookalike_no_mention",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, Alice in Wonderland theme"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "mention": false
+  },
+  "note": "Alice in Wonderland theme",
+  "id": "stress2-249-allergy_lookalike_no_mention"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_lookalike_no_mention",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, algorithm quiz night"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "mention": false
+  },
+  "note": "algorithm quiz night",
+  "id": "stress2-250-allergy_lookalike_no_mention"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_lookalike_no_mention",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, egg hunt for the kids"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "mention": false
+  },
+  "note": "egg hunt for the kids",
+  "id": "stress2-251-allergy_lookalike_no_mention"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, vegetarian"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-252-diet_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, veg"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-253-diet_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, vegan"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegan"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-254-diet_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, jain food"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "jain"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-255-diet_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, halal"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "halal"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-256-diet_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, non veg only"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "non_vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-257-diet_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_correct",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, veg khana"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "",
+  "id": "stress2-258-diet_correct"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, vgeetaroan"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "dietary"
+  ],
+  "resolve": [
+   {
+    "press": "vegetarian"
+   }
+  ],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "vgeetaroan",
+  "id": "stress2-259-diet_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, vwgetaeian"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "dietary"
+  ],
+  "resolve": [
+   {
+    "press": "vegetarian"
+   }
+  ],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "vwgetaeian",
+  "id": "stress2-260-diet_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, vegwtariaan"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "dietary"
+  ],
+  "resolve": [
+   {
+    "press": "vegetarian"
+   }
+  ],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "vegwtariaan",
+  "id": "stress2-261-diet_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, vegettarrian"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "dietary"
+  ],
+  "resolve": [
+   {
+    "press": "vegetarian"
+   }
+  ],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "vegettarrian",
+  "id": "stress2-262-diet_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, vegrarian"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "dietary"
+  ],
+  "resolve": [
+   {
+    "press": "vegetarian"
+   }
+  ],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "vegrarian",
+  "id": "stress2-263-diet_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, vgtearian"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "dietary"
+  ],
+  "resolve": [
+   {
+    "press": "vegetarian"
+   }
+  ],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "vgtearian",
+  "id": "stress2-264-diet_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, vegerarkan"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "dietary"
+  ],
+  "resolve": [
+   {
+    "press": "vegetarian"
+   }
+  ],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "vegerarkan",
+  "id": "stress2-265-diet_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, vegegaarian"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "dietary"
+  ],
+  "resolve": [
+   {
+    "press": "vegetarian"
+   }
+  ],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "vegegaarian",
+  "id": "stress2-266-diet_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, veegtaarian"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "dietary"
+  ],
+  "resolve": [
+   {
+    "press": "vegetarian"
+   }
+  ],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "veegtaarian",
+  "id": "stress2-267-diet_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, veetgarian"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "dietary"
+  ],
+  "resolve": [
+   {
+    "press": "vegetarian"
+   }
+  ],
+  "safety": {
+   "allergens": [],
+   "dietary": [
+    "vegetarian"
+   ],
+   "mention": true
+  },
+  "note": "veetgarian",
+  "id": "stress2-268-diet_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_note",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, no onion no garlic"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "dietary": [],
+   "diet_note": true,
+   "mention": true
+  },
+  "note": "no onion no garlic",
+  "id": "stress2-269-diet_note"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_note",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, bina pyaaz lehsun"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "dietary": [],
+   "diet_note": true,
+   "mention": true
+  },
+  "note": "bina pyaaz lehsun",
+  "id": "stress2-270-diet_note"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_note",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, no beef"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "dietary": [],
+   "diet_note": true,
+   "mention": true
+  },
+  "note": "no beef",
+  "id": "stress2-271-diet_note"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_note",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, sattvic"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "dietary": [],
+   "diet_note": true,
+   "mention": true
+  },
+  "note": "sattvic",
+  "id": "stress2-272-diet_note"
+ },
+ {
+  "split": "stress2",
+  "group": "diet_note",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, kosher"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": {
+   "allergens": [],
+   "dietary": [],
+   "diet_note": true,
+   "mention": true
+  },
+  "note": "kosher",
+  "id": "stress2-273-diet_note"
+ },
+ {
+  "split": "stress2",
+  "group": "correction",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "sorry, 150 guests"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 150,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-274-correction"
+ },
+ {
+  "split": "stress2",
+  "group": "correction",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "actually 80 guests"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 80,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-275-correction"
+ },
+ {
+  "split": "stress2",
+  "group": "correction",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "budget is 3 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 300000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-276-correction"
+ },
+ {
+  "split": "stress2",
+  "group": "correction",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "move it to 19 December 2026"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-19",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-277-correction"
+ },
+ {
+  "split": "stress2",
+  "group": "correction",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "actually make it Mumbai"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Mumbai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-278-correction"
+ },
+ {
+  "split": "stress2",
+  "group": "correction",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "not Pune, Mumbai"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Mumbai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-279-correction"
+ },
+ {
+  "split": "stress2",
+  "group": "correction",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "not in Pune but in Mumbai"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Mumbai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-280-correction"
+ },
+ {
+  "split": "stress2",
+  "group": "correction",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Mumbai instead of Pune"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Mumbai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-281-correction"
+ },
+ {
+  "split": "stress2",
+  "group": "correction",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "Mumbai"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Mumbai",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-282-correction"
+ },
+ {
+  "split": "stress2",
+  "group": "correction_bare_number",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "make it 150"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 150,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "number"
+  ],
+  "resolve": [
+   {
+    "press": "guests"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-283-correction_bare_number"
+ },
+ {
+  "split": "stress2",
+  "group": "correction_bare_number",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "now 80"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 80,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "number"
+  ],
+  "resolve": [
+   {
+    "press": "guests"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-284-correction_bare_number"
+ },
+ {
+  "split": "stress2",
+  "group": "correction_bare_number",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "150"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 150,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "number"
+  ],
+  "resolve": [
+   {
+    "press": "guests"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-285-correction_bare_number"
+ },
+ {
+  "split": "stress2",
+  "group": "correction_nochange",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "sounds good"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-286-correction_nochange"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_removal",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to peanuts"
+   },
+   {
+    "say": "actually nobody is allergic"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true,
+   "removal": true
+  },
+  "note": "actually nobody is allergic",
+  "id": "stress2-287-allergy_removal"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_removal",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to peanuts"
+   },
+   {
+    "say": "remove the peanut allergy"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true,
+   "removal": true
+  },
+  "note": "remove the peanut allergy",
+  "id": "stress2-288-allergy_removal"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_removal",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to peanuts"
+   },
+   {
+    "say": "the peanut allergy no longer applies"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true,
+   "removal": true
+  },
+  "note": "the peanut allergy no longer applies",
+  "id": "stress2-289-allergy_removal"
+ },
+ {
+  "split": "stress2",
+  "group": "allergy_removal",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget 2 lakh, allergic to peanuts"
+   },
+   {
+    "say": "forget the allergy"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "allergens"
+  ],
+  "resolve": [],
+  "safety": {
+   "allergens": [
+    "peanut"
+   ],
+   "mention": true,
+   "removal": true
+  },
+  "note": "forget the allergy",
+  "id": "stress2-290-allergy_removal"
+ },
+ {
+  "split": "stress2",
+  "group": "bare_answers",
+  "steps": [
+   {
+    "say": "wedding in Pune"
+   },
+   {
+    "say": "100"
+   },
+   {
+    "say": "12 Dec 2026"
+   },
+   {
+    "say": "200000"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-291-bare_answers"
+ },
+ {
+  "split": "stress2",
+  "group": "bare_answers",
+  "steps": [
+   {
+    "say": "wedding in Pune"
+   },
+   {
+    "say": "about 100"
+   },
+   {
+    "say": "12/12/2026"
+   },
+   {
+    "say": "2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-292-bare_answers"
+ },
+ {
+  "split": "stress2",
+  "group": "bare_answers",
+  "steps": [
+   {
+    "say": "wedding for 100 guests on 12 December 2026, budget 2 lakh"
+   },
+   {
+    "say": "pune"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "city answered in lower case",
+  "id": "stress2-293-bare_answers"
+ },
+ {
+  "split": "stress2",
+  "group": "hinglish",
+  "steps": [
+   {
+    "say": "Pune mein shaadi hai, 100 log, 12 December ko, budget 2 lakh"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "guest_count",
+   "budget_total",
+   "city"
+  ],
+  "resolve": [
+   {
+    "say": "100 guests"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-294-hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "hinglish",
+  "steps": [
+   {
+    "say": "Pune mein shaadi, 100 mehmaan, 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "guest_count",
+   "budget_total",
+   "city"
+  ],
+  "resolve": [
+   {
+    "say": "100 guests"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-295-hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "hinglish",
+  "steps": [
+   {
+    "say": "shaadi 100 log Pune 12/12/2026 2 lakh"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "guest_count",
+   "budget_total",
+   "city"
+  ],
+  "resolve": [
+   {
+    "say": "100 guests"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-296-hinglish"
+ },
+ {
+  "split": "stress2",
+  "group": "hinglish_number_words",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget do lakh"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [
+   {
+    "say": "2 lakh"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-297-hinglish_number_words"
+ },
+ {
+  "split": "stress2",
+  "group": "hinglish_number_words",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget teen lakh"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 300000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-298-hinglish_number_words"
+ },
+ {
+  "split": "stress2",
+  "group": "hinglish_number_words",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget paanch lakh"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 500000
+  },
+  "ask_fields": [
+   "budget_total"
+  ],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-299-hinglish_number_words"
+ },
+ {
+  "split": "stress2",
+  "group": "number_words",
+  "steps": [
+   {
+    "say": "wedding for a hundred guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-300-number_words"
+ },
+ {
+  "split": "stress2",
+  "group": "number_words",
+  "steps": [
+   {
+    "say": "wedding for hundred and twenty guests in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 120,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-301-number_words"
+ },
+ {
+  "split": "stress2",
+  "group": "number_words",
+  "steps": [
+   {
+    "say": "wedding for fifty pax in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 50,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-302-number_words"
+ },
+ {
+  "split": "stress2",
+  "group": "number_words",
+  "steps": [
+   {
+    "say": "wedding for two hundred people in Pune on 12 December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 200,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-303-number_words"
+ },
+ {
+  "split": "stress2",
+  "group": "number_words",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 December 2026, budget two lakh"
+   }
+  ],
+  "expect": "exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [],
+  "resolve": [],
+  "safety": null,
+  "note": "",
+  "id": "stress2-304-number_words"
+ },
+ {
+  "split": "stress2",
+  "group": "date_month_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 fecdber 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "event_date"
+  ],
+  "resolve": [
+   {
+    "press": "12 December"
+   }
+  ],
+  "safety": null,
+  "note": "fecdber",
+  "id": "stress2-305-date_month_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "date_month_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 Decemrb 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "event_date"
+  ],
+  "resolve": [
+   {
+    "press": "12 December"
+   }
+  ],
+  "safety": null,
+  "note": "Decemrb",
+  "id": "stress2-306-date_month_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "date_month_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 Dexemner 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "event_date"
+  ],
+  "resolve": [
+   {
+    "press": "12 December"
+   }
+  ],
+  "safety": null,
+  "note": "Dexemner",
+  "id": "stress2-307-date_month_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "date_month_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 fecmber 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "event_date"
+  ],
+  "resolve": [
+   {
+    "press": "12 December"
+   }
+  ],
+  "safety": null,
+  "note": "fecmber",
+  "id": "stress2-308-date_month_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "date_month_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 feembber 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "event_date"
+  ],
+  "resolve": [
+   {
+    "press": "12 December"
+   }
+  ],
+  "safety": null,
+  "note": "feembber",
+  "id": "stress2-309-date_month_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "date_month_typo",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune on 12 Decceber 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask_or_exact",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "event_date"
+  ],
+  "resolve": [
+   {
+    "press": "12 December"
+   }
+  ],
+  "safety": null,
+  "note": "Decceber",
+  "id": "stress2-310-date_month_typo"
+ },
+ {
+  "split": "stress2",
+  "group": "date_unreadable",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune tomorrow, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "event_date"
+  ],
+  "resolve": [
+   {
+    "say": "12 December 2026"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-311-date_unreadable"
+ },
+ {
+  "split": "stress2",
+  "group": "date_unreadable",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune next Saturday, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "event_date"
+  ],
+  "resolve": [
+   {
+    "say": "12 December 2026"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-312-date_unreadable"
+ },
+ {
+  "split": "stress2",
+  "group": "date_unreadable",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune this weekend, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "event_date"
+  ],
+  "resolve": [
+   {
+    "say": "12 December 2026"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-313-date_unreadable"
+ },
+ {
+  "split": "stress2",
+  "group": "date_unreadable",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune in December 2026, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "event_date"
+  ],
+  "resolve": [
+   {
+    "say": "12 December 2026"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-314-date_unreadable"
+ },
+ {
+  "split": "stress2",
+  "group": "date_unreadable",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune 12/12, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "event_date"
+  ],
+  "resolve": [
+   {
+    "say": "12 December 2026"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-315-date_unreadable"
+ },
+ {
+  "split": "stress2",
+  "group": "date_unreadable",
+  "steps": [
+   {
+    "say": "wedding for 100 guests in Pune 5/6/2027, budget 2 lakh"
+   }
+  ],
+  "expect": "ask",
+  "truth": {
+   "guest_count": 100,
+   "city": "Pune",
+   "event_date": "2026-12-12",
+   "budget_total": 200000
+  },
+  "ask_fields": [
+   "event_date"
+  ],
+  "resolve": [
+   {
+    "say": "12 December 2026"
+   }
+  ],
+  "safety": null,
+  "note": "",
+  "id": "stress2-316-date_unreadable"
+ }
+]

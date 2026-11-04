@@ -608,10 +608,15 @@
     if (f === 'budget_total') return inr(v); if (f === 'event_date') return longDate(v); if (Array.isArray(v)) return v.map(cap).join(', ');
     return f === 'event_type' || f === 'venue_setting' ? cap(v) : String(v);
   }
+  var NO_ALLERGY = 'None stated. If anyone has an allergy, write it above before you build.';
   function fieldLabel(f) { for (var i = 0; i < FIELD.length; i++) if (FIELD[i][0] === f) return FIELD[i][1]; return words(f); }
   function renderUnderstood() {
     var box = clear($('#understood')), t = st.turn; if (!t) return;
-    var dl = h('dl', { class: 'facts' }); FIELD.forEach(function (p) { var v = fieldValue(t.draft, p[0]); if (v !== null) { dl.appendChild(h('dt', { text: p[1] })); dl.appendChild(h('dd', { text: v })); } });
+    var dl = h('dl', { class: 'facts' }); FIELD.forEach(function (p) {
+      var v = fieldValue(t.draft, p[0]);
+      if (v === null && p[0] === 'allergens' && !(t.draft.allergy_unclear || []).length) v = NO_ALLERGY;  // a missed allergy must not look the same as "none": the card always says what it holds
+      if (v !== null) { dl.appendChild(h('dt', { text: p[1] })); dl.appendChild(h('dd', { text: v })); }
+    });
     var card = h('div', { class: 'card' }, h('h2', { text: 'What I understood' }), dl), notes = [].concat(t.flags && t.flags.length ? ['Please double-check: ' + t.flags.map(fieldLabel).join(', ')] : [], t.notes || []);
     if (t.changes && t.changes.length) card.appendChild(h('ul', { class: 'list changes', 'aria-label': 'What changed' }, t.changes.map(function (c) { return h('li', { text: c }); })));
     if (notes.length) card.appendChild(h('ul', { class: 'list' }, notes.map(function (n) { return h('li', { text: n }); }))); box.appendChild(card);

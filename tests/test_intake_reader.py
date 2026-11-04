@@ -189,7 +189,9 @@ def test_correctly_spelled_allergies_are_read_with_no_question(talk, phrase):
     assert t.draft.allergens and t.draft.unresolved == () and t.ready
 
 
-@pytest.mark.parametrize("text", ["peanut butter sandwich counter", "a pancake station", "penguin themed cake", "Alice in Wonderland theme", "anagram quiz night", "no onion no garlic"])
+@pytest.mark.parametrize("text", ["peanut butter sandwich counter", "a pancake station", "penguin themed cake", "Alice in Wonderland theme", "anagram quiz night", "no onion no garlic",
+                                   "photo gallery", "a gallery wall of photos", "art gallery venue", "alcohol free bar", "alley lights along the path", "energy drinks counter", "largest hall you have",
+                                   "peanut butter cookies and a gallery", "egg hunt for the kids, orange decor", "venetian blinds", "vegetation themed decor", "vegetable carving counter"])
 def test_ordinary_words_that_look_a_little_like_allergy_words_raise_nothing(talk, text):
     t = talk(f"{FULL}, {text}")
     assert t.draft.allergens == () and "allergens" not in open_fields(t)
@@ -512,3 +514,18 @@ def test_a_long_hostile_message_is_read_or_refused_quickly(logs, label):
 
         reading.screen_budget(part, 100), reading.screen_guests(part), reading.number_words_to_digits(part), allergies.suspects(part), cities.read(part, CITIES)
     assert time.perf_counter() - started < 5.0
+
+
+SPELLED_BADLY = [("alketgic", "peanuts"), ("allehy", "eggs"), ("alkerigc", "gluten"), ("allletgy", "prawns"), ("alleerigc", "sesame")]
+
+
+@pytest.mark.parametrize("cue,food", SPELLED_BADLY, ids=[c[0] for c in SPELLED_BADLY])
+def test_a_badly_spelled_allergy_word_next_to_an_allergen_food_is_asked_about(talk, cue, food):
+    t = talk(f"{FULL}, one guest is {cue} to {food}")
+    assert t.draft.allergens == () and "allergens" in open_fields(t) and not t.ready
+
+
+@pytest.mark.parametrize("word", ["vgdetarian", "vegtarisn", "veftarian", "veegetraian", "vegetaran"])
+def test_a_badly_spelled_diet_word_is_suggested_and_confirmed(talk, word):
+    t = talk(f"{FULL}, {word}")
+    assert t.draft.dietary == () and "dietary" in open_fields(t) and not t.ready

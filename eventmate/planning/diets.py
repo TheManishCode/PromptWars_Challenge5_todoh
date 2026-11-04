@@ -30,6 +30,7 @@ _EXCLUDE: list[tuple[re.Pattern[str], str]] = [
     (re.compile(rf"{_EXCL}(?:onions?|garlic|pyaa?z|lehsun)\b|\b(?:onion|garlic)(?:[- ](?:and|&|or)?[- ]?(?:onion|garlic))?[- ]free\b", _F), "no onion or garlic"),
     (re.compile(rf"{_EXCL}beef\b|\bbeef[- ]free\b", _F), "no beef"),
     (re.compile(rf"{_EXCL}(?:pork|ham|bacon)\b|\bpork[- ]free\b", _F), "no pork"),
+    (re.compile(r"\bbina\s+(?:pyaa?z|lehsun)\b", _F), "no onion or garlic"),  # Hinglish: "bina pyaaz lehsun"
     (re.compile(r"\b(?:no|without|avoid)\s+(?:any\s+)?alcohol\b|\balcohol[- ]free\b|\bdry\s+(?:event|party|wedding)\b", _F), "no alcohol"),
 ]
 # "dietary restriction: X" in words this reader may not know. X is kept unless it is something already read elsewhere ("can't eat X" and "avoid X" are read as allergies, which is the safer reading).
@@ -74,8 +75,11 @@ def read(text: str) -> DietReading:
 # ---------------------------------------------------------------------------------------------------------------- a diet word spelled wrongly
 # "vegiterian" matches none of the diet words, so the requirement vanished without a trace. It is now offered back as the diet it looks like, and applied only when pressed.
 _DIET_WORDS = {"vegetarian": "vegetarian", "vegetarians": "vegetarian"}
-DIET_CUTOFF = 0.78
+DIET_CUTOFF = 0.8  # the first letter must be "v": the misspellings that were measured score 0.8-0.95; "vegetation" also scores 0.8 and is stopped by name
 _LOOKS_LIKE_VEGETARIAN = re.compile(r"veg[a-z]*(?:ian|ain|ean)s?", re.I)  # vegetation and vegetable score as high as vegiterian: the shape separates them
+
+
+_NOT_A_DIET = frozenset("vegetable vegetables vegetation vegetative vegas vegetal venetian veterinarian vegetarians".split())
 
 
 def misspelt_diet(text: str) -> Unresolved | None:
@@ -84,7 +88,9 @@ def misspelt_diet(text: str) -> Unresolved | None:
         w = word.lower()
         if w in _DIET_WORDS or re.search(r"\bveg(?:etarian)?\b", w):
             continue
-        if _LOOKS_LIKE_VEGETARIAN.fullmatch(w) and difflib.get_close_matches(w, list(_DIET_WORDS), n=1, cutoff=DIET_CUTOFF):
+        if w in _NOT_A_DIET or not w.startswith("v"):
+            continue
+        if _LOOKS_LIKE_VEGETARIAN.fullmatch(w) or difflib.get_close_matches(w, list(_DIET_WORDS), n=1, cutoff=DIET_CUTOFF):
             return Unresolved(
                 key=f"diet:{word[:40]}", field="dietary", said=clip(word, 40),
                 question=f'I do not know the word "{clip(word, 40)}" as a diet. Did you mean vegetarian? A food requirement is never guessed, so please press it or say it another way.',

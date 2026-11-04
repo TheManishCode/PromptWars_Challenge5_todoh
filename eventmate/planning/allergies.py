@@ -165,7 +165,14 @@ def read(text: str) -> AllergyReading:
 # intake can ask ("did you mean peanut?") instead of guessing either way.
 
 # a spelling of "allergy", "anaphylaxis" or an auto-injector that is not one of the exact cue words: alergic, allergik, alerjy, anaphalaxis, epipen
-_CUE_TYPO = re.compile(r"\b(?:a[l1]+[ae]?r+[gj]\w*|el+[ae]?r+[gj]\w*|anap\w*|anaf\w*|epi[- ]?pens?|epinephrine)\b", _F)
+_CUE_TYPO = re.compile(
+    r"\b(?:a[l1]+[ae]?r+[gj]\w*|el+[ae]?r+[gj]\w*|anap\w*|anaf\w*|epi[- ]?pens?|epinephrine|(?:severe|serious|bad|life[- ]threatening|anaphylactic)\s+reactions?|reacts?\s+(?:badly\s+)?to)\b", _F
+)
+_CUE_WORDS = ("allergy", "allergic", "allergies", "allergen", "allergens")
+CUE_CUTOFF = 0.84  # on its own a word must be this close to "allergy"/"allergic": real misspellings score 0.86-0.93; "alley" scores 0.83, "alcohol" and "algorithm" under 0.7
+CUE_CUTOFF_WITH_FOOD = 0.72  # when the same sentence names an allergen ("one guest is alketgic to peanuts") a worse spelling is still read as the cue
+_CUE_FIRST_LETTERS = "ae"  # the cue words begin with "a" (or "e" in "elerji"); "gallery" scores 0.86 and is never an allergy, so a word that starts otherwise is not a cue
+_NOT_A_CUE = frozenset("allergist allergists alley alleys alleged allegory allergenic".split())
 _EXCLUSION = re.compile(r"\b(?:no|without|zero)\s+(?:any\s+)?(?P<food>peanuts?|ground\s?nuts?|tree\s?nuts?|nuts?|shellfish|sesame)\b", _F)
 _FUZZY_WORDS = ("peanut", "peanuts", "groundnut", "almond", "almonds", "cashew", "cashews", "walnut", "walnuts", "pistachio", "hazelnut", "shellfish", "prawns", "shrimp", "lobster", "oysters",
                 "sesame", "gluten", "wheat", "celery", "mustard", "lupin", "sulphite", "sulphites", "eggs", "milk", "dairy", "lactose", "soya", "seafood", "tofu", "walnut")
@@ -189,6 +196,16 @@ def _near_food(word: str) -> tuple[A, ...]:
     return tuple(dict.fromkeys(_named(best[0]))) if best else ()
 
 
+def _fuzzy_cue(sentence: str, food_named: bool) -> str | None:
+    """A word that is a few letters away from "allergy"/"allergic" ("alletgic", "alkergy", "allegry"), when it is not the cue itself or an ordinary word."""
+    cutoff = CUE_CUTOFF_WITH_FOOD if food_named else CUE_CUTOFF
+    for w in _words(sentence):
+        lw = w.lower()
+        if len(lw) >= 5 and lw[0] in _CUE_FIRST_LETTERS and lw not in _NOT_A_CUE and not _CUE.search(lw) and max(difflib.SequenceMatcher(None, lw, c).ratio() for c in _CUE_WORDS) >= cutoff:
+            return w
+    return None
+
+
 def suspects(text: str) -> list[Suspect]:
     """Places where the user seems to have written about an allergy but nothing was read: a misspelled cue, a misspelled food after a correct cue, a serious reaction with no food named,
     or "no peanuts" with nothing to say whether it is an allergy."""
@@ -202,7 +219,8 @@ def suspects(text: str) -> list[Suspect]:
     for sentence in _SPLIT_SENTENCE.split(_NA.sub("none", text)):
         if _CUE.search(sentence):
             continue  # an exact cue: the reader above handled it, and the loop over its unclear words handled any typo in the food
-        if cue := _CUE_TYPO.search(sentence):
+        food = bool(_named(sentence)) or any(_near_food(w) for w in _words(sentence))
+        if cue := (_CUE_TYPO.search(sentence) or (m := _fuzzy_cue(sentence, food)) and re.search(re.escape(m), sentence)):
             named = tuple(dict.fromkeys(_named(sentence)))
             near = () if named else next((n for n in (_near_food(w) for w in _words(sentence)) if n), ())
             if named or near:
@@ -233,3 +251,28 @@ def question_for(s: Suspect) -> Unresolved:
         return Unresolved(key=key, field="allergens", said=clip(s.said, 40), question=f'You wrote "{clip(s.said, 40)}". Is anyone allergic to {_names(s.allergens)}, or is it only a preference?',
                           picks=(*yes, Pick(label="Only a preference", field="allergens")))
     return Unresolved(key=key, field="allergens", said=clip(s.said, 40), question=f'You mentioned "{clip(s.said, 40)}", which is a serious reaction, but not to what. What is the allergy? Write the food, for example "peanuts".')
+
+
+# ------------------------------------------------------------------------------------------------ asking to remove a stated allergy
+# An allergy once stated is never replaced by a later message (see ``read`` and the intake's merge). A request to drop it is therefore a question, never an edit: the user presses
+# "remove" or "keep". Without this the request was ignored with no message, and a quiet removal would be the worse error.
+_REMOVAL = re.compile(
+    r"\b(?:nobody|no\s?one|none\s+of\s+(?:us|them|the\s+guests))\s+(?:is\s+|are\s+|has\s+|have\s+)?(?:actually\s+)?(?:allergic|any\s+allerg\w+)\b"
+    r"|\b(?:remove|delete|drop|forget|ignore|cancel|clear|undo|take\s+off)\b[^.;!?\n]{0,40}\ballerg\w*"
+    r"|\ballerg\w*[^.;!?\n]{0,30}\b(?:no\s+longer|not\s+(?:any\s?more|needed|applicable)|removed|cancell?ed)\b"
+    r"|\bno\s+(?:more\s+)?allerg(?:y|ies)\b|\bno\s+longer\s+(?:allergic|applies)\b|\bnot\s+allergic\s+any\s?more\b|\bkoi\s+allergy\s+nahi\b",
+    _F,
+)
+
+
+def removal_requested(text: str) -> bool:
+    return bool(_REMOVAL.search(text))
+
+
+def removal_question(stated: tuple[A, ...]) -> Unresolved:
+    names = _names(stated)
+    return Unresolved(
+        key="allergy_remove", field="allergens", said=clip(names, 40),
+        question=f"Earlier you said someone is allergic to {names}. An allergy is only removed when you say so here. Remove it?",
+        picks=(Pick(label=f"Yes, remove the {names} allergy", field="allergens", value=",".join("-" + a.value for a in stated)), Pick(label="No, keep it", field="allergens")),
+    )
