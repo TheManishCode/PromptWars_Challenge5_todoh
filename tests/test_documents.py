@@ -506,3 +506,29 @@ def test_the_warm_up_sample_is_a_well_formed_pdf():
     assert pdf[start:start + 4] == b"xref"
     offsets = [int(m) for m in re.findall(rb"^(\d{10}) 00000 n ", pdf[start:], re.M)]
     assert len(offsets) == 5 and all(pdf[o:].startswith(b"%d 0 obj" % i) for i, o in enumerate(offsets, 1))
+
+
+def test_the_reader_is_cut_off_from_the_network_where_the_machine_allows_it(tmp_path):
+    """A listener on loopback is reachable from a plain child process and not from one run under the prefix the sandbox puts in front of the reader."""
+    import socket
+    import subprocess
+    import sys
+
+    prefix = list(sandbox.netless_prefix())
+    if not prefix:
+        pytest.skip("this machine cannot create a network namespace")
+    probe = "import socket,sys; s=socket.socket(); s.settimeout(3)\ntry:\n    s.connect(('127.0.0.1', int(sys.argv[1]))); print('connected')\nexcept OSError:\n    print('refused')"
+    with socket.socket() as srv:
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(4)
+        port = str(srv.getsockname()[1])
+        plain = subprocess.run([sys.executable, "-c", probe, port], capture_output=True, text=True, timeout=20).stdout.strip()
+        cut = subprocess.run([*prefix, sys.executable, "-c", probe, port], capture_output=True, text=True, timeout=20).stdout.strip()
+    assert (plain, cut) == ("connected", "refused")
+
+
+def test_a_machine_that_cannot_cut_the_network_can_be_made_to_refuse_to_read_files(monkeypatch):
+    monkeypatch.setattr(sandbox, "netless_prefix", lambda: ())
+    monkeypatch.setenv("EVENTMATE_REQUIRE_NETLESS", "1")
+    with pytest.raises(DocumentError, match="cannot cut the file reader off from the network"):
+        sandbox.convert(b"x", "q.csv", command=[sys.executable, "-c", "pass"])

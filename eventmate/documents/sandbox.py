@@ -5,6 +5,7 @@ kind the extension says."""
 from __future__ import annotations
 
 import contextlib
+import functools
 import json
 import os
 import resource
@@ -93,6 +94,22 @@ def _group_rss(pgid: int) -> int:
     return total
 
 
+@functools.cache
+def netless_prefix() -> tuple[str, ...]:
+    """The command prefix that runs a reader in a network namespace of its own (no interface, not even loopback), or () where this machine cannot do that. Found by trying it once.
+
+    The reader parses a file somebody else wrote, so it gets no network: a parser bug then has nowhere to send what it can read. The Hugging Face offline flags alone do not do this
+    (a clean-install check showed the OCR engine fetching its weights from inside the sandbox)."""
+    exe = shutil.which("unshare", path="/usr/bin:/bin")
+    if exe:
+        try:
+            if subprocess.run([exe, "-rn", "true"], capture_output=True, timeout=10, check=False).returncode == 0:
+                return (exe, "-rn", "--")
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return ()
+
+
 def convert(data: bytes, filename: str, *, timeout: float | None = None, memory: int | None = None, command: list[str] | None = None, cap_address_space: bool | None = None) -> Converted:
     """``command`` replaces the worker, for tests; it gets the file path and extension as its last two arguments. A built-in engine is held to ``memory`` of address space; a heavy
     one (Docling) is held to ``memory`` of resident memory, measured while it runs, and gets a longer time limit."""
@@ -110,7 +127,10 @@ def convert(data: bytes, filename: str, *, timeout: float | None = None, memory:
         env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": ROOT, "LANG": "C.UTF-8", "HOME": str(work), "TMPDIR": str(work), "PYTHONDONTWRITEBYTECODE": "1"}
         if heavy:  # the models were fetched ahead of time (python -m eventmate.documents.warm); a conversion never reaches the network for them
             env.update({"HF_HOME": model_home(), "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"})
-        argv = (command or [sys.executable, "-m", "eventmate.documents.worker"]) + [str(src), ext]
+        cut = list(netless_prefix())
+        if not cut and os.environ.get("EVENTMATE_REQUIRE_NETLESS") == "1":
+            raise DocumentError("this machine cannot cut the file reader off from the network, so reading that kind of file is switched off")
+        argv = cut + (command or [sys.executable, "-m", "eventmate.documents.worker"]) + [str(src), ext]
         with open(out, "wb") as sink:
             proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=sink, stderr=subprocess.DEVNULL, cwd=work, env=env,
                                     preexec_fn=_limits(max_out, memory if cap_address_space else None, int(timeout) + 5), close_fds=True)
