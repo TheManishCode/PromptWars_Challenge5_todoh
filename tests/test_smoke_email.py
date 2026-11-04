@@ -3,6 +3,8 @@
 import imaplib
 import smtplib
 
+import pytest
+
 from eventmate.messaging import smoke_email
 from eventmate.messaging.channels import EmailChannel, EmailConfig
 from tests.mailfake import CFG, FakeIMAP, FakeSMTP, MailWorld
@@ -94,3 +96,20 @@ def test_it_never_selects_the_mailbox_for_writing_and_never_deletes_anything(cap
 def test_the_default_factories_use_tls():
     ch = EmailChannel(EmailConfig(smtp_host="h", smtp_port=465, imap_host="h", user="u", password="p", from_addr="u@h.test"))
     assert ch._smtp.__name__ == "_default_smtp" and ch._imap.__name__ == "_default_imap" and CFG.smtp_port == 465
+
+
+def test_the_test_send_says_it_is_direct_and_outside_the_apps_sending_controls(capsys):
+    """It bypasses the pause, the kill switch, the do-not-contact list and the limits, so it says so in its help, in its module text and, before it sends, on the screen."""
+    from eventmate.messaging import smoke_email
+
+    w = World()
+    code, out = run(w, argv=["--send-test-to", "me@personal.test", "--i-own-this-address"], capsys=capsys)
+    assert code == 0 and "DIRECT TEST SEND" in out.out and "does not go through the app's sending controls" in out.out
+    assert out.out.index("DIRECT TEST SEND") < out.out.index("PASS send")  # said before it is done, not after
+    dry, dry_out = run(World(), capsys=capsys)
+    assert "DIRECT TEST SEND" not in dry_out.out  # a dry run sends nothing and does not claim to
+    assert "outside the app's sending controls" in smoke_email.__doc__
+    with pytest.raises(SystemExit):
+        smoke_email.main(["--help"], env=ENV)
+    helped = " ".join(capsys.readouterr().out.split())  # argparse wraps long lines
+    assert "ONE DIRECT TEST MESSAGE" in helped and "outside the app's sending controls" in helped

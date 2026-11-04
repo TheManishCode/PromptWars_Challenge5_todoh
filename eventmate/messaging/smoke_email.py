@@ -5,6 +5,9 @@ password and no raw server message, only a short category. A real one-message te
 ``--send-test-to ADDRESS --i-own-this-address`` together.
 
 Reads the same settings as the app (`.env` or the environment): EVENTMATE_SMTP_HOST/PORT/USER/PASSWORD, EVENTMATE_IMAP_HOST/PORT.
+
+**This is a direct test send, outside the app's sending controls.** It talks to the mail server itself, so the pause, the kill switch, the do-not-contact list, the daily limits and the
+approval of exact text do not apply to it, and it records nothing in any plan. That is why it can only mail an address you name and say you own. Do not use it to send to anyone else.
 """
 
 from __future__ import annotations
@@ -70,7 +73,7 @@ def check_imap(cfg: EmailConfig, factory: Callable) -> Row:
 
 
 def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None, smtp_factory: Callable | None = None, imap_factory: Callable | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="eventmate.messaging.smoke_email")
+    ap = argparse.ArgumentParser(prog="eventmate.messaging.smoke_email", description="Check the mailbox settings. With --send-test-to it sends ONE DIRECT TEST MESSAGE to your own address: that send is outside the app's sending controls (the pause, the kill switch, the do-not-contact list and the limits do not apply).")
     ap.add_argument("--send-test-to", metavar="ADDRESS", help="also send one real test message to this address (it must be yours)")
     ap.add_argument("--i-own-this-address", action="store_true", help="required with --send-test-to")
     a = ap.parse_args(argv)
@@ -87,6 +90,7 @@ def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None, sm
     channel = EmailChannel(cfg)
     rows = [check_smtp(cfg, smtp_factory or channel._smtp), check_imap(cfg, imap_factory or channel._imap)]
     if a.send_test_to and rows[0][0] == "PASS":
+        print("DIRECT TEST SEND: one message goes now to the address you named. It does not go through the app's sending controls (pause, kill switch, do-not-contact, limits) and is not recorded in any plan.")
         try:
             sender = EmailChannel(cfg, smtp_factory=smtp_factory) if smtp_factory else channel
             sender.send(a.send_test_to.strip(), "to;doh-the event planner mail test", "This is a test message from to;doh-the event planner's mail check. Nothing else was sent.", None)

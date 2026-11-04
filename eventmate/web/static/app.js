@@ -699,7 +699,7 @@
       chipBtn.textContent = !s ? 'Sending: unknown' : (s.paused ? 'Sending paused' : (s.automatic_stopped ? 'Automatic stopped' : 'Sending on'));
       chipBtn.setAttribute('data-paused', s && s.paused ? 'true' : 'false');
       var held = s ? s.approved_waiting : 0;
-      $('#sending-state').textContent = !s ? 'The sending state could not be read.' : (s.paused ? 'Sending is paused. Nothing goes out' + (held ? '; ' + held + ' approved message' + (held === 1 ? ' is' : 's are') + ' held.' : '.') : 'Sending is on. Messages go out only after you approve their exact text' + (held ? ' (' + held + ' approved and waiting for the next send).' : '.'));
+      $('#sending-state').textContent = !s ? 'The sending state could not be read.' : (s.paused ? 'Sending is paused. Nothing new goes out' + (held ? '; ' + held + ' approved message' + (held === 1 ? ' is' : 's are') + ' held.' : '.') : 'Sending is on. Messages go out only after you approve their exact text' + (held ? ' (' + held + ' approved and waiting for the next send).' : '.'));
       $('#sending-toggle').textContent = s && s.paused ? 'Resume sending' : 'Pause all sending';
       $('#auto-state').textContent = !s ? '' : (s.automatic_stopped ? 'Automatic messages are stopped.' : 'Automatic messages are allowed (only under a standing permission you granted).');
       $('#auto-toggle').textContent = s && s.automatic_stopped ? 'Allow automatic messages again' : 'Stop automatic messages';
@@ -762,7 +762,7 @@
         api('/api/sending/resume', { method: 'POST', body: {} }).then(function (r) { smsg(r.ok ? 'Sending resumed.' : errText(r, 'That did not work')); loadAll(); });
         return;
       }
-      api('/api/sending/pause', { method: 'POST', body: {} }).then(function (r) { smsg(r.ok ? 'Sending is paused.' : errText(r, 'That did not work')); loadAll(); });
+      api('/api/sending/pause', { method: 'POST', body: {} }).then(function (r) { smsg(r.ok ? 'Sending is paused. Nothing new will be sent; a message already on its way can\'t be called back.' : errText(r, 'That did not work')); loadAll(); });
     });
     $('#release-keep').addEventListener('click', function () { $('#release-panel').hidden = true; smsg('Still paused.'); });
     $('#release-go').addEventListener('click', function () {

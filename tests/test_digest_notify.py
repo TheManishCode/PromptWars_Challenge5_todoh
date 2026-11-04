@@ -445,3 +445,35 @@ def test_the_owner_email_sender_checks_the_switch_again_right_before_it_sends(em
     em.notifier._killed = lambda: next(reads, True)  # ...and by the time of the send it is on
     tick(em, clock)
     assert owner_mail(world) == []
+
+
+def test_two_flushes_at_once_email_the_owner_one_copy_not_two(tmp_path, em, world, pid, clock):
+    """Two processes flush (the web server and a worker). Both used to read the same un-emailed digest and both send it. Each instance below has its own objects and shares only the data directory, as two
+    processes do, and the send is slowed so both are in flight together: the second one steps aside."""
+    import threading
+    import time
+
+    started(em, pid, clock)
+    world.reply("r@rasoi.test", "Total INR 78,000 for the event. Valid for 10 days.")
+    tick(em, clock)  # the digest exists; no owner email yet because the copy is not enabled
+    other = EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="dig-other", channels={"email": world.channel(), "whatsapp": NoWhatsApp()}, require_symbolic=False)
+    other.outreach_store.now = other.conversations.now = other.jobs_clock = other.digest_store.now = other.notifier.now = clock
+    enable(em)
+    assert owner_mail(world) == []
+    for e in (em, other):
+        channel = e.notifier._channel()
+        real_send = channel.send
+
+        def slow_send(*a, _real=real_send, **k):
+            time.sleep(0.4)
+            return _real(*a, **k)
+
+        channel.send = slow_send
+        e.notifier._channel = lambda _c=channel: _c
+    results = []
+    threads = [threading.Thread(target=lambda e=e: results.append(e.notifier.flush())) for e in (em, other)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    assert sorted(results) == [0, 1] and len(owner_mail(world)) == 1, (results, len(owner_mail(world)))

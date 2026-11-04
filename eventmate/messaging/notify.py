@@ -8,6 +8,8 @@ It takes no recipient argument and refuses any vendor address, so it cannot be u
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import hashlib
 import os
 import secrets
@@ -136,8 +138,31 @@ class OwnerNotifier:
     def _sent_since(self, since: datetime):
         return [e for e in self._log().read() if e.result == "sent" and e.at >= since]
 
+    @contextlib.contextmanager
+    def _flushing(self):
+        """Only one flush at a time across every process on this data directory (the web server and a worker both flush). A second one finds it taken and steps aside: it yields False, and
+        sends nothing. Without this, two flushes that both read an un-emailed digest both sent it (shown by a test), so the owner got two copies and the daily limit and the gap were not kept."""
+        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        fd = os.open(self.root / ".flush.lock", os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                yield False
+                return
+            try:
+                yield True
+            finally:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
     def flush(self) -> int:
-        """Email the owner the newest digest of each job that has not been emailed, if every gate allows it. At most one email per call."""
+        """Email the owner the newest digest of each job that has not been emailed, if every gate allows it. At most one email per call, and one flush at a time across processes."""
+        with self._flushing() as mine:
+            return self._flush() if mine else 0
+
+    def _flush(self) -> int:
         cur = self._latest()
         if cur is None or cur.status != "active" or self._killed():
             return 0

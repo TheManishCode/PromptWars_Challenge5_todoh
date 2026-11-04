@@ -359,7 +359,7 @@ def test_the_sending_controls_pause_and_the_kill_switch_are_independent_and_a_re
     em.conversations.channels["email"] = FakeChannel("email")  # a drafted message needs a configured channel; nothing real is contacted
     page, seen = opened(ctx, url + "/app")
     new_plan(page)
-    plan_id = em.store.list_plans()[-1]
+    plan_id = next(p for p in em.store.list_plans() if VendorCategory.CATERER in em.store.latest(p).request.services)  # the shared server holds plans from other tests: one with a caterer to write to
     page.wait_for_selector("#sending-chip:has-text('Sending on')")
     page.click("#sending-chip")
     page.wait_for_selector("#sending-dialog[open]")
@@ -368,6 +368,8 @@ def test_the_sending_controls_pause_and_the_kill_switch_are_independent_and_a_re
     page.click("#sending-toggle")  # pause
     page.wait_for_selector("#sending-chip:has-text('Sending paused')")
     assert em.outreach_store.paused is True and em.outreach_store.killed is False  # pausing does not touch the kill switch
+    assert "Nothing new goes out" in page.inner_text("#sending-state") and "can't be called back" in page.inner_text("#sending-msg")  # no promise of an instant stop
+    assert "already on its way at that instant can't be called back" in page.inner_text("#sending-dialog")
     page.click("#auto-toggle")  # the kill switch, on its own
     page.wait_for_selector("#auto-state:has-text('stopped')")
     assert em.outreach_store.paused is True and em.outreach_store.killed is True
