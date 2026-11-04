@@ -257,6 +257,18 @@ def cued_number(text: str) -> int | None:
     return n if n >= 1 else None
 
 
+_MULTI_DAY = re.compile(
+    r"\b(?:over|for|across|spanning)\s+(?:the\s+next\s+)?(?:\d+|two|three|four|five|six|seven)\s+days?\b|\b(?:two|three|four|five|six|2|3|4|5|6)[- ]day\b|\b(?:both|all|each|every)\s+(?:the\s+)?days\b|\b(?:multi|several)[- ]days?\b",
+    re.I | re.A,
+)
+
+
+def multi_day(text: str) -> str | None:
+    """The words that say the event lasts more than one day ("over 2 days", "a two-day event", "lunch on both days"), else None. The planner has one event date."""
+    m = _MULTI_DAY.search(mgr._blank_dates(text))
+    return clip(m.group(0), 40) if m else None
+
+
 def bare_guests(text: str) -> tuple[int | None, Unresolved | None]:
     """The whole message as the answer to "how many guests?"."""
     t = number_words_to_digits(mgr._ascii_digits(text.strip(), [], []))

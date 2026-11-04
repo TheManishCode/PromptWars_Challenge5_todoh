@@ -357,6 +357,88 @@ def test_a_count_after_except_is_not_a_competing_total(talk, text):
     assert t.draft.guest_count == 60 and "guest_count" not in open_fields(t)
 
 
+# ===================================================================== 7. typed answers to those questions, "except", and what is not planned
+
+@pytest.mark.parametrize("typed", ["keep", "Keep it", "keep as written", "as written", "keep my words"])
+def test_typing_keep_answers_the_nameless_allergy_question_and_is_not_itself_an_allergy(talk, typed):
+    t = talk(f"{BASE}, my aunt is allergic to kiwi", typed)
+    assert t.ready and t.draft.allergy_unclear == ("kiwi",), (t.draft.allergy_unclear, open_fields(t))
+
+
+@pytest.mark.parametrize("typed", ["only some", "Just some of them", "some of them", "only a few"])
+def test_typing_only_some_answers_the_one_open_diet_question(talk, typed):
+    t = talk(f"{BASE}, a few guests are vegan", typed)
+    assert t.ready and t.draft.dietary == () and any("vegan" in n.lower() for n in t.draft.diet_notes)
+
+
+@pytest.mark.parametrize("typed", ["everyone", "all of them", "everybody", "all guests"])
+def test_typing_everyone_answers_the_one_open_diet_question(talk, typed):
+    t = talk(f"{BASE}, a few guests are vegan", typed)
+    assert t.ready and t.draft.dietary == (DietaryRequirement.VEGAN,)
+
+
+def test_typing_only_some_does_not_pick_between_two_open_diet_questions(talk):
+    t = talk(f"{BASE}, 15 are jain and 6 are vegan", "only some")
+    assert len([u for u in t.draft.unresolved if u.field == "dietary"]) == 2 and not t.ready
+
+
+@pytest.mark.parametrize("phrase", [
+    "everyone is vegetarian except 5 people who eat chicken",
+    "all guests are vegetarian apart from 2 who eat egg",
+    "vegetarian for everyone other than my brothers",
+])
+def test_a_diet_with_an_exception_is_asked_and_not_set_for_everyone(talk, press, phrase):
+    t = talk(f"{BASE}, {phrase}")
+    assert t.draft.dietary == () and "dietary" in open_fields(t) and not t.ready
+    some = press(t, "dietary", "only some")
+    assert some.ready and any("vegetarian" in n.lower() and ("except" in n.lower() or "apart" in n.lower() or "other than" in n.lower()) for n in some.draft.diet_notes), some.draft.diet_notes
+
+
+def test_the_whole_clause_with_its_exception_reaches_the_request(talk, press):
+    msg = f"{BASE}, everyone is vegetarian except 5 people who eat chicken"
+    t = press(talk(msg), "dietary", "only some")
+    request = intake.to_request(t.draft, msg, TODAY, messages=[msg])
+    assert request.dietary == () and any("except 5 people who eat chicken" in n for n in request.diet_notes), request.diet_notes
+
+
+def test_a_diet_word_that_only_looks_like_an_exception_is_still_for_everyone(talk):
+    t = talk(f"{BASE}, vegetarian only, no exceptions")
+    assert t.draft.dietary == (DietaryRequirement.VEGETARIAN,) and t.ready
+
+
+def test_a_message_that_is_not_a_city_is_not_reported_as_an_unreadable_city(talk):
+    t = talk("wedding for 100 guests on 12 December 2026, budget 2 lakh", "sorry its 4 not 3")
+    assert not any("as a city" in n for n in t.notes), t.notes
+    assert any("could not find a change" in n.lower() or "could not use" in n.lower() for n in t.notes), t.notes
+
+
+def test_a_bare_non_answer_to_the_city_question_is_still_named(talk):
+    t = talk("wedding for 100 guests on 12 December 2026, budget 2 lakh", "???")
+    assert any("???" in n and "city" in n for n in t.notes), t.notes
+
+
+@pytest.mark.parametrize("text", [
+    f"{BASE}, we need it over 2 days",
+    "party in Pune for 40 people from 12 December 2026 for 3 days, budget 1 lakh",
+    f"{BASE}, a two-day event",
+    f"{BASE}, lunch on both days",
+])
+def test_a_multi_day_event_is_said_to_be_planned_as_one_day(talk, text):
+    t = talk(text)
+    assert any("one event day" in n.lower() for n in t.notes), t.notes
+
+
+def test_a_single_day_event_gets_no_multi_day_note(talk):
+    t = talk(f"{BASE}, dinner for the whole family")
+    assert not any("one event day" in n.lower() for n in t.notes)
+
+
+def test_a_range_of_dates_says_the_planner_plans_one_day(talk):
+    t = talk("wedding in Pune for 100 guests, 4-6 may 2027, budget 3 lakh")
+    q = asked(t, "event_date")
+    assert "4-6 may 2027" in q.said.lower() and "one event day" in q.question.lower()
+
+
 # ===================================================================== what these tests do not show
 #
 # They show the phrasings above, read by the rule reader with no model. A subgroup, a range, a payment or a correction written with words not listed here can still be read as the

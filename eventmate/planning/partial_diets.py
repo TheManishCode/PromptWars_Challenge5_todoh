@@ -25,6 +25,7 @@ _MENU = re.compile(r"\b(?:caterers?|vendors?|dish(?:es)?|items?|menus?|options?|
 _DIET_WORDS = r"(?:non[- ]?veg\w*|veg\w*|vegan|jain|halal|gluten[- ]free)"
 # "some veg and some non veg dishes": the dishes belong to both diets. The pattern starts on a word: the spaces before it are skipped in code, so a search over a run of spaces stays linear.
 _MENU_AFTER = re.compile(rf"(?:(?:and|or|&)\s{{1,3}}(?:(?:some|few|a\s{{1,3}}few)\s{{1,3}})?{_DIET_WORDS}\s{{1,3}})*(?:dish(?:es)?|items?|options?|menus?|food|meals?|snacks?|starters?|courses?|counters?|stalls?|preparations?)\b", _F)
+_EXCEPTION = re.compile(r"\b(?:except(?:ing)?|apart\s+from|other\s+than|excluding|barring|besides)\b", _F)  # "everyone is vegetarian except 5 people who eat chicken": not for everyone
 _CLAUSE = re.compile(r"[.;,!?\n]")
 KEY = "diet_group"  # "diet_group:vegan": the open question about who the diet is for
 
@@ -50,6 +51,11 @@ def _about_guests(text: str, m: re.Match) -> bool:
     return not (_MENU.search(since) or _MENU_AFTER.match(text, after))
 
 
+def _clause_full(text: str, start: int) -> str:
+    """The whole clause the diet word is in: from the start of its clause to the next break, so an exception after the word is part of what is quoted."""
+    return (_CLAUSE.split(text[max(0, start - 80): start])[-1] + _CLAUSE.split(text[start: start + 120], maxsplit=1)[0]).strip()
+
+
 def split(text: str) -> tuple[tuple[DietaryRequirement, ...], list[Unresolved]]:
     """(the diets written for everyone, a question for each diet written only about some guests). A diet written both ways is set, and asked about too."""
     text = mgr._blank_dates(text)  # a date's numbers are not counts of guests
@@ -61,18 +67,21 @@ def split(text: str) -> tuple[tuple[DietaryRequirement, ...], list[Unresolved]]:
         if not mentions:
             continue
         partial = [m for m in mentions if _about_guests(text, m) and (_QUANT_WORD.search(_clause_before(text, m.start())) or _QUANT_NUM.search(_clause_before(text, m.start())) or any(rx.search(said) for _, said in counted))]
-        if len(partial) < len(mentions):
+        excepted = [m for m in mentions if m not in partial and _EXCEPTION.search(_clause_full(text, m.start()))]
+        if len(partial) + len(excepted) < len(mentions):
             wide.append(diet)
         if partial:
             questions.append(question(diet, _clause_around(text, partial[0].start(), partial[0].end())))
+        elif excepted:
+            questions.append(question(diet, _clause_full(text, excepted[0].start())))
     return tuple(wide), questions
 
 
 def question(diet: DietaryRequirement, said: str) -> Unresolved:
     label = diet.value.replace("_", " ")
     return Unresolved(
-        key=f"{KEY}:{diet.value.replace('_', '-')}", field="dietary", said=clip(said, 40) or label,
-        question=f'You wrote "{clip(said, 40)}". Is everyone {label}, or only some of the guests? A food requirement is never guessed, so please press one.',
+        key=f"{KEY}:{diet.value.replace('_', '-')}", field="dietary", said=clip(said, 60) or label,
+        question=f'You wrote "{clip(said, 60)}". Is everyone {label}, or only some of the guests? A food requirement is never guessed, so please press one.',
         picks=(Pick(label=f"Everyone is {label}", field="dietary", value=diet.value), Pick(label="Only some guests (keep my words)", field="dietary", keep_words=True)),
     )
 

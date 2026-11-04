@@ -159,7 +159,9 @@ def _ambiguity_questions(t: str, problems: list[str], budget_problems: list[str]
                               picks=tuple(Pick(label=f"{c} guests", field="guest_count", value=str(c)) for c in sorted(counts))))
     dates = sorted(set(re.findall(r"\d{4}-\d{2}-\d{2}", next((p for p in problems if p.startswith("multiple different event dates")), ""))))
     if "event_date" not in skip and 1 < len(dates) <= 6:
-        out.append(Unresolved(key="event_date", field="event_date", said=", ".join(dates), question="Which date is right?",
+        span = next((m.group(0) for rx in (mgr._DATE_RANGE_DM, mgr._DATE_RANGE_MD) if (m := rx.search(t))), None)
+        said, question = (clip(span, 40), f'You wrote "{clip(span, 40)}", which is more than one day. The planner plans one event day, so which day should it plan? The other days are not planned.') if span else (", ".join(dates), "Which date is right?")
+        out.append(Unresolved(key="event_date", field="event_date", said=said, question=question,
                               picks=tuple(Pick(label=long_date(date.fromisoformat(d)), field="event_date", value=d) for d in dates)))
     budgets = [b.replace(",", "") for b in re.findall(r"\d[\d,]*", next((p for p in budget_problems if p.startswith("multiple different budgets")), ""))]
     if "budget_total" not in skip and 1 < len(budgets) <= 6:
@@ -216,6 +218,8 @@ def _rule_draft(text: str, today: date, notes: list[str], known: tuple[str, ...]
     t = mgr._ascii_digits(t, problems, assumptions)
     t = reading.number_words_to_digits(t)
     asked: list[Unresolved] = []
+    if days := reading.multi_day(t):
+        notes.append(f'You wrote "{days}". The planner plans one event day, the date you gave; the other days are not planned.')
     for paid in mgr.paid_amounts(t):
         notes.append(f"I did not use {money(paid)} as the budget, because you wrote that it was already paid.")
     guest_question = reading.screen_guests(t, has_total=prior.guest_count is not None)
@@ -407,6 +411,8 @@ def propose(
     if answer is not None:
         draft = _apply_answer(prior, answer, today)
         return _turn(draft, prior, notes, known, source, flags)
+    if (typed := _typed_answer(prior, latest)) is not None:
+        return _turn(_apply_answer(prior, typed, today), prior, notes, known, source, flags)  # "keep" or "only some" typed to the one open question is the same as pressing it
     read = _rule_draft(latest, today, notes, known, prior, expecting)
     new, asked = read.draft, list(read.unresolved)
     if prior.allergens and allergies.removal_requested(latest):
@@ -448,6 +454,27 @@ def propose(
 
 
 _SCALAR_FACTS = ("event_type", "community_subtype", "guest_count", "city", "event_date", "budget_total", "venue_setting")
+
+
+_KEEP = re.compile(r"(?:yes[, ]+)?(?:please[, ]+)?keep(?:\s+(?:it|them|that))?(?:\s+(?:as\s+)?(?:written|is|my\s+words|the\s+words))?|as\s+written|leave\s+it(?:\s+as\s+is)?", re.I | re.A)
+_SOME = re.compile(r"(?:just\s+|only\s+)?(?:some|a\s+few)(?:\s+of\s+(?:them|us|the\s+guests))?|not\s+(?:everyone|all)|only\s+some", re.I | re.A)
+_EVERYONE = re.compile(r"(?:yes[, ]+)?(?:everyone|everybody|every\s+one|all(?:\s+of\s+(?:them|us))?|all\s+(?:the\s+)?guests)", re.I | re.A)
+
+
+def _typed_answer(prior: IntakeDraft, text: str) -> IntakeAnswer | None:
+    """The whole message is the words for the one button of the only open question: "keep" for an allergy that could not be named, "only some" or "everyone" for who a diet is for. With
+    more than one question open it is not clear which is meant, so nothing is applied and the message is read as any other."""
+    if len(prior.unresolved) != 1:
+        return None
+    q, said = prior.unresolved[0], text.strip().strip(".!?, ")
+    if q.key.startswith("allergy_unclear:") and _KEEP.fullmatch(said):
+        return IntakeAnswer(key=q.key, pick=next(i for i, p in enumerate(q.picks) if p.keep_words))
+    if q.key.startswith(partial_diets.KEY):
+        if _SOME.fullmatch(said):
+            return IntakeAnswer(key=q.key, pick=next(i for i, p in enumerate(q.picks) if p.keep_words))
+        if _EVERYONE.fullmatch(said):
+            return IntakeAnswer(key=q.key, pick=next(i for i, p in enumerate(q.picks) if p.value is not None))
+    return None
 
 
 def _constrain_model(ai: IntakeDraft, rules: IntakeDraft, prior: IntakeDraft, asked: Sequence[Unresolved], removed: Sequence[str]) -> IntakeDraft:
@@ -512,9 +539,14 @@ def _bare_answer(expecting, text, known, prior, new: IntakeDraft, asked: list[Un
         return new, asked
     if question:
         asked = [*asked, question]
-    elif not update and not new_found(new) and prior_has_facts(prior):
+    elif not update and not new_found(new) and prior_has_facts(prior) and (expecting != "city" or _city_like(text)):  # a sentence with a number in it is not an unreadable city: it is a message that changed nothing
         notes.append(f'I could not read "{clip(text, 40)}" as {_WHAT[expecting]}.' + (" Type just the city name, for example Pune." if expecting == "city" else ""))
     return (_safe_merge(new, update) if update else new), asked
+
+
+def _city_like(text: str) -> bool:
+    """Short, with no digits: the kind of text that was meant as a place name, so "I could not read it as a city" is the right thing to say."""
+    return not re.search(r"\d", text) and len(text.split()) <= 4
 
 
 def _safe_merge(base: IntakeDraft, update: dict) -> IntakeDraft:
