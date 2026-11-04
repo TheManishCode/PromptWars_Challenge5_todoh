@@ -27,8 +27,13 @@ _NEG_CUE = re.compile(
     rf"|\b(?:allerg\w*|alerji)\s+{_FILL}{{0,3}}(?:nahi|nahin|nope)\b|\b(?:allerg\w*|alerji)\s+{_FILL}{{0,3}}(?:nobody|none)\b",
     _F,
 )
-_SPLIT_SENTENCE = re.compile(r"[.;!?\n]|\b(?:but|however|although|except|yet|lekin|magar)\b", _F)
-_SPLIT_ITEM = re.compile(r"[,/&]|\b(?:and|or|aur|plus|also)\b", _F)  # no leading \s*: on a long run of spaces that is quadratic
+_SPLIT_SENTENCE = re.compile(r"[.!?]|\n\s*\n|\b(?:but|however|although|except|yet|lekin|magar)\b", _F)  # a single line break or a semicolon does not end an allergy list; a blank line does
+_SPLIT_ITEM = re.compile(r"[,/&;|+\n]|\b(?:and|or|aur|plus|also|too)\b", _F)  # no leading \s*: on a long run of spaces that is quadratic
+_BULLET = re.compile(r"^[\s\-*\u2022\d.)(]+")
+_MARKER = re.compile(r"^\W*(?:also|and|plus|too|as\s+well|additionally|aur)\b", _F)  # a short sentence that starts like this continues the list before it
+_NA = re.compile(r"\bn\s{0,2}/\s{0,2}a\b", _F)
+_NO_ANSWER = frozenset("none nil no nope nothing nahi nahin na".split())  # "Allergies: none" is an answer, not an allergy we could not read
+MAX_CONTINUATION_WORDS = 4  # an item or a sentence longer than this is a new thought, not one more item of the list
 
 # (words, the allergens they name). "nut" alone does not say which kind, so it names both.
 _VOCAB: list[tuple[re.Pattern[str], tuple[A, ...]]] = [
@@ -86,36 +91,65 @@ def _phrase(words: list[str]) -> str:
     return " ".join(words)[:MAX_PHRASE].strip()
 
 
+def _words(text: str) -> list[str]:
+    return re.findall(r"[^\W\d_]+", text, re.A)
+
+
 def read(text: str) -> AllergyReading:
     found: list[A] = []
     unclear: list[str] = []
-    for sentence in _SPLIT_SENTENCE.split(text):
-        in_list = False  # the previous item was an allergy statement: an item with no cue of its own may continue its list
-        for item in (i for i in _SPLIT_ITEM.split(sentence) if i and i.strip()):
+    carry = False  # the previous sentence ended inside an allergy list
+    for sentence in _SPLIT_SENTENCE.split(_NA.sub("none", text)):
+        items = [i for i in (_BULLET.sub("", x) for x in _SPLIT_ITEM.split(sentence)) if i.strip()]
+        if not items:
+            continue
+        in_list = carry and (bool(_MARKER.match(sentence)) or len(_words(sentence)) <= MAX_CONTINUATION_WORDS)  # "Allergic to peanuts. Cashews too." / "Also eggs."
+        pending = ""  # a cue that named nothing yet ("Allergies:"): the items that follow may name it
+        for item in items:
             cue = _CUE.search(item)
             negated = bool(_NEG_CUE.search(item)) if cue else bool(_NEG_START.search(item))  # a leading "no" negates a continuation ("not cashews"), not a statement with its own cue
             if cue:
-                if negated:
-                    in_list = False
-                    continue
                 before, after = item[: cue.start()], item[cue.end():]
+                answer = [w.lower() for w in _words(after)]
+                if negated or (answer and all(w in _NO_ANSWER for w in answer)):
+                    in_list, pending = False, ""
+                    continue
                 named = _named(item)  # the cue itself can name one ("celiac")
                 words = _leftover(after) or (_leftover(before)[-1:] if not named else [])
-                if not named and not words and re.match(r"allerg|alerji|elerji|intoleran", cue.group(0), _F):
-                    words = [item.strip()]  # "he has an allergy": said, not named ("avoid onion" is a diet, read elsewhere)
                 found += named
                 if words:
                     unclear.append(_phrase(words))
+                    pending = ""
+                elif not named and re.match(r"allerg|alerji|elerji|intoleran", cue.group(0), _F):
+                    pending = item.strip()  # "he has an allergy" / "Allergies:": said, not yet named; the items that follow may name it ("avoid onion" is a diet, read elsewhere)
+                else:
+                    pending = ""
                 in_list = True
             elif _FREE_OF.search(item) and not negated:
                 found += _named(" ".join(m.group(0).replace("-free", " ").replace(" free", " ") for m in _FREE_OF.finditer(item)))
             elif in_list and not negated:
+                answer = [w.lower() for w in _words(item)]
+                if answer and all(w in _NO_ANSWER for w in answer):
+                    in_list, pending = False, ""  # "Allergies:\n- none"
+                    continue
+                if len(answer) > MAX_CONTINUATION_WORDS:
+                    found += _named(" ".join(item.split()[:MAX_CONTINUATION_WORDS]))  # a run-on ("peanuts and gluten 120 people in Pune"): the first words may still be the last item
+                    in_list = False  # the rest is a new thought, not one more item
+                    continue
                 named = _named(item)
                 found += named
                 rest = _leftover(item)
-                if rest and not named and len(rest) <= 2 and not _BENIGN.search(item) and not _CITY.search(item):
+                if named:
+                    pending = ""
+                elif rest and len(rest) <= 2 and not _BENIGN.search(item) and not _CITY.search(item):
                     unclear.append(_phrase(rest))  # "allergic to peanuts, strawberries": a second thing we cannot name
+                    pending = ""
+                else:
+                    in_list = False  # a benign fact ("veg catering", "Pune") or filler: the list is over, so what follows is not one more item of it
             elif negated:
-                in_list = False
+                in_list, pending = False, ""
+        if pending:
+            unclear.append(_phrase([pending]))  # nothing named it: never read as "no allergy"
+        carry = in_list
     safe = tuple(dict.fromkeys(re.sub(r"[^A-Za-z' -]", "", p).strip() for p in unclear if re.sub(r"[^A-Za-z' -]", "", p).strip()))[:MAX_UNCLEAR]
     return AllergyReading(tuple(dict.fromkeys(found)), safe)
