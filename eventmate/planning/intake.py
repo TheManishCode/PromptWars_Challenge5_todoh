@@ -153,7 +153,7 @@ class IntakeTurn(_Model):
 def _ambiguity_questions(t: str, problems: list[str], budget_problems: list[str], skip: set[str]) -> list[Unresolved]:
     """A question with a button for each value, for each fact the text gave several different values for (at most six). ``skip``: facts a safety check already asked about."""
     out: list[Unresolved] = []
-    counts = {int(m.group(1)) for rx in mgr._GUESTS for m in rx.finditer(t)}
+    counts = set(mgr.guest_counts(t).totals)  # only counts that may be the total: a subgroup, a date or an amount is not an option
     if "guest_count" not in skip and 1 < len(counts) <= 6:
         out.append(Unresolved(key="guest_count", field="guest_count", said=", ".join(map(str, sorted(counts))), question="Which guest count is right?",
                               picks=tuple(Pick(label=f"{c} guests", field="guest_count", value=str(c)) for c in sorted(counts))))
@@ -216,7 +216,7 @@ def _rule_draft(text: str, today: date, notes: list[str], known: tuple[str, ...]
     t = mgr._ascii_digits(t, problems, assumptions)
     t = reading.number_words_to_digits(t)
     asked: list[Unresolved] = []
-    guest_question = reading.screen_guests(t)
+    guest_question = reading.screen_guests(t, has_total=prior.guest_count is not None)
     guests = None if guest_question else mgr._parse_guests(t, [])
     budget_question = reading.screen_budget(t, guests or prior.guest_count)
     city = city_aliases.read(t, known, answer=answering == "city")
@@ -628,7 +628,7 @@ def raised_by(messages: Sequence[str], draft: IntakeDraft, today: date) -> list[
     for m in messages:
         t = reading.number_words_to_digits(unicodedata.normalize("NFKC", m))
         t = mgr._ascii_digits(t, [], [])
-        out += [q for q in (reading.screen_guests(t), reading.screen_budget(t, draft.guest_count)) if q]
+        out += [q for q in (reading.screen_guests(t, has_total=draft.guest_count is not None), reading.screen_budget(t, draft.guest_count)) if q]
         out += [allergies.question_for(s) for s in allergies.suspects(t)]
         if not any(rx.search(t) for rx, _ in mgr._DIETS) and (misspelt := diets.misspelt_diet(t)):
             out.append(misspelt)

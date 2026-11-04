@@ -16,6 +16,7 @@ import uuid
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from collections.abc import Iterable, Sequence
+from typing import NamedTuple
 
 from pydantic import ValidationError
 
@@ -88,7 +89,7 @@ _DIGIT_RUN = re.compile(r"\d+")  # unicode \d: any decimal digit, including Deva
 _NUM = r"\d{1,3}(?:,\d{2,3})+(?:\.\d+)?|\d+(?:\.\d+)?"
 _MONEY = re.compile(
     rf"(?:budget(?:\s+(?:of|is|to|now|at|around|about))*[\s:]*)?(?:(?P<cur>inr|rs\.?|₹|rupees)\s*)?(?<![\d,.])(?P<num>{_NUM})"
-    r"(?:\s*(?P<unit>lakhs?|lacs?|crores?|cr|k|l|thousand|ha[zj]aa?r)\b)?(?:\s*(?P<cur2>inr|rs|rupees?|rupaye|rupay[ae])\b)?",
+    r"(?:\s*(?P<unit>lakhs?|lacs?|crores?|cr|k|l|thousand|ha[zj]aa?r)\b)?(?:\s*(?P<cur2>inr|rs|rupees?|rupaye|rupay[ae])\b(?!\s*\d))?",  # "2027 rs 10,00,000": that "rs" marks the amount after it, not 2027
     re.I,
 )
 _ORGANIZERS = re.compile(r"(?<![\d,.])(\d{1,3})\s*-?\s*(?:organi[sz]ers?|coordinators?|planners?)\b", re.I | re.A)
@@ -261,7 +262,19 @@ def _stands_for_budget(text: str, m: re.Match) -> bool:
     return not (len(num) == 4 and num.isdigit() and 1900 <= int(num) <= 2100)
 
 
+def _blank_dates(text: str) -> str:
+    """``text`` with each date written in it replaced by spaces of the same length: the numbers of a date (day, year) belong to the date and are no other fact's candidate."""
+    spans = [m.span() for rx in (_DATE_NUMERIC, _DATE_MD, _DATE_DM, _DATE_ISO) for m in rx.finditer(text)]
+    if not spans:
+        return text
+    chars = list(text)
+    for start, end in spans:
+        chars[start:end] = " " * (end - start)
+    return "".join(chars)
+
+
 def _parse_budget(text: str, problems: list[str]) -> int | None:
+    text = _blank_dates(text)
     values = set()
     for m in _MONEY.finditer(text):
         marked = m.group("cur") or m.group("unit") or m.group("cur2") or _stands_for_budget(text, m) or _BUDGET_WORD.match(m.group(0))
@@ -291,14 +304,73 @@ def _parse_budget(text: str, problems: list[str]) -> int | None:
     return value
 
 
+# A count says who it is about by what follows it ("3 people having an allergy", "6 guests are diabetic", "30 guests are vegetarian") or what precedes it ("some 3 people").
+# An allergy or a health condition written that way is a subgroup. A diet or "some" is one only when another count is there to be the total, because "100 guests are
+# vegetarian" and "some 100 people" state the total. "3 of the 100 guests have ..." names 100 as the whole the 3 is counted from.
+_COND = r"\bal+(?:[ea]r?|r)g\w*|\baller\w*|alerji|diabet\w*|intoleran\w*|celiac|coeliac|epipen|wheelchair"
+_DIET_WORD = r"non[- ]?veg\w*|veg\w*|vegan|jain|halal|gluten[- ]?free|lactose\w*"
+_PREDICATE = r"(?:(?:who|that|which)\s+)?(?:(?:are|is|have|has|having|got|with|suffer\w*|had|need\w*)\s+(?:\w+\s+){{0,3}}?)?(?:{})"
+_HEALTH_AFTER = re.compile(_PREDICATE.format(_COND), re.I | re.A)
+_DIET_AFTER = re.compile(_PREDICATE.format(_DIET_WORD), re.I | re.A)
+_HEALTH_BEFORE = re.compile(rf"(?:{_COND})(?:\s+(?:to|for|in|of|from))?(?:\s+(?!and\b|or\b|with\b)\w+){{0,2}}\s?[:=-]?\s?$", re.I | re.A)  # "Allergic to peanuts: 2 people"
+_SOME_BEFORE = re.compile(r"\bsome\b(?:\s+\w+){0,2}\s*$", re.I | re.A)
+_WHOLE_BEFORE = re.compile(r"\b(?:of|out\s+of|among|amongst)\s+(?:(?:the|these|our|my|all)\s+)?$", re.I | re.A)
+_NEGATED_AFTER = re.compile(r"\b(?:no|not|none|never|nahi|nahin|without)\b", re.I | re.A)
+
+
+class GuestCounts(NamedTuple):
+    totals: frozenset[int]  # the counts that may be the number of guests in all
+    subgroups: tuple[tuple[int, str], ...]  # (count, the user's words) for counts that are about some of the guests
+
+
+def _guest_candidates(rx: "re.Pattern[str]", text: str) -> list[tuple[int, str, str]]:
+    """(count, the words around it, what the words say it is: "" for a total, else "health", "diet" or "some") for each match of ``rx``."""
+    out = []
+    for m in rx.finditer(text):
+        rest = text[m.end(): m.end() + 140]  # a clause is enough to read, and the rest of a long text per match would be quadratic
+        after_raw = re.split(r"[.;!?\n,\d]", rest, maxsplit=1)[0][:60]  # a comma ends the clause: "100 guests, allergic to peanuts" says nothing about the 100
+        after = after_raw.lstrip()  # the spaces are skipped here, not in the patterns: no pattern starts with \s*
+        said = text[m.start(): m.end() + len(after_raw)].strip()
+        before = text[max(0, m.start(1) - 40): m.start(1)]
+        if _WHOLE_BEFORE.search(before) or _NEGATED_AFTER.search(after[:30]):
+            kind = ""
+        elif _HEALTH_AFTER.match(after) or _HEALTH_BEFORE.search(before):
+            kind = "health"
+        elif _DIET_AFTER.match(after):
+            kind = "diet"
+        elif _SOME_BEFORE.search(before):
+            kind = "some"
+        else:
+            kind = ""
+        out.append((int(m.group(1)), said, kind))
+    return out
+
+
+def guest_counts(text: str) -> GuestCounts:
+    """Sort the counts in ``text`` into those that may be the total number of guests and those about some of the guests, from the words around each. When the roles cannot be told
+    apart the totals stay empty: a subgroup is never promoted to the total to fill the gap."""
+    text = _blank_dates(text)
+    explicit = [c for rx in _GUESTS for c in _guest_candidates(rx, text)]
+    group = _guest_candidates(_GUESTS_GROUP, text)
+    pool = explicit or group or _guest_candidates(_GUESTS_FOR, text)
+    clear = [c for c in pool if not c[2]]
+    if not clear and pool is explicit:
+        clear, pool = [c for c in group if not c[2]], explicit + group  # "100 students ... 3 people allergic": the total is the group noun's
+    if clear:
+        return GuestCounts(frozenset(c[0] for c in clear), tuple((c[0], c[1]) for c in pool if c[2]))
+    if any(c[2] == "health" for c in pool) or len({c[0] for c in pool if c[2] == "diet"}) > 1:
+        return GuestCounts(frozenset(), tuple((c[0], c[1]) for c in pool))
+    return GuestCounts(frozenset(c[0] for c in pool), ())
+
+
 def _parse_guests(text: str, problems: list[str]) -> int | None:
-    values = {int(m.group(1)) for rx in _GUESTS for m in rx.finditer(text)}
+    counts = guest_counts(text)
+    values = counts.totals
     if not values:
-        values = {int(m.group(1)) for m in _GUESTS_GROUP.finditer(text)}
-    if not values:
-        values = {int(m.group(1)) for m in _GUESTS_FOR.finditer(text)}
-    if not values:
-        problems.append("guest count not found (e.g. '120 guests')")
+        if counts.subgroups:
+            problems.append("only some of the guests were counted (" + "; ".join(said for _, said in counts.subgroups) + "); the guest count in all was not found (e.g. '120 guests')")
+        else:
+            problems.append("guest count not found (e.g. '120 guests')")
         return None
     if len(values) > 1:
         problems.append("multiple different guest counts found: " + ", ".join(map(str, sorted(values))))

@@ -102,9 +102,16 @@ def _guest_question(said: str, why: str) -> Unresolved:
     return Unresolved(key="guest_count", field="guest_count", said=clip(said, 40), question=f'I read "{clip(said, 40)}", but {why}. How many guests are you expecting? {EXAMPLE_GUESTS}')
 
 
-def screen_guests(text: str) -> Unresolved | None:
-    """A guest count written in a way that has no single reading: a range, a minus sign, a fraction, zero, or more than the planner handles."""
-    if m := _GUEST_RANGE.search(text):
+_MONEY_BEFORE = re.compile(r"(?:₹|rs\.?|inr|rupees?|rupaye|budget(?:\s+(?:of|is|to|at|around|about|upto|up\s+to|under|max|maximum|only))*)\s*$", re.I)
+
+
+def screen_guests(text: str, has_total: bool = False) -> Unresolved | None:
+    """A guest count written in a way that has no single reading: a range, a minus sign, a fraction, zero, more than the planner handles, or only a part of the guests (the allergic ones,
+    the vegetarian ones) with no total beside it. ``has_total``: the draft already has the total, so a subgroup alone is not a question."""
+    text = mgr._blank_dates(text)  # a date's day and year are not guests
+    for m in _GUEST_RANGE.finditer(text):
+        if _MONEY_BEFORE.search(text[: m.start("a")]):
+            continue  # "rupees 50000 and 6 guests": the amount is the budget, and the 6 is not the end of a range
         low, high = sorted((_int(m.group("a")), _int(m.group("b"))))
         if low != high and low >= 1 and high <= MAX_GUESTS and "." not in m.group("a") + m.group("b"):
             picks = tuple(Pick(label=f"{n} guests", field="guest_count", value=str(n)) for n in (low, high))
@@ -117,6 +124,10 @@ def screen_guests(text: str) -> Unresolved | None:
         n = _int(m.group("n"))
         if not 1 <= n <= MAX_GUESTS:
             return _guest_question(m.group(0), f"I can plan for 1 to {MAX_GUESTS:,} guests")
+    counts = mgr.guest_counts(text)
+    if counts.subgroups and not counts.totals and not has_total:
+        said = clip(counts.subgroups[0][1], 40)
+        return Unresolved(key="guest_count", field="guest_count", said=said, question=f'I read "{said}" as only some of your guests, and I did not find how many guests there are in all. How many guests are you expecting? {EXAMPLE_GUESTS}')
     return None
 
 
@@ -163,7 +174,7 @@ def _budget_question(said: str, why: str) -> str:
 
 def screen_budget(text: str, guests: int | None = None) -> Unresolved | None:
     """The first thing in a budget that cannot be read safely: a foreign currency, a misspelled unit, an amount per person, a range, or a number too small to be a total."""
-    text = " ".join(text.split())  # one space between words, so the patterns below need no unbounded \s*
+    text = " ".join(mgr._blank_dates(text).split())  # a date's numbers are not money; one space between words, so the patterns below need no unbounded \s*
     per_person: list[Unresolved] = []
     clean_total = False
     for m in _AMOUNT.finditer(text):
