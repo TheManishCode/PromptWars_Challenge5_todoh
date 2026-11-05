@@ -207,6 +207,18 @@ def _score(rating: float, cost: int, cap: int) -> float:
     return round(0.6 * (rating / 5.0) + 0.4 * price_term, 4)
 
 
+def dietary_repair(request) -> str:
+    """What to do when no caterer offers every required diet. A restriction guests really have is not something to relax, and the planner books one caterer for the whole event, so
+    several diets must all be offered by that one caterer; serving different groups from different caterers is not supported yet."""
+    diets = ", ".join(d.value.replace("_", " ") for d in request.dietary)
+    if len(request.dietary) > 1:
+        what = f"The planner books one caterer for the whole event, so that caterer must offer all of: {diets}. None in {request.city} does."
+    else:
+        what = f"No caterer in {request.city} offers {diets}."
+    some = " Only some guests need a diet, but one caterer still has to cover every group." if request.diet_groups else ""
+    return f"{what}{some} Add a caterer that offers them, or ask a caterer in writing whether they can; remove a diet from the request only if nobody needs it."
+
+
 class VendorAgent:
     agent_name = AgentName.VENDOR
 
@@ -327,7 +339,7 @@ class VendorAgent:
         if constraint == "capacity":
             return f"change the guest count ({request.guest_count}) or relax capacity needs for the {label}"
         if constraint == "dietary":
-            return "relax the dietary requirements or add caterers that offer them"
+            return dietary_repair(request)
         if constraint == "venue_setting":
             return "allow either indoor or outdoor venues"
         if constraint == "quote_valid":

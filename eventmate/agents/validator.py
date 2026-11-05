@@ -38,7 +38,7 @@ REPAIRS = {
     "city": "choose a vendor located in the event city",
     "date_availability": "choose a vendor free on the event date, or move the date",
     "capacity": "choose a vendor whose capacity covers the guest count, or change the guest count",
-    "dietary": "choose a caterer that offers every required diet, or relax the diet",
+    "dietary": "choose one caterer that offers every required diet; a diet some guests need is not one to drop",
     "venue_setting": "choose a venue with the requested setting, or allow any setting",
     "booking_status": "choose a vendor that is available and not cancelled",
     "budget_cap": "choose a cheaper vendor or rebalance the category budget",

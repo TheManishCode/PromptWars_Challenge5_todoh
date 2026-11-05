@@ -41,6 +41,11 @@ _EXCEPTION_DIETS = (
     (re.compile(r"\bgluten", _F), D.GLUTEN_FREE),
 )
 _CLAUSE = re.compile(r"[.;,!?\n]")
+# a new size for a group the draft already has: "30 vegan", "30 are vegan, not 25" (the number just before the diet), "vegan should be 30", "make the vegan ones 30", "change vegan to 30"
+_SIZE_BEFORE = re.compile(r"(?<![\w.,/%-])(\d+)(?:\s+(?:of\s+)?(?:them|us|people|guests?|pax|persons?|ones))?(?:\s+(?:are|is|will\s+be|r))?\s*$", _F)
+# matched against the words after the diet with leading space removed; each optional word owns the space after it, so no run of spaces can be split two ways
+_SIZE_AFTER = re.compile(r"(?:(?:ones|guests|people|group|count)\s*)?(?:(?:should\s+be|to\s+be|to|is|are|now|=|:|->)\s*)?(\d+)(?![\w.,/%-])(?!\s*(?:lakhs?|lacs?|crores?|k\b|rs\b|inr\b|rupees|thousand|days?|hours?|am\b|pm\b|km\b))", _F)
+_OLD_VALUE = re.compile(r"\b(?:not|no|instead\s+of|rather\s+than|from|was|than)\s*$", _F)  # the number after these is the value being replaced
 _SAFE = re.compile(r"[^A-Za-z0-9' %.-]")
 
 
@@ -143,6 +148,33 @@ def split(text: str) -> tuple[tuple[D, ...], list[DietGroup]]:
             seen.add((g.diet, g.exception))
             kept.append(g)
     return tuple(wide), kept
+
+
+def corrections(text: str, prior: tuple[DietGroup, ...]) -> list[DietGroup]:
+    """A new size for a group the draft already holds, said without a group wording: "30 vegan, not 25", "make the vegan ones 30", "vegan should be 30". Only a diet that already has
+    a group is read this way, so "100 guests vegetarian" and "vegan catering" stay whole-event diets. The number written as the value being replaced ("not 25") is ignored."""
+    text = mgr._blank_dates(text)
+    out: list[DietGroup] = []
+    for g in prior:
+        rx = next((r for r, d in mgr._DIETS if d == g.diet), None)
+        if rx is None:
+            continue
+        for m in rx.finditer(text):
+            if negation.negated(text, m.start()):
+                continue
+            before = _clause_before(text, m.start())
+            near = _SIZE_BEFORE.search(before)
+            if near and not _OLD_VALUE.search(before[: near.start()]):
+                n, at = int(near.group(1)), near.start()
+                said = f"{before[at:]} {m.group(0)}"
+            elif (after := _SIZE_AFTER.match(_CLAUSE.split(text[m.end(): m.end() + 40], maxsplit=1)[0].lstrip())) and not _OLD_VALUE.search(text[max(0, m.end() - 12): m.end()]):
+                n, said = int(after.group(1)), f"{m.group(0)} {after.group(1)}"
+            else:
+                continue
+            if n >= 1 and n != g.count and (made := _group(g.diet, n, None, g.exception, said)):
+                out.append(made)
+            break
+    return out
 
 
 def label_words(groups: list[DietGroup]) -> list[str]:

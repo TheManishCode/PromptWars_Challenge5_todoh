@@ -538,6 +538,10 @@ def parse_request(
     event_date = _parse_dates(text, today, problems, assumptions)
     budget = _parse_budget(text, problems)
     organizers = _parse_organizers(text, problems)
+    from eventmate.planning import partial_diets  # local: that module reads this one's patterns
+
+    _, groups = partial_diets.split(text)  # the same reading the intake conversation uses, so plain text and the review card agree
+    problems.extend(f'"{g.words}" is {g.count} guests, more than the {guests} guests in the request; correct the group or the guest count' for g in groups if g.count and guests and g.count > guests)
     if problems:
         raise RequestParseError(problems)
 
@@ -558,10 +562,11 @@ def parse_request(
             city=city.strip(),
             event_date=event_date,
             budget_total=budget,
-            dietary=dietary,
+            dietary=tuple(dict.fromkeys((*dietary, *(g.diet for g in groups if g.diet)))),
+            diet_groups=tuple(groups),
             allergens=allergy.allergens,
             allergy_unclear=allergy.unclear,
-            diet_notes=diet_more.notes,
+            diet_notes=tuple(dict.fromkeys((*diet_more.notes, *partial_diets.label_words(groups))))[:5],
             diet_unclear=diet_more.unclear,
             venue_setting=setting,
             services=tuple(services),

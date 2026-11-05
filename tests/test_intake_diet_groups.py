@@ -210,3 +210,71 @@ def test_a_group_no_caterer_can_serve_stops_the_plan_like_a_whole_event_diet_wou
 # They show the groups read from the phrasings above and that a group's diet is checked against the caterer's options. They do not show that a caterer can cook the quantity of each
 # diet (the vendor records list options, not how many plates of each): the plan says so as an unverified item. A group is read from the words around a diet word, so a group written
 # in words not listed here is read as the whole event or not at all. Allergy counts ("3 of them are allergic to peanuts") are not stored.
+
+
+# ===================================================================== editing a group the draft already has
+
+EDITS = [
+    ("count restated with the old one struck", ("25 are vegan", "30 vegan, not 25"), {(D.VEGAN, 30, None, False)}),
+    ("count restated plainly", ("25 are vegan", "actually 30 are vegan"), {(D.VEGAN, 30, None, False)}),
+    ("one of two groups, 'make it'", ("40 are jain and 25 are vegan", "make the vegan ones 30"), {(D.JAIN, 40, None, False), (D.VEGAN, 30, None, False)}),
+    ("one of two groups, 'should be'", ("40 are jain and 25 are vegan", "vegan should be 30 not 25"), {(D.JAIN, 40, None, False), (D.VEGAN, 30, None, False)}),
+    ("one of two groups, 'change to'", ("40 are jain and 25 are vegan", "change jain to 35"), {(D.JAIN, 35, None, False), (D.VEGAN, 25, None, False)}),
+]
+
+
+@pytest.mark.parametrize("name,messages,expected", EDITS, ids=[e[0] for e in EDITS])
+def test_a_new_size_for_an_existing_group_replaces_that_group_only(talk, name, messages, expected):
+    t = talk(BASE, *messages)
+    assert groups(t) == expected
+    assert open_fields(t) == []
+
+
+def test_a_diet_with_no_group_is_still_a_whole_event_diet_when_a_number_follows_it(talk):
+    # the correction reading needs a group to correct: "100 guests vegetarian" and a budget beside a diet word are not group sizes
+    assert groups(talk(BASE, "vegan 2 lakh")) == set()
+    assert groups(talk(BASE, "100 guests vegan")) == set()
+
+
+def test_a_group_larger_than_the_guests_is_corrected_by_fixing_the_group_or_the_total(talk):
+    big = talk(BASE, "200 are vegan")
+    assert open_fields(big) == ["guest_count"]
+    assert "Which is wrong?" in big.draft.unresolved[0].question
+    assert groups(talk(BASE, "200 are vegan", "make the vegan ones 20")) == {(D.VEGAN, 20, None, False)}
+    fixed_total = talk(BASE, "200 are vegan", "250 guests")
+    assert fixed_total.draft.guest_count == 250 and open_fields(fixed_total) == []
+
+
+# ===================================================================== the other doors: confirming directly, and planning from plain text
+
+def test_confirming_a_draft_whose_group_exceeds_the_guests_is_refused(em):
+    from eventmate.planning.intake import IntakeDraft, IntakeError
+    from eventmate.schemas import DietGroup, EventType
+
+    draft = IntakeDraft(event_type=EventType.WEDDING, guest_count=40, city="Pune", event_date=date(2026, 12, 12), budget_total=200000, diet_groups=(DietGroup(diet=D.VEGAN, count=60, words="60 are vegan"),))
+    with pytest.raises(IntakeError, match="larger than the guest count"):
+        em.confirm_intake(draft, "x", today=TODAY)
+
+
+def test_plain_text_planning_keeps_a_group_and_says_its_amounts_are_not_checked(em):
+    out = em.plan(BASE.replace("2 lakh", "4 lakh") + ", vegetarian catering, photographer, indoor, 25 are vegan", today=TODAY)
+    assert out.plan is not None, (out.status, out.violations)
+    assert [(g.diet, g.count) for g in out.intake.request.diet_groups] == [(D.VEGAN, 25)]
+    item = next(u for u in out.plan.validation.unverified if u.name == "diet_groups")
+    assert not item.blocks_verified and "amounts are not checked" in item.detail  # the diets are checked; the plates are not, and the plan is not held back by it
+    assert "how many plates of each it can make is not checked" in em.explain(out.plan.plan_id).markdown
+
+
+def test_plain_text_planning_refuses_a_group_larger_than_the_guests(em):
+    from eventmate.agents.manager import RequestParseError
+
+    with pytest.raises(RequestParseError, match="more than the 120 guests"):
+        em.plan(BASE + ", 200 are vegan", today=TODAY)
+
+
+def test_diets_no_one_caterer_offers_are_not_repaired_by_dropping_them(em):
+    out = em.plan(BASE.replace("120 guests", "120 guests, vegan and halal and jain catering"), today=TODAY)
+    assert out.plan is None
+    repair = next(v.repair for v in out.violations if v.constraint == "dietary")
+    assert "one caterer" in repair and "only if nobody needs it" in repair
+    assert "relax" not in repair.lower()

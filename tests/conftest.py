@@ -4,6 +4,11 @@ from datetime import date
 import pytest
 
 os.environ.setdefault("EVENTMATE_CATALOG", "seed")  # the unit tests are written against the small fixed catalogue; tests/test_catalog_coverage.py uses the full one
+# Module- and session-scoped fixtures (a server started once per file) are built before the per-test fixture below runs, so a real .env must already be hidden here: otherwise create_app
+# loads it, its keys stay in os.environ for every later test, and those tests call live services.
+os.environ["EVENTMATE_ENV_FILE"] = "/nonexistent/eventmate.env"
+for _name in ("NVIDIA_API_KEY", "OPENROUTER_API_KEY", "BRAVE_SEARCH_API_KEY", "GOOGLE_PLACES_API_KEY", "OPENWEATHER_API_KEY"):
+    os.environ.pop(_name, None)
 
 from eventmate.decision_logger import DecisionLogger
 from eventmate.agents.vendor import VendorRepository

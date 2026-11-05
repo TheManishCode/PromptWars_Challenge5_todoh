@@ -252,6 +252,8 @@ def _rule_draft(text: str, today: date, notes: list[str], known: tuple[str, ...]
     unnamed = [allergies.unnamed_question(u) for u in allergy.unclear if not consumed & {w.lower() for w in u.split()}]  # a word offered back as "did you mean peanut?" is not also an allergy that was not understood
     asked += unnamed  # an allergy that cannot be named is a question, so the draft is not ready beside it; "keep as written" moves the words into the draft
     wide, groups = partial_diets.split(t)  # a diet said about some guests is a group; the caterer must offer its diet all the same
+    have = {(g.diet, g.exception) for g in groups}
+    groups = [*groups, *(c for c in partial_diets.corrections(t, prior.diet_groups) if (c.diet, c.exception) not in have)]  # a new size for a group the user already gave
     dietary = tuple(dict.fromkeys((*wide, *(g.diet for g in groups if g.diet))))
     if not dietary and (misspelt := diets.misspelt_diet(t)):
         asked.append(misspelt)
@@ -496,7 +498,7 @@ def _group_larger_than_guests(draft: IntakeDraft) -> Unresolved | None:
         if g.count and draft.guest_count and g.count > draft.guest_count:
             return Unresolved(
                 key=GROUP_SIZE_KEY, field="guest_count", said=clip(g.words, 40),
-                question=f'You wrote "{clip(g.words, 40)}", which is {g.count} guests, but the guest count is {draft.guest_count}. A group cannot be larger than all the guests. How many guests are you expecting? {reading.EXAMPLE_GUESTS}',
+                question=f'You wrote "{clip(g.words, 40)}", which is {g.count} guests, but the guest count is {draft.guest_count}. A group cannot be larger than all the guests. Which is wrong? Give the guest count (for example "{g.count + 20} guests") or the group\'s size ("20 are {g.diet.value.replace("_", " ") if g.diet else "vegan"}").',
             )
     return None
 
