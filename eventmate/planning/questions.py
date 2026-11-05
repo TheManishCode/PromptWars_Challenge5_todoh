@@ -81,7 +81,7 @@ def clip(text: str, n: int = 60) -> str:
 # ------------------------------------------------------------------------------------------------------ saying what a message changed
 
 _LABELS = {"event_type": "Event", "guest_count": "Guests", "city": "City", "event_date": "Date", "budget_total": "Budget", "venue_setting": "Setting"}
-_LIST_LABELS = {"dietary": "Food", "allergens": "Allergies", "services": "Services"}
+_LIST_LABELS = {"dietary": "Food", "diet_groups": "Food groups", "allergens": "Allergies", "services": "Services"}
 
 
 def _show(field: str, value) -> str:
@@ -107,7 +107,7 @@ def describe_changes(before, after) -> tuple[str, ...]:
             out.append(f"{label} changed from {_show(field, a)} to {_show(field, b)}")
     for field, label in _LIST_LABELS.items():
         a, b = set(getattr(before, field)), set(getattr(after, field))
-        name = lambda items: ", ".join(sorted(str(getattr(i, "value", i)).replace("_", " ").capitalize() for i in items))  # noqa: E731
+        name = lambda items: ", ".join(sorted((i.label() if hasattr(i, "label") else str(getattr(i, "value", i)).replace("_", " ").capitalize()) for i in items))  # noqa: E731
         if b - a:
             out.append(f"{label} added: {name(b - a)}")
         if a - b:

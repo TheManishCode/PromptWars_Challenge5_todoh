@@ -346,6 +346,15 @@ class ValidatorAgent:
                 repair="say exactly what the allergy is (for example 'peanut' or 'dairy'), and ask each caterer to confirm in writing that they can serve without it",
                 label=f"allergy or food restriction not understood ({said})",
             ))
+        if labelled := [g for g in r.diet_groups if g.diet]:
+            what = "; ".join(g.label() for g in labelled)
+            items.append(UnverifiedItem(
+                name="diet_groups",
+                detail=f"you said who needs which diet: {what}. The caterer must offer each of these diets (that is checked), but the vendor records list the diets a caterer offers, not how many plates of each it can make, so the amounts are not checked",
+                repair="ask each caterer, in writing, whether they can make that many plates of each diet, and keep their reply",
+                label=f"amounts per diet not confirmed with the caterer ({what})"[:120],
+                blocks_verified=False,
+            ))
         if r.diet_notes:
             what = ", ".join(r.diet_notes)
             items.append(UnverifiedItem(

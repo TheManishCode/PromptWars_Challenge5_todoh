@@ -109,6 +109,7 @@ def _summary(ctx: ToolContext, _):
         "event_date": r.event_date.isoformat(),
         "guests": r.guest_count,
         "dietary": [d.value for d in r.dietary],
+        "diet_groups": [g.label() for g in r.diet_groups],
         "vendors": [{"category": s.category.value, "name": s.name, "booking_status": s.booking_status.value} for s in p.selections],
         "warnings": list(p.warnings),
         "verification": ctx.em.verification(ctx.plan_id),  # the assistant must not call a plan fully verified when this says it needs verification

@@ -599,13 +599,15 @@
   function closeStage() { stage.hidden = true; document.body.style.overflow = ''; if (opener) opener.focus(); }
 
   /* ------------------------------------------------------------ new plan: brief, review, build */
-  var briefDlg = $('#brief-dialog'), FIELD = [['event_type', 'Event'], ['community_subtype', 'Kind of gathering'], ['guest_count', 'Guests'], ['city', 'City'], ['event_date', 'Date'], ['budget_total', 'Budget'], ['dietary', 'Food'], ['allergens', 'Allergies'], ['allergy_unclear', 'Allergy to clarify'], ['diet_notes', 'Food to confirm'], ['diet_unclear', 'Food rule to clarify'], ['venue_setting', 'Setting'], ['services', 'Services'], ['reminders', 'Reminders']];
+  var briefDlg = $('#brief-dialog'), FIELD = [['event_type', 'Event'], ['community_subtype', 'Kind of gathering'], ['guest_count', 'Guests'], ['city', 'City'], ['event_date', 'Date'], ['budget_total', 'Budget'], ['dietary', 'Food'], ['diet_groups', 'Food groups'], ['allergens', 'Allergies'], ['allergy_unclear', 'Allergy to clarify'], ['diet_notes', 'Food to confirm'], ['diet_unclear', 'Food rule to clarify'], ['venue_setting', 'Setting'], ['services', 'Services'], ['reminders', 'Reminders']];
   function openDialog(d) { if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); }
   function closeDialog(d) { if (typeof d.close === 'function') d.close(); else d.removeAttribute('open'); }
   function openBrief() { openDialog(briefDlg); $('#brief-input').focus(); }
   function fieldValue(d, f) {
     var v = d[f]; if (v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length)) return null;
-    if (f === 'budget_total') return inr(v); if (f === 'event_date') return longDate(v); if (Array.isArray(v)) return v.map(cap).join(', ');
+    if (f === 'budget_total') return inr(v); if (f === 'event_date') return longDate(v);
+    if (f === 'diet_groups') return v.map(function (g) { return (g.diet ? cap(g.diet) : 'Other food need') + ': ' + (g.count ? g.count + (g.count === 1 ? ' guest' : ' guests') : (g.share || 'some guests')) + (g.exception ? ' (an exception)' : ''); }).join('; ');
+    if (Array.isArray(v)) return v.map(cap).join(', ');
     return f === 'event_type' || f === 'venue_setting' ? cap(v) : String(v);
   }
   var NO_ALLERGY = 'None stated. If anyone has an allergy, write it above before you build.';

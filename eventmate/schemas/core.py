@@ -52,6 +52,22 @@ class DietaryRequirement(str, Enum):
     GLUTEN_FREE = "gluten_free"
 
 
+class DietGroup(_Model):
+    """Some of the guests need a diet ("40 are jain", "a few are vegan", "except 5 who eat chicken"). ``request.dietary`` is the list of diets a caterer must offer, so a group's diet is also
+    in that list: the group says who needs it and how many, and the vendor check does the rest. ``diet`` is None when the words name no diet this product lists ("who eat egg")."""
+
+    diet: DietaryRequirement | None = None
+    count: int | None = Field(default=None, ge=1, le=MAX_GUESTS)  # a number the user wrote ("12 of them", "one guest")
+    share: str | None = Field(default=None, min_length=1, max_length=30, pattern=r"^[A-Za-z0-9' %.-]+$")  # what the user wrote instead of a number ("a few", "half", "30%")
+    exception: bool = False  # the group is an exception to a whole-event diet ("everyone is vegetarian except 5 who eat chicken")
+    words: str = Field(min_length=1, max_length=60, pattern=r"^[A-Za-z0-9' %.-]+$")  # the user's own words about it
+
+    def label(self) -> str:
+        name = self.diet.value.replace("_", " ").capitalize() if self.diet else "Other food need"
+        size = f"{self.count} guest{'' if self.count == 1 else 's'}" if self.count else (self.share or "some guests")
+        return f"{name}: {size}" + (" (an exception)" if self.exception else "")
+
+
 class Allergen(str, Enum):
     PEANUT = "peanut"
     TREE_NUT = "tree_nut"
@@ -334,6 +350,7 @@ class EventRequest(_Model):
     # food requirements the vendor records cannot answer (sattvic, no onion or garlic, kosher...), as fixed labels; and the user's own words for a restriction we could not place
     diet_notes: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z0-9' %-]+$")], ...] = Field(default=(), max_length=5)
     diet_unclear: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z' -]+$")], ...] = Field(default=(), max_length=5)
+    diet_groups: tuple[DietGroup, ...] = Field(default=(), max_length=5)  # who needs which diet, when it is only some of the guests; each group's diet is also in ``dietary``
     venue_setting: VenueSetting = VenueSetting.ANY
     services: tuple[VendorCategory, ...] = (VendorCategory.VENUE,)
     reminders: tuple[ReminderKind, ...] = ()

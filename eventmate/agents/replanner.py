@@ -66,6 +66,7 @@ def diff_plans(old: PlanVersion, new: PlanVersion) -> PlanDiff:
             ("budget_total", f"INR {o.budget_total:,}", f"INR {n.budget_total:,}"),
             ("city", o.city, n.city),
             ("dietary", ", ".join(d.value for d in o.dietary) or "none", ", ".join(d.value for d in n.dietary) or "none"),
+            ("diet_groups", "; ".join(g.label() for g in o.diet_groups) or "none", "; ".join(g.label() for g in n.diet_groups) or "none"),
             ("venue_setting", o.venue_setting.value, n.venue_setting.value),
         )
 

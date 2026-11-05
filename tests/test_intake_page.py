@@ -280,13 +280,20 @@ def test_the_card_always_says_when_no_allergy_was_captured_so_a_miss_does_not_lo
 # ------------------------------------------------------------------ what the reader keeps instead of choosing (tests/test_intake_next_reader.py, on the page)
 
 
-def test_a_diet_about_some_guests_is_asked_and_only_some_keeps_the_words(dialog):
+def test_a_diet_about_some_guests_is_shown_as_a_group_and_nothing_is_asked(dialog):
     page = dialog
-    page.say("party in Pune for 40 people on 12 December 2026, budget 1 lakh, a few guests are vegan")
-    assert "Is everyone vegan" in card(page) and row(page, "Food") is None and not can_build(page)
-    page.get_by_role("button", name="Only some guests").click()
-    page.wait_for_selector("#build")
-    assert row(page, "Food") is None and "a few guests are vegan" in card(page), "nothing is set for everyone, and the words are kept for the caterer"
+    page.say("party in Pune for 120 guests on 12 December 2026, budget 2 lakh, 40 are jain and 25 are vegan")
+    assert can_build(page) and "Is everyone" not in card(page)
+    assert row(page, "Food groups") == "Jain: 40 guests; Vegan: 25 guests", card(page)
+    assert "Jain" in (row(page, "Food") or "") and "Vegan" in (row(page, "Food") or ""), "the caterer must offer both"
+
+
+def test_saying_everyone_is_vegan_later_replaces_the_group_on_the_card(dialog):
+    page = dialog
+    page.say("party in Pune for 120 guests on 12 December 2026, budget 2 lakh, a few guests are vegan")
+    assert row(page, "Food groups") == "Vegan: a few"
+    page.say("actually make it vegan for everyone")
+    assert row(page, "Food groups") is None and row(page, "Food") == "Vegan" and "Food groups removed" in card(page)
 
 
 def test_a_range_of_dates_offers_both_ends_and_the_pressed_one_is_set(dialog):

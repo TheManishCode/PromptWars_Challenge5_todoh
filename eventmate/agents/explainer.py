@@ -148,6 +148,7 @@ class ExplainerAgent:
             f"- {r.guest_count} guests; budget {_inr(r.budget_total)}",
             f"- Vendors total {_inr(plan.total_cost)}; {_inr(r.budget_total - plan.total_cost)} left of the budget",
             f"- Dietary needs: {', '.join(d.value.replace('_', ' ') for d in plan.guests.required_diets) or 'none stated'}",
+            *([f"- Who needs which diet: {'; '.join(_esc(g.label()) for g in r.diet_groups)}"] if r.diet_groups else []),
             f"- Venue setting: {r.venue_setting.value}",
             "",
             "## Vendors",

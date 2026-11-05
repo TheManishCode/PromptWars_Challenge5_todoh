@@ -38,6 +38,7 @@ from eventmate.schemas import (
     Allergen,
     CommunityDetails,
     DietaryRequirement,
+    DietGroup,
     EventRequest,
     EventType,
     ReminderKind,
@@ -52,7 +53,7 @@ MAX_MESSAGE_CHARS = mgr.MAX_TEXT_CHARS
 _MAX_TOKENS = 1200  # a reasoning model spends part of this thinking; 600 sometimes ended before any JSON
 _ATTEMPTS = 2  # one retry, only for a reply that is not usable JSON; a provider failure is not retried
 REQUIRED = ("guest_count", "city", "event_date", "budget_total")
-FIELDS = tuple(f for f in ("event_type", "community_subtype", "guest_count", "city", "event_date", "budget_total", "dietary", "allergens", "allergy_unclear", "diet_notes", "diet_unclear", "venue_setting", "services", "reminders"))
+FIELDS = tuple(f for f in ("event_type", "community_subtype", "guest_count", "city", "event_date", "budget_total", "dietary", "diet_groups", "allergens", "allergy_unclear", "diet_notes", "diet_unclear", "venue_setting", "services", "reminders"))
 _CITY = re.compile(r"[^\W\d_](?:[^\W\d_]|[ .'-])*")  # letters, spaces, . ' - only
 MAX_CITY_WORDS, MAX_CITY_CHARS = 3, 40  # "Navi Mumbai" fits; a sentence or payload does not
 _QUESTIONS = {
@@ -90,6 +91,7 @@ class IntakeDraft(_Model):
     allergy_unclear: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z' -]+$")], ...] = Field(default=(), max_length=5)  # an allergy mentioned but not named; rules only
     diet_notes: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z0-9' %-]+$")], ...] = Field(default=(), max_length=5)  # rules only; the user's words about some guests may hold a number
     diet_unclear: tuple[Annotated[str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z' -]+$")], ...] = Field(default=(), max_length=5)
+    diet_groups: tuple[DietGroup, ...] = Field(default=(), max_length=5)  # who needs which diet when it is only some of the guests; rules only, and each group's diet is also in ``dietary``
     allergens: tuple[Allergen, ...] = ()  # only ever read from the user's own words (rules), never proposed by a model
     venue_setting: VenueSetting | None = None
     services: tuple[VendorCategory, ...] = ()
@@ -249,14 +251,14 @@ def _rule_draft(text: str, today: date, notes: list[str], known: tuple[str, ...]
     consumed = {sus.said.lower() for sus in suspects if sus.kind == "typo_word"}
     unnamed = [allergies.unnamed_question(u) for u in allergy.unclear if not consumed & {w.lower() for w in u.split()}]  # a word offered back as "did you mean peanut?" is not also an allergy that was not understood
     asked += unnamed  # an allergy that cannot be named is a question, so the draft is not ready beside it; "keep as written" moves the words into the draft
-    dietary, diet_questions = partial_diets.split(t)  # a diet said about some guests is asked about, not set for everyone
-    asked += diet_questions
+    wide, groups = partial_diets.split(t)  # a diet said about some guests is a group; the caterer must offer its diet all the same
+    dietary = tuple(dict.fromkeys((*wide, *(g.diet for g in groups if g.diet))))
     if not dietary and (misspelt := diets.misspelt_diet(t)):
         asked.append(misspelt)
     return RuleReading(
         draft=_safe_draft(
             event_type=event_type, community_subtype=subtype, guest_count=guests, city=city.city, event_date=when, budget_total=budget, dietary=dietary, allergens=allergy.allergens,
-            allergy_unclear=(), diet_notes=diet.notes, diet_unclear=diet.unclear, venue_setting=setting, services=tuple(services), reminders=tuple(reminders),
+            allergy_unclear=(), diet_notes=tuple(dict.fromkeys((*diet.notes, *partial_diets.label_words(groups))))[:5], diet_groups=groups, diet_unclear=diet.unclear, venue_setting=setting, services=tuple(services), reminders=tuple(reminders),
         ),
         unresolved=tuple({u.key: u for u in asked}.values())[:MAX_OPEN_QUESTIONS],
         removed_cities=city.removed,
@@ -305,8 +307,20 @@ def _merge(base: IntakeDraft, new: IntakeDraft) -> IntakeDraft:
     for name, value in new.model_dump().items():
         if name in ("allergens", "allergy_unclear", "diet_notes", "diet_unclear"):
             merged[name] = tuple(dict.fromkeys((*getattr(base, name), *getattr(new, name))))  # an allergy once stated is never replaced by a later message, only added to
+        elif name == "diet_groups":
+            continue  # below: a group is added or replaced by the same diet's group, never wiped by an unrelated message
         elif value not in (None, ()):
             merged[name] = value
+    groups = base.diet_groups
+    if new.diet_groups or new.dietary:
+        for_all = set(new.dietary) - {g.diet for g in new.diet_groups}  # diets this message gave for the whole event: "make it vegan for everyone" replaces that diet's group
+        replaced = {(g.diet, g.exception) for g in new.diet_groups}
+        kept = [g for g in base.diet_groups if (g.diet, g.exception) not in replaced and not (g.diet in for_all and not g.exception)]
+        groups = (*kept, *new.diet_groups)[:5]
+        if new.diet_groups:
+            merged["dietary"] = tuple(dict.fromkeys((*base.dietary, *new.dietary)))  # a group adds a diet the caterer must offer; it does not replace the whole-event diets
+    merged["diet_groups"] = groups
+    merged["dietary"] = tuple(dict.fromkeys((*merged["dietary"], *(g.diet for g in groups if g.diet))))  # whatever the message said, a group's diet stays one the caterer must offer
     return IntakeDraft.model_validate(merged)
 
 
@@ -449,6 +463,9 @@ def propose(
         draft = draft.model_copy(update={"city": None})  # "not Pune": the earlier city does not stand in
     # an ambiguity in the user's own words is theirs to settle: no earlier or AI-picked value stands in, and the question stays open until they answer
     open_now = _still_open(prior.unresolved, asked, new, expecting)
+    open_now = tuple(q for q in open_now if q.key != GROUP_SIZE_KEY)
+    if too_big := _group_larger_than_guests(draft):
+        open_now = (*open_now, too_big)[:MAX_OPEN_QUESTIONS]  # a group cannot be larger than all the guests: one of the two numbers is wrong, and which is the user's to say
     draft = draft.model_copy(update={"unresolved": open_now, "settled": _settled(prior, open_now), **{q.field: None for q in asked if q.field in _SCALARS}})
     return _turn(draft, prior, notes, known, source, flags, read.removed_cities, latest, new)
 
@@ -457,23 +474,30 @@ _SCALAR_FACTS = ("event_type", "community_subtype", "guest_count", "city", "even
 
 
 _KEEP = re.compile(r"(?:yes[, ]+)?(?:please[, ]+)?keep(?:\s+(?:it|them|that))?(?:\s+(?:as\s+)?(?:written|is|my\s+words|the\s+words))?|as\s+written|leave\s+it(?:\s+as\s+is)?", re.I | re.A)
-_SOME = re.compile(r"(?:just\s+|only\s+)?(?:some|a\s+few)(?:\s+of\s+(?:them|us|the\s+guests))?|not\s+(?:everyone|all)|only\s+some", re.I | re.A)
-_EVERYONE = re.compile(r"(?:yes[, ]+)?(?:everyone|everybody|every\s+one|all(?:\s+of\s+(?:them|us))?|all\s+(?:the\s+)?guests)", re.I | re.A)
 
 
 def _typed_answer(prior: IntakeDraft, text: str) -> IntakeAnswer | None:
-    """The whole message is the words for the one button of the only open question: "keep" for an allergy that could not be named, "only some" or "everyone" for who a diet is for. With
-    more than one question open it is not clear which is meant, so nothing is applied and the message is read as any other."""
+    """The whole message is the words for the one button of the only open question: "keep" for an allergy that could not be named. With more than one question open it is not clear which
+    is meant, so nothing is applied and the message is read as any other."""
     if len(prior.unresolved) != 1:
         return None
-    q, said = prior.unresolved[0], text.strip().strip(".!?, ")
-    if q.key.startswith("allergy_unclear:") and _KEEP.fullmatch(said):
+    q = prior.unresolved[0]
+    if q.key.startswith("allergy_unclear:") and _KEEP.fullmatch(text.strip().strip(".!?, ")):
         return IntakeAnswer(key=q.key, pick=next(i for i, p in enumerate(q.picks) if p.keep_words))
-    if q.key.startswith(partial_diets.KEY):
-        if _SOME.fullmatch(said):
-            return IntakeAnswer(key=q.key, pick=next(i for i, p in enumerate(q.picks) if p.keep_words))
-        if _EVERYONE.fullmatch(said):
-            return IntakeAnswer(key=q.key, pick=next(i for i, p in enumerate(q.picks) if p.value is not None))
+    return None
+
+
+GROUP_SIZE_KEY = "diet_group_size"
+
+
+def _group_larger_than_guests(draft: IntakeDraft) -> Unresolved | None:
+    """A diet group with a count above the guest count ("60 are vegan" for 40 guests). Groups adding up to more than the guests are fine: a guest can be in two of them."""
+    for g in draft.diet_groups:
+        if g.count and draft.guest_count and g.count > draft.guest_count:
+            return Unresolved(
+                key=GROUP_SIZE_KEY, field="guest_count", said=clip(g.words, 40),
+                question=f'You wrote "{clip(g.words, 40)}", which is {g.count} guests, but the guest count is {draft.guest_count}. A group cannot be larger than all the guests. How many guests are you expecting? {reading.EXAMPLE_GUESTS}',
+            )
     return None
 
 
@@ -489,7 +513,7 @@ def _constrain_model(ai: IntakeDraft, rules: IntakeDraft, prior: IntakeDraft, as
     if ai.city and city_aliases.canonical(ai.city) in gone:
         drop.add("city")
     update = {f: empty[f] for f in drop}
-    update |= {"allergens": (), "allergy_unclear": (), "diet_notes": (), "diet_unclear": (), "unresolved": (), "settled": ()}
+    update |= {"allergens": (), "allergy_unclear": (), "diet_notes": (), "diet_unclear": (), "diet_groups": (), "unresolved": (), "settled": ()}
     return ai.model_copy(update=update)
 
 
@@ -530,6 +554,8 @@ def _bare_answer(expecting, text, known, prior, new: IntakeDraft, asked: list[Un
     elif expecting == "city":
         got = city_aliases.read(text, known, answer=True)
         question, update = got.unresolved, ({"city": got.city} if got.city else {})
+    elif expecting == "allergens" and not _food_like(text):
+        question, update = None, {}  # "thanks", "like 10" or a question is not the name of a food: it is not recorded as an allergy
     elif expecting == "allergens":
         got = allergies.read("allergic to " + text)
         suspects = allergies.suspects("allergic to " + text)
@@ -542,6 +568,15 @@ def _bare_answer(expecting, text, known, prior, new: IntakeDraft, asked: list[Un
     elif not update and not new_found(new) and prior_has_facts(prior) and (expecting != "city" or _city_like(text)):  # a sentence with a number in it is not an unreadable city: it is a message that changed nothing
         notes.append(f'I could not read "{clip(text, 40)}" as {_WHAT[expecting]}.' + (" Type just the city name, for example Pune." if expecting == "city" else ""))
     return (_safe_merge(new, update) if update else new), asked
+
+
+_CHATTER = frozenset("ok okay thanks thank you yes no yeah yep nope hmm hi hello hey sure fine cool great lol please nothing done wait nevermind never mind".split())
+
+
+def _food_like(text: str) -> bool:
+    """Short, no digits, no question mark, and not only chatter: the kind of text that may be the name of a food in answer to "what is the allergy?"."""
+    words = re.findall(r"[^\W\d_]+", text, re.A)
+    return bool(words) and len(words) <= 4 and not re.search(r"[\d?]", text) and not all(w.lower() in _CHATTER for w in words)
 
 
 def _city_like(text: str) -> bool:
@@ -564,10 +599,9 @@ def _still_open(before: Sequence[Unresolved], asked: Sequence[Unresolved], new: 
         gave_value = q.field in _SCALARS and getattr(new, q.field) is not None
         gave_number = q.field == "number" and (new.guest_count is not None or new.budget_total is not None)
         named_allergy = q.field == "allergens" and q.key.startswith("allergy:") and not q.picks and bool(new.allergens)
-        said_diet = q.field == "dietary" and not q.key.startswith(partial_diets.KEY) and bool(new.dietary)
-        said_for_all = q.key.startswith(partial_diets.KEY) and any(p.value and DietaryRequirement(p.value) in new.dietary for p in q.picks)  # only the diet asked about, said for everyone, closes it
+        said_diet = q.field == "dietary" and bool(new.dietary)
         named_unclear = q.key.startswith("allergy_unclear:") and expecting == "allergens" and bool(new.allergens)  # only the answer to that question closes it: "also eggs" does not
-        if q.key in renewed or gave_value or gave_number or named_allergy or said_diet or said_for_all or named_unclear:
+        if q.key in renewed or gave_value or gave_number or named_allergy or said_diet or named_unclear:
             continue
         kept.append(q)
     return tuple([*kept, *asked])[:MAX_OPEN_QUESTIONS]
@@ -605,9 +639,6 @@ def _apply_answer(prior: IntakeDraft, answer: IntakeAnswer, today: date) -> Inta
                 fields["allergens"] = tuple(a for a in dict.fromkeys((*prior.allergens, *added)) if a not in removed)
             elif pick.field == "dietary":
                 fields["dietary"] = tuple(dict.fromkeys((*prior.dietary, DietaryRequirement(pick.value))))
-        elif pick.keep_words and item.field == "dietary":
-            words = re.sub(r"[^A-Za-z0-9' %-]", "", item.said).strip()[:60]  # "only some": the user's words go to the caterer as a food note, and nothing is set for everyone
-            fields["diet_notes"] = tuple(dict.fromkeys((*prior.diet_notes, *([words] if words else ()))))[:5]
         elif pick.keep_words:
             words = re.sub(r"[^A-Za-z' -]", "", item.said).strip()[:60]
             fields["allergy_unclear"] = tuple(dict.fromkeys((*prior.allergy_unclear, *([words] if words else ()))))[:5]
@@ -680,7 +711,6 @@ def raised_by(messages: Sequence[str], draft: IntakeDraft, today: date) -> list[
         out += [q for q in (reading.screen_guests(t, has_total=draft.guest_count is not None), reading.screen_budget(t, draft.guest_count)) if q]
         out += [allergies.question_for(s) for s in allergies.suspects(t)]
         out += allergies.unnamed_questions(t)
-        out += partial_diets.questions(t)
         if not any(rx.search(t) for rx, _ in mgr._DIETS) and (misspelt := diets.misspelt_diet(t)):
             out.append(misspelt)
     return list({q.key: q for q in out}.values())
@@ -695,6 +725,8 @@ def to_request(draft: IntakeDraft, raw_text: str, today: date, source: str = "ru
         raise IntakeError("still needed: " + ", ".join(draft.missing()))
     if draft.unresolved:
         raise IntakeError("still unresolved, answer these first: " + "; ".join(u.question for u in draft.unresolved))
+    if _group_larger_than_guests(draft):
+        raise IntakeError("a diet group is larger than the guest count; correct one of them")
     if skipped := [q for q in raised_by(list(messages) if messages else [raw_text], draft, today) if q.key not in draft.settled]:
         raise IntakeError("still unresolved (an answer was lost), answer these first: " + "; ".join(q.question for q in skipped))
     if draft.event_date < today:
@@ -729,7 +761,8 @@ def to_request(draft: IntakeDraft, raw_text: str, today: date, source: str = "ru
             city=draft.city.strip(),
             event_date=draft.event_date,
             budget_total=draft.budget_total,
-            dietary=draft.dietary,
+            dietary=tuple(dict.fromkeys((*draft.dietary, *(g.diet for g in draft.diet_groups if g.diet)))),
+            diet_groups=draft.diet_groups,
             allergens=draft.allergens,
             allergy_unclear=draft.allergy_unclear,
             diet_notes=draft.diet_notes,

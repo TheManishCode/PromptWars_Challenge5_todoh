@@ -205,40 +205,14 @@ def test_a_range_of_money_is_asked_with_both_ends_and_no_amount_is_chosen(talk, 
     assert sorted(int(p.value) for p in asked(t, "budget_total").picks) == list(ends)
 
 
-# ===================================================================== 4. a diet about some guests is not a diet for all
-
-SOME_GUESTS = [
-    ("a few", "a few guests are vegan", "vegan"),
-    ("percent", "about 30% of the guests are jain", "jain"),
-    ("half", "half of them eat only veg", "vegetarian"),
-    ("most", "most of us are vegetarian", "vegetarian"),
-    ("number of them", "12 of them are vegan", "vegan"),
-    ("one", "one guest is vegan", "vegan"),
-    ("some", "some relatives are jain", "jain"),
-]
+# ===================================================================== 4. diets for the whole event (the groups are in tests/test_intake_diet_groups.py)
 
 
-@pytest.mark.parametrize("label,phrase,diet", SOME_GUESTS, ids=[c[0] for c in SOME_GUESTS])
-def test_a_diet_said_about_some_guests_is_asked_and_not_set_for_everyone(talk, label, phrase, diet):
-    t = talk(f"{BASE}, {phrase}")
-    assert t.draft.dietary == () and not t.ready
-    q = asked(t, "dietary")
-    assert diet in q.question.lower() and len(q.picks) >= 2
 
 
-def test_everyone_sets_the_diet_and_only_some_keeps_the_words_without_setting_it(talk, press):
-    t = talk(f"{BASE}, a few guests are vegan")
-    everyone = press(t, "dietary", "everyone")
-    assert everyone.draft.dietary == (DietaryRequirement.VEGAN,) and everyone.ready
-    some = press(t, "dietary", "only some")
-    assert some.draft.dietary == () and some.ready and any("vegan" in w.lower() for w in some.draft.diet_notes), "the words are kept as a food note the caterer must confirm"
 
 
-def test_the_words_kept_for_some_guests_reach_the_request_with_their_number(talk, press):
-    msg = f"{BASE}, 12 of them are vegan"
-    t = press(talk(msg), "dietary", "only some")
-    request = intake.to_request(t.draft, msg, TODAY, messages=[msg])
-    assert request.dietary == () and any("12" in n and "vegan" in n.lower() for n in request.diet_notes)
+
 
 
 @pytest.mark.parametrize("phrase,diets", [
@@ -253,14 +227,8 @@ def test_a_diet_for_everyone_is_still_set_with_no_question(talk, phrase, diets):
     assert t.draft.dietary == diets and "dietary" not in open_fields(t) and t.ready
 
 
-def test_a_diet_for_the_whole_event_stays_beside_a_diet_for_some(talk):
-    t = talk(f"{BASE}, vegetarian food for everyone and a few guests are vegan")
-    assert t.draft.dietary == (DietaryRequirement.VEGETARIAN,) and "dietary" in open_fields(t) and not t.ready
 
 
-def test_two_groups_with_counts_ask_about_each(talk):
-    t = talk(f"{BASE}, 15 are jain and 6 are vegan")
-    assert t.draft.dietary == () and sorted(u.key for u in t.draft.unresolved if u.field == "dietary") == ["diet_group:jain", "diet_group:vegan"]
 
 
 def test_the_total_with_a_diet_beside_it_is_still_the_total(talk):
@@ -308,23 +276,29 @@ def test_a_number_that_belongs_to_a_date_or_an_amount_is_not_a_bare_number(talk)
     assert t.draft.event_date == date(2026, 12, 19) and "number" not in open_fields(t)
 
 
-# ===================================================================== 6. a question about who a diet is for does not hide the next fact, and no message is dropped silently
+# ===================================================================== 6. no message is dropped silently
 
-def test_a_bare_city_is_read_as_the_city_while_a_diet_question_is_open(talk):
-    t = talk("birthday for 30 guests on 15 December 2026, budget 40k, some of them are vegetarian", "Thane")
-    assert t.draft.city == "Thane" and "dietary" in open_fields(t) and not t.ready
+
+
+
+
 
 
 def test_a_message_that_answers_nothing_is_said_not_to_be_used_while_a_question_is_open(talk):
-    t = talk("birthday in Pune for 30 guests on 15 December 2026, budget 40k, some of them are vegetarian", "like 10")
+    t = talk(f"{BASE}, my aunt is allergic to kiwi", "like 10")
     assert any("like 10" in n and "could not" in n.lower() for n in t.notes), t.notes
-    assert "dietary" in open_fields(t) and t.draft.dietary == ()
+    assert "allergens" in open_fields(t)
 
 
-def test_the_question_quotes_only_the_clause_about_the_diet(talk):
-    t = talk(f"{BASE}, 4 of them are vegan and one girl cannot have gluten")
-    q = asked(t, "dietary")
-    assert "vegan" in q.said and "girl" not in q.said and "gluten" not in q.said
+@pytest.mark.parametrize("chatter", ["like 10", "thanks", "ok", "hmm let me think about it", "what about the venue?", "3"])
+def test_chatter_while_the_nameless_allergy_question_is_open_is_not_recorded_as_an_allergy(talk, chatter):
+    t = talk(f"{BASE}, my aunt is allergic to kiwi", chatter)
+    assert t.draft.allergy_unclear == () and "allergens" in open_fields(t) and not t.ready, (t.draft.allergy_unclear, open_fields(t))
+
+
+def test_a_real_second_allergy_word_is_still_recorded_when_answering_the_question(talk):
+    t = talk(f"{BASE}, my aunt is allergic to kiwi", "mangoes")
+    assert t.draft.allergy_unclear == ("mangoes",) or any("mango" in u.said.lower() for u in t.draft.unresolved), (t.draft.allergy_unclear, t.draft.unresolved)
 
 
 def test_a_question_raised_by_the_message_is_not_also_reported_as_unused(talk):
@@ -357,7 +331,7 @@ def test_a_count_after_except_is_not_a_competing_total(talk, text):
     assert t.draft.guest_count == 60 and "guest_count" not in open_fields(t)
 
 
-# ===================================================================== 7. typed answers to those questions, "except", and what is not planned
+# ===================================================================== 7. typed answers, and what is not planned
 
 @pytest.mark.parametrize("typed", ["keep", "Keep it", "keep as written", "as written", "keep my words"])
 def test_typing_keep_answers_the_nameless_allergy_question_and_is_not_itself_an_allergy(talk, typed):
@@ -365,40 +339,14 @@ def test_typing_keep_answers_the_nameless_allergy_question_and_is_not_itself_an_
     assert t.ready and t.draft.allergy_unclear == ("kiwi",), (t.draft.allergy_unclear, open_fields(t))
 
 
-@pytest.mark.parametrize("typed", ["only some", "Just some of them", "some of them", "only a few"])
-def test_typing_only_some_answers_the_one_open_diet_question(talk, typed):
-    t = talk(f"{BASE}, a few guests are vegan", typed)
-    assert t.ready and t.draft.dietary == () and any("vegan" in n.lower() for n in t.draft.diet_notes)
 
 
-@pytest.mark.parametrize("typed", ["everyone", "all of them", "everybody", "all guests"])
-def test_typing_everyone_answers_the_one_open_diet_question(talk, typed):
-    t = talk(f"{BASE}, a few guests are vegan", typed)
-    assert t.ready and t.draft.dietary == (DietaryRequirement.VEGAN,)
 
 
-def test_typing_only_some_does_not_pick_between_two_open_diet_questions(talk):
-    t = talk(f"{BASE}, 15 are jain and 6 are vegan", "only some")
-    assert len([u for u in t.draft.unresolved if u.field == "dietary"]) == 2 and not t.ready
 
 
-@pytest.mark.parametrize("phrase", [
-    "everyone is vegetarian except 5 people who eat chicken",
-    "all guests are vegetarian apart from 2 who eat egg",
-    "vegetarian for everyone other than my brothers",
-])
-def test_a_diet_with_an_exception_is_asked_and_not_set_for_everyone(talk, press, phrase):
-    t = talk(f"{BASE}, {phrase}")
-    assert t.draft.dietary == () and "dietary" in open_fields(t) and not t.ready
-    some = press(t, "dietary", "only some")
-    assert some.ready and any("vegetarian" in n.lower() and ("except" in n.lower() or "apart" in n.lower() or "other than" in n.lower()) for n in some.draft.diet_notes), some.draft.diet_notes
 
 
-def test_the_whole_clause_with_its_exception_reaches_the_request(talk, press):
-    msg = f"{BASE}, everyone is vegetarian except 5 people who eat chicken"
-    t = press(talk(msg), "dietary", "only some")
-    request = intake.to_request(t.draft, msg, TODAY, messages=[msg])
-    assert request.dietary == () and any("except 5 people who eat chicken" in n for n in request.diet_notes), request.diet_notes
 
 
 def test_a_diet_word_that_only_looks_like_an_exception_is_still_for_everyone(talk):
