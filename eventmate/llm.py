@@ -19,6 +19,7 @@ import json
 import os
 import re
 import threading
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -211,27 +212,57 @@ class OpenAICompatClient:
 
 
 class FallbackClient:
-    """Tries each provider in order; the first that answers wins. ``last_used`` says which one did."""
+    """Tries each provider in order; the first that answers wins. ``last_used`` says which one did.
 
-    def __init__(self, clients):
+    A provider that fails ``BREAKER_FAILURES`` times in a row is skipped for ``BREAKER_COOLDOWN_S`` seconds, so a dead endpoint costs one timeout, not one per request.
+    After the cool-down it gets a single trial call; if every provider is cooling down they are all tried anyway, because a late answer beats none.
+    """
+
+    BREAKER_FAILURES = 3
+    BREAKER_COOLDOWN_S = 30.0
+
+    def __init__(self, clients, clock=time.monotonic):
         self.clients = list(clients)
         self.last_used: str | None = None
+        self._clock = clock
+        self._fails: dict[str, int] = {}
+        self._open_until: dict[str, float] = {}
+        self._lock = threading.Lock()
 
     @property
     def name(self) -> str:
         return "+".join(f"{c.name}:{c.model}" for c in self.clients)
 
+    def _cooling(self, c) -> bool:
+        with self._lock:
+            return self._open_until.get(c.name, 0.0) > self._clock()
+
+    def _record(self, c, ok: bool) -> None:
+        with self._lock:
+            if ok:
+                self._fails.pop(c.name, None)
+                self._open_until.pop(c.name, None)
+                return
+            n = self._fails[c.name] = self._fails.get(c.name, 0) + 1
+            if n >= self.BREAKER_FAILURES:
+                self._open_until[c.name] = self._clock() + self.BREAKER_COOLDOWN_S
+                self._fails[c.name] = self.BREAKER_FAILURES - 1  # one failed trial re-opens it
+
     def complete(self, system: str, user: str, max_tokens: int) -> str:
         errors = []
-        for c in self.clients:
+        live = [c for c in self.clients if not self._cooling(c)] or self.clients
+        for c in live:
             try:
                 out = c.complete(system, user, max_tokens)
-                self.last_used = c.name
-                return out
             except consumption.ConsumptionError:
                 raise  # a limit is not a provider fault: another provider would be charged against the same limit
             except LLMError as exc:
+                self._record(c, False)
                 errors.append(str(exc))
+                continue
+            self._record(c, True)
+            self.last_used = c.name
+            return out
         raise LLMError("no model answered: " + "; ".join(errors))
 
 

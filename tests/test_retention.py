@@ -46,7 +46,7 @@ def busy_plan(em, chans, clock):
     em.grant_autoreply(pid, sender_name="Asha")
     chans["email"].inbox = [Inbound(channel="email", sender=d.recipient, external_id="<v1>", received_at=clock() + timedelta(minutes=10), body="Yes, free that day. Rs 650 per plate.")]
     em.poll_conversations()
-    em.jobs.start_job(pid, C.CATERER, {"cat-pune-annapurna": ("email", SECRET_CONTACT)}, "get a quote", clock() + timedelta(days=3), "Asha", min_quotes=1)
+    em.jobs.start_job(pid, C.CATERER, {"cat-pune-annapurna": ("email", SECRET_CONTACT)}, "get a quote", clock() + timedelta(days=365), "Asha", min_quotes=1)
     em.ideas.generate(em.store.latest(pid), ())
     em.save_lead(pid, kind="caterer", url="https://caterer.example/menu", domain="caterer.example", label="thali", unit="per_plate", low_inr=500, high_inr=700)
     em.shortlist.add_entry(pid, C.CATERER, "ext_" + "a" * 24)

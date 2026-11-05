@@ -209,3 +209,41 @@ def test_the_light_nvidia_model_is_a_fast_non_reasoning_choice_with_low_effort_a
     assert seen[1][0]["model"] == "openai/gpt-oss-20b" and seen[1][0]["reasoning_effort"] == "low" and seen[1][1] == 30
     monkeypatch.setenv("EVENTMATE_NVIDIA_MODEL_LIGHT", "vendor/other-light")
     assert client_from_env(tier="light", transport=t).clients[0].model == "vendor/other-light"
+
+
+# ------------------------------------------------------------------- circuit breaker
+
+
+class _Stub:
+    def __init__(self, name, fail):
+        self.name, self.model, self.fail, self.calls = name, "m", fail, 0
+
+    def complete(self, system, user, max_tokens):
+        self.calls += 1
+        if self.fail:
+            raise LLMError(f"{self.name} could not be reached")
+        return f"from {self.name}"
+
+
+def test_a_dead_provider_is_skipped_after_repeated_failures_then_retried_after_the_cooldown():
+    now = [0.0]
+    dead, live = _Stub("a", True), _Stub("b", False)
+    fb = FallbackClient([dead, live], clock=lambda: now[0])
+    for _ in range(FallbackClient.BREAKER_FAILURES):
+        assert fb.complete("s", "u", 10) == "from b"
+    assert dead.calls == FallbackClient.BREAKER_FAILURES
+    assert fb.complete("s", "u", 10) == "from b" and dead.calls == FallbackClient.BREAKER_FAILURES  # skipped while open
+    now[0] += FallbackClient.BREAKER_COOLDOWN_S + 1
+    dead.fail = False
+    assert fb.complete("s", "u", 10) == "from a" and fb.last_used == "a"  # trial call succeeds and closes it
+
+
+def test_when_every_provider_is_cooling_down_they_are_still_tried():
+    now = [0.0]
+    a, b = _Stub("a", True), _Stub("b", True)
+    fb = FallbackClient([a, b], clock=lambda: now[0])
+    for _ in range(FallbackClient.BREAKER_FAILURES):
+        with pytest.raises(LLMError):
+            fb.complete("s", "u", 10)
+    a.fail = False
+    assert fb.complete("s", "u", 10) == "from a"
