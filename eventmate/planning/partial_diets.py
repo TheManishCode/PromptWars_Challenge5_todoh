@@ -70,9 +70,9 @@ def _about_guests(text: str, m: re.Match) -> bool:
     return not (_MENU.search(since) or _MENU_AFTER.match(text, after))
 
 
-def _size(before: str) -> tuple[int | None, str | None]:
-    """(count, share) from the words before a diet word: the nearest number the user wrote, else the word they used ("a few", "half", "30%"). The nearest one, because "40 are jain and 25 are
-    vegan" has two."""
+def _size(before: str) -> tuple[int | None, str | None, int | None]:
+    """(count, share, where it starts in ``before``) from the words before a diet word: the nearest number the user wrote, else the word they used ("a few", "half", "30%"). The nearest
+    one, because "40 are jain and 25 are vegan" has two."""
     found: list[tuple[int, int | None, str | None]] = []
     for m in _PERCENT.finditer(before):
         found.append((m.start(), None, m.group(0).replace(" ", "")))
@@ -87,9 +87,9 @@ def _size(before: str) -> tuple[int | None, str | None]:
         else:
             found.append((m.start(), None, "a few" if word == "few" and re.search(r"\ba\s+few\b", before, _F) else word))
     if not found:
-        return None, None
-    _, count, share = max(found, key=lambda f: f[0])
-    return count, share
+        return None, None, None
+    at, count, share = max(found, key=lambda f: f[0])
+    return count, share, at
 
 
 def _words(said: str) -> str:
@@ -120,10 +120,12 @@ def split(text: str) -> tuple[tuple[D, ...], list[DietGroup]]:
             wide.append(diet)  # a mention with no such words, or one that only has an exception, is the whole event's
         if partial:
             m = partial[0]
-            count, share = _size(_clause_before(text, m.start()))
+            before = _clause_before(text, m.start())
+            count, share, at = _size(before)
             if count is None and share is None:
                 count = next((n for n, said in counted if rx.search(said)), None)
-            if g := _group(diet, count, share, False, _clause_around(text, m.start(), m.end())):
+            said = f"{before[at:]} {m.group(0)}" if at is not None else _clause_around(text, m.start(), m.end())  # from its own quantity to the diet word, not the whole clause
+            if g := _group(diet, count, share, False, said):
                 groups.append((m.start(), g))
         for m in (m for m in mentions if m not in partial and _EXCEPTION.search(_clause_full(text, m.start()))):
             clause = _clause_full(text, m.start())

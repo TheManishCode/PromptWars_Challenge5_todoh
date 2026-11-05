@@ -93,6 +93,18 @@ def test_an_exception_to_a_whole_event_diet_is_kept_as_an_exception_group(talk, 
     assert t.ready and not t.draft.unresolved
 
 
+def test_each_group_keeps_only_its_own_words(talk):
+    t = talk(f"{BASE}, 40 are jain and 25 are vegan")
+    assert {g.words for g in t.draft.diet_groups} == {"40 are jain", "25 are vegan"}, [g.words for g in t.draft.diet_groups]
+    t = talk(f"{BASE}, half are non veg and half are veg")
+    assert {g.words for g in t.draft.diet_groups} == {"half are non veg", "half are veg"}, [g.words for g in t.draft.diet_groups]
+
+
+def test_the_groups_keep_the_order_the_user_wrote_them_in(talk):
+    t = talk(f"{BASE}, 25 are vegan and 40 are jain")
+    assert [g.diet for g in t.draft.diet_groups] == [D.VEGAN, D.JAIN]
+
+
 def test_an_exception_whose_diet_is_not_listed_is_kept_in_the_users_words_for_the_caterer(talk):
     t = talk(f"{BASE}, all guests are vegetarian apart from 2 who eat egg")
     assert any("apart from 2" in n and "egg" in n for n in t.draft.diet_notes), t.draft.diet_notes
