@@ -24,7 +24,7 @@ from pydantic import Field, StrictInt, ValidationError, field_validator
 
 from eventmate.agents import manager as mgr
 from eventmate.llm import LLMClient, PromptError, PromptStore
-from eventmate.planning import allergies, diets, partial_diets, reading
+from eventmate.planning import allergies, diets, partial_diets, reading, relative_dates
 from eventmate.planning import cities as city_aliases
 from eventmate.planning.questions import EXPECTABLE, Pick, Unresolved, clip, describe_changes, long_date, money
 from eventmate.planning.community import load_profiles, match_subtype
@@ -181,16 +181,43 @@ def _read_event_type(t: str, notes: list[str]) -> tuple[EventType | None, str | 
     event_type = next((et for rx, et in mgr._EVENT_TYPES if rx.search(t)), None)
     if event_type is EventType.WEDDING and (m := _WEDDING_FUNCTION.search(t)) and not _WEDDING_WORD.search(t):
         notes.append(f'I read "{m.group(0)}" as part of a wedding. Please check that it is right.')
-    if event_type is not None or (hit := match_subtype(t)) is None:
+    if event_type is not None:
         return event_type, None
+    if (hit := match_subtype(t)) is None:
+        if m := mgr._OTHER_EVENTS.search(t):
+            notes.append(f'The planner has no event type for "{m.group(0).lower()}", so it will be planned as "other" (known types: wedding, birthday, engagement, corporate, conference).')
+            return EventType.OTHER, None
+        return None, None
     label = load_profiles().get(hit[0]).label
     if "community" not in hit[1]:
         notes.append(f"I read this as a community event ({label}) because you wrote '{hit[1]}'. Please check that it is right.")
     return EventType.COMMUNITY, hit[0]
 
 
+_OWN_VENUE = re.compile(
+    r"\bvenue\s+(?:we|i)\s+(?:already\s+)?(?:have|got|booked)\b|\b(?:we|i)\s+(?:already\s+)?(?:have|got|booked)\s+(?:a\s+|the\s+|our\s+(?:own\s+)?)?venue\b|\bvenue\s+(?:is\s+)?(?:already\s+)?(?:booked|fixed|done|sorted|ready|hai)\b|\b(?:own|our\s+own)\s+venue\b",
+    re.I | re.A,
+)
+
+
+_OUTSIDE = (
+    (re.compile(r"\bdjs?\b|\bsound\s+system\b|\b(?:mic|mics|microphones?|speakers?\s+system)\b", re.I | re.A), "a DJ or sound"),
+    (re.compile(r"\bdecor\w*|\bflowers?\b|\bbackdrop\b", re.I | re.A), "decor"),
+    (re.compile(r"\bstage\b", re.I | re.A), "a stage"),
+    (re.compile(r"\bprojector\b|\bslideshow\b|\bled\s+screen\b", re.I | re.A), "a projector or screen"),
+    (re.compile(r"\b(?:rooms?\s+for|accommodation|lodging)\b", re.I | re.A), "rooms"),
+    (re.compile(r"\bmagic\s+show\b|\bgames\b|\bentertainment\b|\blive\s+(?:music|band|counter)\b", re.I | re.A), "entertainment or a live counter"),
+)
+
+
+def _outside_the_planner(t: str) -> str:
+    """What the message asks for that the planner has no vendor type for, in words ("a DJ or sound, decor and a stage"). Empty when there is nothing."""
+    found = [label for rx, label in _OUTSIDE if rx.search(t)]
+    return found[0] if len(found) == 1 else ", ".join(found[:-1]) + " and " + found[-1] if found else ""
+
+
 def _read_services_and_reminders(t: str) -> tuple[list[VendorCategory], list[ReminderKind]]:
-    services = [VendorCategory.VENUE] if re.search(r"\bvenue\b", t, re.I | re.A) else []
+    services = [VendorCategory.VENUE] if re.search(r"\bvenue\b", t, re.I | re.A) and not _OWN_VENUE.search(t) else []
     if mgr._mentioned(mgr._CATERER, t):
         services.append(VendorCategory.CATERER)
     if mgr._mentioned(mgr._PHOTO, t):
@@ -225,16 +252,32 @@ def _rule_draft(text: str, today: date, notes: list[str], known: tuple[str, ...]
     for paid in mgr.paid_amounts(t):
         notes.append(f"I did not use {money(paid)} as the budget, because you wrote that it was already paid.")
     guest_question = reading.screen_guests(t, has_total=prior.guest_count is not None)
+    if guest_question is None and not mgr.guest_counts(t).totals and not mgr.guest_counts(t).subgroups:
+        guest_question = reading.guest_typo(t)
     guests = None if guest_question else mgr._parse_guests(t, [])
-    budget_question = reading.screen_budget(t, guests or prior.guest_count)
+    if guests is None and (part := mgr.guest_counts(mgr._blank_dates(t)).subgroups) and prior.guest_count is not None:
+        notes.append(f'I did not change the guest count ({prior.guest_count}): "{clip(part[0][1], 40)}" is about only some of the guests.')
+    if (crowd := mgr.crowd_parts(t)) and guests == sum(crowd):
+        notes.append(f"I added the {crowd[0]} and the {crowd[1]} you wrote to make {guests} guests. Please check that it is right.")
+    budget_question = reading.screen_budget(t, guests or prior.guest_count) or reading.itemised_budget(t)
     city = city_aliases.read(t, known, answer=answering == "city")
     when = mgr._parse_dates(t, today, problems, assumptions)
+    if two := relative_dates.either(t, today):
+        asked.append(two)  # "19th or 20th December": the date is the user's to choose, and the one the parser happened to read is not it
+        when = None
+    elif when is not None and (clash := relative_dates.weekday_mismatch(t, when, today)):
+        asked.append(clash)
+        when = None
+    elif when is None and (anchor := prior.event_date or next((date.fromisoformat(p.value) for q in prior.unresolved if q.field == "event_date" for p in q.picks if p.value), None)):
+        when = relative_dates.day_only(t, anchor, today)  # "lets lock 13th": the day of the month the user was already talking about
     budget_problems: list[str] = []
     budget = None if budget_question else mgr._parse_budget(t, budget_problems)
     asked += [q for q in (guest_question, budget_question, city.unresolved) if q]
-    if when is None and not any("multiple different" in p for p in problems):
+    if when is None and not any(q.field == "event_date" for q in asked) and not any("multiple different" in p for p in problems):
         if typo := reading.month_typo(t, today):
             asked.append(typo)
+        elif rel := relative_dates.relative(t, today):
+            asked.append(rel)  # "next Saturday": the real dates it could be, pressed by the user; an earlier date does not stand in meanwhile
         elif hint := reading.date_hint(t):
             notes.append(hint)
     # only ambiguity or invalid values deserve a note; plain absence becomes a question
@@ -245,6 +288,10 @@ def _rule_draft(text: str, today: date, notes: list[str], known: tuple[str, ...]
     wants_in, wants_out = mgr._mentioned(mgr._INDOOR, t), mgr._mentioned(mgr._OUTDOOR, t)
     setting = VenueSetting.INDOOR if wants_in and not wants_out else VenueSetting.OUTDOOR if wants_out and not wants_in else None
     services, reminders = _read_services_and_reminders(t)
+    if outside := _outside_the_planner(t):
+        notes.append(f"The planner does not plan {outside}. It covers a venue, a caterer and a photographer, so {'that is' if ',' not in outside and ' and ' not in outside else 'those are'} not in the plan or its cost.")
+    if _OWN_VENUE.search(t):
+        notes.append("You said you already have a venue. The planner always includes one, so the plan will still price a venue; read that line as a placeholder.")
     allergy, diet = allergies.read(t), diets.read(t)
     suspects = allergies.suspects(t)
     asked += [allergies.question_for(sus) for sus in suspects]
@@ -311,6 +358,8 @@ def _merge(base: IntakeDraft, new: IntakeDraft) -> IntakeDraft:
             merged[name] = tuple(dict.fromkeys((*getattr(base, name), *getattr(new, name))))  # an allergy once stated is never replaced by a later message, only added to
         elif name == "diet_groups":
             continue  # below: a group is added or replaced by the same diet's group, never wiped by an unrelated message
+        elif name == "event_type" and value == EventType.OTHER and base.event_type not in (None, EventType.OTHER):
+            continue  # "other" is what a word like "party" gives; it never replaces a type the user already gave
         elif value not in (None, ()):
             merged[name] = value
     groups = base.diet_groups
@@ -411,6 +460,7 @@ def propose(
     *,
     expecting: str | None = None,
     answer: IntakeAnswer | None = None,
+    model_when: str = "always",
 ) -> IntakeTurn:
     """Read the newest message, merge it into the reviewed draft and say what is still needed. Pure proposal.
 
@@ -439,6 +489,8 @@ def propose(
         number = reading.cued_number(latest)
     if not asked and not new_found(new) and number is not None and prior_has_facts(prior) and not _answered(expecting, new):
         asked = [reading.number_question(number, prior.guest_count, prior.budget_total)]  # before any model is asked, so the model cannot answer it
+    if llm is not None and model_when == "auto" and not _model_could_add(prior, new, [*asked, *prior.unresolved]):
+        llm = None  # the rules read every fact a plan needs, or the user is already being asked about what is missing: a model call would take seconds and could add nothing it is allowed to keep
     if llm is not None:
         ai, reason = _llm_draft(llm, prompts or PromptStore(), logs, latest, prior, today, "intake")
         if ai is None:
@@ -475,7 +527,19 @@ def propose(
 _SCALAR_FACTS = ("event_type", "community_subtype", "guest_count", "city", "event_date", "budget_total", "venue_setting")
 
 
+_YES = re.compile(r"(?:yes|yeah|yep|yup|ya|haan|han|ok|okay|correct|right|sure|exactly|that'?s\s+(?:right|correct)|yes\s+please)", re.I | re.A)
+_YES_KEYS = frozenset({"number", "guest_count", "budget_total", "event_date", "city"})  # a yes is never read for an allergy or a diet: those are pressed
 _KEEP = re.compile(r"(?:yes[, ]+)?(?:please[, ]+)?keep(?:\s+(?:it|them|that))?(?:\s+(?:as\s+)?(?:written|is|my\s+words|the\s+words))?|as\s+written|leave\s+it(?:\s+as\s+is)?", re.I | re.A)
+
+
+def _model_could_add(prior: IntakeDraft, new: IntakeDraft, open_questions: Sequence[Unresolved]) -> bool:
+    """Is a required fact still empty with no question open about it? Only then can a model's reading be kept (it never fills a fact someone is being asked about)."""
+    try:
+        merged = _merge(prior, new)
+    except ValidationError:
+        return True
+    asked = {q.field for q in open_questions} | ({"guest_count", "budget_total"} if any(q.field == "number" for q in open_questions) else set())
+    return any(f not in asked for f in merged.missing())
 
 
 def _typed_answer(prior: IntakeDraft, text: str) -> IntakeAnswer | None:
@@ -484,8 +548,11 @@ def _typed_answer(prior: IntakeDraft, text: str) -> IntakeAnswer | None:
     if len(prior.unresolved) != 1:
         return None
     q = prior.unresolved[0]
-    if q.key.startswith("allergy_unclear:") and _KEEP.fullmatch(text.strip().strip(".!?, ")):
+    plain = text.strip().strip(".!?, ")
+    if q.key.startswith("allergy_unclear:") and _KEEP.fullmatch(plain):
         return IntakeAnswer(key=q.key, pick=next(i for i, p in enumerate(q.picks) if p.keep_words))
+    if q.key in _YES_KEYS and len(q.picks) == 1 and q.picks[0].value is not None and _YES.fullmatch(plain):
+        return IntakeAnswer(key=q.key, pick=0)  # "Did you mean 75 guests?" "yes": the one option, pressed in words
     return None
 
 
@@ -668,7 +735,7 @@ def _turn(draft: IntakeDraft, prior: IntakeDraft, notes: list[str], known: tuple
     changes = describe_changes(prior, draft) if prior_has_facts(prior) else ()
     if prior_has_facts(prior) and latest and not changes and not draft.unresolved and not said_something:
         notes.append("I could not find a change in that message. Say what to change, for example “150 guests”, “budget 3 lakh”, “move it to 19 December 2026” or “not Pune, Mumbai”.")
-    raised_now = {q.key for q in draft.unresolved} - {q.key for q in prior.unresolved}  # a question this message raised is its answer: it was used
+    raised_now = {(q.key, q.said) for q in draft.unresolved} - {(q.key, q.said) for q in prior.unresolved}  # a question this message raised (or asked again about other words) is its answer: it was used
     if prior_has_facts(prior) and latest and new is not None and draft.unresolved and not raised_now and not changes and not said_something and not new_found(new):
         notes.append(f'I could not use "{clip(latest, 40)}" for the question above. Press one of the options, or say it another way.')  # an open question never swallows a message without saying so
     if not prior_has_facts(prior) and latest and new is not None and not new_found(new) and not draft.unresolved:

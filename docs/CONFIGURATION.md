@@ -13,6 +13,8 @@
 | `EVENTMATE_FD`, `EVENTMATE_VAL` | Paths to Fast Downward / VAL if not in the default locations |
 | `EVENTMATE_BROWSER=1` | (`pip install '.[browser]'`) A read-only browser for vendor pages that show their text only after scripts run (needs Playwright and Chromium; `EVENTMATE_BROWSER_NO_SANDBOX=1` inside a container). It clicks and types nothing, Chromium has no network of its own (every request is answered by the same checked, pinned fetch as a static page), and the text it returns goes to the price and contact readers, never to a model |
 | `NVIDIA_API_KEY`, `OPENROUTER_API_KEY` (`EVENTMATE_ENABLE_LLM=0` turns models off) | Models: NVIDIA for heavy work, OpenRouter free models for light work and as backup; no SDK needed |
+| `EVENTMATE_INTAKE_MODEL` (`auto` by default; `always`) | Intake: `auto` asks a model only when a fact a plan needs is still empty and nobody is being asked about it. Complete briefs are then read by the rules alone, in milliseconds instead of the model's 5-25 s per message. `always` asks a model on every message |
+| `EVENTMATE_INTAKE_TIER` (unset; `light`) | Intake: `light` reads briefs with the light model tier. Off by default: an unreachable light provider costs its whole timeout (30 s) on every message that reaches a model |
 
 Secrets are only read from the environment and never written to disk or logs.
 

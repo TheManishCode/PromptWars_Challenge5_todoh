@@ -57,7 +57,7 @@ from eventmate.pricing.ledger import Ledger
 from eventmate.pricing.observations import ObservationStore
 from eventmate.pricing.vendorscore import score_category
 from eventmate.planning import intake
-from eventmate.llm import LLMClient, client_from_env
+from eventmate.llm import FallbackClient, LLMClient, client_from_env
 from eventmate.logs import RunLogs
 from eventmate.planning.rules import Advisory, advisories_for
 from eventmate.plan_store import PlanStore, draft_from_plan
@@ -155,6 +155,7 @@ class EventMate:
         planner = PlannerAgent(self.logs, scheduler, symbolic or SymbolicChecker())
         self.validator = ValidatorAgent(self.repo, self.logs, scheduler.policy, require_symbolic, budget_policy)
         self.llm = llm
+        self._intake_light = None
         self.ideas = IdeaService(self.store.root, self.logs, self.repo, llm)
         self.explainer = ExplainerAgent(self.logs, llm)
         self.manager = ManagerAgent(self.repo, decisions, budget, vendor, guest, planner, self.validator, self.explainer, self.store)
@@ -181,7 +182,16 @@ class EventMate:
         """Propose a draft from the organiser's words. Nothing is planned or stored until ``confirm_intake``.
 
         ``expecting`` is the fact the last question was about; ``answer`` is an option the user pressed (see ``intake.propose``)."""
-        return intake.propose(messages, prior, today or date.today(), self.repo.cities(), self.logs, self.llm, expecting=expecting, answer=answer)
+        return intake.propose(messages, prior, today or date.today(), self.repo.cities(), self.logs, self._intake_model(), expecting=expecting, answer=answer, model_when=os.environ.get("EVENTMATE_INTAKE_MODEL", "auto"))
+
+    def _intake_model(self):
+        """The model that reads a brief. Normally the app's own; ``EVENTMATE_INTAKE_TIER=light`` gives it the light tier (a small model, a few seconds when its provider is up). Not the default: a
+        light model that cannot be reached costs its whole timeout on every message, and on the machine this was measured on the heavy one was the one that answered. A model handed in (a test's fake) is used as it is."""
+        if os.environ.get("EVENTMATE_INTAKE_TIER") != "light" or not isinstance(self.llm, FallbackClient):
+            return self.llm
+        if self._intake_light is None:
+            self._intake_light = client_from_env(tier="light") or self.llm
+        return self._intake_light
 
     def confirm_intake(self, draft: intake.IntakeDraft, raw_text: str, today: date | None = None, guest_list_id: str | None = None, source: str = "rule:parser", messages=None) -> PlanOutcome:
         """The user confirmed the review card: run the full pipeline on exactly what they approved."""

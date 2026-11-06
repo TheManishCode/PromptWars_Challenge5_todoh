@@ -390,10 +390,10 @@ def test_an_unknown_city_given_as_the_answer_to_the_city_question_is_accepted_as
 
 
 def test_an_unknown_lowercase_city_inside_a_brief_is_asked_for_by_name_and_then_accepted(talk):
-    t = talk("wedding for 100 guests in thane on 12 December 2026, budget 2 lakh")
+    t = talk("wedding for 100 guests in gundlupet on 12 December 2026, budget 2 lakh")
     assert t.draft.city is None and t.asking == "city"
     assert "just the city name" in t.question.lower(), "the question says how to answer"
-    assert talk("wedding for 100 guests in thane on 12 December 2026, budget 2 lakh", "thane").draft.city == "Thane"
+    assert talk("wedding for 100 guests in gundlupet on 12 December 2026, budget 2 lakh", "gundlupet").draft.city == "Gundlupet"
 
 
 @pytest.mark.parametrize("text", ["in the evening", "in December", "in total", "in 3 days", "in vegetarian style", "at 6pm", "near the stage"])

@@ -31,9 +31,39 @@ ALIASES: dict[str, str] = {
     "hyderabad": "Hyderabad", "hyd": "Hyderabad",
     "jaipur": "Jaipur", "ahmedabad": "Ahmedabad",
 }
+# Places the vendor data does not hold, spelled the way the state now writes them, and the localities of the large cities people name instead of the city ("Koramangala" is Bengaluru).
+# They are here so a message that names one is read as that place and not asked about again; a city with no vendor records still fails at planning, and the intake says so.
+_MORE_CITIES = {
+    "mysuru": ("mysore",), "mandya": (), "udupi": ("udipi",), "hubballi": ("hubli", "hubli-dharwad", "hubballi-dharwad"), "dharwad": (), "mangaluru": ("mangalore",), "madikeri": ("mercara",),
+    "belagavi": ("belgaum", "belgavi"), "kalaburagi": ("gulbarga",), "shivamogga": ("shimoga",), "tumakuru": ("tumkur",), "hassan": (), "davanagere": ("davangere",), "ballari": ("bellary",),
+    "vijayapura": ("bijapur",), "chikkamagaluru": ("chikmagalur", "chikmagaluru"), "coorg": ("kodagu",), "ooty": ("udhagamandalam", "udagamandalam"), "coimbatore": ("kovai",), "madurai": (),
+    "salem": (), "tiruchirappalli": ("trichy", "tiruchi"), "vellore": (), "tirunelveli": ("nellai",), "kozhikode": ("calicut",), "thrissur": ("trichur",), "palakkad": ("palghat",),
+    "visakhapatnam": ("vizag", "vishakhapatnam"), "vijayawada": (), "tirupati": (), "guntur": (), "nagpur": (), "nashik": ("nasik",), "aurangabad": (), "kolhapur": (), "indore": (),
+    "bhopal": (), "lucknow": (), "kanpur": (), "patna": (), "ranchi": (), "bhubaneswar": (), "guwahati": (), "chandigarh": (), "amritsar": (), "surat": (), "rajkot": (), "goa": ("panaji", "panjim"),
+    "noida": (), "ghaziabad": (), "faridabad": (), "dehradun": (), "jodhpur": (), "udaipur": (), "varanasi": ("banaras", "benares"), "thane": (), "vasai": (),
+}
+_LOCALITIES = {
+    "Bengaluru": ("koramangala", "indiranagar", "hsr layout", "hsr", "electronic city", "whitefield", "jayanagar", "marathahalli", "jp nagar", "btm layout", "btm", "malleshwaram", "yelahanka", "hebbal",
+                  "bellandur", "sarjapur", "banashankari", "basavanagudi", "rajajinagar", "bannerghatta", "kr puram", "domlur", "mg road", "brigade road", "frazer town", "yeshwanthpur"),
+    "Mumbai": ("andheri", "bandra", "powai", "juhu", "colaba", "worli", "borivali", "malad", "goregaon", "dadar", "chembur", "kurla", "ghatkopar", "versova"),
+    "Pune": ("kothrud", "hinjewadi", "baner", "viman nagar", "koregaon park", "hadapsar", "wakad", "aundh", "kharadi", "pimpri", "chinchwad"),
+    "Delhi": ("dwarka", "rohini", "saket", "connaught place", "karol bagh", "lajpat nagar", "vasant kunj", "janakpuri"),
+    "Hyderabad": ("gachibowli", "hitech city", "hi-tech city", "madhapur", "banjara hills", "jubilee hills", "secunderabad", "kondapur"),
+    "Chennai": ("t nagar", "adyar", "anna nagar", "velachery", "mylapore", "nungambakkam", "tambaram", "porur", "omr"),
+    "Kolkata": ("salt lake", "park street", "new town", "howrah"),
+}
+for _c, _aliases in _MORE_CITIES.items():
+    ALIASES.setdefault(_c, _c.capitalize())
+    for _a in _aliases:
+        ALIASES.setdefault(_a, _c.capitalize())
+for _parent, _places in _LOCALITIES.items():
+    for _p in _places:
+        ALIASES.setdefault(_p, _parent)
+ALIASES["mysore"] = "Mysuru"
+PREP_ONLY = frozenset({"hassan", "salem", "goa", "surat", "patna", "thane", "omr", "hsr", "btm"})  # also a person's name or a word: a city only after "in", "at" or "near"
 _ALTERNATION = "|".join(sorted(map(re.escape, ALIASES), key=lambda a: (-len(a), a)))
 # a city written on its own, with no "in" before it: the longer spellings, any case, and the airport-style codes only in capitals (a lowercase "bom" is not Mumbai)
-BARE = re.compile(rf"(?<!\w)(?:{'|'.join(sorted((a for a in ALIASES if len(a) >= 4), key=lambda a: (-len(a), a)))}|(?-i:BLR|HYD|BOM))(?!\w)", re.I)
+BARE = re.compile(rf"(?<!\w)(?:{'|'.join(sorted((a for a in ALIASES if len(a) >= 4 and a not in PREP_ONLY), key=lambda a: (-len(a), a)))}|(?-i:BLR|HYD|BOM))(?!\w)", re.I)
 AFTER_PREPOSITION = re.compile(rf"\b(?:in|at|near)\s+({_ALTERNATION})\b", re.I | re.A)
 
 
@@ -52,11 +82,14 @@ _MONTHS = "jan feb mar apr may jun jul aug sep sept oct nov dec january february
 _NOT_A_PLACE = frozenset(
     _MONTHS + """the a an my our this that your their his her its total all case order advance addition general time mind person people style spirit touch charge day days week weeks weekend
     weekday evening morning afternoon night noon hotel home house hall garden banquet budget vegetarian veg non jain halal vegan indoor outdoor party wedding birthday engagement lakh lac
-    crore rs inr rupees guests guest pax yes no ok okay thanks thank please sure maybe none nothing in at near on for with and or by to from upto under over about around approx it is city""".split()
+    crore rs inr rupees guests guest pax monday tuesday wednesday thursday friday saturday sunday tomorrow today tonight yesterday ghar office mein kuch sabhi yes no ok okay thanks thank please sure maybe none nothing in at near on for with and or by to from upto under over about around approx it is city""".split()
 )
 _NEGATING = re.compile(r"(?:\bnot|\bnever|\bexcept|\bnahi|\bnahin|\bother\s+than|\brather\s+than|\binstead\s+of|\bno)\s+(?:in\s+|at\s+|near\s+|the\s+)?$", re.I)
 _AFTER_PREPOSITION_WORDS = re.compile(r"\b(?:in|at|near)\s+([^\W\d_][\w.'-]*(?:\s+[^\W\d_][\w.'-]*)?)", re.I | re.A)
 _LABELLED = re.compile(r"\bcity\s*(?:is|:|=|-)\s*([^\W\d_][\w.'-]*(?:\s+[^\W\d_][\w.'-]*)?)", re.I | re.A)
+_CHANGE_TO = re.compile(r"\b(?:change|make|set|shift|move|switch|update)\s+(?:the\s+|my\s+)?(?:city|town|location|place)\s+(?:to|as)\s+([^\W\d_][\w.'-]*(?:\s+[^\W\d_][\w.'-]*)?)", re.I | re.A)
+_MEIN = re.compile(r"(?<![\w.'-])([^\W\d_][\w.'-]{3,})\s+(?:mein|mai)\b", re.I | re.A)
+_DESCRIPTOR = frozenset("traditional south north east west indian style veg menu food party function hall palace grounds ground resort banquet club restaurant park lawn lawns road cross circle temple".split())
 _PLACE_NAME = re.compile(r"[^\W\d_]+(?:[ .'-][^\W\d_]+){0,2}")
 _ANSWER_PREFIX = re.compile(r"^(?:in|at|near|it'?s|its|it\s+is|the\s+city\s+is|city\s*(?:is|:))\s+", re.I)
 NEAR_CUTOFF = 0.74
@@ -79,7 +112,7 @@ def _tables(known: tuple[str, ...]):
     for k in known:
         names.setdefault(k.lower(), k)
     by_length = sorted(names, key=lambda a: (-len(a), a))
-    anywhere = re.compile(rf"(?<!\w)(?:{'|'.join(map(re.escape, (a for a in by_length if len(a) >= 4)))}|(?-i:BLR|HYD|BOM))(?!\w)", re.I | re.A)
+    anywhere = re.compile(rf"(?<!\w)(?:{'|'.join(map(re.escape, (a for a in by_length if len(a) >= 4 and a not in PREP_ONLY)))}|(?-i:BLR|HYD|BOM))(?!\w)", re.I | re.A)
     after_prep = re.compile(rf"\b(?:in|at|near)\s+({'|'.join(map(re.escape, by_length))})\b", re.I | re.A)
     return names, anywhere, after_prep
 
@@ -120,6 +153,14 @@ def _suggestion(typed: str, suggest: str) -> Unresolved:
     )
 
 
+def _which_name(first: str, whole: str) -> Unresolved:
+    return Unresolved(
+        key="city", field="city", said=clip(whole, 40),
+        question=f'Is the city "{clip(first, 40)}" or "{clip(whole, 40)}"? I have no vendor records for either.',
+        picks=(Pick(label=_as_written(first), field="city", value=_as_written(first)), Pick(label=_as_written(whole), field="city", value=_as_written(whole))),
+    )
+
+
 def _conflict(cities: list[str]) -> Unresolved:
     return Unresolved(
         key="city", field="city", said=clip(" and ".join(cities), 80),
@@ -131,11 +172,11 @@ def _conflict(cities: list[str]) -> Unresolved:
 def _place_like_words(text: str) -> list[str]:
     """Words the user wrote after "in", "at" or "near" (or after "city is") that could be a place, whole name first: "Navi Mumbay", then "Navi". Ordinary words are left out."""
     out: list[str] = []
-    for m in (*_LABELLED.finditer(text), *_AFTER_PREPOSITION_WORDS.finditer(text)):
+    for m in (*_LABELLED.finditer(text), *_CHANGE_TO.finditer(text), *_AFTER_PREPOSITION_WORDS.finditer(text), *_MEIN.finditer(text)):
         words = [w.strip(".,;:!?'\"()") for w in m.group(1).split()]
         if not words[0] or words[0].lower() in _NOT_A_PLACE:
             continue
-        if len(words) == 2 and words[1] and words[1].lower() not in _NOT_A_PLACE and words[0][:1].isupper() == words[1][:1].isupper():
+        if len(words) == 2 and words[1] and words[1].lower() not in _NOT_A_PLACE and words[1].lower() not in _DESCRIPTOR and words[0][:1].isupper() == words[1][:1].isupper():
             out.append(f"{words[0]} {words[1]}")
         out.append(words[0])
     return out
@@ -165,7 +206,15 @@ def read(text: str, known: Iterable[str] = (), *, answer: bool = False) -> CityR
             return CityReading(unresolved=_suggestion(typed, suggest), removed=removed)
     for typed in words:
         if typed[:1].isupper() and all(p[:1].isupper() for p in typed.split()):
+            if len(typed.split()) == 2 and (first := typed.split()[0]) and any(typed.split()[1].lower() not in _NOT_A_PLACE for _ in (0,)):
+                return CityReading(unresolved=_which_name(first, typed), removed=removed)  # two capitals could be one name or a place and a word after it ("Mandya Traditional"): the user says which
             return CityReading(city=_as_written(typed), removed=removed)  # a capitalised name is a place; a lowercase word after "in" is not, so it is asked for by name
+    change = _CHANGE_TO.search(text)
+    if change and change.group(1).split()[0].lower() not in _NOT_A_PLACE and len(change.group(1).split()[0]) >= 3:
+        return CityReading(city=_as_written(change.group(1).split()[0]), removed=removed)  # "change city to coimbatore": said to be the city, in any case
+    mein = _MEIN.search(text)
+    if mein and mein.group(1).lower() not in _NOT_A_PLACE:
+        return CityReading(city=_as_written(mein.group(1)), removed=removed)  # "tumkur mein": the place written before "in", in Hindi
     label = _LABELLED.search(text)
     if label and label.group(1).split()[0].lower() not in _NOT_A_PLACE:
         return CityReading(city=_as_written(label.group(1).split()[0]), removed=removed)  # "city: nagpur": the user said it is the city

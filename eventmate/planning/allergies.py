@@ -63,9 +63,10 @@ _STOP = frozenset("""a an the to of and or also is are was has have had hai hain
  allergic allergy allergies alerji intolerant intolerance for from with in on at by as be been being that this these those there here who whom which what when where
  guest guests people person persons kids kid child children son daughter mother father mom dad wife husband friend friends family anyone someone everyone one two three
  mere meri mera hamare humare unhe unko usse unse uska uski anything nothing something
- spicy spice spices food foods meat chicken mutton lamb beef pork onion onions garlic alcohol sugar salt oil sweets sweet non veg vegetarian""".split())
+ spicy spice spices food foods meat chicken mutton lamb beef pork onion onions garlic alcohol sugar salt oil sweets sweet non veg vegetarian
+ adults adult elders elder seniors youngsters youngster ladies gents men women boys girls cousins relatives colleagues students employees staff carry epipen level""".split())
 _BENIGN = re.compile(
-    r"\d|\b(?:veg\w*|non|vegan|jain|halal|gluten|indoor|outdoor|cater\w*|food|meals?|photo\w*|reminders?|invit\w*|budget|rs|inr|rupees?|lakh|lac|crore|k|party|wedding|birthday|"
+    r"\d|\b(?:veg\w*|non[- ]?veg\w*|non|vegan|jain|halal|gluten|indoor|outdoor|cater\w*|food|meals?|photo\w*|reminders?|invit\w*|budget|rs|inr|rupees?|lakh|lac|crore|k|party|wedding|birthday|"
     r"engagement|conference|corporate|event|venue|please|thanks|thank|jan\w*|feb\w*|mar\w*|apr\w*|may|jun\w*|jul\w*|aug\w*|sep\w*|oct\w*|nov\w*|dec\w*|in|at|on|for|under|around|about)\b",
     _F,
 )
@@ -126,7 +127,8 @@ def read(text: str) -> AllergyReading:
                     in_list, pending = False, ""
                     continue
                 named = _named(item)  # the cue itself can name one ("celiac")
-                words = _leftover(after) or (_leftover(before)[-1:] if not named else [])
+                postfix = bool(_named(before)) and not re.match(r"\s*(?:to|of|from|for|:|-|=)", after, _F)  # "nut allergy (carry epipen)": the food came first, so what follows is not another food
+                words = ([] if postfix else _leftover(after)) or (_leftover(before)[-1:] if not named else [])
                 found += named
                 if words:
                     unclear.append(_phrase(words))
@@ -154,7 +156,7 @@ def read(text: str) -> AllergyReading:
                 rest = _leftover(item)
                 if named:
                     pending = ""
-                elif rest and len(rest) <= 2 and not _BENIGN.search(item) and not _CITY.search(item):
+                elif rest and len(rest) <= 2 and not _BENIGN.search(item) and not _CITY.search(item) and not re.search(r"\d", sentence):  # a digit in the sentence ("4L") is an amount, not the name of a food
                     unclear.append(_phrase(rest))  # "allergic to peanuts, strawberries": a second thing we cannot name
                     pending = ""
                 else:

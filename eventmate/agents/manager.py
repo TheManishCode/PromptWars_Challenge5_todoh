@@ -92,7 +92,7 @@ _DIGIT_RUN = re.compile(r"\d+")  # unicode \d: any decimal digit, including Deva
 
 _NUM = r"\d{1,3}(?:,\d{2,3})+(?:\.\d+)?|\d+(?:\.\d+)?"
 _MONEY = re.compile(
-    rf"(?:budget(?:\s+(?:of|is|to|now|at|around|about))*[\s:]*)?(?:(?P<cur>inr|rs\.?|₹|rupees)\s*)?(?<![\d,.])(?P<num>{_NUM})"
+    rf"(?:budget(?:\s+(?:of|is|to|now|at|around|about))*[\s:]*)?(?:(?<![A-Za-z])(?P<cur>inr|rs\.?|₹|rupees)\s*)?(?<![\d,.])(?P<num>{_NUM})"
     r"(?:\s*(?P<unit>lakhs?|lacs?|crores?|cr|k|l|thousand|ha[zj]aa?r)\b)?(?:\s*(?P<cur2>inr|rs|rupees?|rupaye|rupay[ae])\b(?!\s*\d))?",  # "2027 rs 10,00,000": that "rs" marks the amount after it, not 2027
     re.I,
 )
@@ -104,15 +104,32 @@ _UNIT = {"k": 1_000, "lakh": 100_000, "lac": 100_000, "crore": 10_000_000, "cr":
 _GUESTS = [
     re.compile(r"(?<![\d,.])(\d{1,12})\s*-?\s*(?:person|persons|people|guests?|pax|ppl|heads|attendees?|log|logon|logo|mehmaan|mehman|aadmi)\b", re.I | re.A),
     re.compile(r"\bguests?(?:\s+count)?\s*(?:of|:|=)\s*(\d{1,12})\b", re.I | re.A),
+    re.compile(r"\b(?:assum(?:e|ing)|plan(?:ning)?\s+for|count\s+(?:on|as)|take\s+it\s+as|go\s+with)\s+(?:about\s+|around\s+|approx(?:imately)?\s+)?(\d{1,5})(?!\d|[,.]\d|\s*%|\s*(?:lakhs?|lacs?|crores?|cr|k|l|thousand|inr|rs|rupees|days?|hours?|nights?|weeks?|months?|years?)\b)", re.I | re.A),
 ]
 # Used only when no explicit "guests / people / pax" count exists, so "2 kids and 40 guests" is never read as a conflict.
-_GUESTS_GROUP = re.compile(r"(?<![\d,.])(\d{1,12})\s*-?\s*(?:friends|relatives|invitees?|colleagues|coworkers|classmates|students|members|residents)\b", re.I | re.A)
+_GUESTS_GROUP = re.compile(r"(?<![\d,.])(\d{1,12})\s*-?\s*(?:friends|relatives|invitees?|colleagues|coworkers|classmates|students|members|residents|employees|staff|ladies|gents|women|men|jana)\b", re.I | re.A)
 # "a wedding for 120": a headcount with no noun, used only when nothing says guests, people or pax. Not "for 2 lakh", "for 12 Dec" or "for 3 days".
 _GUESTS_FOR = re.compile(
     r"\bfor\s+(?:about\s+|around\s+|approx(?:imately)?\s+|nearly\s+)?(\d{1,5})(?!\d|[,.]\d|\s*%|\s*(?:lakhs?|lacs?|crores?|cr|k|l|thousand|ha[zj]aa?r|inr|rs|rupees|days?|hours?|nights?|mins?|minutes|weeks?|months?|years?"
     r"|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b)",
     re.I | re.A,
 )
+# "50 kids + 30 adults": two parts of one crowd, and the guests are their sum (a part alone, "4 kids have an egg allergy", is not matched: it has no second part)
+_KID_WORD = r"(?:kids?|children|child|boys|girls|youngsters)"
+_ADULT_WORD = r"(?:adults?|elders|seniors?|parents|grown[- ]?ups|men|women|ladies|gents)"
+_CROWD_PARTS = [re.compile(rf"(?<![\d,.])(\d{{1,5}})\s*{x}\s*(?:\+|and|&|plus)\s*(\d{{1,5}})\s*{y}\b", re.I | re.A) for x, y in ((_KID_WORD, _ADULT_WORD), (_ADULT_WORD, _KID_WORD))]
+
+
+def crowd_parts(text: str) -> tuple[int, int] | None:
+    """(kids, adults) written as "50 kids + 30 adults" (either order), else None. Their sum is the guest count."""
+    for rx in _CROWD_PARTS:
+        if m := rx.search(text):
+            return int(m.group(1)), int(m.group(2))
+    return None
+
+
+# a count about a need of some of the guests, not how many guests there are: "rooms for 20 outstation guests", "parking for 15"
+_PART_NEED = re.compile(r"\b(?:rooms?|stay(?:ing)?|accommodat\w*|lodg\w*|hotel|outstation|out[- ]of[- ]town|travell?ing|flying|arriving|coming\s+from|pick[- ]?ups?|transport|parking|vip|speakers?|chief\s+guests?|volunteers?)\b", re.I | re.A)
 _CITY_FALLBACK = re.compile(r"\b(?:in|at|near)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\b", re.A)
 _NOT_CITIES = frozenset({"rs", "inr", "the", "this", "our", "my", "a", "an"})
 _NEGATION = re.compile(r"\b(?:no|not|without|skip|exclude|excluding|never|don't|dont)\b", re.I | re.A)
@@ -124,8 +141,12 @@ _EVENT_TYPES = [
     (re.compile(r"\bsagai\b", re.I | re.A), EventType.ENGAGEMENT_PARTY),
     (re.compile(r"\b(?:birthday|b'?day|birth\s+day)\b", re.I | re.A), EventType.BIRTHDAY),
     (re.compile(r"\bconference\b", re.I | re.A), EventType.CONFERENCE),
-    (re.compile(r"\b(?:corporate|offsite|company)\b", re.I | re.A), EventType.CORPORATE),
+    (re.compile(r"\b(?:corporate|offsite|company|office\s+(?:ki\s+)?(?:party|lunch|dinner|outing|function|celebration|offsite)|annual\s+day|annual\s+function|team\s+(?:lunch|dinner|outing|party|building|celebration)|staff\s+(?:party|outing|lunch|dinner)|employees)\b", re.I | re.A), EventType.CORPORATE),
 ]
+# Things people host that have no event type of their own: they are named, so the planner treats them as "other" on purpose and the reader does not say it failed to recognise them.
+_OTHER_EVENTS = re.compile(
+    r"\b(?:farewell|send[- ]?off|reunion|anniversary|pooja|puja|housewarming|house[- ]warming|griha\s*pravesh|baby\s+shower|godh\s*bharai|kitty\s+party|get[- ]?together|retirement|surprise\s+party|"
+    r"tournament|diwali\s+party|new\s+year\s+party|christmas\s+party|naming\s+ceremony|namakarana|upanayana|thread\s+ceremony|baptism|satyanarayan|katha|bhajan|jagrata|party)\b", re.I | re.A)
 _DIETS = [
     (re.compile(r"\b(?:non[- ]?veg(?:etarian)?|maansahari|mansahari)\b", re.I | re.A), DietaryRequirement.NON_VEGETARIAN),
     (re.compile(r"(?<!non-)(?<!non )\b(?:veg(?:etarian)?|veggie|shakahari|shaakahaari)\b|\b(?:doesn'?t|does\s+not|don'?t|do\s+not)\s+eat\s+(?:any\s+)?(?:meat|non[- ]?veg|chicken|mutton)\b", re.I | re.A), DietaryRequirement.VEGETARIAN),
@@ -288,7 +309,7 @@ def _blank_dates(text: str) -> str:
 
 
 # An amount the user says was already paid ("rs 40,000 as advance", "advance of 25000 paid", "20000 is already paid to the hall") is money spent, not the total budget.
-_PAID_AMT = rf"(?P<amt>(?:(?:rs\.?|inr|₹|rupees?)\s{{0,2}})?(?:{_NUM})(?:\s{{0,2}}(?:lakhs?|lacs?|crores?|cr|k|thousand|l)\b)?(?:\s{{0,2}}(?:rs|inr|rupees?)\b)?)"
+_PAID_AMT = rf"(?P<amt>(?:(?<![A-Za-z])(?:rs\.?|inr|₹|rupees?)\s{{0,2}})?(?:{_NUM})(?:\s{{0,2}}(?:lakhs?|lacs?|crores?|cr|k|thousand|l)\b)?(?:\s{{0,2}}(?:rs|inr|rupees?)\b)?)"
 _PAID_WORD = r"(?:paid|advance|advanced|deposit|deposited|token|booking(?:\s+amount)?)"
 _PAID_BEFORE = re.compile(rf"\b{_PAID_WORD}(?:\s+(?:of|amount\s+of|is|was|as|:))?\s{{0,2}}{_PAID_AMT}", re.I | re.A)
 _PAID_AFTER = re.compile(rf"(?<![\d,.]){_PAID_AMT}(?:\s+(?:is|was|has\s+been|have\s+been|already|as|towards|for\s+the|given\s+as)){{0,3}}\s+(?:already\s+)?{_PAID_WORD}\b", re.I | re.A)
@@ -357,6 +378,7 @@ def _parse_budget(text: str, problems: list[str]) -> int | None:
 # A count says who it is about by what follows it ("3 people having an allergy", "6 guests are diabetic", "30 guests are vegetarian") or what precedes it ("some 3 people").
 # An allergy or a health condition written that way is a subgroup. A diet or "some" is one only when another count is there to be the total, because "100 guests are
 # vegetarian" and "some 100 people" state the total. "3 of the 100 guests have ..." names 100 as the whole the 3 is counted from.
+_DIET_BEFORE = re.compile(r"(?:\bveg\w*|\bnon[- ]?veg\w*|\bvegan|\bjain|\bhalal|\bsat+[vw]ik|\bsattvic)(?:\s+(?:food|menu|meals?|counter|thali))?\s*[(\[:~-]+\s*(?:about\s+|around\s+|approx\w*\s+)?$", re.I | re.A)  # "satvik food (~40 ppl)"
 _COND = r"\bal+(?:[ea]r?|r)g\w*|\baller\w*|alerji|diabet\w*|intoleran\w*|celiac|coeliac|epipen|wheelchair"
 _DIET_WORD = r"non[- ]?veg\w*|veg\w*|vegan|jain|halal|gluten[- ]?free|lactose\w*"
 _PREDICATE = r"(?:(?:who|that|which)\s+)?(?:(?:are|is|have|has|having|got|with|suffer\w*|had|need\w*)\s+(?:\w+\s+){{0,3}}?)?(?:{})"
@@ -375,7 +397,7 @@ class GuestCounts(NamedTuple):
 
 
 def _guest_candidates(rx: "re.Pattern[str]", text: str) -> list[tuple[int, str, str]]:
-    """(count, the words around it, what the words say it is: "" for a total, else "health", "diet" or "some") for each match of ``rx``."""
+    """(count, the words around it, what the words say it is: "" for a total, else "health", "diet", "some" or "part") for each match of ``rx``."""
     out = []
     for m in rx.finditer(text):
         rest = text[m.end(): m.end() + 140]  # a clause is enough to read, and the rest of a long text per match would be quadratic
@@ -385,6 +407,10 @@ def _guest_candidates(rx: "re.Pattern[str]", text: str) -> list[tuple[int, str, 
         before = text[max(0, m.start(1) - 40): m.start(1)]
         if _WHOLE_BEFORE.search(before) or _NEGATED_AFTER.search(after[:30]):
             kind = ""
+        elif _PART_NEED.search(text[max(0, m.start() - 30): m.start()] + " " + after[:40]):
+            kind = "part"
+        elif _DIET_BEFORE.search(before):
+            kind = "diet"
         elif _HEALTH_AFTER.match(after) or _HEALTH_BEFORE.search(before):
             kind = "health"
         elif _DIET_AFTER.match(after):
@@ -401,6 +427,8 @@ def guest_counts(text: str) -> GuestCounts:
     """Sort the counts in ``text`` into those that may be the total number of guests and those about some of the guests, from the words around each. When the roles cannot be told
     apart the totals stay empty: a subgroup is never promoted to the total to fill the gap."""
     text = _blank_dates(text)
+    if parts := crowd_parts(text):
+        return GuestCounts(frozenset({sum(parts)}), ())
     explicit = [c for rx in _GUESTS for c in _guest_candidates(rx, text)]
     group = _guest_candidates(_GUESTS_GROUP, text)
     pool = explicit or group or _guest_candidates(_GUESTS_FOR, text)
@@ -409,7 +437,7 @@ def guest_counts(text: str) -> GuestCounts:
         clear, pool = [c for c in group if not c[2]], explicit + group  # "100 students ... 3 people allergic": the total is the group noun's
     if clear:
         return GuestCounts(frozenset(c[0] for c in clear), tuple((c[0], c[1]) for c in pool if c[2]))
-    if any(c[2] == "health" for c in pool) or len({c[0] for c in pool if c[2] == "diet"}) > 1:
+    if any(c[2] in ("health", "part") for c in pool) or len({c[0] for c in pool if c[2] == "diet"}) > 1:
         return GuestCounts(frozenset(), tuple((c[0], c[1]) for c in pool))
     return GuestCounts(frozenset(c[0] for c in pool), ())
 

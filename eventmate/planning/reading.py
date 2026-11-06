@@ -102,7 +102,7 @@ def _guest_question(said: str, why: str) -> Unresolved:
     return Unresolved(key="guest_count", field="guest_count", said=clip(said, 40), question=f'I read "{clip(said, 40)}", but {why}. How many guests are you expecting? {EXAMPLE_GUESTS}')
 
 
-_MONEY_BEFORE = re.compile(r"(?:₹|rs\.?|inr|rupees?|rupaye|budget(?:\s+(?:of|is|to|at|around|about|upto|up\s+to|under|max|maximum|only))*)\s*$", re.I)
+_MONEY_BEFORE = re.compile(r"(?:₹|(?<![a-z])rs\.?|inr|rupees?|rupaye|budget(?:\s+(?:of|is|to|at|around|about|upto|up\s+to|under|max|maximum|only))*)\s*$", re.I)
 
 
 def screen_guests(text: str, has_total: bool = False) -> Unresolved | None:
@@ -131,6 +131,25 @@ def screen_guests(text: str, has_total: bool = False) -> Unresolved | None:
     return None
 
 
+_GROUP_WORDS = ("employees", "attendees", "colleagues", "relatives", "residents", "students", "invitees", "classmates", "members", "friends", "guests", "people", "persons", "visitors", "delegates", "ladies")
+_NUMBER_WORD = re.compile(r"(?<![\w.,/-])(?P<n>\d{1,5})\s+(?P<w>[A-Za-z]{5,12})\b", re.A)
+
+
+def guest_typo(text: str) -> Unresolved | None:
+    """"90 employes": a number and a word that is not a guest word but looks like one. Offered as that many guests and applied only when the user presses it."""
+    for m in _NUMBER_WORD.finditer(mgr._blank_paid(mgr._blank_dates(text))):
+        word = m.group("w").lower()
+        if word in _GROUP_WORDS or word.rstrip("s") + "s" in _GROUP_WORDS:
+            continue
+        if difflib.get_close_matches(word, _GROUP_WORDS, n=1, cutoff=0.8):
+            n = int(m.group("n"))
+            if 1 <= n <= MAX_GUESTS:
+                said = clip(m.group(0), 40)
+                return Unresolved(key="guest_count", field="guest_count", said=said, question=f'I read "{said}", but "{m.group("w")}" is not a word I know for guests. Did you mean {n} guests? Press it, or write the number of guests.',
+                                  picks=(Pick(label=f"{n} guests", field="guest_count", value=str(n)),))
+    return None
+
+
 # ---------------------------------------------------------------------------------------------------------- budget
 
 _FOREIGN = {"$": "dollars", "us$": "dollars", "usd": "dollars", "dollar": "dollars", "dollars": "dollars", "€": "euros", "eur": "euros", "euro": "euros", "euros": "euros",
@@ -138,12 +157,12 @@ _FOREIGN = {"$": "dollars", "us$": "dollars", "usd": "dollars", "dollar": "dolla
             "sgd": "Singapore dollars", "cad": "Canadian dollars", "aud": "Australian dollars", "chf": "Swiss francs"}
 _RUPEE = {"₹", "rs", "inr", "rupee", "rupees", "rupaye"}
 _CUR = r"(?:₹|rs\.?|inr|rupees?|rupaye|us\$|\$|usd|€|eur|£|gbp|aed|sgd|cad|aud|chf|dollars?|euros?|pounds?|dirhams?)"
-_AMOUNT = re.compile(rf"(?:(?P<c1>{_CUR})\s*)?(?<![\w,])(?P<n>{mgr._NUM})(?P<exp>e\d+)?", re.I | re.A)
+_AMOUNT = re.compile(rf"(?:(?<![A-Za-z])(?P<c1>{_CUR})\s*)?(?<![\w,])(?P<n>{mgr._NUM})(?P<exp>e\d+)?", re.I | re.A)
 _WORD = re.compile(r"([A-Za-z]+)")  # no leading \s*: a search over a long run of spaces is quadratic; ``_at`` skips the spaces in code
 _UNIT_VALUE = {"lakh": 100_000, "lac": 100_000, "crore": 10_000_000, "cr": 10_000_000, "k": 1_000, "l": 100_000, "thousand": 1_000, "hazaar": 1_000, "hazar": 1_000, "hajaar": 1_000, "hajar": 1_000}
 _UNIT_NAME = {"lakh": "lakh", "lac": "lakh", "crore": "crore", "thousand": "thousand", "hazaar": "thousand"}  # what a near miss is offered as
 _UNSUPPORTED_UNITS = {"million", "millions", "mn", "mil", "billion", "bn", "trillion", "m", "b"}
-_PER_PERSON = re.compile(r"(?:(?:rs\.?|inr|₹) ?)?[/-]? ?(?:(?:per|a|an|each|every) ?-? ?(?:person|head|guest|plate|pax|people|adult|kid|child|member|delegate|student)s?\b|pp\b|pph\b)", re.I)  # spaces are single: the text is collapsed first
+_PER_PERSON = re.compile(r"(?:(?:rs\.?|inr|₹) ?)?[/-]? ?(?:(?:per|a|an|each|every) ?-? ?(?:person|head|guest|plate|pax|people|adult|kid|child|member|delegate|student)s?\b|/ ?(?:person|head|guest|plate|pax|pp)s?\b|pp\b|pph\b)", re.I)  # spaces are single: the text is collapsed first
 _RANGE_TO = re.compile(rf"(?:-|–|—|to|and|or)\s*(?:{_CUR}\s*)?(?P<n2>{mgr._NUM})\s*(?P<u2>[A-Za-z]+)?", re.I | re.A)
 _BUDGET_CONTEXT = re.compile(r"budget(?:\s+(?:of|is|to|now|at|around|about|upto|up\s+to|under|max|maximum|only|between))*[\s:=]*$", re.I)
 _SMALLEST_TOTAL = 1_000  # "budget 50" and "budget 2" are not a total: the unit was left off
@@ -185,8 +204,8 @@ def screen_budget(text: str, guests: int | None = None) -> Unresolved | None:
         c2 = word_text.lower() if word_text.lower() in _FOREIGN or word_text.lower() in _RUPEE else ""
         at_budget = bool(_BUDGET_CONTEXT.search(before))
         ranged = bool((to := _at(_RANGE_TO, rest)) and _unit_of(to.group("u2") or ""))  # "8 to 10 lakh": the 8 is money too, the unit comes with the second number
-        if not (c1 or c2 or unit or at_budget or ranged):
-            continue  # a number that is not money here: a date, a guest count, a phone number
+        if not (c1 or c2 or unit or at_budget or ranged or _at(_PER_PERSON, rest)):
+            continue  # a number that is not money here: a date, a guest count, a phone number ("500 per head" is money: a rate)
         shown = clip(text[m.start(): m.end() + (word.end() if word and (unit or c2) else 0)].strip(), 40)
         currency = _FOREIGN.get(c1) or _FOREIGN.get(c2)
         if currency:
@@ -227,6 +246,26 @@ def screen_budget(text: str, guests: int | None = None) -> Unresolved | None:
     return None if clean_total or not per_person else per_person[0]  # a stated total beside "1500 per plate" is the total
 
 
+_ITEMISED = re.compile(rf"(?:(?:₹|rs\.?|inr)\s?)?(?P<n>{mgr._NUM})\s?(?P<u>lakhs?|lacs?|crores?|cr|k|thousand|l)?\s+(?:on|for|towards)\s+(?P<what>[a-z]+)", re.I | re.A)
+
+
+def itemised_budget(text: str) -> Unresolved | None:
+    """Two or more amounts, each for its own thing ("1,50,000 on food and 75k on decor"): none of them is the total, and their sum is only one thing it could be. Asked, never chosen."""
+    text = " ".join(mgr._blank_paid(mgr._blank_dates(text)).split())
+    items: dict[int, str] = {}
+    for m in _ITEMISED.finditer(text):
+        unit = _unit_of(m.group("u") or "")
+        value = _value(m.group("n"), unit)
+        if value is not None and (unit or value >= _SMALLEST_TOTAL):
+            items.setdefault(value, m.group("what").lower())
+    if len(items) < 2 or len(items) > 4 or sum(items) > MAX_BUDGET_INR:
+        return None
+    picks = tuple(Pick(label=f"{money(v)} ({what})", field="budget_total", value=str(v)) for v, what in items.items())
+    picks += (Pick(label=f"{money(sum(items))} (all of them added)", field="budget_total", value=str(sum(items))),)
+    said = clip(", ".join(f"{money(v)} on {what}" for v, what in items.items()), 80)
+    return Unresolved(key="budget_total", field="budget_total", said=said, question="You gave separate amounts for different things. Which is the total budget?", picks=picks)
+
+
 # ---------------------------------------------------------------------------------------------------------- bare answers
 
 _FILLER = r"(?:actually|sorry|oh|no|ok|okay|well|so|now|make|change|set|update|it'?s|its|should\s+be|let'?s\s+say|say|is|be|to|it|that|this|the|number|count|total|about|around|approx(?:imately)?\.?|roughly|nearly|~)"
@@ -240,7 +279,7 @@ def lone_number(text: str) -> int | None:
     return _int(m.group("n")) if m else None
 
 
-_CHANGE_CUE = re.compile(r"\b(?:now|actually|instead|make\s+(?:it|that|this)|chang(?:e|ed|ing)\s+(?:it\s+|that\s+|this\s+)?to|updat(?:e|ed|ing)|it'?s|its|it\s+is|revised|new\s+(?:number|count|total))\b", re.I | re.A)
+_CHANGE_CUE = re.compile(r"\b(?:now|actually|instead|make\s+(?:it|that|this)|chang(?:e|ed|ing)\s+(?:it\s+|that\s+|this\s+)?to|updat(?:e|ed|ing)|it'?s|its|it\s+is|revised|new\s+(?:number|count|total)|final(?:ly)?|confirmed|(?:list|count|total)\s+is|is\s+now)\b", re.I | re.A)
 _BARE_NUMBER = re.compile(r"(?<![\w.,/:-])\d[\d,]*(?![\w.,/:%-])(?!\s*(?:am|pm|days?|hours?|hrs?|minutes?|mins?|weeks?|months?|years?|km|kg|%))", re.I | re.A)
 
 
