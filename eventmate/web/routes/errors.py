@@ -26,6 +26,7 @@ from eventmate.followthrough.jobs import StaleJob
 from eventmate.sourcing.suppression import NeedsAcknowledgement
 from eventmate.integrations.websearch import SearchError
 from eventmate.integrations.travel import TravelError
+from eventmate.planning.staging import StageClosed, StageConflict, StageGone
 from eventmate.web.base import (
     NotOnSharedHost,
     log,
@@ -161,6 +162,18 @@ def register(app, k):
     @app.errorhandler(NotOnSharedHost)
     def _not_shared(exc):
         return _err(403, str(exc)[:200])
+
+    @app.errorhandler(StageGone)
+    def _stage_gone(exc):
+        return _err(410, str(exc)[:300], code="brief_gone")
+
+    @app.errorhandler(StageConflict)
+    def _stage_conflict(exc):
+        return _err(409, str(exc)[:300], code="brief_changed")
+
+    @app.errorhandler(StageClosed)
+    def _stage_closed(exc):
+        return _err(409, str(exc)[:300], code="brief_closed")
 
     @app.errorhandler(ValueError)
     def _value(exc):

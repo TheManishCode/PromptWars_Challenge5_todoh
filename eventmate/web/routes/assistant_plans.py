@@ -143,7 +143,7 @@ def register(app, k):
     def intake_turn():
         b = body(IntakeBody)
         with lock:
-            turn = em.intake_turn(b.messages, b.draft, today=today_fn(), expecting=b.expecting, answer=b.answer)
+            turn = em.intake_turn(b.messages, b.draft, today=today_fn(), expecting=b.expecting, answer=b.answer, staged_id=b.staged_id)
         return out(turn)
 
     @app.post("/api/intake/confirm")

@@ -31,6 +31,7 @@ from eventmate.integrations.travel import CABINS
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_FILES = {
     "favicon.svg": "image/svg+xml",
+    "google-maps-logo.svg": "image/svg+xml",  # Google's own attribution file (dark gray, for a plain background), byte for byte as Google supplies it: it must not be modified
     # the landing page (/) and the planner (/app); the look they share is site.css
     "site.css": "text/css; charset=utf-8", "landing.css": "text/css; charset=utf-8", "landing.js": "text/javascript; charset=utf-8",
     "app.css": "text/css; charset=utf-8", "app.js": "text/javascript; charset=utf-8",
@@ -103,6 +104,29 @@ class IntakeBody(_Strict):
     draft: intake.IntakeDraft | None = None
     expecting: Literal["guest_count", "budget_total", "event_date", "city", "allergens"] | None = None  # the fact the last question was about
     answer: intake.IntakeAnswer | None = None  # an option of an open question the user pressed
+    staged_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{24}$")  # the brief's place on the server: when it is sent, the staged draft is the one corrected, not ``draft``
+
+
+class QuoteConfirmBody(_Strict):
+    fields: dict[str, str | None] = Field(min_length=1, max_length=9)  # field key -> a value the user typed, or None for "as read"; the same parser as the vendor's reply decides if it is usable
+    by: str = Field(min_length=1, max_length=60)
+    valid_days: str | None = Field(default=None, max_length=20)  # how long the price holds, when the user is confirming the price and the reply did not say
+
+
+class QuoteRetractBody(_Strict):
+    field: str = Field(min_length=1, max_length=30)
+    by: str = Field(min_length=1, max_length=60)
+
+
+class IntakeEditBody(_Strict):
+    fields: dict[str, StrictInt | str | None] = Field(min_length=1, max_length=8)  # values typed onto the review card; the schema decides what is acceptable
+    version: int = Field(ge=1)  # the version of the brief the user was looking at
+
+
+class IntakeCommitBody(_Strict):
+    version: int = Field(ge=1)
+    draft_hash: str = Field(pattern=r"^[0-9a-f]{64}$")  # the draft as the user saw it: a different one is refused
+    guest_list_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
 
 class IntakeConfirmBody(_Strict):
@@ -128,6 +152,7 @@ class QuoteBody(_Strict):
     amount_inr: int = Field(gt=0)
     basis: Literal["total", "per_plate"]
     guest_count: int | None = Field(default=None, ge=1)
+    quoted_for_date: date | None = None
     inclusions: list[str] = Field(default_factory=list, max_length=30)
     exclusions: list[str] = Field(default_factory=list, max_length=30)
     hidden_costs: list[HiddenCost] = Field(default_factory=list, max_length=20)
@@ -254,6 +279,7 @@ class ConfirmContactBody(_Strict):
     by: str = Field(min_length=1, max_length=60)
     edited_value: str | None = Field(default=None, max_length=254)
     acknowledge_bounce: bool = False  # required to confirm an address that bounced earlier
+    business_name: str | None = Field(default=None, max_length=120)  # the name the user confirms for a Google-listed business: its listing name is not stored
 
 
 class SuppressBody(_Strict):

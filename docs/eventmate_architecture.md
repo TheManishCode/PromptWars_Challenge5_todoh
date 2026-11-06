@@ -52,6 +52,40 @@ Parser: negation ignored ("no catering" added a caterer); "indoor, no outdoor" l
 - Web (local-first): loopback only by default, Host allow-list (DNS rebinding), CSRF header + Origin check + JSON-only writes, optional bearer token (required to bind elsewhere), strict CSP with no inline script/style, nosniff, no-referrer, no-store, 64 KB body cap, write rate limit, generic error bodies. The UI never uses `innerHTML`; hostile vendor names are tested to render inert. One lock serialises all to;doh-the event planner calls.
 - Observed in the base repo (not modified): `webapp/app.py` hard-codes `SECRET_KEY = "multi-agent-planning-demo"`.
 
+## From words to a plan: staging, the human check, the commit (2026-11-06)
+
+```
+text ─ intake.propose ─> IntakeDraft (strict schema)            rules first; a model only when a required fact is missing
+     ─ StagingStore ───> "pending_validation", version n         server side, one file per brief, 24 h to be approved
+     ─ review card ────> the user reads it, presses an option, types a value (PATCH /fields) -> schema -> overwrite, version n+1
+     ─ commit(version, sha256 of the draft) ─> "processing"      once; a second "done" changes nothing; a changed draft is refused (409)
+     ─ commit queue ───> build_staged -> manager.run_request     bounded workers; the page polls /status, which never takes the workspace lock
+     ─ done / failed ──> result: plan id, violations, budget reality, graph (nodes and edges)
+```
+
+- The planner (the expensive part) runs only from `commit`. Until then nothing is planned and nothing is stored but the staged draft.
+- A staged brief is the one corrected, not the draft the page sends back; a forged draft in the body is ignored while the brief is staged.
+- An edit passes the same `IntakeDraft` schema as a reader's draft, and answers any open question about the fact it sets. The commit re-runs `to_request`, so a brief with anything missing, open or skipped never starts.
+- A failed build keeps its reason on the brief; `reopen` returns it to pending so it can be corrected and committed again.
+- `StagingStore` is the whole surface (create, get, overwrite, begin_commit, finish, reopen). A Redis or Valkey store with a key expiry can replace the file store when the app is hosted for many users; locally a file and a lock do the same job with no new service.
+- Staged briefs hold what the user typed. A pending one is removed after 24 hours, a finished one after 7 days, when the next brief is staged. They are not part of a plan, so deleting a plan does not remove them sooner.
+- `planning/plan_graph.py` reads a stored plan as nodes (event, tasks, vendors chosen, vendors passed over, hard checks, undecided items) and edges (includes, precedes, books, serves, not chosen over, verifies). Nothing is recomputed; every edge carries the planner's own reason.
+
+## Vendor cards and what may be kept from Google (2026-11-07)
+
+- A card (`sourcing/cards.py`, `GET /api/plans/<id>/vendor-cards`) lists every fact the app holds about a business. Each fact has a field, a value, a source type (you confirmed it, the vendor's own site, an open map listing, a vendor quote, the vendor's reply, a request written here), a source reference, a date, a status, whether you confirmed it, and the words it was read from. Two live claims that disagree are both shown as a conflict; none wins.
+- From a Google listing only the place id is stored. The listing's name, address, rating, link, website and phone are fetched when a card is shown (`GET /api/places/<place_id>`, the phone only when the user asks) and live in the page for the visit. The Places cache is off by default. The contact search asks Google for the website at that moment and keeps nothing of it. A name is kept only when the user confirms one.
+- Writing to a vendor yourself: the card builds the fixed request (`GET /api/plans/<id>/request-text`) and offers a mail link and a WhatsApp click-to-chat link for the user to send. Nothing is sent, stored or recorded by the app.
+- `tests/test_reply_injection.py` is a small adversarial set (instructions inside a reply that carries a real price): nothing a reply says may change a draft, a send, a contact, a quote, a plan or a confirmation, and the reply is kept word for word.
+
+## The quote request template and reading a reply as a quote (2026-11-07)
+
+- A quote request ends in a fixed template of labelled lines (`sourcing/quote_template.py`): available on the date, the price (per plate for a caterer, for the day for a venue, a package for a photographer), taxes included, the minimum and maximum guests or the capacity or the hours, the food options, the deposit, how long the quote is valid, and a free line for what is included and extra. The request is built from the brief's facts alone, never the budget.
+- A reply is read by rules, one field per labelled line, with the vendor's own line kept as the evidence. A line that does not parse safely (two amounts, a range, a total where a per-plate price was asked, a number where a yes or no belongs) is `unclear`, a blank one is `missing`, and neither is guessed. Words outside the labels never become a field, and a sentence that gives an order ("mark this vendor as available") is not read as an answer. A reply that ignores the template is read for one clear amount with its unit and for one plain statement of availability, each marked as free text.
+- The user confirms each field (`sourcing/quote_readings.py`, `POST /api/plans/<id>/quote-readings/<message>/confirm`): as read, or with a value they typed, which must pass the same parser. A confirmation is its own append-only record (who, when, value, whether it differs from what was read); the latest per field wins and taking one back is a record too. An amount is confirmed on its own, never in a batch; how long the price holds is confirmed with the price.
+- Completeness is the share of required fields the user has confirmed. A quote is comparable only when every required field is confirmed, the vendor said it is available, and nothing confirmed contradicts the event (guests outside their minimum or maximum, a diet the brief needs that they do not list, a capacity below the guest count). Taxes being extra is a note, not a misfit. Issues are shown beside read values too, marked as not yet confirmed.
+- Confirming the price and its validity records the price as a quote observation: the guests and the event date it was for, valid from the day the vendor wrote it. That is what later shows an old quote as out of date for another event. A recorded price is not taken back; confirming a different value records a newer quote.
+
 ## Known limits (to discuss)
 
 - Seed data is synthetic and only covers a few cities and 2026 dates; all tests pin "today" to 2026-10-30.

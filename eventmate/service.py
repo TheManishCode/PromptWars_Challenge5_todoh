@@ -12,6 +12,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import logging
 import os
 import re
 import time
@@ -50,11 +51,17 @@ from eventmate.sourcing.contacts import find_contacts
 from eventmate.sourcing.externals import ExternalStore, ResolvedVendor, clean_email, slug
 from eventmate.evidence.ledger import EvidenceLedger, FactState
 from eventmate.followthrough.watches import WatchRunner, WatchStore
+from eventmate.planning import brief_scope, plan_graph
+from eventmate.planning.staging import StageClosed, StageGone, StagingStore, StagedIntake
+from eventmate.messaging import outreach as outreach_mod
+from eventmate.sourcing import cards, quote_template
+from eventmate.sourcing.quote_readings import QuoteAssessment, QuoteConfirmationStore, assess, parse_typed
+from eventmate.sourcing.cards import VendorCard
 from eventmate.sourcing.search import VendorSearch, clean_name
 from eventmate.sourcing.suppression import NeedsAcknowledgement, SuppressionStore, UnmatchedStore, domain_note
 from eventmate.sourcing.shortlist import ShortlistStore
 from eventmate.pricing.ledger import Ledger
-from eventmate.pricing.observations import ObservationStore
+from eventmate.pricing.observations import ObservationStore, old_reasons
 from eventmate.pricing.vendorscore import score_category
 from eventmate.planning import intake
 from eventmate.llm import FallbackClient, LLMClient, client_from_env
@@ -62,6 +69,8 @@ from eventmate.logs import RunLogs
 from eventmate.planning.rules import Advisory, advisories_for
 from eventmate.plan_store import PlanStore, draft_from_plan
 from eventmate.schemas.integrations import MAX_DATE_RANGE_DAYS
+from eventmate.schemas import HiddenCost, InboundMessage
+from eventmate.followthrough.worker import CONFIRM_CONFIDENCE
 from eventmate.schemas import CheapestDates, GuestTravel, ConstraintViolation, ObservationSource, AgentName, DecisionType, ContactFindResult, ExternalBusiness, SearchOutcome, ShortlistItem, VendorContact, VendorRef, WeatherAdvice, BookingStatus, DecisionLogEntry, SelectionQuoteStatus, LedgerEntry, LedgerSummary, Disruption, DisruptionKind, PlanDiff, PlanOutcome, PlanVersion, ReplanOutcome, TradeoffOption, TradeoffReport, ValidationReport, VendorCategory
 from eventmate.symbolic import SymbolicChecker
 from eventmate.integrations.deals import DealAgent
@@ -118,6 +127,9 @@ class EventMate:
         self.watches = WatchStore(self.store.root)  # makes no file until the first watch
         self.last_watch_report: dict = {}
         self.externals = ExternalStore(self.store.root, evidence=self.evidence)
+        self.externals.scrub_google_content()  # an earlier version kept Google listing content; only the place id may be kept
+        self.quote_confirmations = QuoteConfirmationStore(self.store.root)  # what the user confirmed, field by field, from a vendor's reply
+        self.staging = StagingStore(self.store.root)  # briefs waiting for the user's approval; nothing is planned from one until it is committed
         self.shortlist = ShortlistStore(self.store.root, evidence=self.evidence)
         self.observations.external_lookup = self.externals.get
         self.suppressions = SuppressionStore(self.store.root)
@@ -134,7 +146,7 @@ class EventMate:
         self.jobs_clock = None  # tests inject a clock here before the worker is first used
         self._job_store: JobStore | None = None
         self.digest_store = DigestStore(self.store.root)
-        self.conversations = ConversationService(self.outreach_store, channels or channels_from_env(os.environ), self.store.latest)
+        self.conversations = ConversationService(self.outreach_store, channels or channels_from_env(os.environ), self._scope)
         self.integrity = Guard(self.store.root)  # while an authoritative record file is damaged, nothing is sent or approved
         self.conversations.health = self.integrity.blocker
         self.conversations.guards.append(self._job_guard)
@@ -178,11 +190,83 @@ class EventMate:
         self._clock(today)
         return self.manager.run(text, today=today, guest_list_id=guest_list_id)
 
-    def intake_turn(self, messages, prior: intake.IntakeDraft | None = None, today: date | None = None, expecting: str | None = None, answer: intake.IntakeAnswer | None = None) -> intake.IntakeTurn:
-        """Propose a draft from the organiser's words. Nothing is planned or stored until ``confirm_intake``.
+    def intake_turn(self, messages, prior: intake.IntakeDraft | None = None, today: date | None = None, expecting: str | None = None, answer: intake.IntakeAnswer | None = None, staged_id: str | None = None) -> intake.IntakeTurn:
+        """Propose a draft from the organiser's words and stage it, pending the user's approval. Nothing is planned until ``commit_staged``.
 
-        ``expecting`` is the fact the last question was about; ``answer`` is an option the user pressed (see ``intake.propose``)."""
-        return intake.propose(messages, prior, today or date.today(), self.repo.cities(), self.logs, self._intake_model(), expecting=expecting, answer=answer, model_when=os.environ.get("EVENTMATE_INTAKE_MODEL", "auto"))
+        ``expecting`` is the fact the last question was about; ``answer`` is an option the user pressed (see ``intake.propose``). With a ``staged_id`` the staged draft is the one corrected, not
+        whatever the caller sends back; a staged brief that is gone (timed out) falls back to the caller's own draft and is staged again."""
+        today = today or date.today()
+        staged = None
+        if staged_id:
+            try:
+                staged = self.staging.require(staged_id)
+            except StageGone:
+                staged = None
+            if staged is not None and staged.state == "expired":
+                staged = None
+            elif staged is not None and staged.state != "pending_validation":
+                raise StageClosed("this brief is already being built, so it can no longer be changed")
+            elif staged is not None:
+                prior = staged.draft
+        turn = intake.propose(messages, prior, today, self.repo.cities(), self.logs, self._intake_model(), expecting=expecting, answer=answer, model_when=os.environ.get("EVENTMATE_INTAKE_MODEL", "auto"))
+        history = (*(staged.messages if staged else ()), *([] if answer is not None else list(messages)[-1:]))  # only the newest message is read; a pressed option is not a message
+        row = self.staging.overwrite(staged.staged_id, turn.draft, history, turn.source, staged.version) if staged else self.staging.create(turn.draft, history, turn.source)
+        return self._staged_turn(turn, row)
+
+    @staticmethod
+    def _staged_turn(turn: intake.IntakeTurn, row: StagedIntake) -> intake.IntakeTurn:
+        return turn.model_copy(update={"staged_id": row.staged_id, "version": row.version, "draft_hash": row.draft_hash, "state": row.state, "expires_at": row.expires_at})
+
+    def edit_staged(self, staged_id: str, patch: dict, version: int, today: date | None = None) -> intake.IntakeTurn:
+        """The user typed new values onto the review card. They pass the same schema as a reader's draft, replace the staged one, and answer any open question about them."""
+        today = today or date.today()
+        cur = self.staging.require(staged_id)
+        if cur.state == "expired":
+            raise StageGone("that brief timed out; start it again")
+        if cur.state != "pending_validation":
+            raise StageClosed("this brief is already being built, so it can no longer be changed")
+        turn = intake.edited(cur.draft, patch, self.repo.cities(), today)
+        row = self.staging.overwrite(staged_id, turn.draft, cur.messages, cur.source, version)
+        return self._staged_turn(turn, row)
+
+    def staged_turn(self, staged_id: str, today: date | None = None) -> intake.IntakeTurn:
+        """The staged brief as the review card shows it, read again from what is stored (a reloaded page, another device)."""
+        cur = self.staging.require(staged_id)
+        turn = intake.edited_view(cur.draft, self.repo.cities(), cur.source)
+        return self._staged_turn(turn, cur)
+
+    def commit_staged(self, staged_id: str, version: int, digest: str, today: date | None = None) -> tuple[StagedIntake, bool]:
+        """The user's "done". Refused unless the brief is ready, buildable and exactly the one they reviewed; then pending becomes processing, once.
+        Returns the row and whether this call started the build (a repeat does not start a second one)."""
+        today = today or date.today()
+        cur = self.staging.require(staged_id)
+        if cur.state == "pending_validation":
+            if cur.draft.city and cur.draft.city.lower() not in {c.lower() for c in self.repo.cities()}:
+                raise intake.IntakeError(f"I have no vendor records for {cur.draft.city} yet, so a plan there cannot be built")
+            intake.to_request(cur.draft, "\n".join(cur.messages)[:2000], today, cur.source, list(cur.messages))  # raises IntakeError for anything missing, open or skipped
+        return self.staging.begin_commit(staged_id, version, digest)
+
+    def reopen_staged(self, staged_id: str, today: date | None = None) -> intake.IntakeTurn:
+        """A failed build goes back to pending so the user can correct the brief and press done again."""
+        return self.staged_turn(self.staging.reopen(staged_id).staged_id, today)
+
+    def build_staged(self, staged_id: str, today: date, guest_list_id: str | None = None) -> StagedIntake:
+        """The build itself, run by the commit queue. It records its outcome on the staged brief, whatever happens."""
+        row = self.staging.require(staged_id)
+        try:
+            outcome = self.confirm_intake(row.draft, "\n".join(row.messages)[:2000], today, guest_list_id, row.source, list(row.messages))
+        except ValueError as exc:  # an IntakeError or a refusal with a message written for the user
+            return self.staging.finish(staged_id, False, error=str(exc)[:300])
+        except Exception:
+            logging.getLogger(__name__).exception("staged build %s failed", staged_id)  # the user gets a plain sentence; the cause is in the application log
+            return self.staging.finish(staged_id, False, error="The plan could not be built. Nothing was stored; try again.")
+        result = {
+            "status": outcome.status, "plan_id": outcome.plan.plan_id if outcome.plan else None, "violations": [v.model_dump() for v in outcome.violations],
+            "tasks": [{"id": t.id, "agent": t.agent.value, "status": t.status.value, "depends_on": list(t.depends_on)} for t in outcome.task_graph.tasks],
+            "reality": json.loads(outcome.intake.reality.model_dump_json()) if outcome.intake.reality else None,
+            "graph": plan_graph.build(outcome.plan) if outcome.plan else None,  # the finished plan as nodes and edges, in the same payload the page follows
+        }
+        return self.staging.finish(staged_id, outcome.plan is not None, result, "" if outcome.plan else "The plan could not pass the hard checks, so nothing was stored.")
 
     def _intake_model(self):
         """The model that reads a brief. Normally the app's own; ``EVENTMATE_INTAKE_TIER=light`` gives it the light tier (a small model, a few seconds when its provider is up). Not the default: a
@@ -414,6 +498,24 @@ class EventMate:
         """Record a vendor quote you were given. Later plans and validation price from it."""
         return self.observations.add_quote(vendor_id, category, **fields)
 
+    def earlier_quotes(self, city: str, today: date, guests: int | None = None, event_date: date | None = None) -> list[dict]:
+        """The last quote each discovered business in a city gave, for showing while a fresh one is awaited: what it said, when, how many earlier ones there are, and why it may no longer hold.
+        Reads only. An earlier quote is shown, never priced from."""
+        out = []
+        for biz in self.externals.all():
+            if biz.city.casefold() != city.casefold():
+                continue
+            quotes = self.observations.quotes(biz.vendor_id)
+            if not quotes:
+                continue
+            last = quotes[-1]
+            out.append({
+                "vendor_id": biz.vendor_id, "external_id": biz.external_id, "name": biz.name, "category": biz.category.value, "amount_inr": last.amount_inr, "basis": last.basis,
+                "guest_count": last.guest_count, "quoted_for_date": last.quoted_for_date.isoformat() if last.quoted_for_date else None, "observed_at": last.observed_at.isoformat(),
+                "earlier": len(quotes) - 1, "old": old_reasons(last, today, guests, event_date),
+            })
+        return out
+
     def vendor_scores(self, category: VendorCategory, today: date | None = None):
         """Transparent score of every vendor with a current quote in a category. Reads only; changes no price."""
         return score_category(self.observations, category, today or date.today())
@@ -536,6 +638,15 @@ class EventMate:
         w = self.watches.get(watch_id)
         return self.watches.save(w.model_copy(update={"status": "active", "failures": 0, "last_error": "", "next_check_at": self.outreach_store.now()}))
 
+    def _scope(self, plan_id: str):
+        """What a sourcing step reads its facts from: a stored plan, or, for ``brief_<id>``, the staged brief that has no plan yet. Unknown, hostile or timed-out ids fail here."""
+        if brief_scope.is_brief(plan_id):
+            row = self.staging.require(brief_scope.staged_id_of(plan_id))
+            if row.state == "expired":
+                raise StageGone("that brief timed out; start it again")
+            return brief_scope.scope_of(row)
+        return self.store.latest(plan_id)
+
     def draft_outreach(self, plan_id: str, category: VendorCategory, channel: str, recipient: str, sender_name: str, vendor_id: str | None = None):
         """Write a quote request for a vendor in the plan, or for another vendor of the category when ``vendor_id`` is given (to compare quotes).
         It is a proposal: nothing leaves until it is approved."""
@@ -548,32 +659,61 @@ class EventMate:
         hit = self.suppressions.active_for(channel, recipient) if channel in ("email", "whatsapp") else None
         if hit is not None:
             raise ValueError("Blocked: do not contact. That address is on the do-not-contact list (" + hit.reason.replace("_", " ") + "); only you can lift it.")
-        return self.outreach_store.draft(self.store.latest(plan_id), category, channel, recipient, sender_name, vendor)
+        scope = self._scope(plan_id)
+        draft = self.outreach_store.draft(scope, category, channel, recipient, sender_name, vendor)
+        if getattr(scope, "is_brief", False):
+            self.staging.keep(brief_scope.staged_id_of(plan_id))  # the replies will be filed under this brief
+        return draft
 
     def outreach(self, plan_id: str):
-        self.store.latest(plan_id)
+        self._scope(plan_id)
         return self.outreach_store.list(plan_id)
 
     def mark_outreach_sent(self, plan_id: str, draft_id: str):
         """The manual path: the user sent it themselves from the link."""
-        self.store.latest(plan_id)
+        self._scope(plan_id)
         return self.outreach_store.mark_sent(plan_id, draft_id)
 
     def approve_outreach(self, plan_id: str, draft_id: str, content_hash: str):
         """Approve exactly this text; the agent sends it through the configured channel."""
-        self.store.latest(plan_id)
+        self._scope(plan_id)
         return self.conversations.approve(plan_id, draft_id, content_hash)
 
     def deny_outreach(self, plan_id: str, draft_id: str):
-        self.store.latest(plan_id)
+        self._scope(plan_id)
         return self.conversations.deny(plan_id, draft_id)
 
     def followup_outreach(self, plan_id: str, request_id: str, text: str, sender_name: str):
-        self.store.latest(plan_id)
+        self._scope(plan_id)
         return self.outreach_store.followup(plan_id, request_id, text, sender_name)
 
     def request_all_quotes(self, plan_id: str, sender_name: str):
+        scope = self._scope(plan_id)
+        if getattr(scope, "is_brief", False):
+            return self._request_all_for_brief(scope, sender_name)
         return self.conversations.request_all(plan_id, sender_name)
+
+    def _request_all_for_brief(self, scope, sender_name: str):
+        """One proposal per shortlisted business that has a contact the user confirmed and no live request. The user still approves each one; nothing is sent here."""
+        existing = self.outreach_store.list(scope.plan_id)
+        made, skipped = [], []
+        for item in self.shortlist_view(scope.plan_id):
+            biz, c = item.business, item.contact
+            live = any(d.vendor_id == biz.vendor_id and d.kind == "request" and d.status in ("prepared", "approved", "sending", "sent") for d in existing)
+            if live:
+                skipped.append(f"{biz.name}: already asked")
+            elif c is None:
+                skipped.append(f"{biz.name}: no confirmed contact")
+            elif not (address := c.email if c.preferred == "email" else c.whatsapp):
+                skipped.append(f"{biz.name}: no {c.preferred} address saved")
+            elif item.blocked:
+                skipped.append(f"{biz.name}: do not contact")
+            else:
+                to = address if c.preferred == "email" else "+" + address
+                made.append(self.outreach_store.draft(scope, biz.category, c.preferred, to, sender_name, (biz.vendor_id, biz.name, biz.origin)))
+        if made:
+            self.staging.keep(brief_scope.staged_id_of(scope.plan_id))
+        return made, skipped
 
     def inbox(self, plan_id: str):
         return self.conversations.inbox(plan_id)
@@ -697,7 +837,7 @@ class EventMate:
         contact = self.outreach_store.set_contact_record(VendorContact(
             vendor_id=biz.vendor_id, email=email, preferred="email", updated_at=now, origin="test", confirmed_by=confirmed_by.strip(), confirmed_at=now))
         if plan_id is not None:
-            self.store.latest(plan_id)
+            self._scope(plan_id)
             self.shortlist.add_entry(plan_id, category, biz.vendor_id)
         return biz, contact
 
@@ -714,10 +854,10 @@ class EventMate:
 
     def search_vendors(self, plan_id: str, category: VendorCategory, source: str | None = None, limit: int = 10) -> SearchOutcome:
         """Find businesses for a plan's city and category and shortlist them. Not vendor records, and nothing is contacted."""
-        return self.vendor_search.search(self.store.latest(plan_id), category, source, limit)
+        return self.vendor_search.search(self._scope(plan_id), category, source, limit)
 
     def shortlist_view(self, plan_id: str, category: VendorCategory | None = None) -> list[ShortlistItem]:
-        self.store.latest(plan_id)
+        self._scope(plan_id)
         contacts = self.outreach_store.contacts()
         out = []
         for e in self.shortlist.entries(plan_id, category):
@@ -732,6 +872,115 @@ class EventMate:
                 blocked=None if hit is None else ("do not contact: " + hit.reason.replace("_", " ")),
             ))
         return out
+
+    def _reply(self, plan_id: str, message_id: str) -> InboundMessage:
+        msg = next((m for m in self.outreach_store.inbound(plan_id) if m.message_id == message_id), None)
+        if msg is None or msg.category not in quote_template.ASKED:
+            raise ValueError("no such reply for this brief or plan")
+        return msg
+
+    def quote_assessments(self, plan_id: str) -> list[QuoteAssessment]:
+        """Each vendor reply read as a quote: field by field with the vendor's own line, what the user has confirmed, how complete it is, and what does not fit the event. Newest first."""
+        req = self._scope(plan_id).request
+        diets = tuple(d.value for d in req.dietary)
+        found = [assess(m, m.category, self.quote_confirmations.latest(plan_id, m.message_id), req.guest_count, diets) for m in self.outreach_store.inbound(plan_id) if m.category in quote_template.ASKED]
+        return sorted(found, key=lambda a: a.received_at, reverse=True)
+
+    def confirm_quote_fields(self, plan_id: str, message_id: str, items: dict[str, str | None], by: str, valid_days: str | None = None) -> QuoteAssessment:
+        """The user confirms fields of a reply: each as read (value None) or with the value they typed, which must read safely. An amount is confirmed on its own, never in a batch. Nothing is saved unless
+        every field passes. Once the price and its validity are both confirmed the price is recorded as a quote, with the guests and date it was for."""
+        scope = self._scope(plan_id)
+        by = (by or "").strip()
+        if not 1 <= len(by) <= 60:
+            raise ValueError("say who confirmed it (a name)")
+        msg = self._reply(plan_id, message_id)
+        reading = quote_template.read_message(msg, msg.category)
+        items = dict(items)
+        if valid_days not in (None, "") and "valid_days" not in items:
+            items["valid_days"] = str(valid_days)
+        if not items:
+            raise ValueError("nothing to confirm")
+        planned = []
+        for key, typed in items.items():
+            if key not in quote_template.ASKED[msg.category]:
+                raise ValueError(f"{key} is not asked of a {msg.category.value}")
+            label, kind = quote_template.FIELDS[key]
+            r = reading.fields[key]
+            if typed in (None, ""):
+                if r.state != "read":
+                    raise ValueError(f"{label}: nothing was read safely from the reply; type the value")
+                planned.append((key, r.value, False))
+            else:
+                value = parse_typed(msg.category, key, typed)
+                planned.append((key, value, value != r.value))
+        money = [k for k, _, _ in planned if quote_template.FIELDS[k][1] == "money"]
+        if money and (len(money) > 1 or any(k not in money and k != "valid_days" for k, _, _ in planned)):  # a price may travel with how long it holds, nothing else
+            raise ValueError("an amount is confirmed on its own: confirm the price and the deposit one at a time")
+        for key, value, edited in planned:
+            self.quote_confirmations.add(plan_id, message_id, msg.vendor_id, key, value, by, edited)
+        self._record_confirmed_quote(plan_id, msg, scope, by)
+        return next(a for a in self.quote_assessments(plan_id) if a.message_id == message_id)
+
+    def retract_quote_field(self, plan_id: str, message_id: str, field: str, by: str) -> QuoteAssessment:
+        """The user takes a confirmation back. A price already recorded as a quote is not taken back this way: confirm the right value instead and the newer quote stands."""
+        self._scope(plan_id)
+        msg = self._reply(plan_id, message_id)
+        if field not in self.quote_confirmations.latest(plan_id, message_id):
+            raise ValueError("that field is not confirmed")
+        price_key = quote_template.PRICE_KEY[msg.category]
+        if field in (price_key, "valid_days") and any(o.evidence_ref.startswith(f"reply {message_id}:") for o in self.observations.quotes(msg.vendor_id)):
+            raise ValueError("this price is already recorded as a quote: confirm the right value instead, and the newer quote stands")
+        if not (by or "").strip():
+            raise ValueError("say who took it back (a name)")
+        self.quote_confirmations.add(plan_id, message_id, msg.vendor_id, field, None, by, retracted=True)
+        return next(a for a in self.quote_assessments(plan_id) if a.message_id == message_id)
+
+    def _record_confirmed_quote(self, plan_id: str, msg: InboundMessage, scope, by: str) -> None:
+        """When the price and how long it holds are both confirmed, record the price as a quote observation (once per confirmed amount). It carries the guests and the date it was for, so it can later
+        be shown as out of date for another event."""
+        got = self.quote_confirmations.latest(plan_id, msg.message_id)
+        key = quote_template.PRICE_KEY[msg.category]
+        if key not in got or "valid_days" not in got:
+            return
+        amount, days = int(got[key].value), int(got["valid_days"].value)
+        tag = f"reply {msg.message_id}: {amount}"
+        if any(o.evidence_ref == tag and o.expires_at == (msg.received_at.date() + timedelta(days=days)) for o in self.observations.quotes(msg.vendor_id)):
+            return
+        taxes = got.get("taxes_included")
+        self.observe_quote(
+            msg.vendor_id, msg.category, source_type=ObservationSource.VENDOR_QUOTE, entered_by=by, observed_at=msg.received_at, expires_at=msg.received_at.date() + timedelta(days=days), confidence=CONFIRM_CONFIDENCE,
+            evidence_ref=tag, amount_inr=amount, basis="per_plate" if msg.category == VendorCategory.CATERER else "total", guest_count=scope.request.guest_count, quoted_for_date=scope.request.event_date,
+            hidden_costs=[HiddenCost(label="Taxes (GST) extra: ask for the amount")] if taxes is not None and taxes.value == "no" else [],
+            note=f"from the vendor's reply of {msg.received_at.date().isoformat()}; the price and its validity were confirmed by {by}"[:200],
+        )
+
+    def place_details(self, place_id: str, phone: bool = False):
+        """One Google listing as it is now, for a card. Nothing is stored."""
+        return self.places.details(place_id, phone)
+
+    def vendor_cards(self, plan_id: str, today: date | None = None, category: VendorCategory | None = None) -> list[VendorCard]:
+        """A card for each shortlisted business: what the app holds, with where each fact came from and whether the user confirmed it. A Google listing's own fields are not here; ``place_id`` fetches them."""
+        today = today or date.today()
+        scope = self._scope(plan_id)
+        drafts, replies = self.outreach_store.list(plan_id), self.outreach_store.inbound(plan_id)
+        guests = getattr(getattr(scope, "request", None), "guest_count", None)
+        when = getattr(getattr(scope, "request", None), "event_date", None)
+        return [
+            cards.assemble(i, self.observations.quotes(i.business.vendor_id), [d for d in drafts if d.vendor_id == i.business.vendor_id], [m for m in replies if m.vendor_id == i.business.vendor_id], today, guests, when)
+            for i in self.shortlist_view(plan_id, category)
+        ]
+
+    def request_text(self, plan_id: str, category: VendorCategory, vendor_name: str, sender_name: str) -> tuple[str, str]:
+        """The fixed quote request, as subject and body, for a person to send themselves from their own mail or WhatsApp. It is built from the brief's facts alone (never the budget) and nothing is stored or sent."""
+        scope = self._scope(plan_id)
+
+        def said(raw: str, fallback: str) -> str:
+            try:
+                return outreach_mod._clean_name(raw) or fallback
+            except ValueError:  # blank or not a plain name: the user fills it in before sending, nothing here is stored
+                return fallback
+
+        return outreach_mod._message(scope, category, said(vendor_name, "there"), said(sender_name, "[your name]"), self.outreach_store.checklists.get(category.value, ()))
 
     def _external(self, vendor_id: str) -> ExternalBusiness:
         biz = self.externals.get(vendor_id) if VendorRef.of(vendor_id).kind == "external" else None
@@ -751,10 +1000,13 @@ class EventMate:
         biz = self._external(vendor_id)
         if biz.is_test:
             raise ValueError("a test vendor's address is already confirmed by its owner; there is no website to read")
-        if not biz.website:
+        website = biz.website
+        if biz.source == "gplaces" and not website:  # the listing's website is not stored: ask Google for it now, use it, keep nothing of it
+            website = self.places.details(biz.external_id.split(":", 1)[1]).website
+        if not website:
             raise ValueError(f"{biz.name} has no website: type its website first (its listing did not publish one)")
         started = time.perf_counter()
-        res = find_contacts(self.contact_fetcher(), biz.website)
+        res = find_contacts(self.contact_fetcher(), website)
         added = self.shortlist.add_candidates(vendor_id, res.found)
         self.logs.tool_calls.log(
             request_id="sourcing", tool="contacts.find", args={"vendor_id": vendor_id, "pages": len(res.pages)}, ok=bool(res.pages),
@@ -772,7 +1024,7 @@ class EventMate:
             raise ValueError(f"that address is already {cand.status}")
         return self.shortlist.update(candidate_id, status="rejected")
 
-    def confirm_contact(self, vendor_id: str, candidate_id: str, by: str, edited_value: str | None = None, acknowledge_bounce: bool = False) -> VendorContact:
+    def confirm_contact(self, vendor_id: str, candidate_id: str, by: str, edited_value: str | None = None, acknowledge_bounce: bool = False, business_name: str | None = None) -> VendorContact:
         """The user confirms an address that was found for a discovered business, optionally correcting it. Only this creates its contact."""
         biz = self.externals.get(vendor_id)
         cand = self.shortlist.get_candidate(candidate_id)
@@ -782,11 +1034,15 @@ class EventMate:
             raise ValueError(f"that address is already {cand.status}")
         if not (by or "").strip():
             raise ValueError("say who confirmed it (a name)")
+        if biz.source == "gplaces" and biz.name_source != "user_confirmed" and not (business_name or "").strip():
+            raise ValueError("confirm the business name: type it as you want it in your own record (a Google listing's name is not stored)")
         value = clean_email(edited_value) if edited_value else cand.value
         edited = value.casefold() != cand.value.casefold()
         earlier = self.suppressions.active_for("email", value)
         if earlier is not None and earlier.reason == "bad_address" and acknowledge_bounce is not True:
             raise NeedsAcknowledgement(earlier.detail)  # nothing is saved until the user has seen why this address failed
+        if biz.source == "gplaces" and (business_name or "").strip():
+            self.externals.confirm_name(vendor_id, business_name)
         now = self.outreach_store.now()
         contact = self.outreach_store.set_contact_record(VendorContact(
             vendor_id=vendor_id, email=value, preferred="email", updated_at=now, origin="discovered", source_url=cand.source_url,

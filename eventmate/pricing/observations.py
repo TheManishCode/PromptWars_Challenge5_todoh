@@ -17,6 +17,24 @@ from eventmate.jsonl import JsonlLog
 from eventmate.schemas import ObservationSource, QuoteComparison, QuoteObservation, QuoteReport, VendorCategory
 
 EXPIRING_DAYS = 3
+OLD_AFTER_DAYS = 30  # a quote older than this is shown as old even when the vendor never said how long it held
+GUEST_DRIFT = 0.2  # a per-plate price depends on the headcount: more than this far from the quoted one, it is old for this event
+
+
+# FUTURE(quotes-fresh): the page says "confirm with the vendor" beside an earlier quote because nothing sends a fresh request yet. When a request is pending, say "we are asking for a fresh quote for your event" and, when it arrives, show the change ("was 650, now 700").
+def old_reasons(o: QuoteObservation, today: date, guests: int | None = None, event_date: date | None = None) -> tuple[str, ...]:
+    """Why a stored quote should not be read as today's price for this event; empty when nothing says so. A display rule only: it never makes a quote usable."""
+    why = []
+    if today > o.expires_at:
+        why.append(f"it expired on {o.expires_at.isoformat()}")
+    age = (today - o.observed_at.date()).days
+    if age > OLD_AFTER_DAYS:
+        why.append(f"it is {age} days old")
+    if guests and o.guest_count and abs(guests - o.guest_count) > GUEST_DRIFT * o.guest_count:
+        why.append(f"it was for {o.guest_count} guests, not {guests}")
+    if event_date and o.quoted_for_date and o.quoted_for_date != event_date:
+        why.append(f"it was for {o.quoted_for_date.isoformat()}, not {event_date.isoformat()}")
+    return tuple(why)
 
 
 class _ObservationFile(JsonlLog[QuoteObservation]):

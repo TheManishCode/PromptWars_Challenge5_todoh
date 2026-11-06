@@ -29,9 +29,15 @@ class Net:
         self.places, self.exc, self.raw, self.calls = places if places is not None else [place()], exc, raw, []
 
     def __call__(self, url, headers, data, timeout):
-        self.calls.append((url, headers, json.loads(data)))
+        self.calls.append((url, headers, json.loads(data) if data is not None else None))
         if self.exc:
             raise self.exc
+        if data is None:  # a details request: the one place with that id
+            wanted = url.rsplit("/", 1)[-1]
+            hit = next((p for p in self.places if p.get("id") == wanted), None)
+            if hit is None:
+                raise urllib.error.HTTPError(url, 404, "not found", {}, None)
+            return json.dumps(hit).encode()
         return self.raw if self.raw is not None else json.dumps({"places": self.places}).encode()
 
 
@@ -95,9 +101,18 @@ def test_unreadable_entries_are_skipped_not_fatal():
     assert [p.name for p in r.places] == ["Good"] and r.warnings
 
 
-def test_a_second_identical_search_uses_the_cache_to_save_quota():
+def test_nothing_from_a_listing_is_cached_by_default():
+    """Google's policy: Places content is not cached or stored beyond the place id. Two searches are two requests."""
     net = Net()
     s = src(net)
+    s.search("venue", "Pune")
+    s.search("venue", "pune")
+    assert len(net.calls) == 2
+
+
+def test_a_caller_with_its_own_licence_can_opt_in_to_a_cache():
+    net = Net()
+    s = PlacesSource(api_key=KEY, transport=net, cache_ttl=600)
     s.search("venue", "Pune")
     s.search("venue", "pune")
     assert len(net.calls) == 1

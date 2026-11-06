@@ -612,12 +612,36 @@
   }
   var NO_ALLERGY = 'None stated. If anyone has an allergy, write it above before you build.';
   function fieldLabel(f) { for (var i = 0; i < FIELD.length; i++) if (FIELD[i][0] === f) return FIELD[i][1]; return words(f); }
+  // FUTURE(page-resume): the server keeps the staged brief (GET /api/intake/<id>) but the page does not look for one on load, so a reload starts an empty dialog. Keep the id in sessionStorage and offer "Continue your brief".
+  // FUTURE(page-edit): only guests, city, date and budget can be typed onto the card. Event type, diets, allergies and services still need a sentence; add typed edits for them (the schema in intake.edited already checks any field in EDITABLE).
+  // FUTURE(page-provenance): the card flags only the fields a model filled that the rules could not confirm. Show per field whether it was read by the rules, filled by a model, pressed by the user or assumed ("year not given; assumed" belongs on the date).
+  // FUTURE(page-graph): draw the plan graph (result.graph, or GET /api/plans/<id>/graph) as a "why this plan" view.
+  var EDIT = { guest_count: 'number', city: 'text', event_date: 'date', budget_total: 'number' };  // the facts that can be typed straight onto the card
+  function editButton(key, label, dd, shown, t) {
+    return h('button', { type: 'button', class: 'linkish', 'aria-label': 'Edit ' + label.toLowerCase(), onclick: function () {
+      var input = h('input', { type: EDIT[key], value: t.draft[key] === null || t.draft[key] === undefined ? '' : String(t.draft[key]), 'aria-label': label, required: true, min: EDIT[key] === 'number' ? '1' : undefined }), msg = h('small', { class: 'notice bad', role: 'alert', hidden: true });
+      var form = h('form', { class: 'row' }, input, h('button', { type: 'submit', text: 'Save' }), h('button', { type: 'button', text: 'Cancel', onclick: function () { renderUnderstood(); } }), msg);
+      form.addEventListener('submit', function (ev) {
+        ev.preventDefault(); var raw = input.value.trim(); if (!raw) return;
+        var value = EDIT[key] === 'number' ? Number(raw) : raw, patch = {}; patch[key] = value;
+        api('/api/intake/' + t.staged_id + '/fields', { method: 'PATCH', body: { fields: patch, version: t.version } }).then(function (r) {
+          if (r.ok && r.data) { st.turn = r.data; st.draft = r.data.draft; renderUnderstood(); announce(label + ' changed.'); return; }
+          msg.hidden = false; msg.textContent = r.status === 409 ? 'This brief changed somewhere else. Reloading it.' : errText(r, 'That could not be used');
+          if (r.status === 409 || r.status === 410) reloadStaged(t.staged_id);
+        });
+      });
+      clear(dd); dd.appendChild(form); input.focus();
+    } });
+  }
+  function reloadStaged(id) {  // the stored brief, as the card shows it
+    api('/api/intake/' + id).then(function (r) { if (r.ok && r.data) { st.turn = r.data; st.draft = r.data.draft; renderUnderstood(); } });
+  }
   function renderUnderstood() {
     var box = clear($('#understood')), t = st.turn; if (!t) return;
     var dl = h('dl', { class: 'facts' }); FIELD.forEach(function (p) {
       var v = fieldValue(t.draft, p[0]);
       if (v === null && p[0] === 'allergens' && !(t.draft.allergy_unclear || []).length) v = NO_ALLERGY;  // a missed allergy must not look the same as "none": the card always says what it holds
-      if (v !== null) { dl.appendChild(h('dt', { text: p[1] })); dl.appendChild(h('dd', { text: v })); }
+      if (v !== null) { var dd = h('dd', null, v); if (t.staged_id && t.state === 'pending_validation' && EDIT[p[0]]) dd.appendChild(editButton(p[0], p[1], dd, v, t)); dl.appendChild(h('dt', { text: p[1] })); dl.appendChild(dd); }
     });
     var card = h('div', { class: 'card' }, h('h2', { text: 'What I understood' }), dl), notes = [].concat(t.flags && t.flags.length ? ['Please double-check: ' + t.flags.map(fieldLabel).join(', ')] : [], t.notes || []);
     if (t.changes && t.changes.length) card.appendChild(h('ul', { class: 'list changes', 'aria-label': 'What changed' }, t.changes.map(function (c) { return h('li', { text: c }); })));
@@ -630,18 +654,262 @@
         return h('button', { type: 'button', text: label, onclick: function () { sendBrief(label, { key: q.key, pick: i }); } });  // the number of the option is sent, not text to be read again
       }))));
     });
-    if (t.ready) { box.appendChild(h('div', { class: 'row' }, h('button', { type: 'button', class: 'pill pill--k', id: 'build', text: 'Build my plan', onclick: build }))); box.appendChild(h('p', { class: 'hint', text: 'Nothing is planned until you press this. Add more detail above to change what was understood.' })); }
+    if (t.ready && !t.no_vendors) { box.appendChild(h('div', { class: 'row' }, h('button', { type: 'button', class: 'pill pill--k', id: 'build', text: 'Build my plan', onclick: build }))); box.appendChild(h('p', { class: 'hint', text: 'Nothing is planned until you press this. Add more detail above to change what was understood.' })); }
+    else if (t.ready && t.no_vendors) renderFound(box, t.draft, t);
     else if (!open.length) { box.appendChild(h('p', { class: 'hint', text: t.question || 'Tell me more about the event.' })); }
+  }
+  // FUTURE(quotes-fresh): wording for a pending fresh request; see pricing/observations.py.
+  function earlierNote(q) {  // what this vendor said before, dated, and why it may not hold: shown for orientation only, never used as a price
+    var when = new Date(q.observed_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    var said = 'Earlier quote: ' + inr(q.amount_inr) + (q.basis === 'per_plate' ? ' per plate' : ' in total') + (q.guest_count ? ' for ' + q.guest_count + ' guests' : '') + ', ' + when + '.';
+    var why = q.old && q.old.length ? ' Out of date: ' + q.old.join('; ') + '.' : ' It may have changed.';
+    return h('small', { class: 'foot', role: 'note', text: said + why + ' Confirm with the vendor before relying on it.' });
+  }
+  var FOUND_KINDS = [['caterer', 'Caterers'], ['venue', 'Venues'], ['photographer', 'Photographers']];
+  function renderFound(box, draft, t) {
+    var city = draft.city;  // a city with no vendor records: the agent looks the businesses up itself, once per city, and shows what it found (no prices: a listing has none)
+    var card = h('div', { class: 'card', id: 'found' }, h('h2', { text: 'Found online in ' + city }), h('p', { class: 'hint', role: 'status', text: 'I have no vendor records for ' + city + ' yet, so I cannot build a plan there. These businesses were found online. They are listings, not quotes: there is no price or availability until a vendor confirms. Listing details are not stored.' }));
+    card.appendChild(gmaps());
+    box.appendChild(card);
+    var covered = (st.turn && st.turn.covered_cities) || [];
+    if (covered.length) card.appendChild(h('div', null, h('p', { class: 'hint', text: 'I can build a full plan in:' }), h('div', { class: 'chips' }, covered.map(function (c) {
+      return h('button', { type: 'button', text: c, onclick: function () { sendBrief('change city to ' + c); } });
+    }))));
+    var hit = st.found && st.found.city === city ? st.found : (st.found = { city: city, kinds: {} });
+    var earlier = {};  // a business's last quote by its place id, so it can sit under its listing while a fresh one is awaited
+    api('/api/earlier-quotes?city=' + encodeURIComponent(city) + (draft.guest_count ? '&guests=' + draft.guest_count : '') + (draft.event_date ? '&date=' + draft.event_date : '')).then(function (r) {
+      ((r.ok && r.data && r.data.quotes) || []).forEach(function (q) { earlier[q.external_id] = q; });
+      card.querySelectorAll('li[data-place]').forEach(function (li) { var q = earlier['gplaces:' + li.getAttribute('data-place')]; if (q) li.appendChild(earlierNote(q)); });
+    });
+    FOUND_KINDS.forEach(function (k) {
+      var slot = h('div', null, h('h3', { text: k[1] }), h('p', { class: 'hint', text: 'Looking...' })); card.appendChild(slot);
+      var done = function (r) {
+        if (r.ok) hit.kinds[k[0]] = r; if (!slot.isConnected) return;
+        var list = r.ok && r.data && r.data.places ? r.data.places : null; clear(slot); slot.appendChild(h('h3', { text: k[1] }));
+        if (!list) {  // never the server's wording: it can name a setting a visitor cannot change
+          slot.appendChild(h('p', { class: 'hint', text: r.status === 503 ? 'Looking businesses up online is not switched on here.' : r.status === 429 ? 'This hour\'s online lookups are used up. Try again later.' : 'I could not look up ' + k[1].toLowerCase() + ' just now.' }));
+          if (r.status !== 503) slot.appendChild(h('button', { type: 'button', text: 'Try again', onclick: function () { renderUnderstood(); } }));
+          return;
+        }
+        if (!list.length) { slot.appendChild(h('p', { class: 'hint', text: 'Nothing found.' })); return; }
+        slot.appendChild(h('ul', { class: 'list' }, list.slice(0, 6).map(function (p) {
+          var line = p.name + (p.address ? ', ' + p.address.split(',').slice(-3).join(',').trim() : '') + (p.rating ? ' (' + p.rating + ' from ' + (p.rating_count || 0) + ' reviews)' : '');
+          var li = h('li', { 'data-place': p.place_id || '' }, /^https:\/\//.test(p.maps_uri || '') ? h('a', { href: p.maps_uri, target: '_blank', rel: 'noopener noreferrer', text: line }) : line);
+          if (earlier['gplaces:' + p.place_id]) li.appendChild(earlierNote(earlier['gplaces:' + p.place_id]));
+          return li;
+        })));
+      };
+      if (hit.kinds[k[0]]) done(hit.kinds[k[0]]); else api('/api/places?kind=' + k[0] + '&city=' + encodeURIComponent(city)).then(done);
+    });
+    renderAsk(card, t);
+  }
+
+  /* a brief with no plan: find the vendors, confirm an email for each, write the requests, approve each one. The same stores and approvals as a plan, filed under brief_<id>. */
+  function renderAsk(card, t) {
+    var d = t && t.draft, key = t && t.staged_id ? 'brief_' + t.staged_id : null; if (!key || !d.city || !d.event_date || !d.guest_count) return;
+    var name = h('input', { type: 'text', id: 'ask-name', maxlength: '60', 'aria-label': 'Your name', placeholder: 'Your name (the vendors see it)', value: st.askName || '' }), list = h('div', { id: 'ask-list' }), drafts = h('div', { id: 'ask-drafts' }), msg = h('p', { class: 'hint', role: 'status' });
+    var go = h('button', { type: 'button', text: st.askStarted === key ? 'Look again' : 'Find vendors I can email', onclick: function () { st.askName = name.value.trim(); findVendors(key, go, list, drafts, name, msg); } });
+    name.addEventListener('input', function () { st.askName = name.value.trim(); });
+    card.appendChild(h('div', { id: 'ask-vendors' }, h('h3', { text: 'Ask these vendors for a quote' }), h('p', { class: 'hint', text: 'I write one email per vendor, from your mailbox. Nothing is sent until you approve each message, word for word. Your budget is never in it.' }),
+      h('div', { class: 'row' }, name, go), msg, list, drafts));
+    if (st.askStarted === key) { loadAsk(key, list, drafts, name, msg); }
+  }
+  function gmaps() {  // Google's own logo, unmodified, 18dp high with its clear space (CSS), and the accessibility label Google asks for
+    return h('span', { class: 'gmaps' }, h('img', { src: '/static/google-maps-logo.svg', alt: 'Google Maps', width: '98', height: '18' }));
+  }
+  var SRC = { user_confirmed: 'You confirmed this', vendor_website: 'Found on the vendor\'s own website', osm_listing: 'OpenStreetMap listing', vendor_quote: 'Quote from the vendor', vendor_reply: 'The vendor\'s reply', app_request: 'Request written here' };
+  var FACT = { name: 'Name', website: 'Website', 'contact.email': 'Email', 'contact.whatsapp': 'WhatsApp', quote: 'Quote', request: 'Request', reply: 'Reply' };
+  st.place = st.place || {};  // a Google listing as fetched in this visit: shown, never kept past it
+  function listingFor(place_id) {
+    if (!place_id) return null; if (st.place[place_id]) return st.place[place_id];
+    var hit = null; if (st.found) Object.keys(st.found.kinds || {}).forEach(function (k) { var r = st.found.kinds[k]; ((r && r.data && r.data.places) || []).forEach(function (p) { if (p.place_id === place_id) hit = p; }); });
+    return hit;
+  }
+  function safeUrl(u) { return /^https?:\/\/[^\s<>"']+$/.test(u || '') ? u : null; }
+  function vendorCard(c, key, nameInput, msg, again, quotes) {
+    var base = '/api/plans/' + key, live = listingFor(c.place_id), title = (live && live.name) || c.name, box = h('article', { class: 'vcard', 'data-vendor': c.vendor_id, 'aria-label': title });
+    var head = h('h4', null, title, h('small', { class: 'foot', text: ' ' + c.category + (c.label ? ' · ' + c.label : '') })); box.appendChild(head);
+    var line = h('p', { class: 'hint' }); box.appendChild(line);
+    var fill = function (p) {
+      st.place[c.place_id] = p; clear(line); head.firstChild.nodeValue = p.name;
+      line.appendChild(document.createTextNode((p.address ? p.address + ' · ' : '') + (p.rating ? p.rating + ' from ' + (p.rating_count || 0) + ' reviews · ' : '')));
+      if (safeUrl(p.maps_uri)) line.appendChild(h('a', { href: p.maps_uri, target: '_blank', rel: 'noopener noreferrer', text: 'Open in Maps' }));
+      if (safeUrl(p.website)) { line.appendChild(document.createTextNode(' · ')); line.appendChild(h('a', { href: p.website, target: '_blank', rel: 'noopener noreferrer', text: 'Website' })); }
+      line.appendChild(gmaps()); line.appendChild(h('small', { class: 'foot', text: ' Listing details, fetched just now and not stored.' }));
+    };
+    if (c.place_id) {
+      if (live && live.address !== undefined) fill(live);
+      else { line.textContent = 'Fetching the listing...'; api('/api/places/' + encodeURIComponent(c.place_id)).then(function (r) { if (r.ok && r.data) fill(r.data); else line.textContent = r.status === 502 || r.status === 503 ? 'The listing could not be fetched just now.' : 'Google no longer lists this business under that id.'; }); }
+    }
+    var facts = h('ul', { class: 'list facts' });
+    (c.facts || []).forEach(function (f) {
+      var when = f.captured_at ? new Date(f.captured_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null, src = safeUrl(f.source_ref) && f.source_type !== 'user_confirmed';
+      facts.appendChild(h('li', { 'data-field': f.field, 'data-status': f.status }, h('b', { text: FACT[f.field] || f.field }), ': ' + f.value + ' ', h('small', { class: 'foot', text: '(' + SRC[f.source_type] + (when ? ', ' + when : '') + ' · ' + (f.user_confirmed ? 'confirmed by you' : 'not confirmed') + (f.status && f.status !== 'held' && f.status !== 'confirmed' ? ' · ' + f.status : '') + ')' }),
+        src ? h('a', { href: f.source_ref, target: '_blank', rel: 'noopener noreferrer', text: ' source' }) : null,
+        f.conflict ? h('small', { class: 'notice bad', text: ' Conflicts with another address or value held for this business: neither is chosen for you.' }) : null,
+        f.note ? h('small', { class: 'foot', text: ' ' + f.note }) : null,
+        f.evidence ? h('blockquote', { class: 'mono', text: '\u201c' + f.evidence + '\u201d' }) : null));
+      var li = facts.lastChild;
+      if ((f.field === 'contact.email') && f.status === 'found') {  // confirming keeps the address and, for a Google listing, the name the user wants in their own records
+        li.appendChild(h('button', { type: 'button', text: 'Use this email', onclick: function () { confirmForm(li, c, f, key, nameInput, msg, again); } }));
+        li.appendChild(h('button', { type: 'button', text: 'Not this one', onclick: function () { api(base + '/shortlist/' + encodeURIComponent(c.vendor_id) + '/contacts/' + encodeURIComponent(f.candidate_id || '') + '/reject', { method: 'POST', body: {} }).then(again); } }));
+      }
+    });
+    if (!facts.children.length) facts.appendChild(h('li', { class: 'hint', text: 'Nothing held yet beyond the listing: no email found, no quote, no request.' }));
+    box.appendChild(h('details', { open: '' }, h('summary', { text: 'What this app holds, and where it came from' }), facts));
+    (quotes || []).forEach(function (a) { box.appendChild(quoteBlock(a, key, nameInput, msg, again)); });
+    var acts = h('div', { class: 'row' }); box.appendChild(acts);
+    var hasEmail = (c.facts || []).some(function (f) { return f.field === 'contact.email' && f.status !== 'rejected'; });
+    if (!hasEmail && !c.contact_ready) acts.appendChild(h('button', { type: 'button', text: 'Find email on their website', onclick: function (ev) {
+      ev.currentTarget.disabled = true; api(base + '/shortlist/' + encodeURIComponent(c.vendor_id) + '/find-contacts', { method: 'POST', body: {} }).then(function (x) {
+        msg.textContent = x.ok && x.data && !(x.data.added || []).length ? 'No email address on that site.' : (x.ok ? '' : (x.status === 400 ? 'No website to read for this business.' : errText(x, 'The site could not be read'))); again();
+      });
+    } }));
+    acts.appendChild(h('button', { type: 'button', text: 'Write to them myself', onclick: function () { contactPanel(box, c, key, nameInput, title); } }));
+    return box;
+  }
+  var STATE = { confirmed: 'Confirmed', read: 'Read from the reply, not confirmed', unclear: 'Unclear', missing: 'Not answered' };
+  function shown(f) {
+    if (f.value === null || f.value === undefined) return null;
+    if (f.money) return inr(Number(f.value)) + (f.key === 'price' ? ' per plate' : '');
+    if (f.key === 'taxes_included' || f.key === 'available') return f.value === 'yes' ? 'Yes' : 'No';
+    if (f.key === 'diets') return f.value.split(',').map(function (d) { return d.replace('_', ' '); }).join(', ');
+    if (f.key === 'valid_days') return f.value + ' days';
+    return f.value;
+  }
+  function quoteBlock(a, key, nameInput, msg, again) {  // the reply read field by field: nothing counts until the user confirms that field, and an amount is confirmed on its own
+    var base = '/api/plans/' + key + '/quote-readings/' + encodeURIComponent(a.message_id), when = new Date(a.received_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    var box = h('section', { class: 'qblock', 'data-message': a.message_id, 'aria-label': 'Quote from the reply of ' + when });
+    box.appendChild(h('h5', null, 'Quote from the reply of ' + when, h('small', { class: a.comparable ? 'ok' : 'foot', text: a.comparable ? ' · comparable' : ' · not comparable yet' })));
+    box.appendChild(h('p', { class: 'hint', text: a.confirmed_required + ' of ' + a.required_total + ' required fields confirmed by you · ' + (a.read_required - a.confirmed_required) + ' read and waiting' + (a.template_used ? '' : ' · the reply did not use the template, so only what it clearly says was read') }));
+    box.appendChild(h('progress', { max: String(a.required_total), value: String(a.confirmed_required), 'aria-label': 'Required fields confirmed' }));
+    var who = function () { var v = (nameInput.value || '').trim(); if (!v) { msg.textContent = 'Type your name first: it is recorded as the person who confirmed this.'; nameInput.focus(); return null; } return v.slice(0, 60); };
+    var send = function (fields, extra) { var by = who(); if (!by) return; api(base + '/confirm', { method: 'POST', body: Object.assign({ fields: fields, by: by }, extra || {}) }).then(function (x) { msg.textContent = x.ok ? '' : errText(x, 'That could not be confirmed'); again(); }); };
+    var byKey = {}; a.fields.forEach(function (f) { byKey[f.key] = f; });
+    var list = h('ul', { class: 'list qfields' });
+    a.fields.forEach(function (f) {
+      var li = h('li', { 'data-field': f.key, 'data-state': f.state }, h('b', { text: f.label }), ': ', shown(f) || '—', ' ',
+        h('small', { class: 'foot', text: '(' + STATE[f.state] + (f.state === 'confirmed' ? ' by ' + f.confirmed_by + (f.edited ? ', a value you typed' : '') : '') + (f.source === 'free_text' ? ' · from free text' : '') + (f.note && f.state !== 'confirmed' ? ' · ' + f.note : '') + ')' }));
+      if (f.evidence && f.state !== 'confirmed') li.appendChild(h('blockquote', { class: 'mono', text: '“' + f.evidence + '”' }));
+      var row = h('div', { class: 'row' });
+      var typed = function (label) {  // a value the user types: the same parser as the vendor's line decides whether it can be used
+        row.appendChild(h('button', { type: 'button', text: label, onclick: function (ev) {
+          ev.currentTarget.remove(); var input = h('input', { type: 'text', maxlength: '120', 'aria-label': f.label, value: f.value || '' }), go = h('button', { type: 'button', text: 'Confirm what I typed' });
+          go.addEventListener('click', function () { if (!input.value.trim()) return; var o = {}; o[f.key] = input.value.trim(); send(o, f.key === 'price' || f.key === 'price_total' || f.key === 'package' ? { valid_days: (byKey.valid_days.value || undefined) } : undefined); });
+          row.appendChild(input); row.appendChild(go); input.focus();
+        } }));
+      };
+      if (f.state === 'read') {
+        var isPrice = f.key === 'price' || f.key === 'price_total' || f.key === 'package';
+        row.appendChild(h('button', { type: 'button', class: f.money ? 'pill pill--k' : '', text: f.money ? 'Confirm ' + shown(f) : 'Confirm', onclick: function () {
+          var o = {}; o[f.key] = null;
+          if (isPrice && byKey.valid_days.state !== 'confirmed') {  // the price is a quote only with how long it holds
+            var days = h('input', { type: 'number', min: '1', max: '365', 'aria-label': 'How many days the price is valid', value: byKey.valid_days.value || '', required: true }), go = h('button', { type: 'button', text: 'Confirm price and validity' });
+            go.addEventListener('click', function () { if (days.value) send(o, { valid_days: String(days.value) }); });
+            row.appendChild(h('label', null, 'Valid for how many days? ', days)); row.appendChild(go); days.focus(); return;
+          }
+          send(o);
+        } }));
+        typed('Change');
+      } else if (f.state === 'unclear' || f.state === 'missing') typed('Type the value');
+      else row.appendChild(h('button', { type: 'button', text: 'Take back', onclick: function () { var by = who(); if (!by) return; api(base + '/retract', { method: 'POST', body: { field: f.key, by: by } }).then(function (x) { msg.textContent = x.ok ? '' : errText(x, 'That could not be taken back'); again(); }); } }));
+      li.appendChild(row); list.appendChild(li);
+    });
+    box.appendChild(list);
+    var rest = a.fields.filter(function (f) { return f.state === 'read' && !f.money && f.key !== 'inclusions' && f.key !== 'valid_days'; });  // how long a price holds is confirmed with the price, never in a batch
+    if (rest.length > 1) box.appendChild(h('div', { class: 'row' }, h('button', { type: 'button', text: 'Confirm the ' + rest.length + ' other fields as read', onclick: function () { var o = {}; rest.forEach(function (f) { o[f.key] = null; }); send(o); } }), h('small', { class: 'foot', text: 'Amounts are never confirmed in a batch.' })));
+    if (a.issues.length) box.appendChild(h('ul', { class: 'list' }, a.issues.map(function (i) { return h('li', { class: i.blocking ? 'notice bad' : 'hint', text: (i.blocking ? 'Does not fit: ' : 'Note: ') + i.text + (i.tentative ? ' (as read, not confirmed yet)' : '') }); })));
+    return box;
+  }
+  function confirmForm(li, c, f, key, nameInput, msg, again) {
+    var who = h('input', { type: 'text', maxlength: '60', 'aria-label': 'Your name', value: nameInput.value || '', placeholder: 'Your name' }), nm = h('input', { type: 'text', maxlength: '120', 'aria-label': 'Name to keep for this business', value: (listingFor(c.place_id) || {}).name || (c.name_confirmed ? c.name : ''), placeholder: 'Business name for your records' });
+    var form = h('form', { class: 'row' }, h('label', null, 'Business name to keep in your records ', nm), h('label', null, 'Confirmed by ', who), h('button', { type: 'submit', text: 'Confirm' }), h('button', { type: 'button', text: 'Cancel', onclick: function () { again(); } }));
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault(); if (!who.value.trim()) return; nameInput.value = who.value.trim();
+      var body = { by: who.value.trim().slice(0, 60) }; if (c.source === 'gplaces') body.business_name = nm.value.trim();
+      api('/api/plans/' + key + '/shortlist/' + encodeURIComponent(c.vendor_id) + '/contacts/' + encodeURIComponent(f.candidate_id || '') + '/confirm', { method: 'POST', body: body }).then(function (x) { msg.textContent = x.ok ? '' : errText(x, 'That address could not be confirmed'); again(); });
+    });
+    li.appendChild(form); nm.focus();
+  }
+  function contactPanel(box, c, key, nameInput, title) {  // the request as text, for the user to send from their own mail or WhatsApp: nothing here sends, stores or records it
+    var old = box.querySelector('.contact'); if (old) { old.remove(); return; }
+    var panel = h('div', { class: 'contact' }, h('p', { class: 'hint', text: 'Writing it...' })); box.appendChild(panel);
+    var q = '?category=' + encodeURIComponent(c.category) + '&name=' + encodeURIComponent(title) + '&sender=' + encodeURIComponent(nameInput.value || '');
+    api('/api/plans/' + key + '/request-text' + q).then(function (r) {
+      clear(panel); if (!r.ok || !r.data) { panel.appendChild(h('p', { class: 'notice bad', text: errText(r, 'The request could not be written') })); return; }
+      var t = r.data, emails = (c.facts || []).filter(function (f) { return f.field === 'contact.email' && f.status !== 'rejected'; });
+      panel.appendChild(h('p', { class: 'hint', text: 'This is the request as the app would write it. Sending it yourself is outside the app: it is not recorded and replies do not come back here.' }));
+      panel.appendChild(h('p', { class: 'mono exact', text: t.subject + '\n\n' + t.body }));
+      var row = h('div', { class: 'row' }); panel.appendChild(row);
+      emails.forEach(function (f) { row.appendChild(h('a', { class: 'pill', href: 'mailto:' + encodeURIComponent(f.value).replace('%40', '@') + '?subject=' + encodeURIComponent(t.subject) + '&body=' + encodeURIComponent(t.body), text: 'Email ' + f.value })); });
+      var wa = h('button', { type: 'button', text: 'Show phone and WhatsApp' }); row.appendChild(wa);
+      wa.addEventListener('click', function () {
+        wa.disabled = true;
+        api('/api/places/' + encodeURIComponent(c.place_id || 'none0000') + '?phone=1').then(function (x) {
+          if (!c.place_id || !x.ok || !x.data || !x.data.phone) { row.appendChild(h('small', { class: 'foot', text: c.place_id ? 'Google lists no phone number for this business.' : 'This business has no Google listing to read a phone from.' })); return; }
+          var digits = x.data.phone.replace(/\D/g, ''), clean = x.data.phone;
+          row.appendChild(h('small', { class: 'foot', text: clean + ' (from Google, shown now, not stored) ' }));
+          row.appendChild(h('a', { class: 'pill', href: 'tel:' + (clean.charAt(0) === '+' ? '+' : '') + digits, text: 'Call' }));
+          row.appendChild(h('a', { class: 'pill', href: 'https://wa.me/' + digits + '?text=' + encodeURIComponent(t.body), target: '_blank', rel: 'noopener noreferrer', text: 'WhatsApp them' }));
+        });
+      });
+    });
+  }
+  function findVendors(key, btn, list, drafts, name, msg) {
+    btn.disabled = true; btn.textContent = 'Looking...';
+    Promise.all(['caterer', 'venue', 'photographer'].map(function (c) { return api('/api/plans/' + key + '/shortlist/search', { method: 'POST', body: { category: c, source: 'places', limit: 6 } }); })).then(function () {
+      btn.disabled = false; btn.textContent = 'Look again'; st.askStarted = key; loadAsk(key, list, drafts, name, msg);
+    });
+  }
+  function loadAsk(key, list, drafts, name, msg) {
+    var base = '/api/plans/' + key, again = function () { loadAsk(key, list, drafts, name, msg); };
+    Promise.all([api(base + '/vendor-cards'), api(base + '/quote-readings')]).then(function (both) {
+      var r = both[0], quotes = both[1].ok && both[1].data && Array.isArray(both[1].data.quotes) ? both[1].data.quotes : [];
+      clear(list); var cards = r.ok && r.data && Array.isArray(r.data.cards) ? r.data.cards : [];
+      if (!cards.length) { list.appendChild(h('p', { class: 'hint', text: 'No businesses to ask yet.' })); }
+      cards.forEach(function (c) { list.appendChild(vendorCard(c, key, name, msg, again, quotes.filter(function (q) { return q.vendor_id === c.vendor_id; }))); });
+      var ready = cards.filter(function (c) { return c.contact_ready; }).length;
+      if (ready) list.appendChild(h('div', { class: 'row' }, h('button', { type: 'button', class: 'pill pill--k', text: 'Write the requests (' + ready + ')', onclick: function () {
+        if (!name.value.trim()) { msg.textContent = 'Type your name first: the email is signed with it.'; name.focus(); return; }
+        api(base + '/outreach/request-all', { method: 'POST', body: { sender_name: name.value.trim().slice(0, 80) } }).then(function (x) { msg.textContent = x.ok ? '' : errText(x, 'The requests could not be written'); again(); });
+      } })));
+    });
+    api(base + '/outreach').then(function (r) {
+      clear(drafts); (r.ok && Array.isArray(r.data) ? r.data : []).forEach(function (dr) {
+        if (dr.status === 'prepared') {
+          var card = h('div', { class: 'card', 'data-draft': dr.draft_id }, h('p', null, h('b', { text: 'Approve to send' }), ' \u00b7 email to ' + dr.vendor_name + ' ', h('span', { class: 'mono', text: dr.recipient })), h('p', { class: 'mono exact', text: dr.subject + '\n\n' + dr.body }));
+          var yes = h('button', { type: 'button', class: 'pill pill--k', text: 'Approve exactly this and send' }), no = h('button', { type: 'button', text: 'Do not send' }), say2 = h('small', { class: 'foot', role: 'status' });
+          yes.addEventListener('click', function () { yes.disabled = no.disabled = true; api(base + '/outreach/' + encodeURIComponent(dr.draft_id) + '/approve', { method: 'POST', body: { content_hash: dr.content_hash } }).then(function (x) { say2.textContent = x.ok ? 'Approved: sent through your mailbox.' : errText(x, 'Not approved, and nothing was sent'); if (x.ok) again(); else yes.disabled = no.disabled = false; }); });
+          no.addEventListener('click', function () { yes.disabled = no.disabled = true; api(base + '/outreach/' + encodeURIComponent(dr.draft_id) + '/deny', { method: 'POST', body: {} }).then(function () { again(); }); });
+          card.appendChild(h('div', { class: 'row' }, yes, no)); card.appendChild(say2); drafts.appendChild(card);
+        } else if (dr.status === 'stale') drafts.appendChild(h('p', { class: 'hint', text: 'The request to ' + dr.vendor_name + ' no longer matches your brief. Write the requests again.' }));
+        else if (['sent', 'approved', 'sending'].indexOf(dr.status) >= 0) drafts.appendChild(h('p', { class: 'hint', text: 'Asked ' + dr.vendor_name + ' (' + dr.status + '). Waiting for a reply.' }));
+      });
+    });
+    api(base + '/inbox').then(function (r) {  // what the vendors wrote back: their own words as text, and the amounts and answers read from them. Nothing here records a quote.
+      var box = $('#ask-replies'); if (box) box.remove(); var threads = r.ok && r.data && r.data.threads ? r.data.threads.filter(function (t2) { return (t2.replies || []).length; }) : []; if (!threads.length) return;
+      box = h('div', { id: 'ask-replies' }, h('h3', { text: 'Replies' }));
+      threads.forEach(function (t2) {
+        (t2.replies || []).forEach(function (m) {
+          var a = m.analysis || {}, facts = [];
+          (a.amounts || []).forEach(function (x) { facts.push(inr(x.low_inr) + (x.high_inr !== x.low_inr ? ' to ' + inr(x.high_inr) : '') + (x.unit && x.unit !== 'unspecified' ? ' ' + x.unit : '')); });
+          if (a.says_available) facts.push('says it is available'); if (a.says_unavailable) facts.push('says it is NOT available'); if (a.asks_to_stop) facts.push('asks you to stop');
+          box.appendChild(h('div', { class: 'card', 'data-reply': m.message_id }, h('p', null, h('b', { text: m.vendor_name }), ' wrote:'), h('p', { class: 'mono exact', text: String(m.body).slice(0, 1200) }),
+            facts.length ? h('p', { class: 'hint', text: 'I read: ' + facts.join('; ') + '. This is only what the text says: check it before you rely on it.' }) : null));
+        });
+      });
+      drafts.parentNode.appendChild(box);
+    });
   }
   function busy(on) { st.busy = on; ['#read-brief', '#build'].forEach(function (s) { var b = $(s); if (b) b.disabled = on; }); $('#read-brief').textContent = on ? 'Reading...' : 'Read my brief'; }
   function sendBrief(text, answer) {
     text = String(text || '').trim(); if (st.busy) return;
     if (!text) { renderUnderstood(); $('#understood').appendChild(h('p', { class: 'notice bad', role: 'alert', text: 'Type a few words about the event first, for example: 120 guests in Pune on 12 December, budget 2 lakh.' })); return; }
     if (!answer) st.messages.push(text); $('#brief-input').value = ''; busy(true);  // the history is kept only for the plan's own record of what was typed; the server reads just the newest message
-    api('/api/intake', { method: 'POST', body: { messages: [text], draft: st.draft, expecting: (st.turn && st.turn.asking) || undefined, answer: answer } }).then(function (r) {
+    api('/api/intake', { method: 'POST', body: { messages: [text], draft: st.draft, expecting: (st.turn && st.turn.asking) || undefined, answer: answer, staged_id: (st.turn && st.turn.staged_id) || undefined } }).then(function (r) {
       busy(false);
       if (!r.ok || !r.data) { if (!answer) st.messages.pop(); if (!r.lost) { clear($('#understood')); $('#understood').appendChild(h('p', { class: 'notice bad', role: 'alert', text: errText(r, 'The brief could not be read') })); } return; }
-      st.turn = r.data; st.draft = r.data.draft; renderUnderstood(); announce(r.data.ready ? 'Everything needed is understood. Press Build my plan.' : (r.data.question || 'Tell me more.'));
+      st.turn = r.data; st.draft = r.data.draft; renderUnderstood(); announce(r.data.ready && r.data.no_vendors ? 'I have no vendors for that city yet.' : r.data.ready ? 'Everything needed is understood. Press Build my plan.' : (r.data.question || 'Tell me more.'));
       var f = $('#build') || $('#brief-input'); if (f) f.focus();
     });
   }
@@ -660,13 +928,40 @@
     });
     stream.addEventListener('timeout', stopProgress); stream.onerror = stopProgress;
   }
+  function planReady(plan_id, reality) {
+    st.reality = reality || null; window.setTimeout(function () { closeDialog(briefDlg); }, reduce.matches ? 0 : 450); st.messages = []; st.draft = null; st.turn = null; clear($('#understood'));
+    refreshAll(plan_id).then(function () { announce('Plan ready.'); openAssistant(); say('ai', (reality && reality.message) || 'Plan ready.'); });
+  }
   function build() {
-    if (st.busy || !st.draft) return; busy(true); var src = st.turn && /^[A-Za-z0-9:._-]+$/.test(st.turn.source || '') ? st.turn.source : 'rule:parser';
-    announce('Building the plan and checking every hard constraint.'); startProgress();
+    if (st.busy || !st.draft) return; var t = st.turn;
+    busy(true); announce('Building the plan and checking every hard constraint.'); startProgress();
+    if (t && t.staged_id) {  // the approved brief goes to the build queue; this page follows it
+      api('/api/intake/' + t.staged_id + '/commit', { method: 'POST', body: { version: t.version, draft_hash: t.draft_hash } }).then(function (r) {
+        if (r.ok && r.data) { follow(t.staged_id, Date.now()); return; }
+        busy(false); stopProgress(); if (r.lost) return;
+        var box = clear($('#understood')); box.appendChild(h('p', { class: 'notice bad', role: 'alert', text: r.status === 409 ? 'This brief is not the one you reviewed any more. It has been reloaded: check it and press Done again.' : errText(r, 'The brief could not be sent to build') }));
+        reloadStaged(t.staged_id);
+      });
+      return;
+    }
+    var src = t && /^[A-Za-z0-9:._-]+$/.test(t.source || '') ? t.source : 'rule:parser';
     api('/api/intake/confirm', { method: 'POST', body: { draft: st.draft, raw_text: st.messages.join('\n').slice(0, 2000), messages: st.messages, source: src } }).then(function (r) {
       busy(false); window.setTimeout(stopProgress, 600);
-      if (r.ok && r.data && r.data.plan) { st.reality = r.data.reality || null; window.setTimeout(function () { closeDialog(briefDlg); }, reduce.matches ? 0 : 450); st.messages = []; st.draft = null; st.turn = null; clear($('#understood')); refreshAll(r.data.plan.plan_id).then(function () { announce('Plan ready.'); openAssistant(); say('ai', (r.data.reality && r.data.reality.message) || 'Plan ready.'); }); return; }
+      if (r.ok && r.data && r.data.plan) { planReady(r.data.plan.plan_id, r.data.reality); return; }
       if (!r.lost) failure(r);
+    });
+  }
+  function follow(id, since) {  // poll the build; the answer is the stored outcome, so a page reloaded half way finds the same one
+    api('/api/intake/' + id + '/status').then(function (r) {
+      if (r.ok && r.data && r.data.state === 'processing' && Date.now() - since < 300000) { window.setTimeout(function () { follow(id, since); }, 700); return; }
+      busy(false); window.setTimeout(stopProgress, 600);
+      var d = r.data || {};
+      if (r.ok && d.state === 'done' && d.result && d.result.plan_id) { planReady(d.result.plan_id, d.result.reality); return; }
+      if (r.lost) return;
+      failure({ data: r.ok ? Object.assign({}, d.result || {}, { error: d.state === 'processing' ? 'The build is taking longer than expected. Check again in a moment.' : d.error }) : d, status: r.status });
+      if (r.ok && d.state === 'failed') $('#understood').appendChild(h('div', { class: 'row' }, h('button', { type: 'button', text: 'Edit the brief and try again', onclick: function () {
+        api('/api/intake/' + id + '/reopen', { method: 'POST', body: {} }).then(function (x) { if (x.ok && x.data) { st.turn = x.data; st.draft = x.data.draft; renderUnderstood(); } });
+      } })));
     });
   }
   function failure(r) {

@@ -12,14 +12,12 @@ COLLEGE = e2e.COLLEGE
 clock, world, em, pid, shortlisted, candidate = e2e.clock, e2e.world, e2e.em, e2e.pid, e2e.shortlisted, e2e.candidate
 
 
-def test_a_search_records_what_the_listing_says_as_discovered_and_nothing_stronger(em, pid):
+def test_a_search_of_google_listings_records_no_evidence_because_nothing_of_a_listing_is_kept(em, pid):
+    """Google's policy lets only the place id be stored, so a listing's name, link, website and rating are not recorded as evidence either."""
     items = shortlisted(em, pid)
     sharma = items["Sharma Caterers"].business.vendor_id
-    name = em.evidence.best(sharma, "name")
-    assert name.value == "Sharma Caterers" and name.state is S.DISCOVERED and name.source == "tool:gplaces" and name.url.startswith("https://")
+    assert em.evidence.records(sharma) == [] and em.evidence.best(sharma, "name") is None
     assert em.evidence.best(sharma, "price_per_plate_inr") is None  # a listing has no price, so none is claimed
-    assert all(r.state is S.DISCOVERED for r in em.evidence.records(sharma)) and em.evidence.best(sharma, "name")
-    assert em.evidence.usable_for_hard_constraint(sharma, "name") is None  # discovered never rests a hard constraint
 
 
 def test_found_addresses_are_discovered_with_their_page_and_confirming_one_is_the_users_word(em, pid):
@@ -29,7 +27,7 @@ def test_found_addresses_are_discovered_with_their_page_and_confirming_one_is_th
     found = [r for r in em.evidence.records(sharma) if r.field.startswith("email_candidate:") and r.value == cand.value]
     assert len(found) == 1 and found[0].state is S.DISCOVERED and found[0].source.startswith("web:") and found[0].url == cand.source_url
     assert em.evidence.best(sharma, "email") is None  # found is not confirmed: the field for the address in use stays empty
-    em.confirm_contact(sharma, cand.candidate_id, "Asha", edited_value="events@sharma-caterers.example")
+    e2e.confirm(em, sharma, cand.candidate_id, edited_value="events@sharma-caterers.example")
     now = em.evidence.best(sharma, "email")
     assert now.value == "events@sharma-caterers.example" and now.state is S.USER_CONFIRMED and now.source == "user_input"
     assert em.evidence.usable_for_hard_constraint(sharma, "email") is None  # "you told us", not verified
@@ -45,8 +43,9 @@ def test_running_discovery_again_adds_no_duplicates(em, pid):
 
 def test_the_evidence_route_groups_by_state_and_rejects_hostile_subjects(em, pid):
     sharma = shortlisted(em, pid)["Sharma Caterers"].business.vendor_id
+    e2e.candidate(em, sharma, "orders")
     c = create_app(em, today_fn=lambda: TODAY, poll_seconds=0).test_client()
     doc = c.get(f"/api/evidence?subject={sharma}").get_json()
-    assert set(doc) == {s.value for s in S} and {r["field"] for r in doc["discovered"]} >= {"name"} and doc["booked"] == []
+    assert set(doc) == {s.value for s in S} and any(r["field"].startswith("email_candidate:") for r in doc["discovered"]) and doc["booked"] == []
     assert c.get("/api/evidence?subject=../x").status_code == 400
     assert "ext_" in json.dumps(c.get("/api/evidence").get_json())

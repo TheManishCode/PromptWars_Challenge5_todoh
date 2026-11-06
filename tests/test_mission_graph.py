@@ -25,22 +25,22 @@ def start(runner, **kw):
 
 
 def confirm_all(view, by="Asha"):
-    return {"decisions": [{"vendor_id": b["vendor_id"], "candidate_id": b["candidates"][0]["candidate_id"], "action": "confirm", "by": by} for b in view.prompt["businesses"]]}
+    return {"decisions": [{"vendor_id": b["vendor_id"], "candidate_id": b["candidates"][0]["candidate_id"], "action": "confirm", "by": by, "business_name": e2e.LISTING["gplaces:" + b["place_id"]]} for b in view.prompt["businesses"]]}
 
 
 def test_a_brief_runs_to_the_contact_review_and_sends_nothing(runner, world):
     v = start(runner)
     assert v.status == "waiting" and v.waiting_for == "contact_review" and v.plan_id
-    names = {b["name"] for b in v.prompt["businesses"]}
-    assert names == {"Sharma Caterers", "Kapoor Food Services"}
+    assert {e2e.LISTING["gplaces:" + b["place_id"]] for b in v.prompt["businesses"]} == {"Sharma Caterers", "Kapoor Food Services"}
+    assert all(b["name"].startswith("Google listing") and b["website"] is None and not b["name_confirmed"] for b in v.prompt["businesses"]), "the prompt carries the place id, not the listing's words"
     assert all(c["source_url"].startswith("https://") for b in v.prompt["businesses"] for c in b["candidates"])
     assert world.outbox == []
 
 
 def test_the_whole_flow_needs_two_human_answers_and_then_sends_exactly_the_approved_text(runner, em, world):
     v = start(runner)
-    sharma = next(b for b in v.prompt["businesses"] if b["name"] == "Sharma Caterers")
-    pick = {"decisions": [{"vendor_id": sharma["vendor_id"], "candidate_id": sharma["candidates"][0]["candidate_id"], "action": "confirm", "by": "Asha"}]}
+    sharma = next(b for b in v.prompt["businesses"] if b["place_id"] == "ChIJsharma000001")
+    pick = {"decisions": [{"vendor_id": sharma["vendor_id"], "candidate_id": sharma["candidates"][0]["candidate_id"], "action": "confirm", "by": "Asha", "business_name": "Sharma Caterers"}]}
     v = runner.resume("m1", pick)
     assert v.waiting_for == "draft_approval" and world.outbox == []
     (d,) = v.prompt["drafts"]

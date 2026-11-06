@@ -320,6 +320,11 @@ dialog.dlg::backdrop { background: rgba(0,0,0,.6); }
 .dlg .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .dlg .field { margin-top: 12px; } .dlg .field .pill { margin-top: 10px; }
 .dlg dl.facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 10px 0; font-size: 13.5px; } .dlg dl.facts dt { color: var(--mute); } .dlg dl.facts dd { font-weight: 500; }
+.dlg dl.facts button.linkish { margin-left: 10px; padding: 0; border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 400; color: var(--mute); text-decoration: underline; cursor: pointer; } .dlg dl.facts button.linkish::after { content: 'Edit'; } .dlg dl.facts button.linkish:hover, .dlg dl.facts button.linkish:focus-visible { color: inherit; }
+.dlg dl.facts dd form.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .dlg dl.facts dd form.row input { min-width: 0; flex: 1 1 9em; padding: 5px 8px; font: inherit; border: 1px solid var(--mute); border-radius: 8px; }
+.dlg .vcard { border: 1px solid var(--mute); border-radius: 12px; padding: 12px 14px; margin: 10px 0; } .dlg .vcard h4 { margin: 0 0 4px; } .dlg .vcard details summary { cursor: pointer; font-size: 13px; color: var(--mute); }
+.dlg .vcard ul.facts { list-style: none; padding: 0; margin: 8px 0; font-size: 13px; } .dlg .vcard ul.facts li { padding: 6px 0; border-top: 1px solid rgba(128,128,128,.25); } .dlg .vcard blockquote { margin: 4px 0 0; padding: 4px 8px; border-left: 3px solid var(--mute); font-size: 12px; }
+.dlg .vcard .row, .dlg .vcard form.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; } .dlg .vcard form.row label { display: flex; flex-direction: column; font-size: 12px; } .dlg .vcard .contact { margin-top: 8px; } .dlg .vcard a.pill { text-decoration: none; }
 .dlg .card { background: #f4f4f7; border-radius: 18px; padding: 14px 16px; margin-top: 14px; } .dlg .card h2 { font-size: 22px; margin-bottom: 6px; }
 .dlg .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; } .dlg .chips button { border: 1px solid #000; background: #fff; border-radius: 999px; padding: 7px 14px; font-size: 13px; }
 .dlg .notice { border-radius: 14px; padding: 10px 12px; font-size: 13px; margin-top: 12px; background: #fdf0d5; color: #6b4300; } .dlg .notice.bad { background: #fde7e7; color: #7a1f1f; }
@@ -345,3 +350,7 @@ dialog.dlg::backdrop { background: rgba(0,0,0,.6); }
 .dlg label.inline { display: flex; gap: 8px; align-items: center; font-weight: 400; }
 
 .dlg .held-list { list-style: none; padding: 0; margin: 8px 0 0; font-size: 13.5px; } .dlg .held-list li { padding: 4px 0; }
+
+.gmaps { display: inline-block; padding: 10px 10px 5px; vertical-align: middle; } .gmaps img { display: block; height: 18px; width: auto; }
+
+.dlg .qblock { margin: 10px 0; padding: 8px 10px; border-left: 3px solid var(--mute); } .dlg .qblock h5 { margin: 0 0 4px; } .dlg .qblock progress { width: 100%; height: 8px; } .dlg .qblock ul.qfields { list-style: none; padding: 0; font-size: 13px; } .dlg .qblock ul.qfields li { padding: 6px 0; border-top: 1px solid rgba(128,128,128,.25); } .dlg .qblock .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }

@@ -365,6 +365,7 @@ class PlaceInfo(_Model):
     maps_uri: str | None = Field(default=None, max_length=500)
     place_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{8,200}$")
     website: str | None = Field(default=None, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f<>\"']+$")  # the business's own site, when the listing publishes one
+    phone: str | None = Field(default=None, pattern=r"^\+?[0-9 ()-]{6,24}$")  # international form; only from a details request the user asked for
     reviews: tuple[PlaceReview, ...] = Field(default=(), max_length=10)
 
     @field_validator("name", "address")
@@ -966,6 +967,7 @@ class ExternalBusiness(_Model):
     source_url: str | None = Field(default=None, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f]+$")
     website: str | None = Field(default=None, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f<>\"']+$")
     website_source: Literal["listing", "user_input"] = "listing"
+    name_source: Literal["listing", "user_confirmed", "placeholder"] = "listing"  # a Google listing's name is never stored: "placeholder" until the user confirms a name for their own record
     rating: float | None = Field(default=None, ge=0.0, le=5.0)  # only when a source published it
     is_test: bool = False
     origin: Literal["discovered", "test"] = "discovered"  # shown wherever the business appears; derived from the source, never chosen by a caller

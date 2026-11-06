@@ -21,6 +21,20 @@ OSM_KINDS = {VendorCategory.VENUE: "venue"}
 _TAGS = re.compile(r"<[^>]*>")
 
 
+# FUTURE(quotes-register): a discovered place becomes an ExternalBusiness only when "Find vendors I can email" is pressed, so "earlier quotes" cannot show beside a listing before that. Register each place (once, by its place id) when its listing is shown.
+# FUTURE(quotes-carry): requests and replies are filed under brief_<id>. When the brief later becomes a plan, link them to it; and a pending brief is swept 14 days after its last request, which would hide replies still arriving (extend it while any request is unanswered).
+# FUTURE(quotes-menus): a caterer's price depends on the menu tier, service style (buffet or plated) and number of items. The template asks for one price per plate; a vendor quoting tiers has to pick one or say so on the "Included and extra" line. Model tiers as separate quotes.
+# FUTURE(quotes-voice): many vendors answer with a voice note or a call. Transcribe a voice note (the app has audio code) into the same reading, shown as the vendor's words; a call is typed in by the user through the same parser.
+# FUTURE(quotes-attachments): a PDF or image quote is read by documents/quotes.py into its own lines; link its lines to the same fields so the assessment shows them next to the reply.
+# FUTURE(quotes-template-labels): the labels are matched by their exact text, so a label is only ever added, never reworded, or replies to old requests stop reading. Version the template if it must change.
+# FUTURE(quotes-promote): a reply with complete, confirmed facts should become a workspace vendor record (source quote:<message id>, with its validity, guest count and date) so the existing planner and validator can choose among them. The architecture note says discovered vendors stay unplannable (ADR-028, ADR-049): this needs a documented exception.
+# FUTURE(quotes-compare): a quote comparison table (waiting, replied, unclear) and a recommended caterer + venue + photographer for the budget.
+# FUTURE(quotes-silent): vendors that do not reply need chase timing, a stop point, and the plan still built from whoever did. A vendor with no email on its site needs a WhatsApp or phone fallback, still approved by the user.
+# FUTURE(quotes-simulator): a simulator that sends the user's own test addresses realistic replies (clear, messy, wrong, late). Nothing has been tested against a real mailbox yet (docs/EMAIL_SETUP.md).
+# FUTURE(quotes-limits): a cap on requests per brief and per day, the suppression list wired into this flow, and a clear sender identity, before any real vendor is contacted.
+# FUTURE(quotes-browser): some vendor sites show contacts or prices only after scripts run. Feed eventmate/browser (read-only: it clicks and submits nothing) into the contact finder.
+
+
 class SourceNotSupported(ValueError):
     """The chosen source does not cover this category. Not an empty result: a statement that this source cannot answer."""
 
@@ -72,19 +86,18 @@ class VendorSearch:
         return SearchOutcome(source="osm", category=category, city=city, added=added, total=len(self.shortlist.entries(plan.plan_id, category)), warnings=tuple(result.warnings))
 
     def _places(self, plan: PlanVersion, category: VendorCategory, city: str, limit: int) -> SearchOutcome:
-        result = self.places.search(category.value, city, limit=limit, websites=True)  # websites are the higher-priced field: asked for here because this is the contact step
+        result = self.places.search(category.value, city, limit=limit)  # the listing's own fields are not asked for here: nothing from them is kept, and a website is fetched when a contact search is asked for
         added, skipped = 0, 0
         warnings: list[str] = list(result.warnings)
         for p in result.places:
             if not p.place_id:
                 skipped += 1
                 continue
-            name = clean_name(p.name)
-            if not name:
+            if not clean_name(p.name):
                 continue
             ref = f"gplaces:{p.place_id}"
             before = self.externals.get(self._vid(ref))
-            biz = self.externals.add(ref, name, city, category, "gplaces", source_url=p.maps_uri, website=p.website, rating=p.rating)
+            biz = self.externals.add(ref, "", city, category, "gplaces")  # only the place id is kept; the listing's name, link, website and rating are fetched again when shown
             self.shortlist.add_entry(plan.plan_id, category, biz.vendor_id)
             added += before is None
         if skipped:

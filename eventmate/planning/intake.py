@@ -16,7 +16,7 @@ import re
 import time
 import unicodedata
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Literal
 from collections.abc import Iterable, Sequence
 
@@ -146,6 +146,13 @@ class IntakeTurn(_Model):
     notes: tuple[str, ...] = ()
     question: str | None = None
     ready: bool = False
+    staged_id: str | None = None  # the brief's place on the server while it waits for the user's approval; the page sends it back with every correction
+    version: int | None = None  # bumped by every overwrite: a correction or a commit names the version it was made against
+    draft_hash: str | None = None  # SHA-256 of the draft as staged: the commit must name it
+    state: str | None = None  # pending_validation | processing | done | failed | expired
+    expires_at: datetime | None = None
+    covered_cities: tuple[str, ...] = ()  # with no_vendors: the cities that do have vendor records, so the page can offer them
+    no_vendors: bool = False  # the city is read but has no vendor records, so a plan there cannot be built: the page keeps Build off
     source: str  # "llm:<model>" or "rule:parser"
 
 
@@ -730,8 +737,9 @@ def _turn(draft: IntakeDraft, prior: IntakeDraft, notes: list[str], known: tuple
     if draft.diet_unclear:
         notes.append("You mentioned a food restriction I could not place (" + "; ".join(draft.diet_unclear) + "). Write what it is plainly. Until then the plan will say it was not understood.")
     cities = {c.lower() for c in known}
-    if draft.city and cities and draft.city.lower() not in cities:
-        notes.append(f"I have no vendor records for {draft.city} yet, so a plan there will likely fail.")
+    no_vendors = bool(draft.city and cities and draft.city.lower() not in cities)
+    if no_vendors:
+        notes.append(f"I have no vendor records for {draft.city} yet, so a plan there cannot be built. Pick a city I cover, or come back when it is added.")
     changes = describe_changes(prior, draft) if prior_has_facts(prior) else ()
     if prior_has_facts(prior) and latest and not changes and not draft.unresolved and not said_something:
         notes.append("I could not find a change in that message. Say what to change, for example “150 guests”, “budget 3 lakh”, “move it to 19 December 2026” or “not Pune, Mumbai”.")
@@ -750,7 +758,7 @@ def _turn(draft: IntakeDraft, prior: IntakeDraft, notes: list[str], known: tuple
         for u in draft.unresolved if u.picks  # a question whose only button keeps the user's words ("keep as written") has no value to show, so its labels stand in
     )
     return IntakeTurn(
-        draft=draft, choices=choices, changes=changes, asking=asking_of(draft), missing=missing, flags=flags, notes=tuple(dict.fromkeys(notes)), question=question, ready=not missing and not draft.unresolved, source=source
+        draft=draft, choices=choices, changes=changes, asking=asking_of(draft), missing=missing, flags=flags, notes=tuple(dict.fromkeys(notes)), question=question, ready=not missing and not draft.unresolved, no_vendors=no_vendors, covered_cities=tuple(sorted(known))[:12] if no_vendors else (), source=source
     )
 
 
@@ -783,6 +791,43 @@ def raised_by(messages: Sequence[str], draft: IntakeDraft, today: date) -> list[
         if not any(rx.search(t) for rx, _ in mgr._DIETS) and (misspelt := diets.misspelt_diet(t)):
             out.append(misspelt)
     return list({q.key: q for q in out}.values())
+
+
+# FUTURE(intake-fields): no field yet for access needs (ground floor, lift, parking), how many guests have an allergy ("make that two guests" is a no-op with a note), diet group sizes beside "half vegetarian", time of day, or per-day catering.
+# FUTURE(intake-venue): the planner always includes a venue, so "venue we already have" is only noted. It needs a plan request that can say "venue provided" and price it as zero.
+# FUTURE(intake-types): farewell, reunion, anniversary, team lunch, pooja and kitty party all read as "other"; the engine has no matching event type. Hindi "kal" (tomorrow or yesterday) is deliberately not read.
+EDITABLE = ("event_type", "guest_count", "city", "event_date", "budget_total")  # facts the user can type straight into the review card
+
+
+def edited(prior: IntakeDraft, patch: dict, known: Iterable[str], today: date, source: str = "user:edit") -> IntakeTurn:
+    """The user changed values on the review card. The new draft must pass the same schema as one the reader made, so an edit cannot break its shape.
+    A fact set this way answers any open question about it; clearing one (``None``) makes it missing again, and the page asks for it."""
+    bad = sorted(set(patch) - set(EDITABLE))
+    if bad or not patch:
+        raise IntakeError("these can be changed on the card: " + ", ".join(EDITABLE) if bad else "nothing to change")
+    fields = prior.model_dump()
+    fields.update({k: (v.strip() if isinstance(v, str) else v) for k, v in patch.items()})
+    if isinstance(fields.get("city"), str):
+        fields["city"] = city_aliases.canonical(fields["city"])  # "bangalore" is Bengaluru, as it is when typed in a sentence
+    changed = {k for k in patch}
+    answered = [u for u in prior.unresolved if u.field in changed or (u.field == "number" and changed & {"guest_count", "budget_total"})]
+    fields["unresolved"] = tuple(u for u in prior.unresolved if u not in answered)
+    fields["settled"] = tuple(dict.fromkeys((*prior.settled, *(u.key for u in answered))))[-40:]
+    try:
+        draft = IntakeDraft.model_validate(fields)
+    except ValidationError as exc:
+        raise IntakeError("that value cannot be used: " + "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())) from exc
+    if draft.event_date is not None and "event_date" in patch:
+        if draft.event_date < today:
+            raise IntakeError("that date is in the past")
+        if (draft.event_date - today).days > mgr.MAX_EVENT_AHEAD_DAYS:
+            raise IntakeError("that date is more than 3 years away")
+    return _turn(draft, prior, [], tuple(known), source, ())
+
+
+def edited_view(draft: IntakeDraft, known: Iterable[str], source: str) -> IntakeTurn:
+    """A stored draft as the review card shows it: its questions, notes and whether it is ready, with nothing changed."""
+    return _turn(draft, draft, [], tuple(known), source, ())
 
 
 def to_request(draft: IntakeDraft, raw_text: str, today: date, source: str = "rule:parser", messages: Sequence[str] | None = None) -> EventRequest:

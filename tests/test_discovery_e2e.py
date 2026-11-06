@@ -55,9 +55,17 @@ def pid(em):
     return em.plan(COLLEGE, today=TODAY).plan.plan_id
 
 
+LISTING = {"gplaces:ChIJsharma000001": "Sharma Caterers", "gplaces:ChIJkapoor000002": "Kapoor Food Services"}  # what the fake listing calls them: the app does not store it
+
+
 def shortlisted(em, pid):
     em.search_vendors(pid, C.CATERER, "places")
-    return {i.business.name: i for i in em.shortlist_view(pid)}
+    return {LISTING[i.business.external_id]: i for i in em.shortlist_view(pid)}
+
+
+def confirm(em, vid, cid, by="Asha", **kw):
+    """The user confirms an address and types the name they want kept for the business: a Google listing's name is not stored."""
+    return em.confirm_contact(vid, cid, by, business_name=LISTING[em.externals.get(vid).external_id], **kw)
 
 
 def candidate(em, vid, prefix):
@@ -83,7 +91,7 @@ def test_the_whole_flow_from_search_to_a_confirmed_quote_and_a_manual_reprice(em
         em.jobs.start_job(pid, C.CATERER, [sharma], "1 caterer quote", clock() + timedelta(days=5), "Asha", min_quotes=1)
 
     # the user reviews the address and corrects it: the human edit replaces the extracted one and is recorded
-    contact = em.confirm_contact(sharma, cand.candidate_id, "Asha", edited_value="events@sharma-caterers.example")
+    contact = confirm(em, sharma, cand.candidate_id, edited_value="events@sharma-caterers.example")
     assert contact.edited_by_user and contact.email == "events@sharma-caterers.example" and contact.source_url == SITE_A + "contact" and contact.confirmed_by == "Asha"
     assert next(i for i in em.shortlist_view(pid) if i.business.vendor_id == sharma).contact is not None and next(i for i in em.shortlist_view(pid) if i.business.vendor_id == kapoor).contact is None
 
@@ -131,7 +139,7 @@ def test_an_extracted_address_alone_never_starts_a_job_or_a_send(em, world, pid,
 
 def test_a_job_started_from_a_confirmed_address_that_is_then_suppressed_never_sends(em, world, pid, clock):
     vid = shortlisted(em, pid)["Sharma Caterers"].business.vendor_id
-    em.confirm_contact(vid, candidate(em, vid, "orders").candidate_id, "Asha")
+    confirm(em, vid, candidate(em, vid, "orders").candidate_id)
     job = em.jobs.start_job(pid, C.CATERER, [vid], "1 caterer quote", clock() + timedelta(days=5), "Asha", min_quotes=1)
     em.suppress_address("email", "orders@sharma-caterers.example", "Asha", "asked us not to write")  # between drafting and approving
     em.jobs.approve_requests(job.job_id)  # approving does not send a blocked draft
@@ -144,7 +152,7 @@ def test_a_job_started_from_a_confirmed_address_that_is_then_suppressed_never_se
 def test_the_kill_switch_still_stops_automatic_nudges_to_a_discovered_business(em, world, pid, clock):
     em.grant_autoreply(pid, "Asha", hours=168)
     vid = shortlisted(em, pid)["Sharma Caterers"].business.vendor_id
-    em.confirm_contact(vid, candidate(em, vid, "orders").candidate_id, "Asha")
+    confirm(em, vid, candidate(em, vid, "orders").candidate_id)
     job = em.jobs.start_job(pid, C.CATERER, [vid], "1 caterer quote", clock() + timedelta(days=7), "Asha", min_quotes=1)
     em.jobs.approve_requests(job.job_id)
     em.jobs.tick()
@@ -156,7 +164,7 @@ def test_the_kill_switch_still_stops_automatic_nudges_to_a_discovered_business(e
 
 def test_a_stop_reply_from_a_discovered_business_ends_contact_on_every_job(em, world, pid, clock):
     vid = shortlisted(em, pid)["Sharma Caterers"].business.vendor_id
-    em.confirm_contact(vid, candidate(em, vid, "orders").candidate_id, "Asha")
+    confirm(em, vid, candidate(em, vid, "orders").candidate_id)
     job = em.jobs.start_job(pid, C.CATERER, [vid], "1 caterer quote", clock() + timedelta(days=7), "Asha", min_quotes=1)
     em.jobs.approve_requests(job.job_id)
     world.reply("orders@sharma-caterers.example", "Please stop messaging us.")

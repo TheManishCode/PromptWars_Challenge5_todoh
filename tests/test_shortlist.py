@@ -120,16 +120,18 @@ def test_an_unknown_source_is_refused(em, pid):
 
 # ---- Google Places: every category, websites when published
 
-def test_a_places_search_shortlists_caterers_with_the_listings_own_website(make):
+def test_a_places_search_shortlists_businesses_and_keeps_only_their_place_id(make):
     net = Net([place("Sharma Caterers") | {"id": "ChIJabcdef123456", "websiteUri": "https://sharma-caterers.example/"}, place("No Site Caterers", uri="https://maps.google.com/?cid=2") | {"id": "ChIJzzzzzz654321"}])
     e = make(places=net)
     pid = e.plan(COLLEGE, today=TODAY).plan.plan_id
     out = e.search_vendors(pid, C.CATERER, "places")
-    assert out.added == 2 and "places.websiteUri" in net.calls[0][1]["X-Goog-FieldMask"] and "places.id" in net.calls[0][1]["X-Goog-FieldMask"]
-    by = {i.business.name: i.business for i in e.shortlist_view(pid)}
-    assert by["Sharma Caterers"].external_id == "gplaces:ChIJabcdef123456" and by["Sharma Caterers"].website == "https://sharma-caterers.example/" and by["Sharma Caterers"].website_source == "listing"
-    assert by["Sharma Caterers"].source_url and by["No Site Caterers"].website is None and by["Sharma Caterers"].rating == 4.5
-    assert all(b.source == "gplaces" and not b.is_test for b in by.values())
+    assert out.added == 2 and "places.websiteUri" not in net.calls[0][1]["X-Goog-FieldMask"] and "places.id" in net.calls[0][1]["X-Goog-FieldMask"], "a search does not ask for the fields nothing is kept from"
+    by = {i.business.external_id: i.business for i in e.shortlist_view(pid)}
+    assert set(by) == {"gplaces:ChIJabcdef123456", "gplaces:ChIJzzzzzz654321"}
+    for b in by.values():
+        assert b.source == "gplaces" and not b.is_test and b.name_source == "placeholder" and b.name.startswith("Google listing")
+        assert b.website is None and b.rating is None and b.source_url is None, "nothing of the listing is stored"
+    assert "Sharma" not in json.dumps([i.model_dump(mode="json") for i in e.shortlist_view(pid)]), "not even its name"
 
 
 def test_a_place_without_an_id_is_skipped_with_a_warning_and_a_missing_key_is_a_clear_error(make):
@@ -165,7 +167,7 @@ def test_the_shortlist_can_be_filtered_by_category(make, pid=None):
     pid = e.plan(COLLEGE, today=TODAY).plan.plan_id
     e.search_vendors(pid, C.VENUE, "osm")
     e.search_vendors(pid, C.CATERER, "places")
-    assert len(e.shortlist_view(pid)) == 4 and ids(e.shortlist_view(pid, C.CATERER)) == ["Sharma Caterers"]
+    assert len(e.shortlist_view(pid)) == 4 and [i.business.external_id for i in e.shortlist_view(pid, C.CATERER)] == ["gplaces:ChIJabcdef123456"]
 
 
 # ---- contacts from the business's own pages
@@ -247,12 +249,12 @@ def test_confirming_creates_the_contact_with_provenance_and_the_human_edit_is_re
     e.contact_fetcher = lambda: FakeFetcher(pages())
     e.find_business_contacts(vid)
     cand = next(c for c in e.shortlist.candidates(vid) if c.value.startswith("orders"))
-    contact = e.confirm_contact(vid, cand.candidate_id, "Asha", edited_value="Events@Sharma-Caterers.example")
+    contact = e.confirm_contact(vid, cand.candidate_id, "Asha", edited_value="Events@Sharma-Caterers.example", business_name="Sharma Caterers")
     assert contact.email == "Events@Sharma-Caterers.example" and contact.edited_by_user and contact.origin == "discovered"
     assert contact.source_url.endswith("/contact") and contact.confirmed_by == "Asha" and contact.confirmed_at
     done = e.shortlist.get_candidate(cand.candidate_id)
     assert done.status == "confirmed" and done.confirmed_by == "Asha" and done.confirmed_value == "Events@Sharma-Caterers.example"
-    plain = e.confirm_contact(vid, next(c for c in e.shortlist.candidates(vid) if c.value.startswith("hello")).candidate_id, "Asha")
+    plain = e.confirm_contact(vid, next(c for c in e.shortlist.candidates(vid) if c.value.startswith("hello")).candidate_id, "Asha", business_name="Sharma Caterers")
     assert plain.email == "hello@sharma-caterers.example" and not plain.edited_by_user  # the latest confirmation is the address in use
 
 
@@ -263,7 +265,7 @@ def test_an_edited_address_must_be_a_single_valid_address(caterer, bad):
     e.find_business_contacts(vid)
     cand = e.shortlist.candidates(vid)[0]
     with pytest.raises(ValueError):
-        e.confirm_contact(vid, cand.candidate_id, "Asha", edited_value=bad)
+        e.confirm_contact(vid, cand.candidate_id, "Asha", edited_value=bad, business_name="Sharma Caterers")
     assert e.outreach_store.contacts().get(vid) is None and e.shortlist.get_candidate(cand.candidate_id).status == "found"
 
 
@@ -274,18 +276,18 @@ def test_confirmation_needs_a_name_a_real_candidate_of_that_business_and_a_found
     cand = e.shortlist.candidates(vid)[0]
     for who in ("", "  ", None):
         with pytest.raises(ValueError):
-            e.confirm_contact(vid, cand.candidate_id, who)
+            e.confirm_contact(vid, cand.candidate_id, who, business_name="Sharma Caterers")
     with pytest.raises(ValueError):
-        e.confirm_contact(vid, "nope", "Asha")
+        e.confirm_contact(vid, "nope", "Asha", business_name="Sharma Caterers")
     with pytest.raises(ValueError):
         e.confirm_contact("ext_" + "0" * 24, cand.candidate_id, "Asha")  # a candidate of another business
-    e.confirm_contact(vid, cand.candidate_id, "Asha")
+    e.confirm_contact(vid, cand.candidate_id, "Asha", business_name="Sharma Caterers")
     with pytest.raises(ValueError, match="already confirmed"):
-        e.confirm_contact(vid, cand.candidate_id, "Asha")
+        e.confirm_contact(vid, cand.candidate_id, "Asha", business_name="Sharma Caterers")
     other = e.shortlist.candidates(vid)[1]
     e.reject_contact(vid, other.candidate_id)
     with pytest.raises(ValueError, match="already rejected"):
-        e.confirm_contact(vid, other.candidate_id, "Asha")
+        e.confirm_contact(vid, other.candidate_id, "Asha", business_name="Sharma Caterers")
 
 
 def test_nothing_is_confirmed_by_searching_extracting_or_viewing(caterer):
@@ -320,7 +322,7 @@ def test_api_search_find_confirm_and_list(api):
     sharma = next(i for i in items if i["business"]["vendor_id"] == vid)
     assert sharma["business"]["origin"] == "discovered" and len(sharma["candidates"]) == 2 and sharma["contact"] is None
     cid = sharma["candidates"][0]["candidate_id"]
-    ok = post(c, f"/api/plans/{pid}/shortlist/{vid}/contacts/{cid}/confirm", {"by": "Asha"})
+    ok = post(c, f"/api/plans/{pid}/shortlist/{vid}/contacts/{cid}/confirm", {"by": "Asha", "business_name": "Sharma Caterers"})
     assert ok.status_code == 201 and ok.get_json()["confirmed_by"] == "Asha"
     rej = post(c, f"/api/plans/{pid}/shortlist/{vid}/contacts/{sharma['candidates'][1]['candidate_id']}/reject", {})
     assert rej.status_code == 200 and rej.get_json()["status"] == "rejected"

@@ -343,3 +343,10 @@ def test_a_model_that_was_handed_in_is_used_as_it_is(tmp_path):
 
     fake = CountingModel()
     assert EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="fake", llm=fake)._intake_model() is fake
+
+
+def test_a_city_without_vendor_records_is_ready_to_read_but_not_to_build(talk):
+    t = talk("Plan a birthday party for my daughter turning 7, around 40 guests, on Saturday 14 November 2026 in Mysuru. Veg food, budget about 60,000 total.")
+    assert t.draft.city == "Mysuru" and t.no_vendors
+    assert any("cannot be built" in n for n in t.notes)
+    assert not talk("birthday for 40 guests in Pune on 14 November 2026, veg, budget 60000").no_vendors

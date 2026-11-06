@@ -92,7 +92,7 @@ def build_graph(em, checkpointer=None):
         notes = []
         for it in items(state):
             biz = it.business
-            if it.contact is not None or it.candidates or biz.is_test or not biz.website:
+            if it.contact is not None or it.candidates or biz.is_test or not (biz.website or biz.source == "gplaces"):  # a Google listing's website is fetched when its contacts are searched
                 continue
             try:
                 res = em.find_business_contacts(biz.vendor_id)
@@ -106,7 +106,8 @@ def build_graph(em, checkpointer=None):
 
     def review_contacts(state: MissionState) -> dict:
         asked = [{
-            "vendor_id": i.business.vendor_id, "name": i.business.name, "website": i.business.website,
+            "vendor_id": i.business.vendor_id, "name": i.business.name, "website": i.business.website, "place_id": i.business.external_id.split(":", 1)[1] if i.business.source == "gplaces" else None,
+            "name_confirmed": i.business.name_source != "placeholder",  # a Google listing's name is not stored: the page shows it from its place id, and the user confirms the name they want kept
             "candidates": [{"candidate_id": c.candidate_id, "value": c.value, "source_url": c.source_url, "source_kind": c.source_kind, "flags": list(c.flags)}
                            for c in i.candidates if c.status == "found"],
         } for i in pending(state)]
@@ -116,7 +117,7 @@ def build_graph(em, checkpointer=None):
         for d in review.decisions:
             try:
                 if d.action == "confirm":
-                    em.confirm_contact(d.vendor_id, d.candidate_id, d.by, d.edited_value)
+                    em.confirm_contact(d.vendor_id, d.candidate_id, d.by, d.edited_value, business_name=d.business_name)
                 else:
                     em.reject_contact(d.vendor_id, d.candidate_id)
                 notes.append(f"{d.vendor_id}: address {d.action}ed by you" if d.action == "reject" else f"{d.vendor_id}: address confirmed by {_note(d.by)}")

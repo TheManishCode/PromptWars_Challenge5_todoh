@@ -8,7 +8,9 @@ from flask import jsonify, request
 from eventmate.documents import sandbox
 from eventmate.state import build_state
 from eventmate.integrations.explore import route as explore_route
+from eventmate.integrations.discovery import clean_city
 from eventmate.schemas import DealQuery, TripRequest, VendorCategory
+from eventmate.schemas.core import MAX_GUESTS
 from eventmate.integrations.travel import check_date
 from eventmate.web.base import (
     ApplyBody,
@@ -108,6 +110,22 @@ def register(app, k):
             quotes, report = em.observations.quotes(vendor_id), em.observations.report(vendor_id, today_fn())
         return jsonify({"quotes": [json.loads(q.model_dump_json()) for q in quotes], "report": json.loads(report.model_dump_json()) if report else None})
 
+    @app.get("/api/earlier-quotes")
+    def earlier_quotes():
+        """The last quote each discovered business in a city gave, with why it may be out of date for this event. Read-only; nothing is requested or priced from it."""
+        a = request.args
+        try:
+            city = clean_city(a.get("city") or "")
+            guests = int(a["guests"]) if a.get("guests") else None
+            when = date.fromisoformat(a["date"]) if a.get("date") else None
+        except ValueError:
+            return k._err(400, "a city is required; guests must be a whole number and date must be YYYY-MM-DD")
+        if guests is not None and not 1 <= guests <= MAX_GUESTS:
+            return k._err(400, f"guests must be 1-{MAX_GUESTS}")
+        with lock:
+            rows = em.earlier_quotes(city, today_fn(), guests, when)
+        return jsonify({"quotes": rows})
+
     @app.get("/api/observations/compare/<category>")
     def observation_compare(category):
         with lock:
@@ -173,6 +191,15 @@ def register(app, k):
     @app.get("/api/places/status")
     def places_status():
         return jsonify({"configured": em.places.configured()})
+
+    @app.get("/api/places/<place_id>")
+    def place_details_get(place_id):
+        """One Google listing as it is now, for a vendor card; ``phone=1`` also asks for the number (it costs more). Nothing is stored."""
+        try:
+            info = em.place_details(place_id, request.args.get("phone") == "1")
+        except ValueError:
+            return k._err(400, "not a place id")
+        return out(info)
 
     @app.get("/api/places")
     def places_get():

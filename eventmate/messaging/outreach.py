@@ -22,6 +22,7 @@ from collections.abc import Callable, Iterable
 from urllib.parse import quote
 
 from eventmate.jsonl import JsonlLog
+from eventmate.sourcing import quote_template
 from eventmate.schemas import (
     InboundMessage, Mandate, OutreachDraft, PlanVersion, VendorCategory, VendorContact, _EMAIL,
 )
@@ -110,10 +111,10 @@ def _message(plan: PlanVersion, category: VendorCategory, vendor_name: str, send
     ]
     if category == VendorCategory.CATERER and r.dietary:
         lines.append("Dietary needs: " + ", ".join(d.value.replace("_", " ") for d in r.dietary) + ".")
-    lines += ["", "Please reply with:", "- whether you are available on that date", "- the total price and what it covers"]
+    lines += [""] + quote_template.template_lines(category)
     if checklist:
-        lines.append("- for each of these, whether it is included or extra: " + ", ".join(checklist))
-    lines += ["- any other charges (taxes, overtime, travel)", "- how long the quote is valid", "", f"Thank you,\n{sender}"]
+        lines += ["", "For each of these, please say on the \"Included and extra\" line whether it is included or extra: " + ", ".join(checklist) + "."]
+    lines += ["Any other charges (overtime, travel, taxes) can go on the same line.", "", f"Thank you,\n{sender}"]
     return subject, "\n".join(lines)
 
 
@@ -222,7 +223,8 @@ class OutreachStore:
     def draft(self, plan: PlanVersion, category: VendorCategory, channel: str, recipient: str, sender_name: str, vendor: tuple[str, ...] | None = None) -> OutreachDraft:
         """``vendor`` = (vendor_id, name[, origin]) asks a vendor other than the plan's pick, to compare quotes (jobs). The caller has checked that it exists."""
         selection = plan.selection_for(category)
-        if selection is None:
+        brief = getattr(plan, "is_brief", False)  # a staged brief has chosen nothing: it can ask any vendor it names, and only those
+        if selection is None and not (brief and vendor is not None):
             raise ValueError(f"{category.value} is not in this plan")
         vendor_id, vendor_name, *rest = vendor if vendor is not None else (selection.vendor_id, selection.name)
         origin = rest[0] if rest else "seed"
@@ -233,7 +235,7 @@ class OutreachStore:
         return self._new(
             plan.plan_id, category=category, vendor_id=vendor_id, vendor_name=vendor_name, vendor_origin=origin, channel=channel, recipient=recipient,
             subject=subject, body=body, link=_links(channel, recipient, subject, body),
-            plan_version=plan.version, basis_sha256=basis_sha256(plan, category), for_plan_pick=vendor_id == selection.vendor_id and origin == "seed",
+            plan_version=plan.version, basis_sha256=basis_sha256(plan, category), for_plan_pick=selection is not None and vendor_id == selection.vendor_id and origin == "seed",
         )
 
     def followup(self, plan_id: str, parent_id: str, text: str, sender_name: str, automated: bool = False, action_key: str = "") -> OutreachDraft:

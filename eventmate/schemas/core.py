@@ -1217,6 +1217,7 @@ class QuoteObservation(_Model):
     amount_inr: int = Field(gt=0, le=MAX_BUDGET_INR)
     basis: Literal["total", "per_plate"]
     guest_count: int | None = Field(default=None, ge=1, le=MAX_GUESTS)
+    quoted_for_date: date | None = None  # the event date the vendor priced; a price for another date may not hold
     inclusions: tuple[str, ...] = Field(default=(), max_length=MAX_OBSERVATION_ITEMS)
     exclusions: tuple[str, ...] = Field(default=(), max_length=MAX_OBSERVATION_ITEMS)
     hidden_costs: tuple[HiddenCost, ...] = Field(default=(), max_length=MAX_HIDDEN_COSTS)

@@ -7,6 +7,7 @@ What is in this repository that is not ours, and the terms it comes under. The 3
 | File | What | Licence |
 |---|---|---|
 | `landing-instrument-serif.ttf` | Instrument Serif, Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif) | SIL Open Font License 1.1 |
+| `google-maps-logo.svg` | The Google Maps logo, dark gray, taken unchanged from Google's attribution assets (https://developers.google.com/static/maps/documentation/images/Google_Maps_Attribution_Assets.zip), shown beside Google listing details | Google Maps Platform terms and attribution guidelines: not modified, 16-19dp high, 10dp clear space left, right and top and 5dp below, accessible label "Google Maps". Its sha256 is pinned by `tests/test_google_attribution.py` |
 | `landing-inter-400.ttf`, `landing-inter-500.ttf` | Inter, Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter) | SIL Open Font License 1.1 |
 
 The fonts are served from this origin (the page's CSP allows no third party). The licence lets them be used, embedded and redistributed with the notice, and not sold on their own.

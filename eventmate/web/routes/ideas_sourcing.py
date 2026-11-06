@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import re
-from flask import jsonify
-from eventmate.schemas import CommunityDetails
+from flask import jsonify, request
+from eventmate.schemas import CommunityDetails, VendorCategory
 from eventmate.sourcing.search import SourceNotSupported
 from eventmate.web.base import (
+    QuoteConfirmBody,
+    QuoteRetractBody,
     AccessBody,
     ByBody,
     CommunityItemBody,
@@ -157,11 +159,55 @@ def register(app, k):
             items = em.shortlist_view(plan_id)
         return jsonify([json.loads(i.model_dump_json()) for i in items])
 
+    @app.get("/api/plans/<plan_id>/vendor-cards")
+    def vendor_cards_get(plan_id):
+        """Every shortlisted business as a card: what the app holds, each fact with its source, date and whether you confirmed it. A Google listing's own details are not here: fetch them by place id."""
+        plan_id = pid(plan_id)
+        with lock:
+            cards = em.vendor_cards(plan_id, today_fn())
+        return jsonify({"cards": [json.loads(c.model_dump_json()) for c in cards]})
+
+    @app.get("/api/plans/<plan_id>/quote-readings")
+    def quote_readings_get(plan_id):
+        """Each vendor reply read as a quote: the vendor's own line for every field, what you have confirmed, how complete it is, and what does not fit your event. Nothing here is recorded."""
+        plan_id = pid(plan_id)
+        with lock:
+            found = em.quote_assessments(plan_id)
+        return jsonify({"quotes": [json.loads(a.model_dump_json()) for a in found]})
+
+    @app.post("/api/plans/<plan_id>/quote-readings/<message_id>/confirm")
+    def quote_readings_confirm(plan_id, message_id):
+        """Confirm fields of a reply: as read, or with a value you typed. An amount is confirmed on its own. Confirming the price and how long it holds records the price as a quote."""
+        plan_id, message_id, b = pid(plan_id), pid(message_id), body(QuoteConfirmBody)
+        with lock:
+            a = em.confirm_quote_fields(plan_id, message_id, b.fields, b.by, b.valid_days)
+        return out(a, 201)
+
+    @app.post("/api/plans/<plan_id>/quote-readings/<message_id>/retract")
+    def quote_readings_retract(plan_id, message_id):
+        plan_id, message_id, b = pid(plan_id), pid(message_id), body(QuoteRetractBody)
+        with lock:
+            a = em.retract_quote_field(plan_id, message_id, b.field, b.by)
+        return out(a)
+
+    @app.get("/api/plans/<plan_id>/request-text")
+    def request_text_get(plan_id):
+        """The quote request as text, for you to send yourself from your own mail or WhatsApp. Built from the brief's facts alone; nothing is stored or sent."""
+        plan_id = pid(plan_id)
+        a = request.args
+        try:
+            category = VendorCategory(a.get("category", ""))
+        except ValueError:
+            return k._err(400, "category must be venue, caterer or photographer")
+        with lock:
+            subject, text = em.request_text(plan_id, category, a.get("name", "")[:120], a.get("sender", "")[:80])
+        return jsonify({"subject": subject, "body": text})
+
     @app.post("/api/plans/<plan_id>/shortlist/<vendor_id>/website")
     def shortlist_website(plan_id, vendor_id):
         plan_id, vendor_id, b = pid(plan_id), pid(vendor_id), body(WebsiteBody)
         with lock:
-            em.store.latest(plan_id)
+            em._scope(plan_id)
             biz = em.set_business_website(vendor_id, b.url)
         return out(biz)
 
@@ -171,7 +217,7 @@ def register(app, k):
         plan_id, vendor_id = pid(plan_id), pid(vendor_id)
         body(EmptyBody)
         with lock:
-            em.store.latest(plan_id)
+            em._scope(plan_id)
             res = em.find_business_contacts(vendor_id)
         return out(res)
 
@@ -179,8 +225,8 @@ def register(app, k):
     def shortlist_confirm(plan_id, vendor_id, candidate_id):
         plan_id, vendor_id, candidate_id, b = pid(plan_id), pid(vendor_id), pid(candidate_id), body(ConfirmContactBody)
         with lock:
-            em.store.latest(plan_id)
-            contact = em.confirm_contact(vendor_id, candidate_id, b.by, b.edited_value, b.acknowledge_bounce)
+            em._scope(plan_id)
+            contact = em.confirm_contact(vendor_id, candidate_id, b.by, b.edited_value, b.acknowledge_bounce, b.business_name)
         return out(contact, 201)
 
     @app.post("/api/plans/<plan_id>/shortlist/<vendor_id>/contacts/<candidate_id>/reject")
@@ -188,7 +234,7 @@ def register(app, k):
         plan_id, vendor_id, candidate_id = pid(plan_id), pid(vendor_id), pid(candidate_id)
         body(EmptyBody)
         with lock:
-            em.store.latest(plan_id)
+            em._scope(plan_id)
             cand = em.reject_contact(vendor_id, candidate_id)
         return out(cand)
 
@@ -197,7 +243,7 @@ def register(app, k):
         """A vendor whose address is yours, for testing. It needs your statement that you own the address and is labelled TEST VENDOR everywhere."""
         plan_id, b = pid(plan_id), body(TestVendorBody)
         with lock:
-            plan = em.store.latest(plan_id)
+            plan = em._scope(plan_id)
             biz, _ = em.add_test_vendor(b.name, b.city or plan.request.city, b.category, b.email, b.owns_address, b.by, plan_id)
             item = next(i for i in em.shortlist_view(plan_id) if i.business.vendor_id == biz.vendor_id)
         return out(item, 201)

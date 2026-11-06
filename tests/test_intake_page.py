@@ -87,13 +87,13 @@ def test_a_city_typo_is_explained_suggested_and_confirmed_with_one_press(dialog)
     page = dialog
     page.say("wedding for 100 guests on 12 December 2026, budget 2 lakh")
     assert "Which city is it in?" in card(page) and not can_build(page)
-    page.say("Banglore")
+    page.say("Mumbay")
     text = card(page)
-    assert "Banglore" in text and "Bengaluru" in text, text  # it says what it saw and what it thinks you meant
+    assert "Mumbay" in text and "Mumbai" in text, text  # it says what it saw and what it thinks you meant
     assert row(page, "City") is None and not can_build(page), "a suggestion is not applied until it is confirmed"
-    page.get_by_role("button", name="Bengaluru").click()
+    page.get_by_role("button", name="Mumbai").click()
     page.wait_for_selector("#build")
-    assert row(page, "City") == "Bengaluru" and "Banglore" not in card(page).replace("Banglore (as written)", "")
+    assert row(page, "City") == "Mumbai" and "Mumbay" not in card(page).replace("Mumbay (as written)", "")
 
 
 def test_the_city_question_does_not_repeat_itself_wordlessly(dialog):
@@ -104,7 +104,9 @@ def test_the_city_question_does_not_repeat_itself_wordlessly(dialog):
     second = card(page)
     assert "???" in second and second != first, "the answer that was not understood is named, so it is not the same screen twice"
     page.say("thane")
-    assert row(page, "City") == "Thane" and can_build(page) and "no vendor records for Thane" in card(page)
+    assert row(page, "City") == "Thane" and not can_build(page) and "no vendor records for Thane" in card(page)  # no Build for a city with no vendors: the page looks the businesses up instead
+    page.wait_for_selector("#found")
+    assert "Found online in Thane" in card(page)
 
 
 def test_bare_answers_fill_the_fields_the_page_asked_about(dialog):
