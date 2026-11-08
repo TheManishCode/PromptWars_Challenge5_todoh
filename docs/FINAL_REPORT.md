@@ -43,7 +43,7 @@ make hooks
 # 5. checks
 make lint            # pyflakes, ruff, node --check
 make security        # bandit -ll
-make test            # full suite, about 12 minutes
+make test            # about 12 minutes; 5054 collected / 5050 passed / 4 opt-in skips with ,flights (5008 passed / 7 skipped without)
 make ui              # needs npm; rebuilds plan.js and plan.css, git should stay clean
 make deploy-check    # proxy and smuggling tests against nginx, then builds and checks the image (needs Docker)
 
