@@ -1,5 +1,6 @@
 """A vendor card holds the user's facts and the vendor's, each with where it came from, and nothing from a Google listing but its place id (Google's policy). Facts that disagree are both shown."""
 
+import re
 import json
 from datetime import UTC, date, datetime, timedelta
 
@@ -149,7 +150,7 @@ def test_nothing_from_a_google_listing_is_on_disk_after_the_whole_flow(em, brief
         if path.is_file():
             text = path.read_text(errors="ignore")
             for w in LISTING_WORDS:
-                if w in text:
+                if re.search(r"(?<![0-9A-Za-z])" + re.escape(w) + r"(?![0-9A-Za-z])", text):  # as a whole token: "581" is also a run inside a random hex id (it failed about one run in six)
                     found.setdefault(w, []).append(path.name)
     # the vendor's own page url (where an address was read) is provenance of what the vendor published, so its host may appear; the listing's own words may not
     assert found == {}, found

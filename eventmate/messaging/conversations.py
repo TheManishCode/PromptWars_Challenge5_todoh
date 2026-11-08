@@ -58,9 +58,6 @@ _STOP = re.compile(
     r"\b(?:stop (?:messaging|contacting|texting|sending|calling|emailing)|(?:don'?t|do not|never) (?:message|contact|text|call|email|write to)|unsubscribe|wrong number|not interested|remove (?:me|my number|my email))\b|^\s*stop[.!\s]*$",
     re.I,
 )
-# the reply the footer asks for ("Reply STOP"), written the way people write it: the first line is only the word, with a please or thanks. Only the first line, so a sentence that merely holds the word
-# ("Stop the music at 10 pm is our rule") and whatever signature follows are never read as one
-_STOP_FIRST_LINE = re.compile(r"\W*(?:please\W+)?stop(?:\W+(?:please|thanks|thank you))?\W*", re.I)
 _VALIDITY = re.compile(r"\b(?:valid|validity|expires?|expiry|until|till)\b", re.I)
 IST = timezone(timedelta(hours=5, minutes=30))  # India has no daylight saving; the sending window is in IST
 _SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
@@ -78,6 +75,13 @@ def _norm(text: str) -> str:
     return " ".join(text.casefold().split())
 
 
+def _first_line_is_stop(body: str) -> bool:
+    """The reply the footer asks for ("Reply STOP"), written the way people write it: the first line is only the word, with a please or a thanks around it. Only the first line, so a sentence that
+    merely holds the word ("Stop the music at 10 pm is our rule") and whatever signature follows are never read as one. Words, not a pattern: nothing here can be made slow."""
+    first = next((ln for ln in body.splitlines() if ln.strip()), "")[:80]
+    return re.findall(r"[a-z]+", first.casefold()) in (["stop"], ["please", "stop"], ["stop", "please"], ["stop", "thanks"], ["stop", "thank", "you"], ["please", "stop", "thanks"], ["please", "stop", "thank", "you"])
+
+
 def analyze_reply(body: str, checklist: Sequence[str]) -> ReplyAnalysis:
     """Rule-based reading of a reply. It quotes the vendor's words; it never decides a fact."""
     amounts = tuple(
@@ -87,7 +91,7 @@ def analyze_reply(body: str, checklist: Sequence[str]) -> ReplyAnalysis:
     questions = tuple(s.strip()[:200] for s in _SENTENCE.split(body) if s.strip().endswith("?"))[:5]
     text = _norm(body)
     return ReplyAnalysis(
-        amounts=amounts, says_unavailable=unavailable, says_available=bool(_AVAILABLE.search(body)) and not unavailable, questions=questions, asks_to_stop=bool(_STOP.search(body)) or bool(_STOP_FIRST_LINE.fullmatch(next((ln for ln in body.splitlines() if ln.strip()), ""))),
+        amounts=amounts, says_unavailable=unavailable, says_available=bool(_AVAILABLE.search(body)) and not unavailable, questions=questions, asks_to_stop=bool(_STOP.search(body)) or _first_line_is_stop(body),
         checklist_mentioned=tuple(item for item in checklist if _norm(item) in text),
     )
 

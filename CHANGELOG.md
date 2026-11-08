@@ -30,3 +30,4 @@
 - R-015: a first-line "stop" with please/thanks or a signature under it is read as a stop request (`tests/test_stop_shapes.py` from review/l2-stop-shapes, 15 cases; control: without the rule 7 fail).
 - `tools/pre-commit` and `make hooks`: refuse staged .env, run-time data, caches, solvers and secrets; installed in .git/hooks.
 
+- Stop detection is word-based, not a pattern (a pattern version failed the quadratic-time guard). Test fix: the Google-listing-on-disk check matched "581" inside random hex ids (failed about one run in six); it now matches whole tokens (30/30 reruns pass).
