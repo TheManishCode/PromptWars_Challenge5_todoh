@@ -617,7 +617,7 @@ def test_feedback_is_a_score_on_the_trace_and_only_the_asker_or_organiser_can_gi
     a.give_feedback(mine.trace_id, GUEST, -1, "wrong venue, call me on 98765 43210")
     a.exporter.flush()
     score = next(e for e in sink.events() if e["type"] == "score-create")["body"]
-    assert score["traceId"] == mine.trace_id and score["value"] == -1 and "98765" not in json.dumps(score)
+    assert score["traceId"] == mine.trace_id and score["value"] == -1 and "98765" not in score["comment"] and "[phone]" in score["comment"]
     other = Principal(user_id="guest-2", roles=(Role.GUEST,))
     with pytest.raises(AssistantError):
         a.give_feedback(mine.trace_id, other, 1)
