@@ -1,4 +1,4 @@
-.PHONY: install test lint security check web redteam deploy-check ui
+.PHONY: install test lint security check web redteam deploy-check ui hooks
 install:
 	pip install -e ".[dev]"
 test:
@@ -25,3 +25,7 @@ redteam:
 deploy-check:
 	python -m pytest -q tests/test_proxy_deploy.py tests/pentest/test_proxy_smuggling.py
 	tools/check_image.sh
+
+# refuses a commit that stages .env, run-time data, caches, solvers or a secret (tools/pre-commit)
+hooks:
+	cp tools/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Refuse a commit that stages local state or secrets. Installed as .git/hooks/pre-commit (make hooks). Bypassing it with --no-verify is a decision to record in DECISIONS.md.
+set -u
+bad=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '(^|/)\.env($|\.)|\.pyc$|(^|/)__pycache__/|^eventmate/(plans|logs|wall_data|workspaces)/|\.(sqlite3|db)(-wal|-shm)?$|^solvers/|^\.hypothesis/|^ui/node_modules/|(^|/)owner_token$' | grep -v '^\.env\.example$')
+if [ -n "$bad" ]; then
+  echo "pre-commit: refusing to commit local state or secrets:" >&2; echo "$bad" | head -20 | sed 's/^/  /' >&2; exit 1
+fi
+if command -v gitleaks >/dev/null; then
+  gitleaks git --pre-commit --staged --redact --no-banner --log-level error . || { echo "pre-commit: gitleaks found a secret in the staged changes" >&2; exit 1; }
+fi
