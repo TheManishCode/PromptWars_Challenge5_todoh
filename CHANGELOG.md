@@ -63,4 +63,5 @@
 - A5: each request carries `delivery` (`draft`, `queued`, `accepted`, `bounced`, `replied`, `self`, ...) with a label that does not claim delivery; the Message step, the overview and the dashboard use it.
 - `tests/mailfake.py` FakeIMAP now answers SEARCH (SINCE, FROM, HEADER) and keeps folders, and fails if a mailbox is opened for writing. `tests/test_mail_poll.py` (12 tests). Controls: newest-fifty again (4 fail), overflow not counted (1), spam filed like inbox (1), spam read without being named (1).
 - New variable, placeholder only: `EVENTMATE_IMAP_SPAM_FOLDER` in `.env.example`, `deploy/env.example` (empty) and appended, empty, to the local `.env`.
+- R-019: filing a held reply is compare-and-set under the review store's cross-process lock (`ReplyReviewStore.claim`): open, then assigning (a lease of 5 minutes, naming the event), then assigned. Two callers at once: one wins. A claim that never finishes lapses and can only be finished for the same event. Tests: a two-process race, a second tab, a lapsed claim; controls: no claim in assign (4 fail), claim not exclusive (2 fail).
 

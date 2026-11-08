@@ -89,7 +89,7 @@ class FakeIMAP:
 
 
 def _headers(raw: bytes) -> dict[str, str]:
-    msg = email.message_from_bytes(raw)
+    msg = email.message_from_bytes(raw.split(b"\r\n\r\n", 1)[0].split(b"\n\n", 1)[0] + b"\r\n\r\n")  # the header block only: the fake must not choke on a hostile body the real server would never parse
     out = {k.lower(): str(v) for k, v in msg.items()}
     try:
         out["date-day"] = email.utils.parsedate_to_datetime(out["date"]).date()
@@ -103,12 +103,19 @@ class MailWorld:
         self.clock = clock
         self.outbox: list[EmailMessage] = []
         self.folders: dict[str, list[bytes]] = {"INBOX": [], "Spam": []}
-        self.inbox = self.folders["INBOX"]
         self.searches: list[tuple] = []
         self.no_header_search = False
         self.send_error: Exception | None = None
         self.login_error: Exception | None = None
         self._n = 0
+
+    @property
+    def inbox(self) -> list[bytes]:
+        return self.folders["INBOX"]
+
+    @inbox.setter
+    def inbox(self, messages: list[bytes]) -> None:  # tests replace the whole inbox: the folder is what the fake IMAP serves
+        self.folders["INBOX"] = messages
 
     def channel(self) -> EmailChannel:
         return EmailChannel(CFG, smtp_factory=lambda: FakeSMTP(self), imap_factory=lambda: FakeIMAP(self), now=self.clock)

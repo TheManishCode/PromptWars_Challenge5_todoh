@@ -77,7 +77,7 @@ def test_an_earlier_quote_from_someone_else_stays_in_view_while_the_fresh_one_is
         page.click("[data-node=message]")
         page.click("text=Write one request per business")
         page.click("text=Approve exactly this and send")
-        page.wait_for_selector("text=/Approved, sending|· Sent/")
+        page.wait_for_selector("text=/Approved and queued|Accepted by the mail server/")
         page.click("[data-node=vendors]")
         page.wait_for_selector("text=Asking for a fresh quote")
         text = page.locator("[data-vendor]").first.inner_text()

@@ -166,7 +166,7 @@ class EventMate:
         self.conversations.health = self.integrity.blocker
         self.conversations.guards.append(self._job_guard)
         self.conversations.suppressions, self.conversations.unmatched = self.suppressions, self.unmatched
-        self.reply_reviews = ReplyReviewStore(self.store.root)
+        self.reply_reviews = ReplyReviewStore(self.store.root, now=lambda: self.outreach_store.now())
         self.conversations.reviews, self.conversations.event_key = self.reply_reviews, self.brief_links.event_key
         self.conversations.on_reply = self._reply_landed
         if os.environ.get("EVENTMATE_READ_QUOTE_ATTACHMENTS") == "1":  # off unless the user turns it on: an attachment is a stranger's file

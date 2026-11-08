@@ -463,8 +463,6 @@ class ConversationService:
         review = self.reviews.get(review_id)
         if review is None:
             raise ValueError("no such reply")
-        if review.status != "open":
-            raise ValueError(f"this reply is already {review.status}")
         want = self.event_key(plan_id)
         cand = next((c for c in review.candidates if self.event_key(c.plan_id) == want or c.plan_id == plan_id), None)
         if cand is None:
@@ -472,6 +470,7 @@ class ConversationService:
         d = self.store.get(cand.plan_id, cand.draft_id)
         if d is None:
             raise ValueError("the request this would answer is no longer here")
+        self.reviews.claim(review_id, plan_id)  # compare-and-set: of two callers at once (two tabs, two processes) exactly one goes on to file it
         item = Inbound(channel=review.channel, sender=review.sender, external_id=review.external_id, received_at=review.received_at, body=review.body, subject=review.subject)
         stored = self._store(item, cand.plan_id, d, "assigned")
         self.reviews.resolve(review_id, "assigned", plan_id)

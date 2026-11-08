@@ -99,7 +99,7 @@ def test_contacts_and_request_all_over_http(client, em, pid):
 def test_poll_without_channels_does_nothing_harmful(tmp_path):
     e = EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="none", channels={"email": FakeChannel("email", False, False), "whatsapp": FakeChannel("whatsapp", False, False)})
     c = create_app(e, today_fn=lambda: TODAY, poll_seconds=0).test_client()
-    assert post(c, "/api/inbox/poll", {}).get_json() == {"new_messages": 0, "ignored": 0, "sent": 0, "waiting": [], "errors": [], "held": 0}
+    assert post(c, "/api/inbox/poll", {}).get_json() == {"new_messages": 0, "ignored": 0, "sent": 0, "waiting": [], "errors": [], "held": 0, "overflow": 0, "spam": 0, "warnings": []}
 
 
 def test_background_round_sends_approved_drafts_reads_replies_and_survives_errors(tmp_path, chans, capsys):

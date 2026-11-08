@@ -1095,8 +1095,9 @@ class ReplyReview(_Model):
     subject: str = Field(default="", max_length=200)
     body: str = Field(max_length=4000)
     candidates: tuple[ReplyCandidate, ...] = Field(min_length=2, max_length=20)
-    status: Literal["open", "assigned", "dismissed"] = "open"
-    assigned_plan_id: str | None = None
+    status: Literal["open", "assigning", "assigned", "dismissed"] = "open"  # "assigning": one caller has claimed it and is filing it; a claim that is never finished lapses (``ReplyReviewStore.LEASE``)
+    assigned_plan_id: str | None = None  # the event chosen, set when it is claimed: a retry after a crash can only finish the same choice
+    claimed_at: datetime | None = None
     notice: str = "Which event did this answer? Nothing is filed, read or priced until you say."
 
     @field_validator("sender", "subject", "body")

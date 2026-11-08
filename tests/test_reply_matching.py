@@ -1,5 +1,6 @@
 """A reply is filed under the event it answers, or it waits for the user to say; the address alone never picks between events (audit A2), and a brief that became a plan keeps its replies (A4).
 Every stored reply says how it was matched."""
+import pytest
 from datetime import UTC, datetime, timedelta
 
 from eventmate.messaging.channels import Inbound
@@ -140,3 +141,58 @@ def test_deleting_a_plan_built_from_a_brief_removes_what_was_filed_under_the_bri
     assert (em.store.root / "outreach" / f"outreach-{brief}.jsonl").exists()
     em.delete_plan(plan_id)
     assert not (em.store.root / "outreach" / f"outreach-{brief}.jsonl").exists() and em.outreach_store.list(plan_id) == []
+
+
+# ---- R-019: filing a held reply is one atomic step
+
+def _claim_race(args):
+    root, review_id, plan_id = args
+    from eventmate.messaging.reply_review import ReplyReviewStore
+
+    try:
+        ReplyReviewStore(root).claim(review_id, plan_id)
+        return "won"
+    except ValueError as exc:
+        return str(exc)
+
+
+def _held(em, pid, chans, clock):
+    a, b, b_pid = second_event(em, pid, clock)
+    chans["email"].inbox.append(tc.reply(a, "Price per plate (INR): 650", ext="<fresh1@v.test>", when=clock() + timedelta(minutes=5)))
+    em.poll_conversations()
+    (held,) = em.reply_reviews_open()
+    return held, b_pid
+
+
+def test_two_processes_claiming_one_held_reply_one_wins(em, pid, chans, clock, tmp_path):
+    import multiprocessing
+
+    held, b_pid = _held(em, pid, chans, clock)
+    ctx = multiprocessing.get_context("fork")
+    with ctx.Pool(4) as pool:
+        results = pool.map(_claim_race, [(em.store.root, held.review_id, (pid, b_pid)[i % 2]) for i in range(8)])
+    assert results.count("won") == 1 and all(r != "won" and ("being filed" in r or "another event" in r) for r in results if r != "won"), results
+
+
+def test_a_second_caller_cannot_file_a_reply_someone_else_is_filing(em, pid, chans, clock):
+    held, b_pid = _held(em, pid, chans, clock)
+    em.reply_reviews.claim(held.review_id, pid)  # the other tab got there first and is in the middle of filing it
+    with pytest.raises(ValueError, match="being filed right now"):
+        em.assign_reply(held.review_id, b_pid)
+    assert not em.outreach_store.inbound(b_pid) and not em.outreach_store.inbound(pid)
+    with pytest.raises(ValueError, match="being filed right now"):
+        em.dismiss_reply_review(held.review_id)
+
+
+def test_a_claim_that_was_never_finished_lapses_and_can_only_be_finished_the_same_way(em, pid, chans, clock):
+    held, b_pid = _held(em, pid, chans, clock)
+    em.reply_reviews.claim(held.review_id, pid)  # the process died here
+    assert em.reply_reviews_open() == [], "while the claim is fresh the user is not offered it"
+    clock.advance(minutes=6)
+    assert [r.review_id for r in em.reply_reviews_open()] == [held.review_id], "back in the user's list after the lease"
+    with pytest.raises(ValueError, match="another event"):
+        em.assign_reply(held.review_id, b_pid)
+    msg = em.assign_reply(held.review_id, pid)
+    assert msg.plan_id == pid and not em.outreach_store.inbound(b_pid) and em.reply_reviews_open() == []
+    with pytest.raises(ValueError, match="already assigned"):
+        em.assign_reply(held.review_id, pid)
