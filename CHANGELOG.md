@@ -15,3 +15,4 @@
 - `tests/test_static_provenance.py`: every served media file is attributed, none unconfirmed, nothing git-ignored reaches the image, static/ holds only the served list, the built page names no image file.
 - `tools/check_image.sh` looks in the installed package (not the removed /app/eventmate), fails on plans/ logs/ wall_data/ workspaces/ .env and on any static file not on the served list; shown to fail by planting `plans/leak.jsonl` in an image built FROM a clean one (R-007).
 - docs/CONFIGURATION.md: how to build the planning tools in a clean clone.
+- /plan accessibility (R-008, R-009): the brand link names itself "to;doh, back to the start" (label starts with the visible text), the planning rooms sit in a <main> landmark; `tests/test_plan_page_a11y.py` (axe on every room at 1440 and 390 px, keyboard-only path) from review/l5-plan-axe, no axe ignores.

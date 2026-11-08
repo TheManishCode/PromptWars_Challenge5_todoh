@@ -99,12 +99,12 @@ function App() {
         <Opening onIdea={start} busy={brief.busy} error={stage === 'opening' ? brief.error : ''} paused={stage !== 'opening'} initialText={words} />
       </div>
       {stage !== 'opening' && brief.turn && (
-        <div className="continuum" aria-label="Planning">
+        <main className="continuum" aria-label="Planning">
           {reached && <Findings key={brief.turn.staged_id} brief={brief} inactive={stage !== 'findings'} active={node} onActive={(n) => go('findings', n)} onEdit={() => go('review')} />}
           <section className="room review-room" inert={stage !== 'review'}>
             <Review brief={brief} onDone={() => go('findings')} onBack={() => go('opening')} />
           </section>
-        </div>
+        </main>
       )}
     </>
   );

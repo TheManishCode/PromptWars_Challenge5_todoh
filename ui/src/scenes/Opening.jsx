@@ -19,7 +19,7 @@ export function Opening({ onIdea, busy, error, paused, initialText = '' }) {
   return (
     <>
         <header>
-          <a href="#" className="brand" aria-label="Back to the start" onClick={toTop}>
+          <a href="#" className="brand" aria-label="to;doh, back to the start" onClick={toTop}>
             to;doh
             <span className="brand-dot" />
           </a>
