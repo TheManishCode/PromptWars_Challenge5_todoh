@@ -9,3 +9,29 @@ _audit
 data
 solvers
 docs
+# data and local state the application writes at run time: owner and vendor data must never be baked into an image (also kept out of git by .gitignore)
+eventmate/plans
+eventmate/logs
+eventmate/wall_data
+eventmate/workspaces
+plans
+logs
+*.jsonl
+*.sqlite3-wal
+*.sqlite3-shm
+*.db
+*.db-wal
+*.db-shm
+.env.*
+deploy/.env
+deploy/prometheus/owner_token
+.hypothesis
+.ruff_cache
+.pytest_cache
+*.egg-info
+# media whose licence is not confirmed (same list as .gitignore)
+eventmate/web/static/plan-reference-*.webp
+eventmate/web/static/landing-poster.jpg
+eventmate/web/static/landing-hero.mp4
+ui
+papers to refer

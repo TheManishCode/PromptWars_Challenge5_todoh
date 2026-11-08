@@ -34,3 +34,13 @@ docs/
 # media whose licence is not confirmed (see eventmate/web/static/LICENSES.txt); the pages work without them
 eventmate/web/static/landing-poster.jpg
 eventmate/web/static/landing-hero.mp4
+# the cap-wearing character of /plan: borrowed, rights unconfirmed (ui/CHARACTER-SOURCE.md); the page works without it
+eventmate/web/static/plan-reference-*.webp
+ui/art/reference-*.webp
+# L0 quarantine, removed in L1 when the art is replaced: pixel crops of outside images (ui/artwork-source-map.json); never commit them
+eventmate/web/static/plan-story-*.webp
+ui/art/
+ui/node_modules/
+*.egg-info/
+# reading material, not ours to republish
+papers to refer/

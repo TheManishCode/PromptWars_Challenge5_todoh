@@ -1,4 +1,4 @@
-.PHONY: install test lint security check web redteam deploy-check
+.PHONY: install test lint security check web redteam deploy-check ui
 install:
 	pip install -e ".[dev]"
 test:
@@ -13,6 +13,10 @@ security:
 check: lint security test
 web:
 	python -m eventmate.web
+
+# the planning page (/plan) is built from ui/ into eventmate/web/static (plan.js, plan.css, plan-*.webp); the build is committed, so a deploy needs no Node
+ui:
+	cd ui && npm ci && npx vitest run && npx vite build
 
 redteam:
 	python -m pytest -q tests/pentest

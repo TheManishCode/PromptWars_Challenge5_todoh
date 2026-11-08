@@ -18,6 +18,10 @@ fi
 echo "licences travel with the tools"
 run --entrypoint sh "$IMAGE" -c 'test -f /opt/solvers/NOTICE.txt && test -f /opt/solvers/downward/LICENSE.md && test -f /opt/solvers/VAL/LICENSE && test -d /opt/solvers/downward/src' && ok "NOTICE, both licence texts and Fast Downward's source are in the image" || bad "a licence file or the Fast Downward source is missing"
 
+echo "no run-time data or unconfirmed media is baked in"
+LEAK=$(run --entrypoint sh "$IMAGE" -c 'cd /app 2>/dev/null || cd "$(python -c "import eventmate,os;print(os.path.dirname(os.path.dirname(eventmate.__file__)))")"; ls -d eventmate/plans eventmate/logs eventmate/wall_data eventmate/workspaces eventmate/web/static/plan-reference-* eventmate/web/static/landing-poster.jpg eventmate/web/static/landing-hero.mp4 .env 2>/dev/null')
+[ -z "$LEAK" ] && ok "no plans/, logs/, wall_data/, workspaces/, .env or unconfirmed media in the image" || bad "the image contains: $LEAK"
+
 echo "shared mode refuses to start without its settings"
 OUT=$(run -e EVENTMATE_MODE=shared "$IMAGE" python -m eventmate.web --host 127.0.0.1 --port 8000 --allow-remote 2>&1); CODE=$?
 [ "$CODE" -ne 0 ] && echo "$OUT" | grep -qi "EVENTMATE_SECRET" && ok "it refused and named EVENTMATE_SECRET" || bad "it started, or did not say what was missing (exit $CODE)"
