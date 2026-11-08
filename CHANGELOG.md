@@ -41,3 +41,4 @@
 - R-016: `tests/test_retention.py` and `tests/test_approvals_durable.py` no longer search random ids for a digit string.
 - `tools/loadtest/soak.py`: a /plan visitor type (`--plan-share`, half by default) walks brief, vendors, requests, pasted replies, confirm, promote, commit with from_quotes and polls the queue to done through the API. Fails on any 5xx, a commit that never ends, a refused step, or builds over `--build-p95-s` (60). Smoke on this commit: 120 s, 12 visitors (6 on /plan), 1391 requests, all 2xx, 24 builds, build p50 2.3 s / p95 2.6 s, RSS 213 to 218 MB, threads 25 to 27, fds 8 to 8. It must be run from a checkout without a `.env` (shared mode refuses one).
 - R-017: the VAL build recipe (docs/CONFIGURATION.md, FINAL_REPORT, CI) passes `-DCMAKE_POLICY_VERSION_MINIMUM=3.5`, which CMake 4 requires. The Dockerfile builds on Debian bookworm (CMake 3.25) and is unchanged.
+- R-018: FINAL_REPORT says the flights extra is needed for the full 5054-test count.

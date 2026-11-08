@@ -52,3 +52,4 @@ R-001 to R-016 and P-001: all closed except the owner decisions listed in `docs/
 - A real host, DNS, a real certificate, another proxy (Caddy, a cloud load balancer), or traffic from more than one machine.
 - Live model behaviour: the suite runs with model calls off or faked. `prompts/assistant.lock.json` says the behavioural evals are `not_run` against a real model.
 - Python versions other than the 3.14 venv here; browsers other than Chromium and Firefox (no Safari/WebKit pass).
+- The clean-clone run had 5008 passed / 7 skipped because the `flights` extra was not installed (`tests/test_travel.py`, 40 tests, is skipped as a module without `fli`); with it, 5054 collected / 5050 passed / 4 opt-in skips.
