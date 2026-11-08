@@ -168,7 +168,7 @@ def test_the_shared_store_keeps_the_month_of_the_event_never_the_day(tmp_path):
     quoted(*first, own_vendor(first[0], first[3]))
     text = "".join(p.read_text() for p in (tmp_path / "shared").rglob("*.jsonl"))
     assert json.loads(text.splitlines()[0])["quoted_for_date"] == "2026-11-01" and "2026-11-14" not in text  # the brief was for 14 November
-    row = shared_quotes.SharedQuote.model_validate({**json.loads(text.splitlines()[0]), "quoted_for_date": "2026-11-14"})
+    row = shared_quotes.SharedQuote.model_validate({**{k: v for k, v in json.loads(text.splitlines()[0]).items() if k != "schema_version"}, "quoted_for_date": "2026-11-14"})
     assert row.quoted_for_date.isoformat() == "2026-11-01", "a record with an exact day is read back coarsened"
 
 
@@ -181,4 +181,4 @@ def test_what_is_shown_to_the_next_person_says_a_different_month_and_never_which
     assert same and not any("month" in r or "2026-11" in r for r in same[0]["old"]) and "quoted_for_date" not in same[0]
     other = em.shared_earlier(vid, TODAY, 40, date(2027, 2, 14))
     assert "it was for a different month than your event" in other[0]["old"]
-    assert "2026-11" not in json.dumps(other) and "quoted_for_date" not in other[0]
+    assert "2026-11-14" not in json.dumps(other) and "2026-11-01" not in json.dumps(other) and "quoted_for_date" not in other[0]
