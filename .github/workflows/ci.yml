@@ -67,7 +67,7 @@ jobs:
           git clone --depth 1 --branch release-24.06.1 https://github.com/aibasel/downward.git
           (cd downward && ./build.py)
           git clone --depth 1 https://github.com/KCL-Planning/VAL.git
-          (cd VAL && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j"$(nproc)")
+          (cd VAL && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 && make -j"$(nproc)")
       - run: pip install --require-hashes -r requirements.lock && pip install --no-deps -e .
       - run: python -m playwright install --with-deps chromium
       - name: Test suite

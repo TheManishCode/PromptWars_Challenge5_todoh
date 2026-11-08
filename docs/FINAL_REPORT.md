@@ -31,7 +31,7 @@ git clone --depth 1 --branch release-24.06.1 https://github.com/aibasel/downward
 (cd fast-downward-24.06.1 && test "$(git rev-parse HEAD)" = 1eef26b2cbf599a1894606aa898d9d49e1034cb9 && python3 build.py -j4)
 git init -q VAL && cd VAL && git remote add origin https://github.com/KCL-Planning/VAL.git \
   && git fetch -q --depth 1 origin 3c7a1f330bdab0ba28a4762bb45c3f06c27fb6d4 && git checkout -q FETCH_HEAD \
-  && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j4
+  && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 && make -j4
 cd ../../..
 
 # 3. browsers for the browser tests

@@ -24,7 +24,7 @@ jobs:
             sudo apt-get update && sudo apt-get install -y cmake g++ make flex bison
             mkdir -p solvers && cd solvers
             git clone --depth 1 --branch release-24.06.1 https://github.com/aibasel/downward.git && (cd downward && ./build.py)
-            git clone --depth 1 https://github.com/KCL-Planning/VAL.git && (cd VAL && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j"$(nproc)")
+            git clone --depth 1 https://github.com/KCL-Planning/VAL.git && (cd VAL && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 && make -j"$(nproc)")
           fi
       - run: pip install --require-hashes -r requirements.lock && pip install --no-deps -e .
       - name: Behavioural evals against the real model
