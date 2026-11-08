@@ -16,6 +16,7 @@ import urllib.request
 from dataclasses import dataclass
 from collections.abc import Callable
 
+from eventmate.integrations.health import Watched
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
 
 MAX_REPLY_BYTES = 1_500_000
@@ -189,4 +190,5 @@ class MergedSearch(SearchProvider):
 
 def default_provider() -> SearchProvider:
     key = os.environ.get("BRAVE_SEARCH_API_KEY", "").strip()
-    return MergedSearch([BraveSearch(key), DuckDuckGoHtml()]) if key else DuckDuckGoHtml()
+    inner = MergedSearch([BraveSearch(key), DuckDuckGoHtml()]) if key else DuckDuckGoHtml()
+    return Watched(inner, "search", ("search",))  # records how the search is doing (integrations/health.py); behaves as the provider does

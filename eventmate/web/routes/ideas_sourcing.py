@@ -356,6 +356,12 @@ def register(app, k):
             s = em.suppress_unmatched(message_id, b.by)
         return out(s, 201)
 
+    @app.get("/api/services")
+    def services_get():
+        """How each outside service (Google Places, OpenStreetMap, OpenWeather, web search, flights, the AI model) is doing, from what the app has seen: ok, quota used, degraded, not configured. No key, query or provider text."""
+        with lock:
+            return jsonify(em.service_status())
+
     @app.get("/api/reply-reviews")
     def reply_reviews_get():
         """Replies from an address we wrote to for more than one event, with nothing in them saying which. Nothing is filed, read or priced until you pick the event."""

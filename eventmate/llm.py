@@ -25,6 +25,7 @@ import urllib.request
 from pathlib import Path
 
 from eventmate import consumption
+from eventmate.integrations.health import HEALTH, classify
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
 from typing import Protocol
 from collections.abc import Iterable
@@ -262,7 +263,9 @@ class FallbackClient:
                 continue
             self._record(c, True)
             self.last_used = c.name
+            HEALTH.ok("model")
             return out
+        HEALTH.failed("model", classify(LLMError(" ".join(errors))))  # the kind only (a limit, unreachable, an error): never the providers' own words
         raise LLMError("no model answered: " + "; ".join(errors))
 
 

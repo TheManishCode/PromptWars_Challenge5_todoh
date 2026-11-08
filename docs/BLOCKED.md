@@ -25,3 +25,9 @@ Questions only the owner can answer, before any provider is switched on (`docs/L
 4. Who is the payee in each case: the vendor, or the owner collecting from customers (then PayPal Orders or Invoicing, or a gateway, might fit and Payouts would not)?
 Not run: the PayPal sandbox round trip (needs sandbox credentials from the owner; the request body fields are not verified), any live account, any real payment, any refund.
 
+## Live data and models (WP5): built, not run against any live service
+
+- Service states, the Find-vendors note and the call-capped evals are tested with fakes. **No live Places, Brave, OpenWeather, Overpass, flight or model call was made.**
+- **Behavioural evals: not run** (`prompts/assistant.lock.json` stays `not_run`). Needs a key the owner supplies through the secure route, on a free route only; the run stops at `EVENTMATE_EVAL_MAX_CALLS` (default 120). The owner should confirm the free-tier terms of the chosen provider first (OpenRouter's free-model limits were not rendered, NVIDIA's pages gave no text: `docs/INTEGRATIONS.md`).
+- Owner actions that may involve an account or a payment method: a Google Maps Platform key (billing account), a Brave key (prepaid credits), an OpenWeather key (free, email sign-up). Nothing was created.
+

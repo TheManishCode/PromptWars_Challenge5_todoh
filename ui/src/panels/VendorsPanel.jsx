@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useResource } from '../hooks/useResource';
 import { Collage, Note, Notice } from '../components/Note';
 import { useAction } from '../hooks/useAction';
 import { api } from '../lib/api';
@@ -34,6 +35,19 @@ function AddVendor({ category, sourcing, onDone }) {
       <p className="quiet">If someone else has asked this business for a quote, you will see what it said, marked as theirs and for orientation only.</p>
       {state.error && <Notice tone="bad">{state.error}</Notice>}
     </form>
+  );
+}
+
+/** Says so when an outside lookup is used up or failing, so a short list reads as "missing", not "none exist". */
+function ServiceNotice() {
+  const { data } = useResource('/api/services');
+  const bad = (data || []).filter((s) => ['places', 'overpass', 'search'].includes(s.name) && ['quota_used', 'degraded'].includes(s.state));
+  if (!bad.length) return null;
+  return (
+    <Note tone="warn" title="Online lookups are limited right now">
+      {bad.map((s) => <p key={s.name}>{s.label}: {s.note}.</p>)}
+      <p className="quiet">What is missing below may exist. Add the businesses you know, and look again later.</p>
+    </Note>
   );
 }
 
@@ -95,7 +109,7 @@ function Search({ category, count, sourcing }) {
 const OPTIONAL = ['caterer', 'photographer'];
 
 export function VendorsPanel({ categories, extra, setExtra, sourcing }) {
-  const out = [<NameNote key="name" by={sourcing.by} setBy={sourcing.setBy} />];
+  const out = [<NameNote key="name" by={sourcing.by} setBy={sourcing.setBy} />, <ServiceNotice key="services" />];
   for (const category of categories) {
     const mine = sourcing.cards.filter((c) => c.category === category);
     out.push(<Search key={`find-${category}`} category={category} count={mine.length} sourcing={sourcing} />);

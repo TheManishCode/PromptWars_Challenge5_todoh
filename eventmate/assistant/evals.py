@@ -10,6 +10,7 @@ configured, the behavioral cases too). The lock records honestly whether the beh
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import sys
 import tempfile
@@ -61,12 +62,37 @@ def read_lock(path: Path = LOCK) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def run_behavioral(assistant: Assistant, cases: list[dict] | None = None) -> dict[str, Any]:
-    """Run every case against the example plan; returns a report and does not raise on a failed case."""
+DEFAULT_MAX_CALLS = 120  # model calls in one run: a run that would spend more stops between cases and says so. Evals are meant for free quotas only
+
+
+class _Counted:
+    """A model client that counts the calls made through it. It changes nothing about them."""
+
+    def __init__(self, inner, counter: list[int]):
+        self._inner, self._counter = inner, counter
+
+    def complete(self, system: str, user: str, max_tokens: int) -> str:
+        self._counter[0] += 1
+        return self._inner.complete(system, user, max_tokens)
+
+    def __getattr__(self, attr):
+        return getattr(self._inner, attr)
+
+
+def run_behavioral(assistant: Assistant, cases: list[dict] | None = None, max_calls: int | None = None) -> dict[str, Any]:
+    """Run the cases against the example plan; returns a report and does not raise on a failed case. Stops BETWEEN cases once ``max_calls`` model calls have been made (a case in progress finishes):
+    the report then says ``capped`` and is not a pass, so a cut-short run can never update the lock."""
     cases = cases if cases is not None else json.loads(CASES.read_text(encoding="utf-8"))["cases"]
+    cap = DEFAULT_MAX_CALLS if max_calls is None else max_calls
+    counter = [0]
+    assistant.llms = {k: _Counted(v, counter) for k, v in assistant.llms.items()}
     pid = assistant.em.plan(EXAMPLE, today=EVAL_TODAY).plan.plan_id
     failures: list[str] = []
+    ran = 0
     for c in cases:
+        if counter[0] >= cap:
+            break
+        ran += 1
         who = LOCAL_ORGANIZER if c["role"] == "organizer" else Principal(user_id="eval-" + c["role"], roles=(Role(c["role"]),))
         before = len(assistant.em.ledger_entries(pid))
         res = assistant.ask(c["question"], pid, who)
@@ -81,7 +107,10 @@ def run_behavioral(assistant: Assistant, cases: list[dict] | None = None) -> dic
             failures.append(f"{c['id']}: expected a proposal for the organiser to approve")
         if c.get("expect_ledger_unchanged") and len(assistant.em.ledger_entries(pid)) != before:
             failures.append(f"{c['id']}: the assistant changed the ledger without approval")
-    return {"cases": len(cases), "failures": failures, "passed": not failures}
+    capped = ran < len(cases)
+    if capped:
+        failures.append(f"stopped after {ran} of {len(cases)} cases: the cap of {cap} model calls was reached")
+    return {"cases": ran, "total": len(cases), "calls": counter[0], "capped": capped, "failures": failures, "passed": not failures}
 
 
 def run_retrieval(kb, k: int = 3, cases: list[dict] | None = None) -> dict[str, Any]:
@@ -119,6 +148,7 @@ def main(argv=None) -> int:
     ap.add_argument("--update-lock", action="store_true")
     ap.add_argument("--behavioral", action="store_true", help="run the model cases (needs NVIDIA_API_KEY and/or OPENROUTER_API_KEY; spends credits)")
     ap.add_argument("--require-behavioral", action="store_true", help="fail unless the behavioral cases ran and passed")
+    ap.add_argument("--max-calls", type=int, default=int(os.environ.get("EVENTMATE_EVAL_MAX_CALLS", DEFAULT_MAX_CALLS) or DEFAULT_MAX_CALLS), help=f"stop between cases after this many model calls (default {DEFAULT_MAX_CALLS}, or EVENTMATE_EVAL_MAX_CALLS)")
     a = ap.parse_args(argv)
     problems = static_evals(PromptStore().load(PROMPT_ID)[0])
     print("static evals:", "passed" if not problems else "FAILED\n  " + "\n  ".join(problems))
@@ -137,8 +167,8 @@ def main(argv=None) -> int:
                 print("behavioral evals: NOT RUN (no model configured)")
                 return 1 if a.require_behavioral else (0 if not problems else 1)
             model = getattr(assistant.llms.get("large") or next(iter(assistant.llms.values())), "name", "")
-            report = run_behavioral(assistant)
-            print(f"behavioral evals: {'passed' if report['passed'] else 'FAILED'} ({report['cases']} cases)")
+            report = run_behavioral(assistant, max_calls=a.max_calls)
+            print(f"behavioral evals: {'passed' if report['passed'] else 'FAILED'} ({report['cases']} of {report['total']} cases, {report['calls']} model calls, cap {a.max_calls})")
             for f in report["failures"]:
                 print("  ", f)
     ok = not problems and (report is None or report["passed"])

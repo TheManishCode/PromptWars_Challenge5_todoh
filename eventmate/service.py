@@ -55,6 +55,7 @@ from eventmate.followthrough.watches import WatchRunner, WatchStore
 from eventmate.planning import brief_scope, plan_graph
 from eventmate.planning.brief_links import BriefLinks
 from eventmate.sourcing.contact_log import ContactLogStore
+from eventmate.integrations.health import HEALTH, Watched
 from eventmate.payments.approvals import ProposalStore
 from eventmate.payments.desk import PaymentDesk
 from eventmate.payments.providers import provider_from_env
@@ -131,10 +132,10 @@ class EventMate:
                                     lambda: self.outreach_store.now().date(),
                                     external_allowed=shared_dir is None)  # money terms, approvals and instructions (payments/desk.py); never moves money from a hosted visitor's workspace
         self.lead_store = LeadStore(self.store.root)
-        self.flights = flights or FliProvider()
-        self.discovery = discovery or OverpassSource()
-        self.weather = weather or OpenWeatherSource()
-        self.places = places or PlacesSource()
+        self.flights = Watched(flights or FliProvider(), "flights", ("search_one_way", "cheapest_dates"))  # each records how the service is doing (integrations/health.py)
+        self.discovery = Watched(discovery or OverpassSource(), "overpass", ("venues",))
+        self.weather = Watched(weather or OpenWeatherSource(), "weather", ("forecast",))
+        self.places = Watched(places or PlacesSource(), "places", ("search", "details"))
         self.router_clients = lambda: (client_from_env(tier="light") or _NoClients()).clients  # light tier: OpenRouter free first, NVIDIA behind
         self.deals_factory = lambda on_call: DealAgent(default_provider(), RenderingFetcher(), on_call=on_call)  # static pages first; the read-only browser only for a page with almost no text
         self.observations = ObservationStore(self.store.root, self.repo)
@@ -1065,6 +1066,11 @@ class EventMate:
         if not any(i.business.vendor_id == vendor_id for i in self.shortlist_view(plan_id)):
             raise ValueError("that business is not on this list")
         return self.contact_log.add(plan_id, vendor_id, channel, by, note or "")
+
+    def service_status(self) -> list[dict]:
+        """How each outside service is doing, from what the app has seen of it: ok, quota used, degraded, not configured, or not used yet."""
+        cfg = {"places": getattr(self.places, "configured", None), "weather": getattr(self.weather, "configured", None)}
+        return HEALTH.snapshot({k: (v() if callable(v) else v) for k, v in cfg.items() if v is not None})
 
     def propose_payment_terms(self, plan_id: str, message_id: str, by: str):
         """Money terms for a vendor's quote the user has confirmed in full (price and deposit): the deposit, the balance, and the vendor's own sentence about the deposit. They are only a proposal until
