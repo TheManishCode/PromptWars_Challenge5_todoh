@@ -1,7 +1,8 @@
 """Sustained-load test against the REAL server (waitress, shared mode) started in a child process.
 
-N visitors, each with its own address and workspace, loop through realistic work (open the room, plan an event, read it, add ledger entries, ask the assistant, export) for
-``--seconds``. Reported: requests, errors by class, latency p50/p95/p99 per route, and the server's memory, open files and threads at the start (after warm-up) and the end.
+N visitors, each with its own address and workspace, loop through realistic work for ``--seconds``. Two kinds: the dashboard visitor (open the room, plan an event, read it, add ledger entries,
+ask the assistant, export) and the /plan visitor (``--plan-share``, half by default), who walks what "Start planning" leads to through the API: read a brief (staging), add a venue and a caterer they
+know, write the requests, mark them sent, paste the replies, confirm every line, choose the vendors, commit with from_quotes and poll the commit queue until the plan is done. Reported: requests, errors by class, latency p50/p95/p99 per route, and the server's memory, open files and threads at the start (after warm-up) and the end.
 The run FAILS (exit 1) on any 5xx, a p95 over ``--p95-ms``, or growth beyond the bounds below, which is what a leak looks like.
     python tools/loadtest/soak.py --seconds 60 --visitors 8            # CI smoke
     python tools/loadtest/soak.py --seconds 1800 --visitors 20          # a soak before a release
@@ -109,6 +110,106 @@ def visitor(i, port, deadline, record, rng):
         time.sleep(rng.uniform(0.8, 2.5))  # a person reads between actions: about 30 requests a minute, under the 60 writes a minute the server allows per address
 
 
+BRIEF = "birthday for 40 guests in Mysuru on 14 February 2027, veg, budget 60000"
+REPLIES = {
+    "venue": "Available on the date (yes/no): yes\nPrice for the day (INR): 20,000\nTaxes (GST) included (yes/no): yes\nCapacity (guests): 120\nDeposit to book (INR): 5,000\nQuote valid for (days): 10\nIncluded and extra: tables included",
+    "caterer": "Available on the date (yes/no): yes\nPrice per plate (INR): 650\nTaxes (GST) included (yes/no): yes\nMinimum guests: 20\nMaximum guests: 300\nFood options (vegetarian / jain / vegan / non-veg): vegetarian, jain\nDeposit to book (INR): 10,000\nQuote valid for (days): 10\nIncluded and extra: staff and crockery included",
+}
+PRICE_KEYS = ("price", "price_total", "package")
+COMMIT_WAIT_S = 240
+
+
+def plan_journey(i, n, cl, record, fail, rng):
+    """One /plan visitor, start to finish, through the API. Anything unexpected (a non-2xx, a build that never ends) is a failure of the run, not a skipped step."""
+    def step(label, method, path, body=None, expect=(200, 201, 202)):
+        st, j, ms = cl.call(method, path, body)
+        record(label, st, ms)
+        if st not in expect:
+            fail(f"{label} -> {st} {str(j)[:160]}")
+            return None
+        time.sleep(rng.uniform(0.3, 1.2))
+        return j
+
+    turn = step("POST intake", "POST", "/api/intake", {"messages": [BRIEF]})
+    if not turn:
+        return
+    staged, pid, ids = turn["staged_id"], "brief_" + turn["staged_id"], {}
+    for cat in REPLIES:
+        item = step("POST user-vendor", "POST", f"/api/plans/{pid}/shortlist/user-vendor", {"name": f"Our {cat} {i}-{n}", "category": cat, "by": "Soak", "email": f"{cat}{i}x{n}@vendor.test"})
+        if not item:
+            return
+        ids[cat] = item["business"]["vendor_id"]
+    made = step("POST request-all", "POST", f"/api/plans/{pid}/outreach/request-all", {"sender_name": "Soak"})
+    if made is None:
+        return
+    for d in made["drafts"]:
+        if step("POST outreach sent", "POST", f"/api/plans/{pid}/outreach/{d['draft_id']}/sent", {}) is None:
+            return
+    for cat, vid in ids.items():
+        if step("POST replies/paste", "POST", f"/api/plans/{pid}/replies/paste", {"vendor_id": vid, "text": REPLIES[cat], "by": "Soak", "channel": "email"}) is None:
+            return
+    for _ in range(40):  # confirm every line, the money lines one by one, as a person would
+        readings = step("GET quote-readings", "GET", f"/api/plans/{pid}/quote-readings")
+        todo = [(a, f) for a in (readings or {}).get("quotes", []) if not a["comparable"] for f in a["fields"] if f["state"] == "read"]
+        if not todo:
+            break
+        a, f = todo[0]
+        body = {"fields": {f["key"]: None}, "by": "Soak", **({"valid_days": "10"} if f["key"] in PRICE_KEYS else {})}
+        if step("POST quote confirm", "POST", f"/api/plans/{pid}/quote-readings/{a['message_id']}/confirm", body) is None:
+            return
+    readings = step("GET quote-readings", "GET", f"/api/plans/{pid}/quote-readings")
+    comparable = [a for a in (readings or {}).get("quotes", []) if a["comparable"]]
+    if len(comparable) != len(REPLIES):
+        fail(f"{len(comparable)} of {len(REPLIES)} replies became comparable after every line was confirmed")
+        return
+    for a in comparable:
+        body = {"by": "Soak", **({"setting": "indoor"} if a["category"] == "venue" else {})}
+        if step("POST promote", "POST", f"/api/plans/{pid}/quote-readings/{a['message_id']}/promote", body) is None:
+            return
+    for attempt in range(6):  # the commit queue has a bounded number of places: "busy" is an honest answer, and a person presses the button again
+        status = step("GET intake status", "GET", f"/api/intake/{staged}/status")
+        if not status:
+            return
+        st, j, ms = cl.call("POST", f"/api/intake/{staged}/commit", {"version": status["version"], "draft_hash": status["draft_hash"], "from_quotes": True})
+        record("POST commit", st, ms)
+        if st in (200, 202):
+            break
+        if st != 429:
+            fail(f"POST commit -> {st} {str(j)[:200]}")
+            return
+        time.sleep(3 + attempt * 2)
+    else:
+        fail("POST commit stayed busy (429) for six tries")
+        return
+    t0 = time.time()
+    while time.time() - t0 < COMMIT_WAIT_S:
+        time.sleep(1.5)
+        status = step("GET intake status", "GET", f"/api/intake/{staged}/status")
+        if not status:
+            return
+        if status["state"] in ("done", "failed"):
+            record("commit to done", 200 if status["state"] == "done" else 500, (time.time() - t0) * 1000)
+            if status["state"] == "failed":
+                fail(f"the build failed: {status.get('error')}")
+            return
+    fail(f"a commit never reached done or failed within {COMMIT_WAIT_S} s")
+
+
+def plan_visitor(i, port, deadline, record, fail, rng):
+    cl = Client(port, f"198.51.100.{10 + i % 200}")
+    st, j, ms = cl.call("GET", "/api/session")
+    record("GET /api/session", st, ms)
+    if st != 200:
+        fail("a /plan visitor could not open a session")
+        return
+    cl.csrf = j["csrf"]
+    n = 0
+    while time.time() < deadline:
+        n += 1
+        plan_journey(i, n, cl, record, fail, rng)
+        time.sleep(rng.uniform(1, 3))
+
+
 def pct(values, p):
     values = sorted(values)
     return round(values[min(len(values) - 1, int(len(values) * p))], 1) if values else None
@@ -119,6 +220,8 @@ def main():
     ap.add_argument("--seconds", type=int, default=60)
     ap.add_argument("--visitors", type=int, default=8)
     ap.add_argument("--p95-ms", type=float, default=3000)
+    ap.add_argument("--build-p95-s", type=float, default=60, help="the longest a commit may take to reach done, at the 95th percentile")
+    ap.add_argument("--plan-share", type=float, default=0.5, help="the share of visitors that walk the /plan journey (the rest do the dashboard work)")
     ap.add_argument("--max-rss-growth-pct", type=float, default=35)
     ap.add_argument("--max-fd-growth", type=int, default=25)
     ap.add_argument("--max-thread-growth", type=int, default=10)
@@ -155,9 +258,18 @@ def main():
                 if st >= 300:
                     bad[f"{route} -> {st}"] += 1
 
+        problems: list[str] = []
+
+        def fail(msg):
+            with lock:
+                if len(problems) < 20:
+                    problems.append(msg)
+
         warm = time.time() + min(10, a.seconds / 4)
         deadline = time.time() + a.seconds
-        threads = [threading.Thread(target=visitor, args=(i, port, deadline, record, random.Random(i))) for i in range(a.visitors)]
+        n_plan = round(a.visitors * a.plan_share)
+        threads = [threading.Thread(target=plan_visitor, args=(i, port, deadline, record, fail, random.Random(i))) if i < n_plan
+                   else threading.Thread(target=visitor, args=(i, port, deadline, record, random.Random(i))) for i in range(a.visitors)]
         [t.start() for t in threads]
         while time.time() < warm:
             time.sleep(0.2)
@@ -173,9 +285,13 @@ def main():
         fails = []
         if not up:
             fails.append("the server process died during the run")
+        fails.extend(problems)
         if codes.get("5xx"):
             fails.append(f"{codes['5xx']} responses were 5xx")
-        allms = [v for vs in lat.values() for v in vs]
+        allms = [v for k, vs in lat.items() if k != "commit to done" for v in vs]  # a build's wait is judged on its own, not as a request
+        builds = lat.get("commit to done", [])
+        if builds and pct(builds, 0.95) > a.build_p95_s * 1000:
+            fails.append(f"builds: p95 {pct(builds, 0.95)} ms to done is over {a.build_p95_s} s")
         if allms and codes.get("429", 0) / len(allms) > 0.05:
             fails.append(f"{codes['429']} of {len(allms)} requests were rate limited: the test is not exercising real work (or the limits are too tight for a normal visitor)")
         p95 = pct(allms, 0.95)
@@ -187,7 +303,7 @@ def main():
             fails.append(f"open files grew {start['fds']} -> {end['fds']}")
         if end["threads"] - start["threads"] > a.max_thread_growth:
             fails.append(f"threads grew {start['threads']} -> {end['threads']}")
-        report = {"seconds": a.seconds, "visitors": a.visitors, "requests": len(allms), "by_class": dict(codes), "non_2xx": dict(bad), "p50_ms": pct(allms, 0.5), "p95_ms": p95, "p99_ms": pct(allms, 0.99),
+        report = {"seconds": a.seconds, "visitors": a.visitors, "plan_visitors": n_plan, "requests": len(allms), "by_class": dict(codes), "non_2xx": dict(bad), "builds": len(builds), "build_p50_ms": pct(builds, 0.5), "build_p95_ms": pct(builds, 0.95), "p50_ms": pct(allms, 0.5), "p95_ms": p95, "p99_ms": pct(allms, 0.99),
                   "per_route_p95_ms": {k: pct(v, 0.95) for k, v in sorted(lat.items())}, "server_start": start, "server_peak": peak, "server_end": end, "failures": fails}
         print(json.dumps(report, indent=1))
         if a.report:
