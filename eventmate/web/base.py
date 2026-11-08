@@ -35,19 +35,14 @@ STATIC_FILES = {
     # the landing page (/) and the planner (/app); the look they share is site.css
     "site.css": "text/css; charset=utf-8", "landing.css": "text/css; charset=utf-8", "landing.js": "text/javascript; charset=utf-8",
     "app.css": "text/css; charset=utf-8", "app.js": "text/javascript; charset=utf-8",
-    # the planning front door (/plan): built from ui/ (npm run build). The two reference-* drawings are not in the repository (their licence is unconfirmed): the page works without them.
+    # the planning front door (/plan): built from ui/ (npm run build). Its drawings are inline SVG authored for this project: no image files.
     "plan.css": "text/css; charset=utf-8", "plan.js": "text/javascript; charset=utf-8", "plan-instrument-serif-italic.ttf": "font/ttf",
-    "plan-story-knot.webp": "image/webp", "plan-story-relaxed.webp": "image/webp", "plan-story-table-sketch.webp": "image/webp", "plan-story-char-cat.webp": "image/webp",
-    "plan-story-char-duck.webp": "image/webp", "plan-story-char-frog.webp": "image/webp", "plan-story-char-music.webp": "image/webp", "plan-story-char-robot.webp": "image/webp",
-    "plan-story-char-tallbird.webp": "image/webp", "plan-reference-cap.webp": "image/webp", "plan-reference-head-open.webp": "image/webp", "plan-reference-head-closed.webp": "image/webp",
-    # fonts and hero media served from this origin: the CSP allows no third party. The poster and the video are not in the repository (their licence is unconfirmed): without
-    # them the hero shows its plain gradient, and a file that is absent is a 404.
-    "landing-poster.jpg": "image/jpeg", "landing-hero.mp4": "video/mp4",
+    # fonts served from this origin: the CSP allows no third party
     "landing-instrument-serif.ttf": "font/ttf", "landing-inter-400.ttf": "font/ttf", "landing-inter-500.ttf": "font/ttf",
 }
-LONG_CACHE = frozenset({"landing-poster.jpg", "landing-hero.mp4", "landing-instrument-serif.ttf", "landing-inter-400.ttf", "landing-inter-500.ttf", "plan-instrument-serif-italic.ttf"})  # large and unchanging: not re-sent on every page load
+LONG_CACHE = frozenset({"landing-instrument-serif.ttf", "landing-inter-400.ttf", "landing-inter-500.ttf", "plan-instrument-serif-italic.ttf"})  # large and unchanging: not re-sent on every page load
 GZIP_MIN = 1024  # below this the header overhead outweighs the saving
-GZIP_MAX = 6 * 1024 * 1024  # above this a file (the hero video) is streamed as it is, with ETag and Range, never read whole into memory; compression is done once per file and cached
+GZIP_MAX = 6 * 1024 * 1024  # above this a file is streamed as it is, with ETag and Range, never read whole into memory; compression is done once per file and cached
 _gzip_cache: dict[tuple, bytes] = {}  # (name, mtime_ns) -> compressed bytes; the file set is fixed and small
 WORKSPACE_EXEMPT = ("/api/owner/status", "/metrics", "/api/wall/")  # /api routes with their own authentication: no workspace is looked up or made for them
 # POST routes that send, or let something send later, through the owner's mailbox or gateway; refused for every guest workspace

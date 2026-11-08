@@ -151,7 +151,7 @@ export function Review({ brief, onDone, onBack }) {
         <div className="review-question">
           <div className={`speech${!ready && (turn.question || '').length > 60 ? ' speech--long' : ''}`}>{speech({ ready, editing, answer, question: turn.question })}</div>
           <svg className="speech-arrow" viewBox="0 0 24 34" aria-hidden="true"><path d="M5 2c12 3 16 14 9 27M14 29l-6-5M14 29l5-6" /></svg>
-          <Art name="reference-head-closed" className="review-mascot" alt="" />
+          <Art name="thinker-head-closed" className="review-mascot" alt="" />
           {ready ? (
             <div className="review-options" role="group" aria-label="Is this right?" onKeyDown={arrows}>
               <button ref={yesRef} className="word-choice" id="answer-yes" type="button" aria-pressed={answer === 'yes'} onClick={() => setAnswer('yes')}>Yes</button>

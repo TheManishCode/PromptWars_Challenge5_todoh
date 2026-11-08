@@ -15,9 +15,6 @@ from eventmate.web.base import (
 )
 
 
-OPTIONAL_MEDIA = {"landing-poster.jpg": r'<img class="hero__poster"[^>]*>\s*', "landing-hero.mp4": r'<video class="hero__video".*?</video>\s*'}
-
-
 def register(app, k):
     P = k.P
     asset_version = k.asset_version
@@ -30,11 +27,6 @@ def register(app, k):
         what the page names can be kept for a year and a visitor never runs new markup against an old script."""
         version = asset_version()
         html = (STATIC_DIR / name).read_text(encoding="utf-8")
-        for media, tag in OPTIONAL_MEDIA.items():  # the hero poster and video are not in every checkout: no tag for a file that is absent, so no request fails
-            if not (STATIC_DIR / media).is_file():
-                html = re.sub(tag, "", html, flags=re.S)
-        if not (STATIC_DIR / "landing-poster.jpg").is_file():
-            html = re.sub(r'\sposter="[^"]*"', "", html)
         html = re.sub(r'((?:src|href)="/static/[A-Za-z0-9_.-]+\.(?:js|css|svg|jpg|mp4))"', lambda m: f'{m.group(1)}?v={version}"', html)
         html = html.replace("<head>", f'<head>\n<meta name="asset-version" content="{version}">', 1)
         return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})  # the page itself is always asked for again; what it names is cached for good

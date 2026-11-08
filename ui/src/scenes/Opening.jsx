@@ -70,7 +70,7 @@ export function Opening({ onIdea, busy, error, paused, initialText = '' }) {
                   </g>
                 </svg>
                 <div className="mess-illustration">
-                  <Art name="story-knot" alt="" fetchPriority="high" />
+                  <Art name="story-knot" alt="" />
                   <span className="scribble-label sl-one">THE GUEST LIST</span>
                   <span className="scribble-label sl-two">THE BUDGET</span>
                   <span className="scribble-label sl-three">EVERYTHING ELSE</span>

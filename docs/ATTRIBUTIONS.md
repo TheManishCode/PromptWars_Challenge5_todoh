@@ -8,11 +8,14 @@ What is in this repository that is not ours, and the terms it comes under. The 3
 |---|---|---|
 | `landing-instrument-serif.ttf` | Instrument Serif, Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif) | SIL Open Font License 1.1 |
 | `google-maps-logo.svg` | The Google Maps logo, dark gray, taken unchanged from Google's attribution assets (https://developers.google.com/static/maps/documentation/images/Google_Maps_Attribution_Assets.zip), shown beside Google listing details | Google Maps Platform terms and attribution guidelines: not modified, 16-19dp high, 10dp clear space left, right and top and 5dp below, accessible label "Google Maps". Its sha256 is pinned by `tests/test_google_attribution.py` |
+| `plan-instrument-serif-italic.ttf` | Instrument Serif Italic, Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif), used by the /plan page | SIL Open Font License 1.1 |
 | `landing-inter-400.ttf`, `landing-inter-500.ttf` | Inter, Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter) | SIL Open Font License 1.1 |
 
 The fonts are served from this origin (the page's CSP allows no third party). The licence lets them be used, embedded and redistributed with the notice, and not sold on their own.
 
-**Not in the repository: the landing hero poster and video** (`landing-poster.jpg`, `landing-hero.mp4`). They came from `designerstephen.github.io/public-assets` and their licence is not confirmed, so they are git-ignored and the page works without them (a plain gradient shows). Confirm the right to publish them before adding them back.
+**Authored for this project:** `favicon.svg`, and every drawing on the /plan page (the characters, the tangle, the table sketch, the thinker): inline SVG in `ui/src/components/Art.jsx`, drawn for this project, no image files, no outside source.
+
+**Removed, not shipped:** the landing hero poster and video (`landing-poster.jpg`, `landing-hero.mp4`; licence unconfirmed) and the `/plan` story and reference artwork (`plan-story-*.webp`, `plan-reference-*.webp`; cropped from outside images). Nothing in the repository, the served list or the container image refers to them.
 
 ## Used by the tests only (never served)
 

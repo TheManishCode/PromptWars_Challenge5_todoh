@@ -14,7 +14,6 @@ from tests.conftest import EXAMPLE, TODAY
 from tests.test_web import post
 
 STATIC = Path(__file__).resolve().parent.parent / "eventmate/web/static"
-OPTIONAL = {"landing-poster.jpg", "landing-hero.mp4"}  # not in the repository (licence unconfirmed); the page works without them
 
 
 @pytest.fixture
@@ -85,7 +84,7 @@ def test_plan_run_drives_the_pulse(client):
 
 def test_every_listed_static_file_exists_and_page_scripts_and_styles_are_local():
     for name in STATIC_FILES:
-        assert (STATIC / name).is_file() or name in OPTIONAL, name
+        assert (STATIC / name).is_file(), name
     assert not [n for n in STATIC_FILES if (STATIC / n).is_dir()] and not (STATIC / "vendor").exists()  # nothing third-party is served except the two fonts
     for page in ("landing.html", "app.html"):
         html = (STATIC / page).read_text()
@@ -113,27 +112,7 @@ def test_assets_are_gzipped_only_when_asked_and_round_trip(client):
 
 def test_a_listed_file_that_is_not_in_the_checkout_is_a_plain_404_not_an_error(client, monkeypatch):
     monkeypatch.setattr("eventmate.web.routes.pages.STATIC_DIR", STATIC / "nowhere")
-    assert client.get("/static/landing-hero.mp4").status_code == 404
-
-
-def test_the_hero_video_when_present_is_streamed_with_ranges_not_read_whole(client):
-    if not (STATIC / "landing-hero.mp4").is_file():
-        pytest.skip("the hero video is not in this checkout")
-    r = client.get("/static/landing-hero.mp4", headers={"Range": "bytes=0-99", "Accept-Encoding": "gzip"})
-    assert r.status_code == 206 and len(r.data) == 100 and "Content-Encoding" not in r.headers
-
-
-def test_a_page_names_no_hero_media_that_is_not_in_the_checkout(client, monkeypatch, tmp_path):
-    import shutil
-
-    for name in ("landing.html", "app.html"):
-        shutil.copy(STATIC / name, tmp_path / name)
-    monkeypatch.setattr("eventmate.web.routes.pages.STATIC_DIR", tmp_path)
-    html = client.get("/").get_data(as_text=True)
-    assert "landing-hero.mp4" not in html and "landing-poster.jpg" not in html and "<video" not in html and 'class="hero__poster"' not in html and "poster=" not in html
-    assert "<h1" in html and "hero__content" in html  # the page itself is whole without them
-    (tmp_path / "landing-poster.jpg").write_bytes(b"x")
-    assert 'class="hero__poster"' in client.get("/").get_data(as_text=True)  # and with a file present its tag is kept
+    assert client.get("/static/landing-inter-400.ttf").status_code == 404
 
 
 def test_the_two_pages_link_to_each_other_and_nothing_else_is_an_interface(client):

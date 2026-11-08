@@ -21,7 +21,7 @@ export function Graph({ active, onSelect, badges = {} }) {
 
   return (
     <div className="thinker">
-      <Art name="reference-cap" className="thinker-cap" alt="" />
+      <Art name="thinker-cap" className="thinker-cap" alt="" />
       <div className="graph-world">
         <svg className="graph-wires" viewBox="0 0 360 340" preserveAspectRatio="none" aria-hidden="true">
           <defs>
@@ -64,7 +64,7 @@ export function Graph({ active, onSelect, badges = {} }) {
           </button>
         ))}
       </div>
-      <Art name="reference-head-open" className="thinker-head" alt="" />
+      <Art name="thinker-head-open" className="thinker-head" alt="" />
     </div>
   );
 }

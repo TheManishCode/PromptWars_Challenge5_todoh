@@ -54,3 +54,12 @@ def test_git_ignored_files_under_the_package_stay_out_of_the_image():
                              cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
     leaks = sorted(p for p in ignored if not dockerignored(p.rstrip("/"), patterns) and "__pycache__" not in p and not p.endswith((".pyc", ".egg-info/")))
     assert not leaks, f"git ignores these but `docker build` would copy them into the image: {leaks}"
+
+
+def test_the_static_folder_holds_only_what_is_served_and_the_built_page_asks_for_no_image_file():
+    static = ROOT / "eventmate/web/static"
+    pages = {"app.html", "landing.html", "plan.html", "LICENSES.txt"}
+    extra = sorted(p.name for p in static.iterdir() if p.is_file() and p.name not in STATIC_FILES and p.name not in pages)
+    assert not extra, f"files in static/ that are not on the served list (they would still be copied into the image): {extra}"
+    built = "".join((static / n).read_text() for n in ("plan.js", "plan.css"))
+    assert not re.search(r"""[\w./-]+\.(?:webp|png|jpe?g|gif|mp4|webm)\b""", built), "the built /plan page names an image or video file: its art must be inline SVG we authored"

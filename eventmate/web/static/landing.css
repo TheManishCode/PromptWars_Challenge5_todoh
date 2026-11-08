@@ -22,14 +22,6 @@
   background: var(--hero-bg);
 }
 .hero__media { position: absolute; inset: 0; z-index: 0; }
-.hero__poster,
-.hero__video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
 /* light scrim: keeps navy text legible over the bright video
    (a dark overlay would defeat the dark-on-light palette) */
 .hero__scrim {

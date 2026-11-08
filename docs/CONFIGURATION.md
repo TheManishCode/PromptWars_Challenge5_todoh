@@ -74,3 +74,18 @@ I have **not run** the 1Password, libsecret or macOS commands for this page; the
 
 Do not put a secret on a command line (`--password ...`) or in a shell history line: other users can see process arguments. Rotate any secret that has ever been pasted into a chat, a ticket or a log.
 
+
+## Building the planning tools (a clean clone needs this before `make test`)
+
+Plans refuse to run without Fast Downward and VAL (by design: nothing unchecked is shown), so a fresh checkout fails most of the suite until they are built. The pinned commits are the ones the `Dockerfile` uses. Needs `cmake g++ make flex bison git`.
+
+```
+mkdir -p solvers && cd solvers
+git clone --depth 1 --branch release-24.06.1 https://github.com/aibasel/downward.git fast-downward-24.06.1
+(cd fast-downward-24.06.1 && test "$(git rev-parse HEAD)" = 1eef26b2cbf599a1894606aa898d9d49e1034cb9 && python3 build.py -j4)
+git init -q VAL && cd VAL && git remote add origin https://github.com/KCL-Planning/VAL.git \
+  && git fetch -q --depth 1 origin 3c7a1f330bdab0ba28a4762bb45c3f06c27fb6d4 && git checkout -q FETCH_HEAD \
+  && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j4
+```
+
+The default lookup finds `solvers/fast-downward-24.06.1/fast-downward.py` and `solvers/VAL/build/bin/Validate`; otherwise set `EVENTMATE_FD` / `EVENTMATE_VAL`. The `solvers/` directory is git-ignored.

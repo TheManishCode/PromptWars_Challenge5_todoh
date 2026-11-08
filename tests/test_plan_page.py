@@ -23,7 +23,7 @@ def test_the_page_and_its_built_files_are_served(tmp_path):
     page = c.get("/plan")
     assert page.status_code == 200 and 'id="root"' in page.get_data(as_text=True)
     assert c.get("/static/plan.js").status_code == 200 and c.get("/static/plan.css").status_code == 200
-    assert c.get("/static/plan-story-knot.webp").status_code == 200
+    assert c.get("/static/plan-instrument-serif-italic.ttf").status_code == 200
 
 
 @pytest.fixture(scope="module")
