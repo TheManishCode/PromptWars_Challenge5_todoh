@@ -72,6 +72,26 @@ class QuoteConfirmationStore:
             return self._file()._append(rec, rec.confirmation_id)
 
 
+class MenuOption(_Model):
+    label: str = Field(max_length=30)  # the vendor's name for the menu or package
+    value: str = Field(max_length=12)  # its amount, as written
+
+
+class DocLine(_Model):
+    label: str = Field(max_length=120)
+    quantity: int | None = None
+    unit_inr: int | None = None  # the rate on the line (a caterer's per-plate rate), when the file gave one
+    total_inr: int | None = None
+
+
+class AttachedQuote(_Model):
+    """The lines of a quote file that came attached to a reply, as read by the document reader. Evidence, not a quote: nothing here is recorded until the user picks an amount and confirms it."""
+
+    document: str = Field(pattern=r"^[0-9a-f]{10}$")
+    lines: tuple[DocLine, ...] = Field(default=(), max_length=40)
+    grand_total_inr: int | None = None
+
+
 class FieldView(_Model):
     key: str
     label: str
@@ -85,6 +105,7 @@ class FieldView(_Model):
     edited: bool = False
     confirmed_by: str | None = None
     confirmed_at: datetime | None = None
+    options: tuple[MenuOption, ...] = ()  # when the vendor priced several menus on this line: what they wrote, for the user to pick from (nothing is picked for them)
 
 
 class Issue(_Model):
@@ -107,6 +128,7 @@ class QuoteAssessment(_Model):
     index: float  # confirmed required fields over required fields
     comparable: bool
     issues: tuple[Issue, ...] = ()
+    attached: tuple[AttachedQuote, ...] = ()  # quote files attached to this reply, read into lines (when reading attachments is turned on)
     match_method: str = "unknown"  # how the reply was filed under this event: header, sender, assigned, pasted (see InboundMessage)
 
 
@@ -151,6 +173,7 @@ def assess(msg: InboundMessage, category: VendorCategory, confirmations: dict[st
         views.append(FieldView(
             key=key, label=label, money=key in qt.MONEY or kind == "money", state="confirmed" if c else r.state, value=c.value if c else r.value, read_value=r.value, evidence=r.evidence, note=r.note,
             source=r.source, edited=bool(c and c.edited), confirmed_by=c.confirmed_by if c else None, confirmed_at=c.confirmed_at if c else None,
+            options=tuple(MenuOption(label=a, value=b) for a, b in r.options) if not c else (),
         ))
     by = {v.key: v for v in views}
     required = qt.REQUIRED[category]

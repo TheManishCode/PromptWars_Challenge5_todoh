@@ -19,10 +19,10 @@ from eventmate.schemas import ExternalBusiness, InboundMessage, OutreachDraft, Q
 # FUTURE(places-refresh): Google advises refreshing a stored place id older than 12 months (ids can change). ExternalBusiness.created_at is the age; refresh through a search and show "no longer listed" on NOT_FOUND (done) until then.
 # DECIDED(cards-legal): two things are kept that sit next to a Google listing: the name the user types for their own record, and the URL of the vendor's own page where an address was read (provenance of what the vendor published). Both are treated as the user's and the vendor's own content, not Google's. Counsel to confirm before a public launch.
 # FUTURE(cards-dedupe): one business that matches two searches (a caterer that is also a venue) is two cards. Merge by place id, then phone, then name and postcode, always with the user confirming a merge.
-# FUTURE(cards-contact-log): writing to a vendor yourself (mailto, WhatsApp) is outside the app: it is not recorded and the reply does not come back. Offer "I contacted them" so the card can show it, and a way to paste the reply in.
+# (cards-contact-log, done in WP3: sourcing/contact_log.py; "I contacted them myself" on the card, the reply is pasted under Replies)
 
 
-SourceType = Literal["user_confirmed", "vendor_website", "osm_listing", "vendor_quote", "vendor_reply", "app_request", "earlier_quote"]
+SourceType = Literal["user_confirmed", "vendor_website", "osm_listing", "vendor_quote", "vendor_reply", "app_request", "earlier_quote", "contact_log"]
 CONTACT_FIELDS = ("contact.email", "contact.whatsapp", "website", "name")  # one value each: two different ones are a conflict
 _SOURCE_OF = {"listing_field": "osm_listing", "page_mailto": "vendor_website", "page_text": "vendor_website"}
 
@@ -66,7 +66,7 @@ def _snippet(text: str, n: int = 200) -> str:
 
 
 def assemble(item: ShortlistItem, quotes: list[QuoteObservation], drafts: list[OutreachDraft], replies: list[InboundMessage], today: date, guests: int | None = None, event_date: date | None = None,
-             earlier: list[dict] | None = None) -> VendorCard:
+             earlier: list[dict] | None = None, contacts: list | None = None) -> VendorCard:
     biz: ExternalBusiness = item.business
     facts: list[VendorFact] = []
     if biz.source == "osm":
@@ -99,6 +99,9 @@ def assemble(item: ShortlistItem, quotes: list[QuoteObservation], drafts: list[O
         facts.append(VendorFact(
             field="earlier_quote", value=_money(e), source_type="earlier_quote", captured_at=datetime.fromisoformat(e["observed_at"]), status="old" if e["old"] else "valid",
             note="an earlier quote to someone else, for orientation only: " + ("may be out of date: " + "; ".join(e["old"]) if e["old"] else f"it held until {e['expires_at']}")))
+    for c in sorted(contacts or [], key=lambda c: c.at, reverse=True):  # what the user says they did outside the app: their own statement, labelled so
+        facts.append(VendorFact(field="contact_log", value=f"you contacted them by {c.channel.replace('_', ' ')}" + (f": {c.note}" if c.note else ""), source_type="contact_log", source_ref=c.log_id, captured_at=c.at, status="logged",
+                                user_confirmed=True, note=f"noted by {c.by}; the app cannot check it and no reply came back by itself: paste it under Replies"))
     for d in sorted((d for d in drafts if d.kind == "request"), key=lambda d: d.created_at, reverse=True):
         facts.append(VendorFact(field="request", value=f"{d.channel} to {d.recipient}", source_type="app_request", source_ref=d.draft_id, captured_at=d.sent_at or d.created_at, status=d.status, user_confirmed=d.approved_by == "user" and d.status in ("approved", "sending", "sent")))
     for m in sorted(replies, key=lambda m: m.received_at, reverse=True):

@@ -12,9 +12,10 @@ export const SOURCE = {
   vendor_reply: 'The vendor’s reply',
   app_request: 'A request written here',
   earlier_quote: 'Quoted to someone else',
+  contact_log: 'You wrote this down',
 };
 
-export const FACT = { name: 'Name', website: 'Website', 'contact.email': 'Email', 'contact.whatsapp': 'WhatsApp', quote: 'Quote', earlier_quote: 'Earlier quote', request: 'Request', reply: 'Reply' };
+export const FACT = { name: 'Name', website: 'Website', 'contact.email': 'Email', 'contact.whatsapp': 'WhatsApp', quote: 'Quote', earlier_quote: 'Earlier quote', request: 'Request', reply: 'Reply', contact_log: 'Contacted' };
 
 /** "INR 650 per plate for 40 guests" -> "₹650 per plate · 40 guests" */
 export const rupees = (text) => String(text || '').replace(/^INR\s+/, '₹').replace(/ for (\d+) guests?$/, ' · $1 guests');

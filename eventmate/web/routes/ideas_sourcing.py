@@ -15,6 +15,7 @@ from eventmate.web.base import (
     QuoteRetractBody,
     AccessBody,
     AssignReplyBody,
+    ContactedBody,
     ByBody,
     CommunityItemBody,
     ConfirmContactBody,
@@ -284,6 +285,14 @@ def register(app, k):
             biz, _ = em.add_user_vendor(b.name, b.city or "", b.category, b.email, b.whatsapp, b.by, plan_id)
             item = next(i for i in em.shortlist_view(plan_id) if i.business.vendor_id == biz.vendor_id)
         return out(item, 201)
+
+    @app.post("/api/plans/<plan_id>/shortlist/<vendor_id>/contacted")
+    def shortlist_contacted(plan_id, vendor_id):
+        """Write down that you contacted this business yourself (their own mail, WhatsApp, a call, a visit). Nothing is sent; the card shows it, and the reply can be pasted in."""
+        plan_id, vendor_id, b = pid(plan_id), pid(vendor_id), body(ContactedBody)
+        with lock:
+            e = em.log_contact(plan_id, vendor_id, b.channel, b.by, b.note)
+        return out(e, 201)
 
     @app.post("/api/plans/<plan_id>/replies/paste")
     def reply_paste(plan_id):

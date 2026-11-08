@@ -54,13 +54,14 @@ from eventmate.evidence.ledger import EvidenceLedger, FactState
 from eventmate.followthrough.watches import WatchRunner, WatchStore
 from eventmate.planning import brief_scope, plan_graph
 from eventmate.planning.brief_links import BriefLinks
+from eventmate.sourcing.contact_log import ContactLogStore
 from eventmate.planning.staging import StageClosed, StageGone, StagingStore, StagedIntake
 from eventmate.messaging import outreach as outreach_mod
 from eventmate.sourcing import cards, quote_compare, quote_template
 from eventmate.pricing import shared_quotes
 from eventmate.pricing.shared_quotes import SharedQuoteStore
 from eventmate.sourcing.quote_records import QuotedProviderStore, to_provider
-from eventmate.sourcing.quote_readings import QuoteAssessment, QuoteConfirmationStore, assess, parse_typed
+from eventmate.sourcing.quote_readings import AttachedQuote, DocLine, QuoteAssessment, QuoteConfirmationStore, assess, parse_typed
 from eventmate.sourcing.cards import VendorCard
 from eventmate.sourcing.search import VendorSearch, clean_name
 from eventmate.sourcing.suppression import NeedsAcknowledgement, SuppressionStore, UnmatchedStore, domain_note
@@ -144,6 +145,8 @@ class EventMate:
         self.shortlist = ShortlistStore(self.store.root, evidence=self.evidence)
         self.brief_links = BriefLinks(self.store.root)  # which plan a brief became: its requests and replies follow it (planning/brief_links.py)
         self.shortlist.home = self.quote_confirmations.home = self.brief_links.home
+        self.contact_log = ContactLogStore(self.store.root)
+        self.contact_log.home = self.brief_links.home
         self.observations.external_lookup = self.externals.get
         self.suppressions = SuppressionStore(self.store.root)
         self.unmatched = UnmatchedStore(self.store.root)
@@ -413,6 +416,7 @@ class EventMate:
         self.guest_lists.delete(plan_id)  # also drops any preview still waiting for a commit
         files = delete_plan_files(self.store.root, plan_id) + self.voice_notes.delete_plan(plan_id)
         brief = self.brief_links.brief_of(plan_id)
+        self.contact_log.forget_plan(plan_id, *([brief] if brief else []))
         if brief:  # the requests and replies were filed under the brief this plan was built from: they are this plan's, and go with it
             files += delete_plan_files(self.store.root, brief)
         jobs = self.jobs.store.delete_plan(plan_id) if (self.store.root / "jobs.db").exists() else 0
@@ -728,7 +732,7 @@ class EventMate:
         self._scope(plan_id)
         return self.outreach_store.list(plan_id)
 
-    def delivery_of(self, d, replied: set[str], bounced: set[str]) -> dict:
+    def delivery_of(self, d, replied: set[str], bounced: set[str], today: date | None = None) -> dict:
         """Where a request stands in words that do not say more than is known: written, queued, accepted by the mail server (not proof of delivery), bounced, replied (A5)."""
         key = d.parent_id or d.draft_id
         table = {
@@ -743,9 +747,20 @@ class EventMate:
             if key in replied:
                 return {"state": "replied", "label": "Replied"}
             word = "WhatsApp accepted it" if d.channel == "whatsapp" else "Accepted by the mail server"
-            return {"state": "accepted", "label": f"{word}. That is not proof it was delivered or read"}
+            return {"state": "accepted", "label": f"{word}. That is not proof it was delivered or read", **self._silence(d.sent_at, key in replied, today)}
         state, label = table.get(d.status, (d.status, d.status))
+        if d.status == "marked_sent":
+            return {"state": state, "label": label, **self._silence(d.marked_at, key in replied, today)}
         return {"state": state, "label": label}
+
+    SILENT_AFTER_DAYS = 3  # a request with no reply after this many days is shown as quiet, so the user can follow up themselves (never by the app on its own)
+
+    def _silence(self, since, replied: bool, today: date | None) -> dict:
+        """How long a request has been waiting, once it has waited long enough to mention. Words only: the app chases nobody by itself."""
+        if replied or since is None:
+            return {}
+        days = ((today or self.outreach_store.now().date()) - since.date()).days
+        return {"waiting_days": days, "silent": True} if days >= self.SILENT_AFTER_DAYS else {}
 
     def outreach_with_delivery(self, plan_id: str) -> list[dict]:
         drafts = self.outreach(plan_id)
@@ -992,8 +1007,20 @@ class EventMate:
         """Each vendor reply read as a quote: field by field with the vendor's own line, what the user has confirmed, how complete it is, and what does not fit the event. Newest first."""
         req = self._scope(plan_id).request
         diets = tuple(d.value for d in req.dietary)
-        found = [assess(m, m.category, self.quote_confirmations.latest(plan_id, m.message_id), req.guest_count, diets) for m in self.outreach_store.inbound(plan_id) if m.category in quote_template.ASKED]
+        found = [self._with_attachments(assess(m, m.category, self.quote_confirmations.latest(plan_id, m.message_id), req.guest_count, diets), m)
+                 for m in self.outreach_store.inbound(plan_id) if m.category in quote_template.ASKED]
         return sorted(found, key=lambda a: a.received_at, reverse=True)
+
+    def _with_attachments(self, a: QuoteAssessment, msg: InboundMessage) -> QuoteAssessment:
+        """Put the lines of the quote files attached to this reply beside it (``quotes-attachments``). Only files the reader already read from this very reply: the lines are evidence for the user to pick an amount from."""
+        if not msg.quote_documents:
+            return a
+        docs = {d["document"]: d for d in self.quote_documents(msg.vendor_id)}
+        attached = tuple(
+            AttachedQuote(document=i, grand_total_inr=docs[i]["summary"].get("grand_total"),
+                          lines=tuple(DocLine(label=str(ln.get("label", ""))[:120] or "line", quantity=ln.get("quantity"), unit_inr=ln.get("unit_inr"), total_inr=ln.get("total_inr")) for ln in docs[i]["lines"][:40]))
+            for i in msg.quote_documents if i in docs)
+        return a.model_copy(update={"attached": attached}) if attached else a
 
     def promote_quote(self, plan_id: str, message_id: str, by: str, setting: str | None = None) -> QuoteAssessment:
         """The user asks for a fully confirmed quote to be a vendor the planner may choose, for this city and date only (the exception to ADR-028 and ADR-049). Refused unless every required field is
@@ -1017,6 +1044,20 @@ class EventMate:
         provider = to_provider(a, msg.vendor_id, self.externals.get(msg.vendor_id).name, req.city, req.event_date, setting)
         self.quoted.add(message_id, provider, by)
         return a
+
+    def log_contact(self, plan_id: str, vendor_id: str, channel: str, by: str, note: str = ""):
+        """The user says they contacted this business themselves (their own mail, WhatsApp, a call, a visit). Sends nothing; the card shows it and the reply can be pasted in."""
+        self._scope(plan_id)
+        by = (by or "").strip()
+        if not 1 <= len(by) <= 60:
+            raise ValueError("say who made the contact (a name)")
+        if channel not in ("email", "whatsapp", "phone", "in_person"):
+            raise ValueError("say how: email, whatsapp, phone or in person")
+        if len(note or "") > 200:
+            raise ValueError("keep the note to 200 characters")
+        if not any(i.business.vendor_id == vendor_id for i in self.shortlist_view(plan_id)):
+            raise ValueError("that business is not on this list")
+        return self.contact_log.add(plan_id, vendor_id, channel, by, note or "")
 
     def unpromote_quote(self, plan_id: str, message_id: str, by: str) -> QuoteAssessment:
         """The user takes back "plan with this vendor". The planner no longer sees the vendor from this reply; the quote stays recorded and confirmed, and the choice can be made again. A plan already
@@ -1171,7 +1212,7 @@ class EventMate:
         when = getattr(getattr(scope, "request", None), "event_date", None)
         return [
             cards.assemble(i, self.observations.quotes(i.business.vendor_id), [d for d in drafts if d.vendor_id == i.business.vendor_id], [m for m in replies if m.vendor_id == i.business.vendor_id], today, guests, when,
-                           self.shared_earlier(i.business.vendor_id, today, guests, when))
+                           self.shared_earlier(i.business.vendor_id, today, guests, when), self.contact_log.for_vendor(plan_id, i.business.vendor_id))
             for i in self.shortlist_view(plan_id, category)
         ]
 

@@ -61,6 +61,7 @@ class Read:
     evidence: str = ""  # the vendor's own line
     note: str = ""  # why it is unclear, or what to check
     source: Literal["template", "free_text"] = "template"
+    options: tuple[tuple[str, str], ...] = ()  # (menu or package name, amount) when the vendor priced more than one menu on the line: each is the vendor's own words, none is picked for the user
 
 
 @dataclass(frozen=True)
@@ -155,6 +156,33 @@ def _parse(key: str, kind: str, value: str) -> tuple[str | None, str]:
     return None, "unknown field"
 
 
+_TIER = re.compile(r"^\s*(?P<label>[A-Za-z][A-Za-z0-9 .&'-]{1,30}?)\s*[:=\u2013-]?\s*(?:rs\.?|inr|\u20b9)?\s*(?P<n>\d[\d,]{2,9})\s*(?:/-|/\s*(?:plate|head|person)|\s+(?:per\s+(?:plate|head|person)|pp))?\s*$", re.I)
+_TIER_SPLIT = re.compile(r"[/;|,]|\band\b|\bor\b|\+", re.I)
+MAX_MENU_OPTIONS = 5
+
+
+def menu_options(values: list[str]) -> tuple[tuple[str, str], ...]:
+    """A line that prices several menus or packages ("Silver 500, Gold 650, Platinum 800"): each (name, amount) the vendor wrote, in the order written. Needs at least two with different names and
+    different amounts; anything that does not look like a name and a number is not an option. This never chooses one: the line stays unclear until the user picks and confirms an amount."""
+    found: list[tuple[str, str]] = []
+    for value in values:
+        for part in _TIER_SPLIT.split(value):
+            m = _TIER.match(part)
+            if m:
+                label, amount = " ".join(m.group("label").split()).strip(" .-"), m.group("n").replace(",", "")
+                if label and not re.fullmatch(r"(?:rs|inr|total|per|only)", label, re.I) and not _INSTRUCTION.search(label) and amount.isdigit() and int(amount) > 0:
+                    found.append((label[:30], amount))
+    labels, amounts = {k.casefold() for k, _ in found}, {a for _, a in found}
+    if len(found) < 2 or len(labels) < 2 or len(amounts) < 2:
+        return ()
+    seen, out = set(), []
+    for k, a in found:
+        if k.casefold() not in seen:
+            seen.add(k.casefold())
+            out.append((k, a))
+    return tuple(out[:MAX_MENU_OPTIONS])
+
+
 def _sentence(body: str, pattern: str) -> str:
     for s in re.split(r"(?<=[.!?])\s+|\n+", body):
         if re.search(pattern, s, re.I):
@@ -177,13 +205,15 @@ def read_message(msg: InboundMessage, category: VendorCategory) -> Reading:
         parsed = [(ln, v, *_parse(key, kind, v)) for ln, v in filled]
         values = {p[2] for p in parsed if p[2] is not None}
         if len(values) > 1:
-            out[key] = Read(key, "unclear", evidence=" | ".join(" ".join(p[0].split())[:120] for p in parsed)[:300], note="the reply gives this line more than one answer")
+            out[key] = Read(key, "unclear", evidence=" | ".join(" ".join(p[0].split())[:120] for p in parsed)[:300], note="the reply gives this line more than one answer",
+                            options=menu_options([v for _, v in filled]) if kind == "money" and key in PRICE_KEY.values() else ())
         elif values:
             ln = next(p for p in parsed if p[2] is not None)
             out[key] = Read(key, "read", value=ln[2], evidence=" ".join(ln[0].split())[:200])
         else:
             ln = parsed[0]
-            out[key] = Read(key, "unclear", evidence=" ".join(ln[0].split())[:200], note=ln[3] or "could not be read safely")
+            options = menu_options([v for _, v in filled]) if kind == "money" and key in PRICE_KEY.values() else ()
+            out[key] = Read(key, "unclear", evidence=" ".join(ln[0].split())[:200], note=("they priced more than one menu: pick the one you want" if options else ln[3] or "could not be read safely"), options=options)
     template_used = any(r.state != "missing" for r in out.values())
     if not template_used:  # the vendor ignored the template: read what the free text clearly says, and nothing more
         from eventmate.messaging.conversations import analyze_reply  # here, not at the top: the conversations module reads this one

@@ -23,12 +23,12 @@ _TAGS = re.compile(r"<[^>]*>")
 
 # FUTURE(quotes-register): a discovered place becomes an ExternalBusiness only when "Find vendors I can email" is pressed, so "earlier quotes" cannot show beside a listing before that. Register each place (once, by its place id) when its listing is shown.
 # (quotes-carry, done in LM2) requests and replies are filed under brief_<id>; when the brief becomes a plan the link is recorded (planning/brief_links.py) and both ids read the same files; a pending brief with a request unanswered is not swept.
-# FUTURE(quotes-menus): a caterer's price depends on the menu tier, service style (buffet or plated) and number of items. The template asks for one price per plate; a vendor quoting tiers has to pick one or say so on the "Included and extra" line. Model tiers as separate quotes.
+# (quotes-menus, done in WP3: see CHANGELOG)
 # FUTURE(quotes-voice): many vendors answer with a voice note or a call. Transcribe a voice note (the app has audio code) into the same reading, shown as the vendor's words; a call is typed in by the user through the same parser.
-# FUTURE(quotes-attachments): a PDF or image quote is read by documents/quotes.py into its own lines; link its lines to the same fields so the assessment shows them next to the reply.
+# (quotes-attachments, done in WP3: see CHANGELOG)
 # FUTURE(quotes-template-labels): the labels are matched by their exact text, so a label is only ever added, never reworded, or replies to old requests stop reading. Version the template if it must change.
 # FUTURE(quotes-compare): a recommended caterer + venue + photographer combination for the budget (the ranking per category is in quote_compare.py).
-# FUTURE(quotes-silent): vendors that do not reply need chase timing, a stop point, and the plan still built from whoever did. A vendor with no email on its site needs a WhatsApp or phone fallback, still approved by the user.
+# (quotes-silent, done in WP3: see CHANGELOG)
 # FUTURE(quotes-simulator): a simulator that sends the user's own test addresses realistic replies (clear, messy, wrong, late). Nothing has been tested against a real mailbox yet (docs/EMAIL_SETUP.md).
 # FUTURE(quotes-limits): a cap on requests per brief and per day, the suppression list wired into this flow, and a clear sender identity, before any real vendor is contacted.
 # FUTURE(quotes-browser): some vendor sites show contacts or prices only after scripts run. Feed eventmate/browser (read-only: it clicks and submits nothing) into the contact finder.

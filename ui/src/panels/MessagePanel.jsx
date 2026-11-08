@@ -34,9 +34,10 @@ function Preview({ category, sourcing }) {
 
 const NO_SENDING = 'Sending is switched off in this workspace, so nothing was sent. Use “Send it yourself” below: copy the message, send it from your own email or WhatsApp, then press “I sent it”.';
 
-function SendYourself({ draft, act, busy }) {
+function SendYourself({ draft, act, busy, again = false }) {
   const [copied, setCopied] = useState(false);
   const text = `${draft.subject ? `${draft.subject}\n\n` : ''}${draft.body}`;
+  const wa = draft.channel === 'whatsapp' && /^https:\/\/wa\.me\/\d{8,15}\?text=/.test(draft.link || '') ? draft.link : null; // WhatsApp's own click-to-chat link, the request already typed in: the person presses send in their own WhatsApp
   const mail = draft.channel === 'email' && draft.recipient ? `mailto:${draft.recipient}?subject=${encodeURIComponent(draft.subject || '')}&body=${encodeURIComponent(draft.body)}` : null;
   async function copy() {
     try {
@@ -49,12 +50,13 @@ function SendYourself({ draft, act, busy }) {
   }
   return (
     <details className="self-send">
-      <summary>Send it yourself instead</summary>
-      <p className="quiet">Nothing is sent from here. Send it from your own mail or WhatsApp, press “I sent it”, and when they answer paste their reply under Replies.</p>
+      <summary>{again ? 'Send it again yourself' : 'Send it yourself instead'}</summary>
+      <p className="quiet">{again ? 'Nothing is sent from here. Send the same message from your own mail or WhatsApp, or call them, and paste what they say under Replies.' : 'Nothing is sent from here. Send it from your own mail or WhatsApp, press “I sent it”, and when they answer paste their reply under Replies.'}</p>
       <div className="row">
         <button type="button" className="chip" onClick={copy}>{copied ? 'Copied' : 'Copy the message'}</button>
         {mail && <a className="chip" href={mail}>Open in my email</a>}
-        <button type="button" className="chip" disabled={busy} onClick={() => act('sent', {})}>I sent it</button>
+        {wa && <a className="chip" href={wa} target="_blank" rel="noopener noreferrer">Open in WhatsApp</a>}
+        {!again && <button type="button" className="chip" disabled={busy} onClick={() => act('sent', {})}>I sent it</button>}
       </div>
     </details>
   );
@@ -80,6 +82,12 @@ function Draft({ draft, sourcing }) {
         </div>
       )}
       {draft.status === 'prepared' && <SendYourself draft={draft} act={act} busy={state.busy} />}
+      {draft.delivery?.silent && (
+        <>
+          <Notice tone="warn">No reply yet after {draft.delivery.waiting_days} days. Nothing chases them for you: ask again yourself, or call.</Notice>
+          <SendYourself draft={draft} act={act} busy={state.busy} again />
+        </>
+      )}
       {draft.status === 'prepared' && draft.link && <a className="linkish" href={draft.link} target="_blank" rel="noopener noreferrer">Or send it yourself from your own app</a>}
       {(draft.error || state.error) && <Notice tone="bad">{state.error || draft.error}</Notice>}
     </Note>

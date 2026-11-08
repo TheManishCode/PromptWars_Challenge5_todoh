@@ -20,7 +20,6 @@ Each one is also a comment in the code it touches, tagged `FUTURE(<topic>)`. Fin
 | `places-city` | Restrict Places to the city's coordinates | `integrations/places.py` |
 | `quotes-register` | Save discovered places as businesses when shown | `sourcing/search.py` |
 | `quotes-compare` | A recommended caterer + venue + photographer combination for the budget (per-category ranking exists) | `sourcing/search.py` |
-| `quotes-silent` | Vendors that do not reply; WhatsApp or phone fallback | `sourcing/search.py` |
 | `quotes-simulator` | Simulated vendor replies to the user's own addresses | `sourcing/search.py` |
 | `quotes-limits` | Send caps, suppression list, sender identity | `sourcing/search.py` |
 | `quotes-browser` | Read-only browser for sites that need scripts | `sourcing/search.py` |
@@ -28,8 +27,5 @@ Each one is also a comment in the code it touches, tagged `FUTURE(<topic>)`. Fin
 | `places-refresh` | Refresh place ids older than 12 months | `sourcing/cards.py` |
 | `cards-legal` | DECIDED to keep the user-typed name and the vendor-page URL as the user's and the vendor's own content; counsel to confirm before a public launch | `sourcing/cards.py` |
 | `cards-dedupe` | One business matched by two searches is two cards | `sourcing/cards.py` |
-| `cards-contact-log` | Record a contact made outside the app, and paste the reply in | `sourcing/cards.py` |
-| `quotes-menus` | Menu tiers and service styles as separate quotes | `sourcing/search.py` |
-| `quotes-voice` | Voice-note replies, and calls typed in through the same parser | `sourcing/search.py` |
-| `quotes-attachments` | Link a PDF or image quote's lines to the same fields | `sourcing/search.py` |
+| `quotes-voice` | Voice-note replies (a call typed in through the same parser is done: "Got an answer another way?"). Not built: it needs a transcription engine that runs free and locally, and the only engine test is opt-in and has not been run | `sourcing/search.py` |
 | `quotes-template-labels` | Labels are only ever added, never reworded; version the template if it must change | `sourcing/search.py` |

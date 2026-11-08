@@ -301,6 +301,12 @@ class LiftBody(_Strict):
     acknowledge_reason: bool = False  # required for an address that bounced: you confirm you have read why
 
 
+class ContactedBody(_Strict):
+    by: str = Field(min_length=1, max_length=60)
+    channel: Literal["email", "whatsapp", "phone", "in_person"]
+    note: str = Field(default="", max_length=200)
+
+
 class AssignReplyBody(_Strict):
     plan_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")  # the event (a plan or a brief) the held reply answered
 

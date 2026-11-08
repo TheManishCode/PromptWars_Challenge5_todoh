@@ -78,6 +78,48 @@ function UseEmail({ card, fact, sourcing, listing, onDone }) {
   );
 }
 
+/** "I contacted them myself": writes down a contact made outside the app (their own mail, WhatsApp, a call, a visit). Nothing is sent; the reply is pasted under Replies. */
+function Contacted({ card, sourcing }) {
+  const [open, setOpen] = useState(false);
+  const [channel, setChannel] = useState('phone');
+  const [note, setNote] = useState('');
+  const [state, run] = useAction('That could not be saved');
+  const logged = (card.facts || []).filter((f) => f.field === 'contact_log');
+
+  async function submit(e) {
+    e.preventDefault();
+    const ok = await run(() => api(`${sourcing.base}/shortlist/${encodeURIComponent(card.vendor_id)}/contacted`, { method: 'POST', body: { by: sourcing.by.trim(), channel, note: note.trim() } }));
+    if (ok) { setOpen(false); setNote(''); await sourcing.refresh(); }
+  }
+
+  return (
+    <div className="contacted">
+      {logged.map((f) => <p key={f.source_ref} className="quiet">You wrote down: {f.value}{f.captured_at ? `, ${shortDate(f.captured_at)}` : ''}. The reply does not come back by itself: paste it under Replies.</p>)}
+      {!open && <button type="button" className="linkish" onClick={() => setOpen(true)}>I contacted them myself</button>}
+      {open && (
+        <form className="inline-form" onSubmit={submit}>
+          <label className="field"><span>How</span>
+            <select value={channel} onChange={(e) => setChannel(e.target.value)}>
+              <option value="phone">By phone</option>
+              <option value="whatsapp">On WhatsApp</option>
+              <option value="email">By email</option>
+              <option value="in_person">In person</option>
+            </select>
+          </label>
+          <label className="field"><span>What you asked or were told (optional)</span><input type="text" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} /></label>
+          {!sourcing.by.trim() && <p className="quiet">Add your name on the “Your name” note first.</p>}
+          <div className="row">
+            <button type="submit" className="btn btn--small" disabled={state.busy || !sourcing.by.trim()}>{state.busy ? 'Saving…' : 'Write it down'}</button>
+            <button type="button" className="linkish" onClick={() => setOpen(false)}>Cancel</button>
+          </div>
+          <p className="quiet">Nothing is sent. This is only your note.</p>
+          {state.error && <Notice tone="bad">{state.error}</Notice>}
+        </form>
+      )}
+    </div>
+  );
+}
+
 function Contacts({ card, read, sourcing, listing }) {
   const [using, setUsing] = useState(null);
   const [state, run] = useAction('That did not work');
@@ -117,6 +159,7 @@ function Contacts({ card, read, sourcing, listing }) {
         <button type="button" className="chip" disabled={state.busy} onClick={() => run(look)}>{state.busy ? 'Reading their site…' : 'Look for an email on their website'}</button>
       )}
       {notes.map((n) => <p key={n} className="quiet">{n}</p>)}
+      <Contacted card={card} sourcing={sourcing} />
       {state.error && <Notice tone="bad">{state.error}</Notice>}
     </div>
   );

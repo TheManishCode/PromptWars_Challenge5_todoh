@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Collage, Note, Notice } from '../components/Note';
 import { useAction } from '../hooks/useAction';
 import { api } from '../lib/api';
@@ -17,12 +17,13 @@ const STATE = { confirmed: 'confirmed', read: 'read, waiting for you', unclear: 
 const PRICE_KEYS = ['price', 'price_total', 'package'];
 const show = (f) => (f.value == null ? '' : f.money ? inr(Number(f.value)) : f.value);
 
-function Field({ f, byKey, send, takeBack, busy }) {
+function Field({ f, byKey, send, takeBack, busy, prefill }) {
   const [mode, setMode] = useState(null); // 'typing' | 'days'
   const [typed, setTyped] = useState(f.value || '');
   const [days, setDays] = useState(byKey.valid_days?.value || '');
   const isPrice = PRICE_KEYS.includes(f.key);
   const done = (ok) => ok && setMode(null);
+  useEffect(() => { if (prefill && prefill.key === f.key) { setTyped(prefill.value); setMode('typing'); } }, [prefill]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the price is a quote only together with how long it holds
   const needsDays = isPrice && byKey.valid_days?.state !== 'confirmed';
@@ -39,6 +40,12 @@ function Field({ f, byKey, send, takeBack, busy }) {
       </div>
       {f.evidence && f.state !== 'confirmed' && <blockquote>“{f.evidence}”</blockquote>}
       {f.note && f.state !== 'confirmed' && <small className="quiet">{f.note}</small>}
+      {f.options?.length > 0 && f.state !== 'confirmed' && mode === null && (
+        <div className="row menu-options" role="group" aria-label="The menus they priced">
+          {f.options.map((o) => <button key={o.label} type="button" className="chip" onClick={() => { setTyped(o.value); setMode('typing'); }}>{o.label}: {inr(Number(o.value))}</button>)}
+          <small className="quiet">Pick the one you want, then confirm it. Nothing is picked for you.</small>
+        </div>
+      )}
       <div className="row">
         {f.state === 'read' && mode === null && (
           <>
@@ -69,6 +76,8 @@ function Field({ f, byKey, send, takeBack, busy }) {
 
 function Reading({ a, name, sourcing }) {
   const [state, run] = useAction('That could not be confirmed');
+  const [prefill, setPrefill] = useState(null);
+  const priceKey = PRICE_KEYS.find((k) => a.fields.some((f) => f.key === k));
   const base = `${sourcing.base}/quote-readings/${encodeURIComponent(a.message_id)}`;
   const byKey = Object.fromEntries(a.fields.map((f) => [f.key, f]));
   const needName = () => !sourcing.by.trim();
@@ -97,8 +106,24 @@ function Reading({ a, name, sourcing }) {
       </p>
       {needName() && <Notice tone="warn">Add your name on the “Your name” note to confirm anything.</Notice>}
       <ul className="reading-fields">
-        {a.fields.map((f) => <Field key={f.key} f={f} byKey={byKey} send={send} takeBack={takeBack} busy={state.busy} />)}
+        {a.fields.map((f) => <Field key={f.key} f={f} byKey={byKey} send={send} takeBack={takeBack} busy={state.busy} prefill={prefill} />)}
       </ul>
+      {a.attached?.map((doc) => (
+        <details key={doc.document} className="attached-quote" open>
+          <summary>A quote file came with this reply</summary>
+          <p className="quiet">Read from the file by the document reader. These lines are evidence, not a quote: pick the amount you want, then confirm it like any other.</p>
+          <ul>
+            {doc.lines.map((ln, i) => (
+              <li key={i}>
+                {ln.label}{ln.quantity ? ` × ${ln.quantity}` : ''}{ln.unit_inr ? ` at ${inr(ln.unit_inr)}` : ''}{ln.total_inr ? ` = ${inr(ln.total_inr)}` : ''}
+                {a.category === 'caterer' && ln.unit_inr && <button type="button" className="chip" onClick={() => setPrefill({ key: priceKey, value: String(ln.unit_inr), at: Date.now() })}>Use {inr(ln.unit_inr)} a plate</button>}
+              </li>
+            ))}
+          </ul>
+          {doc.grand_total_inr && a.category !== 'caterer' && <button type="button" className="chip" onClick={() => setPrefill({ key: priceKey, value: String(doc.grand_total_inr), at: Date.now() })}>Use the file’s total {inr(doc.grand_total_inr)}</button>}
+          {doc.grand_total_inr && a.category === 'caterer' && <small className="quiet">The file’s total is {inr(doc.grand_total_inr)} for its own guest count; the price asked here is per plate.</small>}
+        </details>
+      ))}
       {rest.length > 1 && (
         <div className="row">
           <button type="button" className="chip" disabled={state.busy} onClick={() => send(Object.fromEntries(rest.map((f) => [f.key, null])))}>Confirm the {rest.length} other lines as read</button>
