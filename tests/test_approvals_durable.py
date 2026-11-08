@@ -211,12 +211,12 @@ def test_only_someone_allowed_to_decide_can_decide(paths, clock):
 
 def test_deleting_a_plan_removes_its_proposals_from_the_file(paths, clock):
     q = open_queue(paths, clock)
-    p = propose(q, plan="gone", amount=424242)
+    p = propose(q, plan="gone", amount=424242, summary="record AMOUNT-ZZQ")  # a marker no random id can contain
     keep = propose(q, plan="kept", amount=1)
-    assert b"424242" in paths[0].read_bytes() or b"424242" in (paths[0].parent / "approvals.db-wal").read_bytes()
+    assert b"AMOUNT-ZZQ" in paths[0].read_bytes() or b"AMOUNT-ZZQ" in (paths[0].parent / "approvals.db-wal").read_bytes()
     assert q.forget_plan("gone") == 1 and q.forget_plan("gone") == 0
     blob = b"".join(f.read_bytes() for f in paths[1].glob("approvals.db*"))
-    assert b"424242" not in blob
+    assert b"AMOUNT-ZZQ" not in blob
     again = open_queue(paths, clock)
     assert again.pending("gone") == [] and [x.id for x in again.pending("kept")] == [keep.id]
     with pytest.raises(ApprovalError, match="unknown"):

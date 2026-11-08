@@ -236,7 +236,7 @@ def test_the_tombstone_holds_only_the_kind_the_id_and_the_time(em):
     lines = [_json.loads(x) for x in (em.store.root / "tombstones.jsonl").read_text().splitlines()]
     assert len(lines) == 1 and set(lines[0]) == {"kind", "id", "deleted_at"} and lines[0]["kind"] == "plan" and lines[0]["id"] == pid
     text = (em.store.root / "tombstones.jsonl").read_text()
-    assert "SECRET-NOTE-QQ" not in text and "4321" not in text and EXAMPLE[:20] not in text
+    assert "SECRET-NOTE-QQ" not in text and EXAMPLE[:20] not in text  # (the amount is not searched for as a substring: a plan id or a timestamp can hold any four digits)
 
 
 def test_deleting_a_plan_also_removes_its_lines_from_the_logs_and_keeps_the_others(em):
