@@ -67,6 +67,7 @@ _SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
 class SendPolicy:
     per_vendor_per_day: int = 3
     per_day: int = 30
+    per_plan_per_day: int = 10  # first requests from one plan or brief: one brief cannot use up the whole day
     whatsapp_gap_s: int = 20  # WhatsApp restricts accounts that send in bursts
 
 
@@ -267,6 +268,9 @@ class ConversationService:
                     if len(recent) >= self.policy.per_day:
                         waiting.append(f"daily limit of {self.policy.per_day} messages reached")
                         return sent, waiting
+                    if d.kind == "request" and sum(1 for r in recent if r.plan_id == pid and r.kind == "request") >= self.policy.per_plan_per_day:
+                        waiting.append(f"this plan has sent {self.policy.per_plan_per_day} first requests in 24 hours, which is its limit; the rest wait")
+                        continue
                     if sum(1 for r in recent if r.vendor_id == d.vendor_id) >= self.policy.per_vendor_per_day:
                         waiting.append(f"{d.vendor_name}: {self.policy.per_vendor_per_day} messages in 24 hours is the limit")
                         continue

@@ -32,6 +32,7 @@ _SERVICE = {VendorCategory.VENUE: "a venue", VendorCategory.CATERER: "catering",
 _PHONE_CHARS = re.compile(r"^\+?[0-9 ()./-]+$")
 PROPOSAL_TTL = timedelta(hours=24)
 MAX_FOLLOWUP_CHARS = 1000
+STOP_LINE = "Reply STOP and we will not write again."  # the inbound reader (conversations._STOP) takes a reply that is just this word as a stop request
 MAX_FOLLOWUPS_PER_THREAD = 5
 _utcnow = lambda: datetime.now(UTC)  # noqa: E731
 
@@ -114,7 +115,7 @@ def _message(plan: PlanVersion, category: VendorCategory, vendor_name: str, send
     lines += [""] + quote_template.template_lines(category)
     if checklist:
         lines += ["", "For each of these, please say on the \"Included and extra\" line whether it is included or extra: " + ", ".join(checklist) + "."]
-    lines += ["Any other charges (overtime, travel, taxes) can go on the same line.", "", f"Thank you,\n{sender}"]
+    lines += ["Any other charges (overtime, travel, taxes) can go on the same line.", "", f"Thank you,\n{sender}", "", f"(Written with to;doh on behalf of {sender}. {STOP_LINE})"]  # in the body, so the approved hash covers it
     return subject, "\n".join(lines)
 
 

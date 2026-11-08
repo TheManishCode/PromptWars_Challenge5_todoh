@@ -16,3 +16,9 @@
 - `tools/check_image.sh` looks in the installed package (not the removed /app/eventmate), fails on plans/ logs/ wall_data/ workspaces/ .env and on any static file not on the served list; shown to fail by planting `plans/leak.jsonl` in an image built FROM a clean one (R-007).
 - docs/CONFIGURATION.md: how to build the planning tools in a clean clone.
 - /plan accessibility (R-008, R-009): the brand link names itself "to;doh, back to the start" (label starts with the visible text), the planning rooms sit in a <main> landmark; `tests/test_plan_page_a11y.py` (axe on every room at 1440 and 390 px, keyboard-only path) from review/l5-plan-axe, no axe ignores.
+
+### L2 (outbound safety)
+- Per-plan cap: `SendPolicy.per_plan_per_day = 10` first requests per plan or brief per 24 h, counted under the same store lock as the daily and per-vendor caps; the rest wait with a reason in `poll_conversations().waiting` and go the next day. Brief flow (`brief_<id>`) already shares the store, suppression (checked at draft and at dispatch), pause and kill switch.
+- Every first request ends with "(Written with to;doh on behalf of <sender>. Reply STOP and we will not write again.)" inside the hashed body, on email and WhatsApp, and in the mailto/wa.me fallback.
+- A reply that is just STOP suppresses the address; quoting the footer does not. `tests/test_outbound_safety.py`, each check shown to fail when its code is removed.
+- R-010: the feedback masking test checks the comment, not an envelope that holds a random id.
