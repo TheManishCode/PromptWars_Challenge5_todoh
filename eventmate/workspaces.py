@@ -226,7 +226,8 @@ def default_factory(workspace_id: str, home: Path) -> tuple[object, object, obje
     from eventmate.voice.turns import VoiceService
 
     em = EventMate(log_dir=home / "logs", plan_dir=home / "plans", run_id=workspace_id, llm=client_from_env(),
-                   channels={"email": EmailChannel(EmailConfig()), "whatsapp": WhatsAppChannel(WahaConfig())})
+                   channels={"email": EmailChannel(EmailConfig()), "whatsapp": WhatsAppChannel(WahaConfig())},
+                   shared_dir=home.parent.parent / "shared")  # the one place two workspaces meet: what a vendor quoted the last person who asked
     assistant = Assistant.from_env(em)
     return em, assistant, VoiceService(assistant, em)
 

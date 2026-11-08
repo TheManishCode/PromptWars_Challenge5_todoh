@@ -8,6 +8,8 @@ short-circuit) so a rejection lists *every* reason, not just the first.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import json
 import os
 from collections import Counter
@@ -64,6 +66,9 @@ def _load_records(path: Path) -> list[dict]:
     return records
 
 
+_QUOTED_ONLY: contextvars.ContextVar[bool] = contextvars.ContextVar("quoted_only", default=False)
+
+
 class VendorRepository:
     """Read-only, validated view over the seed JSON files."""
 
@@ -85,6 +90,7 @@ class VendorRepository:
         self._vendors = vendors
         self.quotes = None  # ObservationStore, attached by to;doh-the event planner
         self.access = None  # AccessibilityStore, attached by to;doh-the event planner
+        self.quoted: Callable[[], tuple[Provider, ...]] | None = None  # records made from fully confirmed quotes (sourcing/quote_records.py), attached by the service
         self.clock: Callable[[], date] = date.today
 
     def venue_access(self, venue_id: str):
@@ -113,16 +119,32 @@ class VendorRepository:
         base = q.amount_inr * guests if q.basis == "per_plate" else q.amount_inr
         return base + sum(h.amount_inr for h in q.hidden_costs if h.amount_inr)
 
+    @contextlib.contextmanager
+    def quoted_only(self):
+        """Inside this block only vendors made from a fully confirmed quote are visible: no seed or catalogue record is. A plan built here comes from what vendors answered, nothing built in."""
+        token = _QUOTED_ONLY.set(True)
+        try:
+            yield
+        finally:
+            _QUOTED_ONLY.reset(token)
+
+    def _quoted(self, category: VendorCategory) -> tuple[Provider, ...]:
+        mine = self.quoted() if self.quoted is not None else ()
+        return tuple(p for p in mine if (category == VendorCategory.VENUE) == isinstance(p, Venue) and (isinstance(p, Venue) or p.category == category))
+
     def providers(self, category: VendorCategory) -> tuple[Provider, ...]:
+        if _QUOTED_ONLY.get():
+            return self._quoted(category)
         if category == VendorCategory.VENUE:
-            return self._venues
-        return tuple(v for v in self._vendors if v.category == category)
+            return self._venues + self._quoted(category)
+        return tuple(v for v in self._vendors if v.category == category) + self._quoted(category)
 
     def get(self, category: VendorCategory, provider_id: str) -> Provider | None:
         return next((p for p in self.providers(category) if p.id == provider_id), None)
 
     def cities(self) -> tuple[str, ...]:
-        return tuple(sorted({p.city for p in self._venues + self._vendors}))
+        extra = self.quoted() if self.quoted is not None else ()
+        return tuple(sorted({p.city for p in (extra if _QUOTED_ONLY.get() else self._venues + self._vendors + extra)}))
 
 
 def _norm(text: str) -> str:

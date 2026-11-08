@@ -449,7 +449,7 @@ _EMAIL = re.compile(r"^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{
 _LINK = re.compile(r"^(mailto:[A-Za-z0-9._%+@-]+\?[^\s]*|https://wa\.me/[1-9][0-9]{7,14}\?text=[^\s]*)$")
 OutreachStatus = Literal["prepared", "approved", "sending", "sent", "failed", "outcome_unknown", "denied", "expired", "marked_sent", "blocked", "stale"]  # stale: the plan changed after the text was written
 OUTREACH_FINAL = frozenset({"sent", "failed", "outcome_unknown", "denied", "expired", "marked_sent", "blocked"})
-VendorOrigin = Literal["seed", "discovered", "test"]  # where a business came from; shown wherever it appears
+VendorOrigin = Literal["seed", "discovered", "test", "user"]  # where a business came from; shown wherever it appears. "user": the user added it themselves, with a contact they typed
 
 
 def draft_content_hash(d: dict) -> str:
@@ -596,6 +596,7 @@ class InboundMessage(_Model):
     analysis: ReplyAnalysis = ReplyAnalysis()
     read: bool = False
     sender_differs: bool = False  # an email reply carrying the thread's headers from an address other than the one written to: shown, never trusted or answered automatically
+    pasted_by: str | None = Field(default=None, min_length=1, max_length=60)  # the user typed or pasted these words in (a reply that came by phone, WhatsApp or their own mail): never shared with anyone else
     auto_handled: bool = False  # the standing permission has already looked at this reply (answered it or handed it to the user)
     notice: str = "The vendor's own words, shown as text. Nothing in a reply changes a plan or records a quote until you do."
 
@@ -930,7 +931,7 @@ class NotifyLogEntry(_Model):
 
 EXTERNAL_PREFIX = "ext_"
 _EXT_ID = r"^ext_[0-9a-f]{24}$"
-_EXTERNAL_REF = r"^(osm:(node|way|relation)/[0-9]{1,15}|gplaces:[A-Za-z0-9_-]{8,200}|test:[a-z0-9_-]{1,40})$"
+_EXTERNAL_REF = r"^(osm:(node|way|relation)/[0-9]{1,15}|gplaces:[A-Za-z0-9_-]{8,200}|test:[a-z0-9_-]{1,40}|user:[a-z0-9_-]{1,40})$"
 
 
 def external_vendor_id(external_id: str) -> str:
@@ -963,15 +964,15 @@ class ExternalBusiness(_Model):
     name: str = Field(min_length=1, max_length=120)
     city: str = Field(min_length=1, max_length=80)
     category: VendorCategory
-    source: Literal["osm", "gplaces", "test"]
+    source: Literal["osm", "gplaces", "test", "user"]
     source_url: str | None = Field(default=None, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f]+$")
     website: str | None = Field(default=None, max_length=2048, pattern=r"^https?://[^\s\x00-\x1f\x7f<>\"']+$")
     website_source: Literal["listing", "user_input"] = "listing"
     name_source: Literal["listing", "user_confirmed", "placeholder"] = "listing"  # a Google listing's name is never stored: "placeholder" until the user confirms a name for their own record
     rating: float | None = Field(default=None, ge=0.0, le=5.0)  # only when a source published it
     is_test: bool = False
-    origin: Literal["discovered", "test"] = "discovered"  # shown wherever the business appears; derived from the source, never chosen by a caller
-    owner_confirmed_by: str | None = Field(default=None, min_length=1, max_length=60)  # a test vendor's address must be owned by this person
+    origin: Literal["discovered", "test", "user"] = "discovered"  # shown wherever the business appears; derived from the source, never chosen by a caller
+    owner_confirmed_by: str | None = Field(default=None, min_length=1, max_length=60)  # a test vendor's address must be owned by this person; for a user's own vendor, who added it
     created_at: datetime
 
     @field_validator("name", "city", "owner_confirmed_by")
@@ -983,10 +984,12 @@ class ExternalBusiness(_Model):
     def _consistent(self) -> ExternalBusiness:
         if self.vendor_id != external_vendor_id(self.external_id):
             raise ValueError("vendor_id does not match external_id")
-        if self.is_test != (self.source == "test") or self.is_test != self.external_id.startswith("test:") or self.origin != ("test" if self.is_test else "discovered"):
+        if self.is_test != (self.source == "test") or self.is_test != self.external_id.startswith("test:") or self.origin != {"test": "test", "user": "user"}.get(self.source, "discovered"):
             raise ValueError("only a business created as a test vendor can be a test vendor, and a discovered one never is")
-        if self.is_test and not self.owner_confirmed_by:
-            raise ValueError("a test vendor needs the owner's confirmation that the address is theirs")
+        if (self.source == "user") != self.external_id.startswith("user:"):
+            raise ValueError("only a business the user added can have a user reference")
+        if self.source in ("test", "user") and not self.owner_confirmed_by:
+            raise ValueError("a test vendor needs the owner's confirmation that the address is theirs, and a vendor the user added needs their name")
         return self
 
 

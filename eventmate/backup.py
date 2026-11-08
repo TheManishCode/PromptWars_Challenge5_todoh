@@ -82,6 +82,15 @@ def make_backup(data_dir: Path, destination: Path, now: datetime | None = None) 
             elif path.is_file():
                 target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 shutil.copy2(path, target)
+    shared = data_dir / "shared"  # the one place two workspaces meet (vendor quotes shown to the next person who asks): figures only, no names
+    if shared.is_dir():
+        for path in _tree(shared):
+            target = out / path.relative_to(data_dir)
+            if path.is_dir():
+                target.mkdir(parents=True, exist_ok=True, mode=0o700)
+            elif path.is_file() and not path.name.endswith((".lock", "-wal", "-shm")):
+                target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                shutil.copy2(path, target)
     if (data_dir / "tombstones.jsonl").is_file():
         shutil.copy2(data_dir / "tombstones.jsonl", out / "tombstones.jsonl")
     files = [{"path": str(p.relative_to(out)), "sha256": _sha(p), "bytes": p.stat().st_size} for p in sorted(out.rglob("*")) if p.is_file()]

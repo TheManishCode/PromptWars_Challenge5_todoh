@@ -6,13 +6,11 @@ build queue and returns at once; the page follows the build by polling ``status`
 
 from __future__ import annotations
 
-import json
 
 from flask import g, jsonify
 from eventmate.arcade_pulse import pulse as _arcade_pulse
 from eventmate.planning import plan_graph
 from eventmate.web.base import IntakeCommitBody, IntakeEditBody
-from eventmate.web.commit_queue import CommitQueue
 
 
 def register(app, k):
@@ -39,7 +37,7 @@ def register(app, k):
         b = body(IntakeCommitBody)
         if not queue.has_room():
             return k._err(429, "plans are being built for other people right now; try again in a moment", code="busy")
-        row, started = em.commit_staged(staged_id, b.version, b.draft_hash, today_fn())
+        row, started = em.commit_staged(staged_id, b.version, b.draft_hash, today_fn(), b.from_quotes)
         if started:
             ws, today, em_ = g.ws, today_fn(), em._get_current_object() if hasattr(em, "_get_current_object") else em
             if registry is not None:
@@ -50,7 +48,7 @@ def register(app, k):
                 done = None
                 try:
                     with ws.lock:
-                        done = em_.build_staged(staged_id, today, b.guest_list_id)
+                        done = em_.build_staged(staged_id, today, b.guest_list_id, b.from_quotes)
                 finally:
                     _arcade_pulse.finish(bool(done and done.state == "done"), (done.error if done else "the build did not finish"))
                     if registry is not None:

@@ -43,8 +43,8 @@ from eventmate.messaging.digests import DigestStore
 from eventmate.messaging.notify import OwnerNotifier
 from eventmate.planning.ideas import IdeaService
 from eventmate.messaging.channels import Channel, channels_from_env
-from eventmate.messaging.conversations import ConversationService, HeldMessages  # noqa: F401  (HeldMessages is re-exported: callers import it from here)
-from eventmate.messaging.outreach import OutreachStore
+from eventmate.messaging.conversations import ConversationService, HeldMessages
+from eventmate.messaging.outreach import OutreachStore, normalise_phone
 from eventmate.followthrough.worker import JobWorker
 from eventmate.followthrough.jobs import JobStore
 from eventmate.sourcing.contacts import find_contacts
@@ -54,7 +54,10 @@ from eventmate.followthrough.watches import WatchRunner, WatchStore
 from eventmate.planning import brief_scope, plan_graph
 from eventmate.planning.staging import StageClosed, StageGone, StagingStore, StagedIntake
 from eventmate.messaging import outreach as outreach_mod
-from eventmate.sourcing import cards, quote_template
+from eventmate.sourcing import cards, quote_compare, quote_template
+from eventmate.pricing import shared_quotes
+from eventmate.pricing.shared_quotes import SharedQuoteStore
+from eventmate.sourcing.quote_records import QuotedProviderStore, to_provider
 from eventmate.sourcing.quote_readings import QuoteAssessment, QuoteConfirmationStore, assess, parse_typed
 from eventmate.sourcing.cards import VendorCard
 from eventmate.sourcing.search import VendorSearch, clean_name
@@ -85,6 +88,8 @@ from eventmate.browser.render import RenderingFetcher
 from eventmate.integrations.travel import FlightProvider, FliProvider, TravelError, check_range, check_search, search_multi_city
 from eventmate.integrations.tripsearch import search_trip
 
+__all__ = ["EventMate", "HeldMessages"]  # HeldMessages is re-exported: callers import it from here
+
 
 class _NoClients:
     clients: list = []
@@ -107,6 +112,7 @@ class EventMate:
         weather: OpenWeatherSource | None = None,
         places: PlacesSource | None = None,
         channels: dict[str, Channel] | None = None,
+        shared_dir: Path | None = None,
     ):
         self.env = load_env()  # secrets from .env (names only are kept); values already in the environment win
         self._today = date.today()
@@ -128,6 +134,9 @@ class EventMate:
         self.last_watch_report: dict = {}
         self.externals = ExternalStore(self.store.root, evidence=self.evidence)
         self.externals.scrub_google_content()  # an earlier version kept Google listing content; only the place id may be kept
+        self.quoted = QuotedProviderStore(self.store.root)  # plannable records made from fully confirmed quotes
+        self.repo.quoted = self.quoted.providers
+        self.shared_quotes = SharedQuoteStore(shared_dir) if shared_dir is not None and shared_quotes.enabled() else None  # what other people were quoted by the same vendor (pricing/shared_quotes.py): shown, never priced from
         self.quote_confirmations = QuoteConfirmationStore(self.store.root)  # what the user confirmed, field by field, from a vendor's reply
         self.staging = StagingStore(self.store.root)  # briefs waiting for the user's approval; nothing is planned from one until it is committed
         self.shortlist = ShortlistStore(self.store.root, evidence=self.evidence)
@@ -235,14 +244,16 @@ class EventMate:
         turn = intake.edited_view(cur.draft, self.repo.cities(), cur.source)
         return self._staged_turn(turn, cur)
 
-    def commit_staged(self, staged_id: str, version: int, digest: str, today: date | None = None) -> tuple[StagedIntake, bool]:
+    def commit_staged(self, staged_id: str, version: int, digest: str, today: date | None = None, quoted_only: bool = False) -> tuple[StagedIntake, bool]:
         """The user's "done". Refused unless the brief is ready, buildable and exactly the one they reviewed; then pending becomes processing, once.
         Returns the row and whether this call started the build (a repeat does not start a second one)."""
         today = today or date.today()
         cur = self.staging.require(staged_id)
         if cur.state == "pending_validation":
-            if cur.draft.city and cur.draft.city.lower() not in {c.lower() for c in self.repo.cities()}:
-                raise intake.IntakeError(f"I have no vendor records for {cur.draft.city} yet, so a plan there cannot be built")
+            with self._vendors_visible(quoted_only):
+                known = {c.lower() for c in self.repo.cities()}
+            if cur.draft.city and cur.draft.city.lower() not in known:
+                raise intake.IntakeError(f"I have no vendor records for {cur.draft.city} yet, so a plan there cannot be built" if not quoted_only else f"no vendor in {cur.draft.city} has a confirmed quote yet: ask for quotes and confirm them first")
             intake.to_request(cur.draft, "\n".join(cur.messages)[:2000], today, cur.source, list(cur.messages))  # raises IntakeError for anything missing, open or skipped
         return self.staging.begin_commit(staged_id, version, digest)
 
@@ -250,11 +261,15 @@ class EventMate:
         """A failed build goes back to pending so the user can correct the brief and press done again."""
         return self.staged_turn(self.staging.reopen(staged_id).staged_id, today)
 
-    def build_staged(self, staged_id: str, today: date, guest_list_id: str | None = None) -> StagedIntake:
+    def _vendors_visible(self, quoted_only: bool):
+        return self.repo.quoted_only() if quoted_only else contextlib.nullcontext()
+
+    def build_staged(self, staged_id: str, today: date, guest_list_id: str | None = None, quoted_only: bool = False) -> StagedIntake:
         """The build itself, run by the commit queue. It records its outcome on the staged brief, whatever happens."""
         row = self.staging.require(staged_id)
         try:
-            outcome = self.confirm_intake(row.draft, "\n".join(row.messages)[:2000], today, guest_list_id, row.source, list(row.messages))
+            with self._vendors_visible(quoted_only):
+                outcome = self.confirm_intake(row.draft, "\n".join(row.messages)[:2000], today, guest_list_id, row.source, list(row.messages))
         except ValueError as exc:  # an IntakeError or a refusal with a message written for the user
             return self.staging.finish(staged_id, False, error=str(exc)[:300])
         except Exception:
@@ -841,11 +856,36 @@ class EventMate:
             self.shortlist.add_entry(plan_id, category, biz.vendor_id)
         return biz, contact
 
+    def add_user_vendor(self, name: str, city: str, category: VendorCategory, email: str | None, whatsapp: str | None, by: str, plan_id: str | None = None):
+        """A business the user knows and adds themselves, with the contact they typed. Nothing is sent to it until they approve each message, and the do-not-contact list applies as it does to every business."""
+        by = (by or "").strip()
+        if not 1 <= len(by) <= 60:
+            raise ValueError("say who is adding this vendor (a name)")
+        name = clean_name(name)
+        if not name:
+            raise ValueError("give the vendor a name")
+        if not (email or "").strip() and not (whatsapp or "").strip():
+            raise ValueError("give an email address or a WhatsApp number to reach them on")
+        email = clean_email(email) if (email or "").strip() else None
+        phone = normalise_phone(whatsapp) if (whatsapp or "").strip() else None
+        for channel, address in (("email", email), ("whatsapp", phone)):
+            hit = self.suppressions.active_for(channel, address) if address else None
+            if hit is not None:
+                raise ValueError("Blocked: do not contact. That address is on the do-not-contact list (" + hit.reason.replace("_", " ") + "); only you can lift it.")
+        scope = self._scope(plan_id) if plan_id is not None else None
+        biz = self.externals.add(f"user:{slug(name)}-{hashlib.sha256((email or phone).casefold().encode()).hexdigest()[:8]}", name, city or (scope.request.city if scope else ""), category, "user", owner_confirmed_by=by)
+        now = self.outreach_store.now()
+        contact = self.outreach_store.set_contact_record(VendorContact(
+            vendor_id=biz.vendor_id, email=email, whatsapp=phone, preferred="email" if email else "whatsapp", updated_at=now, origin="user", confirmed_by=by, confirmed_at=now))
+        if plan_id is not None:
+            self.shortlist.add_entry(plan_id, category, biz.vendor_id)
+        return biz, contact
+
     def vendor_directory(self) -> dict:
         """Every vendor id the app can show, with its plain name and where it came from (seed, discovered, test). The UI never shows a raw id."""
         d = {p.id: {"name": p.name, "origin": "seed", "label": None} for c in VendorCategory for p in self.repo.providers(c)}
         for b in self.externals.all():
-            d[b.vendor_id] = {"name": b.name, "origin": b.origin, "label": f"TEST VENDOR (address owned by {b.owner_confirmed_by})" if b.is_test else None}
+            d[b.vendor_id] = {"name": b.name, "origin": b.origin, "label": f"TEST VENDOR (address owned by {b.owner_confirmed_by})" if b.is_test else (f"Added by {b.owner_confirmed_by}" if b.source == "user" else None)}
         return d
 
     def vendor_labels(self) -> dict:
@@ -885,6 +925,61 @@ class EventMate:
         diets = tuple(d.value for d in req.dietary)
         found = [assess(m, m.category, self.quote_confirmations.latest(plan_id, m.message_id), req.guest_count, diets) for m in self.outreach_store.inbound(plan_id) if m.category in quote_template.ASKED]
         return sorted(found, key=lambda a: a.received_at, reverse=True)
+
+    def promote_quote(self, plan_id: str, message_id: str, by: str, setting: str | None = None) -> QuoteAssessment:
+        """The user asks for a fully confirmed quote to be a vendor the planner may choose, for this city and date only (the exception to ADR-028 and ADR-049). Refused unless every required field is
+        confirmed, the vendor said it is available, its price is a recorded quote that has not run out, and the business is a discovered one (a seed vendor is already plannable)."""
+        scope = self._scope(plan_id)
+        by = (by or "").strip()
+        if not 1 <= len(by) <= 60:
+            raise ValueError("say who is asking for this (a name)")
+        msg = self._reply(plan_id, message_id)
+        if VendorRef.of(msg.vendor_id).kind != "external":
+            raise ValueError("this vendor is already in the database: confirm the quote and the planner uses it")
+        a = next(x for x in self.quote_assessments(plan_id) if x.message_id == message_id)
+        q = self.observations.pricing_quote(msg.vendor_id)
+        if q is None or not q.evidence_ref.startswith(f"reply {message_id}:"):
+            raise ValueError("confirm this reply's price and how long it holds first: that records the quote the plan will use")
+        if self.repo.clock() > q.expires_at:
+            raise ValueError("this quote has run out: ask the vendor for a new one")
+        req = scope.request
+        provider = to_provider(a, msg.vendor_id, self.externals.get(msg.vendor_id).name, req.city, req.event_date, setting)
+        self.quoted.add(message_id, provider, by)
+        return a
+
+    def paste_reply(self, plan_id: str, vendor_id: str, text: str, by: str, channel: str = "email") -> InboundMessage:
+        """A reply the user got outside the app (their own mail, a call, WhatsApp) and typed or pasted in. It is read and confirmed field by field exactly like one that arrived by mail, but it is
+        marked as the user's own words: nothing in it is ever shared with another person, because anyone could write anything here."""
+        from eventmate.messaging.conversations import analyze_reply
+        self._scope(plan_id)
+        by = (by or "").strip()
+        if not 1 <= len(by) <= 60:
+            raise ValueError("say who is entering this (a name)")
+        body = "\n".join(line.rstrip() for line in (text or "").replace("\r\n", "\n").split("\n")).strip()
+        if len(body) < 3:
+            raise ValueError("paste what the vendor wrote")
+        if len(body) > 4000:
+            raise ValueError("that is longer than 4,000 characters: paste just the part with the answers")
+        if channel not in ("email", "whatsapp"):
+            raise ValueError("channel must be email or whatsapp")
+        item = next((i for i in self.shortlist_view(plan_id) if i.business.vendor_id == vendor_id), None)
+        if item is None:
+            raise ValueError("that business is not on this list")
+        biz = item.business
+        asked = [d for d in self.outreach_store.list(plan_id) if d.vendor_id == vendor_id and d.kind == "request"]
+        msg = InboundMessage(
+            message_id=uuid.uuid4().hex, plan_id=plan_id, draft_id=asked[-1].draft_id if asked else "pasted", vendor_id=vendor_id, vendor_name=biz.name, vendor_origin=biz.origin, category=biz.category,
+            channel=channel, sender=f"entered by {by}"[:254], received_at=self.outreach_store.now(), external_id=f"pasted:{uuid.uuid4().hex}", body=body,
+            analysis=analyze_reply(body, self.outreach_store.checklists.get(biz.category.value, ())), pasted_by=by, auto_handled=True,
+        )
+        stored = self.outreach_store.add_inbound(msg)
+        if stored is None:
+            raise ValueError("that was already entered")
+        return stored
+
+    def compare_quotes(self, plan_id: str, closed: bool = False) -> quote_compare.Comparison:
+        """Fully confirmed quotes ranked by a rule fixed in advance (``quote_compare.RULE``): order-blind, and withheld until enough vendors have answered or the user says they are done waiting."""
+        return quote_compare.compare(self.quote_assessments(plan_id), self._scope(plan_id).request.guest_count, closed)
 
     def confirm_quote_fields(self, plan_id: str, message_id: str, items: dict[str, str | None], by: str, valid_days: str | None = None) -> QuoteAssessment:
         """The user confirms fields of a reply: each as read (value None) or with the value they typed, which must read safely. An amount is confirmed on its own, never in a batch. Nothing is saved unless
@@ -949,10 +1044,35 @@ class EventMate:
         taxes = got.get("taxes_included")
         self.observe_quote(
             msg.vendor_id, msg.category, source_type=ObservationSource.VENDOR_QUOTE, entered_by=by, observed_at=msg.received_at, expires_at=msg.received_at.date() + timedelta(days=days), confidence=CONFIRM_CONFIDENCE,
-            evidence_ref=tag, amount_inr=amount, basis="per_plate" if msg.category == VendorCategory.CATERER else "total", guest_count=scope.request.guest_count, quoted_for_date=scope.request.event_date,
+            evidence_ref=tag, amount_inr=amount, basis="per_plate" if msg.category == VendorCategory.CATERER else "total", guest_count=scope.request.guest_count if msg.category == VendorCategory.CATERER else None, quoted_for_date=scope.request.event_date,
             hidden_costs=[HiddenCost(label="Taxes (GST) extra: ask for the amount")] if taxes is not None and taxes.value == "no" else [],
             note=f"from the vendor's reply of {msg.received_at.date().isoformat()}; the price and its validity were confirmed by {by}"[:200],
         )
+        if self.shared_quotes is not None and msg.pasted_by is None and (keys := self._shared_keys(msg.vendor_id)):  # only what a vendor sent through the app is shared, never what a user typed in
+            self.shared_quotes.add(
+                keys, msg.category, amount, "per_plate" if msg.category == VendorCategory.CATERER else "total", scope.request.guest_count if msg.category == VendorCategory.CATERER else None,
+                scope.request.event_date, msg.received_at, msg.received_at.date() + timedelta(days=days), None if taxes is None else taxes.value == "yes",
+            )
+
+    def _shared_keys(self, vendor_id: str) -> tuple[str, ...]:
+        """How another person's workspace would recognise this vendor. A test vendor is never shared, and a seed vendor already has a price everyone sees."""
+        biz = self.externals.get(vendor_id) if VendorRef.of(vendor_id).kind == "external" else None
+        if biz is None or biz.is_test:
+            return ()
+        k = self.outreach_store.contacts().get(vendor_id)
+        return shared_quotes.vendor_keys(biz.source, biz.external_id, biz.name, biz.city, biz.category, k.email if k else None, k.whatsapp if k else None)
+
+    def shared_earlier(self, vendor_id: str, today: date, guests: int | None = None, event_date: date | None = None) -> list[dict]:
+        """What other people were last quoted by this vendor, newest first, each with why it may not hold for this event. For orientation while this user's own request is out: never priced from."""
+        biz = self.externals.get(vendor_id) if VendorRef.of(vendor_id).kind == "external" else None
+        if self.shared_quotes is None or biz is None or not (keys := self._shared_keys(vendor_id)):
+            return []
+        mine = {(o.amount_inr, o.observed_at.date()) for o in self.observations.quotes(vendor_id)}  # this user's own quote is already on the card
+        return [
+            {"amount_inr": q.amount_inr, "basis": q.basis, "guest_count": q.guest_count, "quoted_for_date": q.quoted_for_date.isoformat() if q.quoted_for_date else None, "observed_at": q.observed_at.isoformat(),
+             "expires_at": q.expires_at.isoformat(), "taxes_included": q.taxes_included, "old": list(old_reasons(q, today, guests, event_date))}  # type: ignore[arg-type]  (a SharedQuote has the fields old_reasons reads)
+            for q in reversed(self.shared_quotes.earlier(keys, biz.category)) if (q.amount_inr, q.observed_at.date()) not in mine
+        ]
 
     def place_details(self, place_id: str, phone: bool = False):
         """One Google listing as it is now, for a card. Nothing is stored."""
@@ -966,7 +1086,8 @@ class EventMate:
         guests = getattr(getattr(scope, "request", None), "guest_count", None)
         when = getattr(getattr(scope, "request", None), "event_date", None)
         return [
-            cards.assemble(i, self.observations.quotes(i.business.vendor_id), [d for d in drafts if d.vendor_id == i.business.vendor_id], [m for m in replies if m.vendor_id == i.business.vendor_id], today, guests, when)
+            cards.assemble(i, self.observations.quotes(i.business.vendor_id), [d for d in drafts if d.vendor_id == i.business.vendor_id], [m for m in replies if m.vendor_id == i.business.vendor_id], today, guests, when,
+                           self.shared_earlier(i.business.vendor_id, today, guests, when))
             for i in self.shortlist_view(plan_id, category)
         ]
 

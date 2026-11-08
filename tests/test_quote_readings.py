@@ -44,7 +44,7 @@ def world(tmp_path):
 
 def reply(world, body):
     em, chans, clock, brief, biz = world
-    chans["email"].inbox = [Inbound(channel="email", sender="owner@personal.test", external_id="<r%d>" % (len(em.outreach_store.inbound(brief)) + 1), received_at=clock() + timedelta(minutes=5), body=body,
+    chans["email"].inbox = [Inbound(channel="email", sender="owner@personal.test", external_id=f"<r{len(em.outreach_store.inbound(brief)) + 1}>", received_at=clock() + timedelta(minutes=5), body=body,
                                     in_reply_to=em.outreach(brief)[0].external_id)]
     clock.advance(minutes=10)
     em.poll_conversations()
@@ -235,3 +235,17 @@ def test_the_routes(world):
     s, r = post(f"/api/plans/{brief}/quote-readings/{mid}/retract", {"field": "min_guests", "by": "Asha"})
     assert s == 200 and r["confirmed_required"] == 0
     assert client.get("/api/plans/brief_nope/quote-readings").status_code in (400, 404, 410)
+
+
+def test_a_confirmed_reply_is_compared_through_the_service_and_the_page_api(world):
+    em, chans, clock, brief, biz = world
+    mid = reply(world, OK_FOR_40)
+    for f in ({"taxes_included": None, "available": None, "min_guests": None, "max_guests": None, "diets": None}, {"deposit": None}, {"price": None}):
+        em.confirm_quote_fields(brief, mid, f, "Asha")
+    em.confirm_quote_fields(brief, mid, {"valid_days": None}, "Asha")
+    client = create_app(em, today_fn=lambda: TODAY, rate_limit_per_minute=10_000).test_client()
+    waiting = client.get(f"/api/plans/{brief}/quote-comparison").get_json()["categories"][0]
+    assert waiting["status"] == "waiting" and waiting["groups"] == [] and waiting["comparable"] == 1
+    closed = client.get(f"/api/plans/{brief}/quote-comparison?closed=1").get_json()
+    (row,) = closed["categories"][0]["groups"][0]["ranked"]
+    assert (row["vendor_id"], row["total_inr"], row["taxes_included"]) == (biz.vendor_id, 26000, False) and "Reply order" in closed["rule"]

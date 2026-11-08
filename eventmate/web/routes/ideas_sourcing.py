@@ -9,6 +9,9 @@ from eventmate.schemas import CommunityDetails, VendorCategory
 from eventmate.sourcing.search import SourceNotSupported
 from eventmate.web.base import (
     QuoteConfirmBody,
+    QuotePromoteBody,
+    PasteReplyBody,
+    UserVendorBody,
     QuoteRetractBody,
     AccessBody,
     ByBody,
@@ -175,12 +178,28 @@ def register(app, k):
             found = em.quote_assessments(plan_id)
         return jsonify({"quotes": [json.loads(a.model_dump_json()) for a in found]})
 
+    @app.get("/api/plans/<plan_id>/quote-comparison")
+    def quote_comparison_get(plan_id):
+        """Your fully confirmed quotes ranked by a rule fixed before any reply is opened. Reply order and speed play no part. Add ?closed=1 to rank now, before enough vendors have answered."""
+        plan_id = pid(plan_id)
+        with lock:
+            res = em.compare_quotes(plan_id, request.args.get("closed") == "1")
+        return out(res)
+
     @app.post("/api/plans/<plan_id>/quote-readings/<message_id>/confirm")
     def quote_readings_confirm(plan_id, message_id):
         """Confirm fields of a reply: as read, or with a value you typed. An amount is confirmed on its own. Confirming the price and how long it holds records the price as a quote."""
         plan_id, message_id, b = pid(plan_id), pid(message_id), body(QuoteConfirmBody)
         with lock:
             a = em.confirm_quote_fields(plan_id, message_id, b.fields, b.by, b.valid_days)
+        return out(a, 201)
+
+    @app.post("/api/plans/<plan_id>/quote-readings/<message_id>/promote")
+    def quote_readings_promote(plan_id, message_id):
+        """Let the planner choose this vendor, for your city and date only, from the quote you confirmed. Refused unless the reply is fully confirmed and its quote has not run out."""
+        plan_id, message_id, b = pid(plan_id), pid(message_id), body(QuotePromoteBody)
+        with lock:
+            a = em.promote_quote(plan_id, message_id, b.by, b.setting)
         return out(a, 201)
 
     @app.post("/api/plans/<plan_id>/quote-readings/<message_id>/retract")
@@ -247,6 +266,23 @@ def register(app, k):
             biz, _ = em.add_test_vendor(b.name, b.city or plan.request.city, b.category, b.email, b.owns_address, b.by, plan_id)
             item = next(i for i in em.shortlist_view(plan_id) if i.business.vendor_id == biz.vendor_id)
         return out(item, 201)
+
+    @app.post("/api/plans/<plan_id>/shortlist/user-vendor")
+    def shortlist_user_vendor(plan_id):
+        """A business you know, added by you with the contact you typed. Nothing is sent to it until you approve each message."""
+        plan_id, b = pid(plan_id), body(UserVendorBody)
+        with lock:
+            biz, _ = em.add_user_vendor(b.name, b.city or "", b.category, b.email, b.whatsapp, b.by, plan_id)
+            item = next(i for i in em.shortlist_view(plan_id) if i.business.vendor_id == biz.vendor_id)
+        return out(item, 201)
+
+    @app.post("/api/plans/<plan_id>/replies/paste")
+    def reply_paste(plan_id):
+        """A reply you got outside the app, pasted in. It is read and confirmed line by line like any other, and is never shared with anyone."""
+        plan_id, b = pid(plan_id), body(PasteReplyBody)
+        with lock:
+            msg = em.paste_reply(plan_id, b.vendor_id, b.text, b.by, b.channel)
+        return out(msg, 201)
 
     @app.get("/api/vendors/directory")
     def vendor_directory():

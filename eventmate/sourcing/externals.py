@@ -25,7 +25,7 @@ class ResolvedVendor:
     ref: VendorRef
     name: str
     category: VendorCategory
-    origin: str  # seed | discovered | test
+    origin: str  # seed | discovered | test | user
     source_url: str | None = None
 
 
@@ -74,11 +74,11 @@ class ExternalStore:
                 return have
             biz = ExternalBusiness(
                 vendor_id=vid, external_id=external_id, name=name, city=city, category=category, source=source, source_url=source_url, website=website,
-                rating=rating, is_test=source == "test", origin="test" if source == "test" else "discovered", owner_confirmed_by=owner_confirmed_by, created_at=self.now(),
-                name_source="placeholder" if source == "gplaces" else "listing",
+                rating=rating, is_test=source == "test", origin={"test": "test", "user": "user"}.get(source, "discovered"), owner_confirmed_by=owner_confirmed_by, created_at=self.now(),
+                name_source="placeholder" if source == "gplaces" else ("user_confirmed" if source == "user" else "listing"),
             )
             self._file()._append(biz, vid)
-        if self.evidence is not None and not biz.is_test and biz.source != "gplaces":  # a listing's words are discovered, never verified; a test vendor was not discovered
+        if self.evidence is not None and not biz.is_test and biz.source not in ("gplaces", "user"):  # a listing's words are discovered, never verified; a test vendor was not discovered, and what a user typed is theirs
             for field, value in (("name", biz.name), ("website", biz.website), ("rating", biz.rating)):
                 if value is not None:
                     self.evidence.record(vid, field, value, FactState.DISCOVERED, f"tool:{biz.source}", biz.source_url)

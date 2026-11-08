@@ -22,7 +22,7 @@ from eventmate.schemas import ExternalBusiness, InboundMessage, OutreachDraft, Q
 # FUTURE(cards-contact-log): writing to a vendor yourself (mailto, WhatsApp) is outside the app: it is not recorded and the reply does not come back. Offer "I contacted them" so the card can show it, and a way to paste the reply in.
 
 
-SourceType = Literal["user_confirmed", "vendor_website", "osm_listing", "vendor_quote", "vendor_reply", "app_request"]
+SourceType = Literal["user_confirmed", "vendor_website", "osm_listing", "vendor_quote", "vendor_reply", "app_request", "earlier_quote"]
 CONTACT_FIELDS = ("contact.email", "contact.whatsapp", "website", "name")  # one value each: two different ones are a conflict
 _SOURCE_OF = {"listing_field": "osm_listing", "page_mailto": "vendor_website", "page_text": "vendor_website"}
 
@@ -44,8 +44,8 @@ class VendorFact(_Model):
 class VendorCard(_Model):
     vendor_id: str
     category: VendorCategory
-    origin: Literal["discovered", "test"]
-    source: Literal["osm", "gplaces", "test"]
+    origin: Literal["discovered", "test", "user"]
+    source: Literal["osm", "gplaces", "test", "user"]
     place_id: str | None = None  # the Google place id, to fetch the listing's own details now; None for any other source
     name: str  # a Google listing's name is only here once the user confirmed one
     name_confirmed: bool = False
@@ -55,21 +55,23 @@ class VendorCard(_Model):
     contact_ready: bool = False  # the user confirmed an address for this business
 
 
-def _money(q: QuoteObservation) -> str:
-    unit = "per plate" if q.basis == "per_plate" else "in total"
-    return f"INR {q.amount_inr:,} {unit}" + (f" for {q.guest_count} guests" if q.guest_count else "")
+def _money(q) -> str:  # a QuoteObservation, or the dict of an earlier quote from someone else
+    q = q if isinstance(q, dict) else q.model_dump()
+    unit = "per plate" if q["basis"] == "per_plate" else "in total"
+    return f"INR {q['amount_inr']:,} {unit}" + (f" for {q['guest_count']} guests" if q["guest_count"] else "")
 
 
 def _snippet(text: str, n: int = 200) -> str:
     return " ".join(text.split())[:n]
 
 
-def assemble(item: ShortlistItem, quotes: list[QuoteObservation], drafts: list[OutreachDraft], replies: list[InboundMessage], today: date, guests: int | None = None, event_date: date | None = None) -> VendorCard:
+def assemble(item: ShortlistItem, quotes: list[QuoteObservation], drafts: list[OutreachDraft], replies: list[InboundMessage], today: date, guests: int | None = None, event_date: date | None = None,
+             earlier: list[dict] | None = None) -> VendorCard:
     biz: ExternalBusiness = item.business
     facts: list[VendorFact] = []
     if biz.source == "osm":
         facts.append(VendorFact(field="name", value=biz.name, source_type="osm_listing", source_ref=biz.source_url, captured_at=biz.created_at, status="held"))
-    elif biz.name_source == "user_confirmed" or biz.source == "test":
+    elif biz.name_source == "user_confirmed" or biz.source in ("test", "user"):
         facts.append(VendorFact(field="name", value=biz.name, source_type="user_confirmed", captured_at=biz.created_at, status="confirmed", user_confirmed=True))
     if biz.website:
         mine = biz.website_source == "user_input"
@@ -93,6 +95,10 @@ def assemble(item: ShortlistItem, quotes: list[QuoteObservation], drafts: list[O
             field="quote", value=_money(q), source_type="vendor_quote", source_ref=q.evidence_ref or None, captured_at=q.observed_at, status="old" if why else "valid", user_confirmed=True,
             note=("may be out of date: " + "; ".join(why)) if why else f"valid until {q.expires_at.isoformat()}",
         ))
+    for e in (earlier or [])[:3]:  # what another person was last quoted by this vendor: there is no source to link and no name to show, by design (pricing/shared_quotes.py)
+        facts.append(VendorFact(
+            field="earlier_quote", value=_money(e), source_type="earlier_quote", captured_at=datetime.fromisoformat(e["observed_at"]), status="old" if e["old"] else "valid",
+            note="an earlier quote to someone else, for orientation only: " + ("may be out of date: " + "; ".join(e["old"]) if e["old"] else f"it held until {e['expires_at']}")))
     for d in sorted((d for d in drafts if d.kind == "request"), key=lambda d: d.created_at, reverse=True):
         facts.append(VendorFact(field="request", value=f"{d.channel} to {d.recipient}", source_type="app_request", source_ref=d.draft_id, captured_at=d.sent_at or d.created_at, status=d.status, user_confirmed=d.approved_by == "user" and d.status in ("approved", "sending", "sent")))
     for m in sorted(replies, key=lambda m: m.received_at, reverse=True):
@@ -107,5 +113,5 @@ def assemble(item: ShortlistItem, quotes: list[QuoteObservation], drafts: list[O
     return VendorCard(
         vendor_id=biz.vendor_id, category=item.category, origin=biz.origin, source=biz.source,
         place_id=biz.external_id.split(":", 1)[1] if biz.source == "gplaces" else None, name=biz.name, name_confirmed=biz.name_source != "placeholder",
-        label=f"TEST VENDOR (address owned by {biz.owner_confirmed_by})" if biz.is_test else None, blocked=item.blocked, facts=tuple(facts), contact_ready=bool(k and (k.email or k.whatsapp)),
+        label=f"TEST VENDOR (address owned by {biz.owner_confirmed_by})" if biz.is_test else (f"Added by {biz.owner_confirmed_by}" if biz.source == "user" else None), blocked=item.blocked, facts=tuple(facts), contact_ready=bool(k and (k.email or k.whatsapp)),
     )
