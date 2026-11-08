@@ -9,7 +9,7 @@ import pytest
 from eventmate.messaging.channels import Inbound
 from eventmate.messaging.conversations import SendPolicy
 from eventmate.integrations.places import PlacesSource
-from eventmate.planning.staging import PENDING_TTL, StageGone
+from eventmate.planning.staging import StageGone
 from eventmate.schemas import VendorCategory as C
 from eventmate.service import EventMate
 from eventmate.web.app import create_app

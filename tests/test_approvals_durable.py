@@ -132,7 +132,7 @@ def test_the_lease_is_exact_and_an_ordinary_failure_is_a_failure_not_an_unknown(
 
 def _race(args):
     db, root, pid, who_id, out = args
-    q = ApprovalQueue(ProposalLog(root, run_id=f"race-{who_id}"), db=db)
+    q = ApprovalQueue(ProposalLog(root, run_id=f"race-{who_id}"), db=db, now=Clock())  # the fixed clock the proposal was made on: the real one had passed its expiry once the calendar did
 
     def apply(p):
         with open(out, "a") as fh:

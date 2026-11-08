@@ -12,7 +12,7 @@ from eventmate.service import EventMate
 from tests.conftest import EXAMPLE, TODAY
 from tests.test_autoreply import sent_request
 from tests.test_conversations import Clock, FakeChannel
-from tests.test_redteam_mail import chan  # noqa: F401  (the IMAP channel fixture)
+from tests import test_redteam_mail
 
 CSV = b"Item,Qty,Rate,Total\nVeg buffet,120,450,54000\n"
 
@@ -26,13 +26,16 @@ def mail(*attachments, body="Our quote is attached."):
     return m.as_bytes()
 
 
-def test_a_small_quote_attachment_is_offered_and_other_files_are_not(chan):  # noqa: F811
+chan = test_redteam_mail.chan  # the IMAP channel fixture
+
+
+def test_a_small_quote_attachment_is_offered_and_other_files_are_not(chan):
     item = chan._parse(mail(("quote.csv", CSV), ("logo.gif", b"GIF89a"), ("evil.exe", b"MZ"), ("../../etc/passwd.txt", b"root")))
     assert [n for n, _ in item.files] == ["quote.csv", "passwd.txt"] and item.files[0][1] == CSV and item.attachments == 4  # a path in the name is cut to the file name
     assert "GIF89a" not in repr(item) and "files" not in repr(item)  # the bytes never reach a log line
 
 
-def test_at_most_two_files_and_none_from_a_message_cut_at_the_fetch_limit(chan):  # noqa: F811
+def test_at_most_two_files_and_none_from_a_message_cut_at_the_fetch_limit(chan):
     assert len(chan._parse(mail(*[(f"q{i}.csv", CSV) for i in range(5)])).files) == ch.MAX_QUOTE_FILES
     cut = mail(("quote.csv", CSV * 8000))[: ch.MAX_FETCH_BYTES]  # the attachment is cut off mid-file
     assert chan._parse(cut).attachments == 1 and chan._parse(cut).files == ()  # its bytes are not the file, so it is not offered

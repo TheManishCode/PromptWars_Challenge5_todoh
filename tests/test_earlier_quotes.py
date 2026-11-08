@@ -1,6 +1,5 @@
 """An earlier quote is shown while a fresh one is awaited: what the vendor said, when, and why it may no longer hold. It is never priced from."""
 
-import json
 from datetime import UTC, date, datetime
 
 import pytest
@@ -15,10 +14,10 @@ PLACE = "gplaces:ChIJabcdefgh12345"
 
 
 def quote(**kw):
-    base = dict(
-        observation_id="o1", vendor_id="ext_" + "0" * 24, category=VendorCategory.CATERER, source_type=ObservationSource.VENDOR_QUOTE, entered_by="asha",
-        observed_at=datetime(2026, 11, 1, tzinfo=UTC), expires_at=date(2026, 12, 1), confidence=0.9, evidence_ref="email", amount_inr=650, basis="per_plate", guest_count=80,
-    )
+    base = {
+        "observation_id": "o1", "vendor_id": "ext_" + "0" * 24, "category": VendorCategory.CATERER, "source_type": ObservationSource.VENDOR_QUOTE, "entered_by": "asha",
+        "observed_at": datetime(2026, 11, 1, tzinfo=UTC), "expires_at": date(2026, 12, 1), "confidence": 0.9, "evidence_ref": "email", "amount_inr": 650, "basis": "per_plate", "guest_count": 80,
+    }
     return QuoteObservation(**{**base, **kw})
 
 

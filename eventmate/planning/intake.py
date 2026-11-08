@@ -680,7 +680,7 @@ def _still_open(before: Sequence[Unresolved], asked: Sequence[Unresolved], new: 
         if q.key in renewed or gave_value or gave_number or named_allergy or said_diet or named_unclear:
             continue
         kept.append(q)
-    return tuple([*kept, *asked])[:MAX_OPEN_QUESTIONS]
+    return (*kept, *asked)[:MAX_OPEN_QUESTIONS]
 
 
 def _settled(prior: IntakeDraft, open_now: Sequence[Unresolved]) -> tuple[str, ...]:
@@ -809,7 +809,7 @@ def edited(prior: IntakeDraft, patch: dict, known: Iterable[str], today: date, s
     fields.update({k: (v.strip() if isinstance(v, str) else v) for k, v in patch.items()})
     if isinstance(fields.get("city"), str):
         fields["city"] = city_aliases.canonical(fields["city"])  # "bangalore" is Bengaluru, as it is when typed in a sentence
-    changed = {k for k in patch}
+    changed = set(patch)
     answered = [u for u in prior.unresolved if u.field in changed or (u.field == "number" and changed & {"guest_count", "budget_total"})]
     fields["unresolved"] = tuple(u for u in prior.unresolved if u not in answered)
     fields["settled"] = tuple(dict.fromkeys((*prior.settled, *(u.key for u in answered))))[-40:]

@@ -13,7 +13,7 @@ from eventmate.service import EventMate
 from eventmate.sourcing.externals import placeholder_name
 from eventmate.web.app import create_app
 from tests.conftest import TODAY
-from tests.test_brief_sourcing import MYSURU, PLACES, fake_places
+from tests.test_brief_sourcing import MYSURU, fake_places
 from tests.test_conversations import Clock, FakeChannel
 from tests.test_shortlist import FakeFetcher
 

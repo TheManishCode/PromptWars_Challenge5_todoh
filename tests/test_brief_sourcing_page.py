@@ -1,7 +1,6 @@
 """Asking vendors for quotes from the New plan dialog, before any plan exists, in a real browser: find, confirm an address, write the requests, approve one, read the reply.
 The vendor is a test vendor whose address is the user's own, and the channel is a fake: nothing leaves the machine."""
 
-import json
 import threading
 from datetime import timedelta
 

@@ -51,7 +51,7 @@ def test_a_listing_shows_the_vendors_earlier_quote_and_why_it_may_be_old(server)
         page.click("#new-plan")
         page.fill("#brief-input", "birthday for 120 guests in Mysuru on 14 November 2026, veg, budget 2 lakh")
         page.click("#read-brief")
-        page.wait_for_selector("#found li[data-place='%s'] small" % PLACE)
+        page.wait_for_selector(f"#found li[data-place='{PLACE}'] small")
         text = page.inner_text("#found")
         assert "Earlier quote: " in text and "650 per plate for 40 guests" in text
         assert "40 guests, not 120" in text and "Confirm with the vendor" in text

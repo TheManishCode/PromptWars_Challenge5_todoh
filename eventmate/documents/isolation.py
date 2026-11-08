@@ -138,7 +138,7 @@ def _confinement_paths(interpreter: str, package_root: str, model_home: str | No
 
 def _binds(interpreter: str, package_root: str, work: str, model_home: str | None) -> list[str]:
     """The mounts of the ``contained`` level. Nothing else of the host is visible."""
-    out = ["--tmpfs", "/tmp", "--ro-bind", "/usr", "/usr"]  # /tmp first: anything bound below it (a virtual environment, the work directory) must be mounted after it
+    out = ["--tmpfs", "/tmp", "--ro-bind", "/usr", "/usr"]  # nosec B108 - a tmpfs inside the sandbox, not a host path; /tmp first: anything bound below it (a virtual environment, the work directory) must be mounted after it
     for name in ("lib", "lib64", "bin", "sbin"):
         link = Path("/") / name
         if link.is_symlink():

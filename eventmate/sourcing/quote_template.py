@@ -166,7 +166,7 @@ def read_message(msg: InboundMessage, category: VendorCategory) -> Reading:
     """What a reply says, field by field. The reply is never changed; every value carries the line it was read from."""
     asked = ASKED[category]
     out: dict[str, Read] = {}
-    lines = [ln for ln in msg.body.splitlines()]
+    lines = list(msg.body.splitlines())
     for key in asked:
         label_re, kind = _LABELS[key], FIELDS[key][1]
         hits = [(ln, m.group("v").strip()) for ln in lines if (m := label_re.match(ln.strip()))]

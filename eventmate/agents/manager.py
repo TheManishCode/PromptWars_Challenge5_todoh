@@ -396,7 +396,7 @@ class GuestCounts(NamedTuple):
     subgroups: tuple[tuple[int, str], ...]  # (count, the user's words) for counts that are about some of the guests
 
 
-def _guest_candidates(rx: "re.Pattern[str]", text: str) -> list[tuple[int, str, str]]:
+def _guest_candidates(rx: re.Pattern[str], text: str) -> list[tuple[int, str, str]]:
     """(count, the words around it, what the words say it is: "" for a total, else "health", "diet", "some" or "part") for each match of ``rx``."""
     out = []
     for m in rx.finditer(text):

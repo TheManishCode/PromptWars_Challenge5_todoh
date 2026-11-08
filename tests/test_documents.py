@@ -1,5 +1,6 @@
 """Quote documents (L7): the sandbox holds against hostile files and the reader keeps only amounts that are written in the document."""
 
+import importlib.util
 import json
 import os
 import sys
@@ -86,11 +87,8 @@ def test_a_binary_file_named_text_is_not_read():
 
 
 def test_a_pdf_without_docling_says_what_is_needed():
-    try:
-        import docling  # noqa: F401
+    if importlib.util.find_spec("docling") is not None:
         pytest.skip("docling is installed here")
-    except ImportError:
-        pass
     with pytest.raises(DocumentError, match="Docling"):
         sandbox.convert(b"%PDF-1.4 x", "q.pdf")
 
@@ -160,8 +158,6 @@ def test_a_long_document_is_cut_and_says_so(monkeypatch):
 
 
 def test_reading_a_quote_notes_each_line_as_unreviewed_and_keeps_no_file(tmp_path):
-    from tests.conftest import TODAY  # noqa: F401
-
     em = EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="doc")
     vendor = next(iter(em.vendor_directory()))
     out = em.read_quote_document(vendor, "q.csv", b"Item,Qty,Rate,Total\nBuffet,50,400,20000\n")
@@ -446,11 +442,8 @@ def test_the_model_home_is_hf_home_or_the_real_home_never_the_sandboxs(monkeypat
 
 
 def test_warming_without_docling_says_what_to_install(capsys):
-    try:
-        import docling  # noqa: F401
+    if importlib.util.find_spec("docling") is not None:
         pytest.skip("docling is installed here")
-    except ImportError:
-        pass
     from eventmate.documents import warm
 
     assert warm.main() == 1 and "pip install docling" in capsys.readouterr().err

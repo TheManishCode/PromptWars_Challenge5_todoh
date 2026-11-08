@@ -8,6 +8,7 @@ closed, dialogs dismissed. Nothing is clicked or typed. The text is read from th
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import threading
@@ -36,10 +37,9 @@ def available() -> bool:
     if os.environ.get("EVENTMATE_BROWSER") != "1" or chromium_path() is None:
         return False
     try:
-        import playwright.sync_api  # noqa: F401
+        return importlib.util.find_spec("playwright.sync_api") is not None
     except ImportError:
         return False
-    return True
 
 
 class _Budget:
