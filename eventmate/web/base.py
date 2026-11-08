@@ -301,6 +301,53 @@ class LiftBody(_Strict):
     acknowledge_reason: bool = False  # required for an address that bounced: you confirm you have read why
 
 
+class TermsProposeBody(_Strict):
+    message_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")  # the vendor reply whose quote the terms are for
+    by: str = Field(min_length=1, max_length=60)
+
+
+class TermsConfirmBody(_Strict):
+    by: str = Field(min_length=1, max_length=60)
+    payee_name: str = Field(min_length=1, max_length=120)
+    payee_method: Literal["bank_transfer", "upi", "paypal", "cash", "cheque", "card_link", "other"]
+    payee_handle: str = Field(default="", max_length=100)
+    deposit_due: date | None = None
+    balance_due: date | None = None
+    expect_version: int | None = Field(default=None, ge=1)
+
+
+class PayProposeBody(_Strict):
+    terms_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    kind: Literal["deposit", "balance"]
+    by: str = Field(min_length=1, max_length=60)
+
+
+class PayApproveBody(_Strict):
+    content_hash: str = Field(min_length=64, max_length=64)  # the hash of the payment as the person was shown it
+    by: str = Field(min_length=1, max_length=60)
+
+
+class PayInstructBody(_Strict):
+    provider: str = Field(default="manual", pattern=r"^[a-z_]{1,30}$")
+    by: str = Field(default="", max_length=60)
+
+
+class PayPaidBody(_Strict):
+    by: str = Field(min_length=1, max_length=60)
+    reference: str = Field(default="", max_length=100)
+
+
+class PayNoteBody(_Strict):
+    by: str = Field(min_length=1, max_length=60)
+    note: str = Field(default="", max_length=300)
+
+
+class RefundBody(_Strict):
+    by: str = Field(min_length=1, max_length=60)
+    amount_inr: int = Field(gt=0)
+    note: str = Field(default="", max_length=300)
+
+
 class ContactedBody(_Strict):
     by: str = Field(min_length=1, max_length=60)
     channel: Literal["email", "whatsapp", "phone", "in_person"]

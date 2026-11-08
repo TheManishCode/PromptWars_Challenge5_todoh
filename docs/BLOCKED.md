@@ -15,3 +15,13 @@ Everything below is built and tested against fakes and local protocol servers. *
 - **IMAP search against Gmail:** the app asks for `SINCE`, `FROM "addr"`, `HEADER In-Reply-To "<id>"` and `HEADER References "<id>"`; the fake proves the app asks, not that Gmail answers the same. Check the replies are found, the overflow note appears, and `[Gmail]/Spam` is readable by `EVENTMATE_IMAP_SPAM_FOLDER` if wanted.
 - **Sending limits:** Gmail allows 500 a day from a personal account (read 2026-11-09); the app's own limits are lower (30 a day, 3 a vendor, 10 a brief).
 
+## Payments (WP4): built, not run, and the route is the owner's to choose
+
+Built and tested against fakes: terms from a confirmed quote, approvals bound to a hash and expiring, the desk, the manual instruction, a PayPal **sandbox** adapter (off). **No payment route is chosen and none has been run.**
+Questions only the owner can answer, before any provider is switched on (`docs/LAUNCH_PLAN`-style list, from the live prompt):
+1. Which country is the owner's PayPal account in, and is it a business account? (PayPal Payouts cannot send from an account registered in India: `docs/INTEGRATIONS.md`.)
+2. Do the vendors have PayPal accounts, and are they in India? Domestic India-to-India PayPal payments are not supported per the owner's note (the PayPal India page could not be read: HTTP 403).
+3. For India-to-India vendors the route is **unverified**: UPI (NPCI's linking specification could not be read, HTTP 403) or a gateway (a merchant collecting, not paying). Choose, then the specification must be read before anything is built.
+4. Who is the payee in each case: the vendor, or the owner collecting from customers (then PayPal Orders or Invoicing, or a gateway, might fit and Payouts would not)?
+Not run: the PayPal sandbox round trip (needs sandbox credentials from the owner; the request body fields are not verified), any live account, any real payment, any refund.
+

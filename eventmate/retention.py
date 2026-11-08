@@ -24,6 +24,7 @@ DEFAULT_LOG_RETENTION_DAYS = 90
 PER_PLAN_JSONL = (
     ("outreach", "outreach"), ("inbound", "inbound"), ("mandates", "mandate"), ("ledger", "ledger"), ("leads", "lead"),
     ("ideas", "ideaset"), ("ideas", "ideadecision"), ("ideas", "plannote"), ("digests", "digest"), ("shortlist", "shortlist"), ("community", "checklist"),
+    ("payment_terms", "payment_terms"), ("payments", "payment_proposal"), ("payments/events", "payment_event"),
 )
 
 

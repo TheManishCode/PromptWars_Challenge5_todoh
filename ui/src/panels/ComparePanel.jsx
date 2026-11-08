@@ -63,6 +63,7 @@ function Entry({ r, category, name, sourcing, chosen, onChosen, onUnchosen, gues
       <span className="rank-n" aria-hidden={r.rank ? undefined : 'true'}>{r.rank || '·'}</span>
       <div>
         <div className="rank-head"><b>{name}</b><span className="rank-total">{inr(r.total_inr)}</span></div>
+        {r.deposit_inr != null && <small className="quiet">{r.deposit_inr > 0 ? `Deposit to book: ${inr(r.deposit_inr)}, part of the total, not on top of it` : 'No deposit to book'}</small>}
         <small className="quiet">{r.basis === 'per_plate' ? `${inr(r.price_inr)} a plate, for ${guests} guests` : 'as quoted'}</small>
         <div className="row">
           {needsSetting && !chosen && (

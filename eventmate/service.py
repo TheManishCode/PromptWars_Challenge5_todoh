@@ -55,6 +55,10 @@ from eventmate.followthrough.watches import WatchRunner, WatchStore
 from eventmate.planning import brief_scope, plan_graph
 from eventmate.planning.brief_links import BriefLinks
 from eventmate.sourcing.contact_log import ContactLogStore
+from eventmate.payments.approvals import ProposalStore
+from eventmate.payments.desk import PaymentDesk
+from eventmate.payments.providers import provider_from_env
+from eventmate.payments.terms import TermsStore
 from eventmate.planning.staging import StageClosed, StageGone, StagingStore, StagedIntake
 from eventmate.messaging import outreach as outreach_mod
 from eventmate.sourcing import cards, quote_compare, quote_template
@@ -123,6 +127,9 @@ class EventMate:
         self.repo = repo or VendorRepository()
         self.store = PlanStore(plan_dir)
         self.ledger = Ledger(self.store.root)
+        self.payments = PaymentDesk(TermsStore(self.store.root, lambda: self.outreach_store.now()), ProposalStore(self.store.root, lambda: self.outreach_store.now()), lambda: provider_from_env(os.environ), self.ledger_add,
+                                    lambda: self.outreach_store.now().date(),
+                                    external_allowed=shared_dir is None)  # money terms, approvals and instructions (payments/desk.py); never moves money from a hosted visitor's workspace
         self.lead_store = LeadStore(self.store.root)
         self.flights = flights or FliProvider()
         self.discovery = discovery or OverpassSource()
@@ -1058,6 +1065,30 @@ class EventMate:
         if not any(i.business.vendor_id == vendor_id for i in self.shortlist_view(plan_id)):
             raise ValueError("that business is not on this list")
         return self.contact_log.add(plan_id, vendor_id, channel, by, note or "")
+
+    def propose_payment_terms(self, plan_id: str, message_id: str, by: str):
+        """Money terms for a vendor's quote the user has confirmed in full (price and deposit): the deposit, the balance, and the vendor's own sentence about the deposit. They are only a proposal until
+        the user says who is paid and how (``confirm_payment_terms``). The plan must exist: nothing is paid for a brief."""
+        plan = self.store.latest(plan_id)
+        by = (by or "").strip()
+        if not 1 <= len(by) <= 60:
+            raise ValueError("say who is asking for this (a name)")
+        msg = self._reply(plan_id, message_id)
+        a = next(x for x in self.quote_assessments(plan_id) if x.message_id == message_id)
+        if not a.comparable:
+            raise ValueError("confirm every line of this quote first, the price and the deposit included: payment terms are made only from a quote you confirmed in full")
+        fields = {f.key: f for f in a.fields}
+        price = int(fields[quote_template.PRICE_KEY[msg.category]].value)
+        total = price * plan.request.guest_count if msg.category == VendorCategory.CATERER else price
+        deposit = int(fields["deposit"].value)
+        return self.payments.propose_terms(plan_id, msg.category, msg.vendor_id, msg.vendor_name, message_id, total, deposit, fields["deposit"].evidence or "", by)
+
+    def payment_view(self, plan_id: str) -> dict:
+        """Everything about money for a plan: the terms, the payments and what was done to them, the ledger beside them, and the plain statement that the app moves nothing by itself."""
+        self.store.latest(plan_id)
+        return {"terms": [json.loads(t.model_dump_json()) for t in self.payments.terms.all(plan_id)], "payments": [json.loads(p.model_dump_json()) for p in self.payments.proposals.all(plan_id)],
+                "events": [json.loads(e.model_dump_json()) for e in self.payments.proposals.events(plan_id)], "external": sorted(k for k in self.payments.providers() if k != "manual") if self.payments.external_allowed else [],
+                "notice": "to;doh-the event planner records and instructs. It does not hold or move your money by itself, a quote is not a booking, and it does not guarantee that a vendor delivers."}
 
     def unpromote_quote(self, plan_id: str, message_id: str, by: str) -> QuoteAssessment:
         """The user takes back "plan with this vendor". The planner no longer sees the vendor from this reply; the quote stays recorded and confirmed, and the choice can be made again. A plan already

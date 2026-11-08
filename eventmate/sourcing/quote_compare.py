@@ -28,6 +28,7 @@ class Ranked(_Model):
     price_inr: int
     basis: str  # "per_plate" or "total"
     taxes_included: bool
+    deposit_inr: int | None = None  # what the vendor asks to book, confirmed by the user: shown beside the total, never added to it
 
 
 class Group(_Model):
@@ -66,11 +67,12 @@ def _why(a: QuoteAssessment) -> str:
     return f"{left} of {a.required_total} required fields not yet confirmed" if left else "the vendor did not say it is available"
 
 
-def _entry(a: QuoteAssessment, guests: int) -> tuple[int, int, bool]:
+def _entry(a: QuoteAssessment, guests: int) -> tuple[int, int, bool, int | None]:
     by = {f.key: f for f in a.fields}
     price = int(by[qt.PRICE_KEY[a.category]].value)
     per_plate = a.category == VendorCategory.CATERER
-    return (price * guests if per_plate else price), price, by["taxes_included"].value == "yes"
+    dep = by.get("deposit")
+    return (price * guests if per_plate else price), price, by["taxes_included"].value == "yes", int(dep.value) if dep is not None and dep.value is not None and dep.state == "confirmed" else None
 
 
 def _best_per_vendor(found: Iterable[QuoteAssessment]) -> list[QuoteAssessment]:
@@ -86,15 +88,15 @@ def _best_per_vendor(found: Iterable[QuoteAssessment]) -> list[QuoteAssessment]:
 def _groups(found: list[QuoteAssessment], guests: int) -> tuple[Group, ...]:
     rows = defaultdict(list)
     for a in found:
-        total, price, taxed = _entry(a, guests)
-        rows[taxed].append((total, a.vendor_id, a.message_id, price, a.category))
+        total, price, taxed, deposit = _entry(a, guests)
+        rows[taxed].append((total, a.vendor_id, a.message_id, price, a.category, deposit))
     out = []
     for taxed in (True, False):
         ordered = sorted(rows[taxed], key=lambda r: (r[0], r[1]))
         if ordered:
             out.append(Group(taxes_included=taxed, ranked=tuple(
-                Ranked(rank=i, vendor_id=v, message_id=m, total_inr=t, price_inr=p, basis="per_plate" if c == VendorCategory.CATERER else "total", taxes_included=taxed)
-                for i, (t, v, m, p, c) in enumerate(ordered, 1))))
+                Ranked(rank=i, vendor_id=v, message_id=m, total_inr=t, price_inr=p, basis="per_plate" if c == VendorCategory.CATERER else "total", taxes_included=taxed, deposit_inr=d)
+                for i, (t, v, m, p, c, d) in enumerate(ordered, 1))))
     return tuple(out)
 
 
@@ -109,8 +111,8 @@ def compare(assessments: Iterable[QuoteAssessment], guests: int, closed: bool = 
         pending = tuple(sorted((Pending(vendor_id=a.vendor_id, message_id=a.message_id, why=_why(a)) for a in mine if not a.comparable and a.vendor_id not in {o.vendor_id for o in ok}),
                                key=lambda p: (p.vendor_id, p.message_id)))
         status = "none" if not ok else "ranked" if closed or len(ok) >= min_quotes else "waiting"
-        unranked = tuple(Ranked(rank=0, vendor_id=a.vendor_id, message_id=a.message_id, total_inr=t, price_inr=p, basis="per_plate" if a.category == VendorCategory.CATERER else "total", taxes_included=x)
-                         for a in sorted(ok, key=lambda a: a.vendor_id) for t, p, x in [_entry(a, guests)]) if status == "waiting" else ()
+        unranked = tuple(Ranked(rank=0, vendor_id=a.vendor_id, message_id=a.message_id, total_inr=t, price_inr=p, basis="per_plate" if a.category == VendorCategory.CATERER else "total", taxes_included=x, deposit_inr=d)
+                         for a in sorted(ok, key=lambda a: a.vendor_id) for t, p, x, d in [_entry(a, guests)]) if status == "waiting" else ()
         cats.append(CategoryComparison(category=cat, status=status, comparable=len(ok), needed=min_quotes, groups=_groups(ok, guests) if status == "ranked" else (), pending=pending,
                                        open_quotes=unranked, chosen=tuple(sorted(a.message_id for a in mine if a.message_id in chosen))))
     return Comparison(rule=RULE, guests=guests, categories=tuple(cats))

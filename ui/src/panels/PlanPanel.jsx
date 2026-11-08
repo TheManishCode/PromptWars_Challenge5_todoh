@@ -2,8 +2,9 @@ import { Collage, Note, Notice } from '../components/Note';
 import { usePlanBuild } from '../hooks/usePlanBuild';
 import { capitalise, inr, longDate } from '../lib/format';
 import { categoryLabel } from '../lib/vendors';
+import { PaymentsPanel } from './PaymentsPanel';
 
-function Built({ result }) {
+function Built({ result, sourcing }) {
   const nodes = result.graph?.nodes || [];
   const event = nodes.find((n) => n.kind === 'event');
   const vendors = nodes.filter((n) => n.kind === 'vendor');
@@ -22,6 +23,7 @@ function Built({ result }) {
         <small className="quiet">Nothing is booked or paid from here.</small>
       </Note>
     )),
+    result.plan_id && <PaymentsPanel key="money" planId={result.plan_id} sourcing={sourcing} />,
     <Note key="next" tone="action" title="What now">
       <p className="quiet">Nothing has been booked or paid. The dashboard keeps this plan, its calendar and its changes. Back in “Compare”, you can change who you plan with.</p>
       <div className="row"><a className="btn btn--small" href="/app">Open it in the dashboard</a></div>
@@ -56,7 +58,7 @@ export function PlanPanel({ brief, sourcing, categories }) {
   const toAsk = missing.filter((c) => !(byCat[c]?.comparable > 0));
   if (!status) return <Collage><Note title="Reading…"><p className="quiet">Looking at where the plan stands.</p></Note></Collage>;
 
-  if (status.state === 'done') return <Built result={status.result} />;
+  if (status.state === 'done') return <Built result={status.result} sourcing={sourcing} />;
 
   if (status.state === 'processing') {
     return <Collage><Note tone="story" title="Building the plan"><div className="building" role="status"><i /></div><p className="quiet">The schedule and prices are being checked against your facts. A plan that breaks a hard rule is never shown.</p></Note></Collage>;

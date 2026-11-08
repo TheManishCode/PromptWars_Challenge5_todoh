@@ -221,6 +221,25 @@ def test_a_visitor_reaches_a_validated_plan_through_the_proxy_with_nothing_sent(
             text = page.locator(".finding-room").inner_text()
             assert "could not be built" not in text, text[:1500]
             assert "The timeline" in text and "Nothing has been booked or paid" in text, text[:1500]
+            # WP4: the deposit is set up, approved against its exact content, shown how to pay, and recorded paid only when the visitor says so (nothing moves)
+            money = page.locator(".note:has-text('Deposits and balances')")
+            money.get_by_role("button", name="Set up the deposit and balance of a chosen quote").first.click()
+            money.locator("[data-terms]").first.wait_for()
+            terms = money.locator("[data-terms]").first
+            assert "deposit ₹" in terms.inner_text() and "Deposit to book" in terms.inner_text()  # the deposit, with the vendor's own sentence about it
+            terms.get_by_label("Their UPI id (like name@bank)").fill("our.vendor@okbank")
+            terms.get_by_role("button", name="Confirm these terms").click()
+            terms.get_by_role("button", name="Propose the deposit").wait_for()
+            terms.get_by_role("button", name="Propose the deposit").click()
+            terms.get_by_role("button", name="Approve exactly this payment").click()
+            terms.get_by_role("button", name="Show me how to pay").click()
+            terms.locator(".exact-note").wait_for()
+            assert "does not move this money" in terms.inner_text() and "our.vendor@okbank" in terms.inner_text()
+            found = axe_violations(page)
+            assert found == [], fmt_axe(found)  # the money panel with a payment waiting to be confirmed
+            terms.get_by_role("button", name="I paid").click()
+            terms.locator("[data-status=paid]").wait_for()
+            assert "Paid so far ₹" in terms.inner_text() and "Paid, as you confirmed" in terms.inner_text()
             plan = page.locator(".note:has-text('THE PLAN')").first.inner_text()
             assert "Mysuru" in plan and "Our venue" in text and "Our caterer" in text, plan
         except Exception:
