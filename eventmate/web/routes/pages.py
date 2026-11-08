@@ -49,6 +49,11 @@ def register(app, k):
         """The planner: describe an event, check what was understood, get the plan, its evidence and your changes."""
         return page("app.html")
 
+    @app.get("/plan")
+    def plan_front_door():
+        """Describe an event, check what was understood, then find vendors, ask them for quotes and plan from the answers."""
+        return page("plan.html")
+
     @app.get("/welcome")
     def welcome():
         return redirect("/", 308)  # the landing page used to live here

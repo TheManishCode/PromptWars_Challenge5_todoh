@@ -80,7 +80,7 @@ def test_the_landing_page_loads_clean_reads_well_and_leads_to_the_dashboard(serv
     page.wait_for_timeout(1200)
     assert axe_violations(page) == []
     assert measure_contrast(page, ctx) == []
-    assert page.get_by_role("link", name="Start planning").get_attribute("href").startswith("/app")
+    assert page.get_by_role("link", name="Start planning").get_attribute("href").startswith("/plan")
     assert seen == [], seen
 
 

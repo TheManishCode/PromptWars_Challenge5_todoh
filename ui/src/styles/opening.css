@@ -1,0 +1,1148 @@
+/* ------------------------------------------------------------------------------------------------
+   The opening: an illustrated scroll story that ends on the box where the idea is written.
+   Artwork, lettering and camera are the approved ones (see scenes/useOpeningMotion.js).
+   The header, wordmark and buttons are the site's own (site.css): pill buttons, Instrument Serif wordmark.
+   ------------------------------------------------------------------------------------------------ */
+
+.opening-root > header {
+  position: absolute;
+  z-index: 20;
+  inset: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  height: 84px;
+  padding: 0 clamp(20px, 4.3vw, 64px);
+  background: var(--paper-bright);
+}
+.opening-root .brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  justify-self: start;
+  font-family: var(--serif);
+  font-size: 32px;
+  line-height: 1;
+  color: var(--navy);
+  text-decoration: none;
+}
+.opening-root .brand-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.opening-root .edition {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1.9px;
+  color: var(--navy);
+}
+.opening-root .skip {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 22px;
+  border: 1px solid var(--black);
+  border-radius: 9999px;
+  background: var(--black);
+  color: var(--white);
+  font: 500 14px var(--sans);
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+.opening-root .skip:hover { transform: scale(1.03); }
+
+.journey {
+  height: 370svh;
+  position: relative;
+}
+.stage {
+  height: 100svh;
+  position: sticky;
+  top: 0;
+  overflow: hidden;
+  isolation: isolate;
+  min-height: 620px;
+}
+.chapter {
+  position: absolute;
+  left: 4.3vw;
+  top: 110px;
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  font-weight: 500;
+  z-index: 6;
+  display: flex;
+  gap: 18px;
+}
+.chapter-number {
+  color: var(--quiet);
+}
+.copy {
+  position: absolute;
+  z-index: 3;
+  top: 20%;
+  left: 9%;
+  pointer-events: none;
+}
+.copy h1,
+.copy h2 {
+  margin: 0;
+  font-size: clamp(48px, 6.3vw, 100px);
+  font-weight: 500;
+  line-height: 0.98;
+  letter-spacing: -0.065em;
+}
+.copy h1 span {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: -0.07em;
+}
+.copy p:not(.eyebrow) {
+  font:
+    20.2px/1.4 var(--serif);
+  margin: 20px 0 0;
+}
+.copy-turn {
+  left: 12%;
+  top: 23%;
+  opacity: 0;
+}
+.copy-turn h2 {
+  font-size: clamp(36px, 4.5vw, 72px);
+}
+.eyebrow {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 1.4px;
+  line-height: 1.5;
+  margin: 0 0 22px;
+}
+.world {
+  position: absolute;
+  inset: auto auto 0 0;
+  width: 2400px;
+  height: 760px;
+  transform-origin: 0 100%;
+  will-change: transform;
+}
+.landscape {
+  position: absolute;
+  inset: 0;
+  width: 2400px;
+  height: 760px;
+}
+.ground-fill {
+  opacity: 0.32;
+}
+.mess-illustration {
+  position: absolute;
+  left: 355px;
+  bottom: 139px;
+  width: 640px;
+  height: 480px;
+}
+.mess-illustration > img {
+  position: absolute;
+  width: 100%;
+  bottom: 0;
+  display: block;
+}
+.ink-marks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.scribble-label {
+  font-size: 8px;
+  letter-spacing: 1px;
+  font-weight: 500;
+  position: absolute;
+  white-space: nowrap;
+  background: white;
+  padding: 6px 0;
+}
+.sl-one {
+  left: 90px;
+  top: 52px;
+  transform: rotate(-12deg);
+}
+.sl-two {
+  right: 6px;
+  top: 170px;
+  transform: rotate(8deg);
+}
+.sl-three {
+  left: 80px;
+  bottom: 12px;
+  transform: rotate(-7deg);
+}
+.welcome-world {
+  position: absolute;
+  left: 1240px;
+  bottom: 139px;
+  width: 1060px;
+  height: 450px;
+}
+.world-word {
+  background:
+    radial-gradient(circle at 2px 2px, white 0.45px, transparent 0.7px) 0 0 /
+      5px 5px,
+    #141414;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+  font-family: "Arial Black", Arial, sans-serif;
+  font-weight: 900;
+  font-size: 250px;
+  line-height: 0.88;
+  letter-spacing: -19px;
+  transform: scaleX(1.07);
+  transform-origin: 0 100%;
+  color: var(--ink);
+}
+.word-grain {
+  position: absolute;
+  inset: 0;
+}
+.cast {
+  position: absolute;
+  display: block;
+  object-fit: contain;
+  filter: none;
+}
+.cast-cat {
+  height: 106px;
+  left: 39px;
+  bottom: 186px;
+  transform: rotate(-6deg);
+}
+.cast-frog {
+  height: 83px;
+  left: 271px;
+  bottom: 188px;
+  transform: rotate(5deg);
+}
+.cast-robot {
+  height: 88px;
+  left: 455px;
+  bottom: 175px;
+  transform: rotate(-4deg);
+}
+.cast-bird {
+  height: 130px;
+  left: 635px;
+  bottom: 0;
+}
+.cast-duck {
+  height: 89px;
+  left: -73px;
+  bottom: 0;
+}
+.calm {
+  position: absolute;
+  right: 35px;
+  bottom: 0;
+  height: 280px;
+}
+.world-sign {
+  position: absolute;
+  right: 20px;
+  bottom: 310px;
+  font-size: 8px;
+  letter-spacing: 1.4px;
+  font-weight: 500;
+  line-height: 1.6;
+  transform: rotate(5deg);
+  text-align: center;
+}
+.paper-shadow {
+  position: absolute;
+  width: 68%;
+  height: 65%;
+  left: 16%;
+  bottom: -1%;
+  background: #141414;
+  filter: blur(35px);
+  opacity: 0;
+  z-index: 7;
+  will-change: transform, opacity;
+}
+.brief-paper {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 690px;
+  height: 570px;
+  padding: 25px 38px 22px;
+  background: #fff;
+  z-index: 8;
+  border: 1.5px solid var(--ink);
+  box-shadow: 3px 4px 0 #141414;
+  transform: translate(-50%, 110vh) rotate(-8deg) scale(0.5);
+  transform-origin: 50% 100%;
+  will-change: transform;
+  display: flex;
+  flex-direction: column;
+}
+.form-content {
+  padding: 25px 5px 0;
+  flex: 1;
+}
+.form-content > .eyebrow {
+  margin-bottom: 14px;
+  font-size: 8px;
+}
+.form-content h2 {
+  font-size: 53px;
+  letter-spacing: -3px;
+  line-height: 0.98;
+  margin: 0 0 26px;
+  font-weight: 500;
+}
+.form-content label {
+  display: block;
+  font-size: 10px;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+.form-content textarea {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  min-height: 95px;
+  max-height: 140px;
+  padding: 10px 0;
+  border: 0;
+  border-top: 1px solid #bbb;
+  border-bottom: 1px solid #bbb;
+  border-radius: 0;
+  background: transparent;
+  font:
+    19px/1.4 var(--serif);
+  color: var(--ink);
+}
+textarea::placeholder {
+  color: var(--quiet);
+  opacity: 1;
+}
+.form-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+  gap: 12px;
+}
+.form-bottom > span {
+  font-size: 9px;
+  color: #666;
+}
+.form-bottom button,
+.form-bottom button:hover,
+.form-bottom button span {
+  margin-left: 20px;
+}
+.paper-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 7px;
+  letter-spacing: 1px;
+  padding-top: 12px;
+  border-top: 1px solid #bbb;
+  margin-top: 18px;
+}
+.fold {
+  position: absolute;
+  top: -1.5px;
+  right: -1.5px;
+  width: 26px;
+  height: 26px;
+  background: linear-gradient(
+    45deg,
+    #eee 49%,
+    #141414 49%,
+    #141414 52%,
+    white 52%
+  );
+  border-bottom: 1.5px solid #141414;
+  border-left: 1.5px solid #141414;
+}
+.bottom-note {
+  position: absolute;
+  bottom: 30px;
+  left: 4.3vw;
+  right: 4.3vw;
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  letter-spacing: 1.3px;
+  font-weight: 500;
+  z-index: 10;
+  pointer-events: none;
+}
+.scroll-invite span {
+  display: inline-block;
+  margin-left: 15px;
+}
+.direction-label {
+  color: var(--quiet);
+}
+.progress {
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: #eee;
+  z-index: 12;
+}
+.progress > span {
+  height: 100%;
+  background: #141414;
+  display: block;
+  transform: scaleX(var(--p));
+  transform-origin: 0 50%;
+}
+.afterword {
+  padding: 120px 24px 70px;
+  text-align: center;
+  border-top: 1px solid #ddd;
+}
+.afterword > .eyebrow {
+  margin-bottom: 22px;
+}
+.afterword > p:not(.eyebrow) {
+  font:
+    clamp(28px, 3vw, 44.8px)/1.25 var(--serif);
+  letter-spacing: -1.3px;
+  margin: 0;
+}
+.restart {
+  padding: 12px 18px;
+  border: 1.5px solid #141414;
+  border-radius: 40px;
+  background: white;
+  font-size: 11px;
+  margin-top: 30px;
+}
+.afterword small {
+  display: block;
+  font-size: 9px;
+  color: var(--quiet);
+  margin-top: 65px;
+}
+.brief-paper.is-folded {
+  height: 450px;
+}
+.brief-paper.is-folded .form-content > h2,
+.brief-paper.is-folded .form-content > .eyebrow {
+  display: none;
+}
+@media (min-width: 1500px) {
+  .copy {
+    left: 12%;
+  }
+  .world {
+    zoom: 1.08;
+  }
+}
+@media (max-width: 700px) {
+  header {
+    height: 68px;
+    padding: 0 22px;
+  }
+  .brand {
+    font-size: 26px;
+  }
+  .edition {
+    display: none;
+  }
+  .skip {
+    padding: 10px 13px;
+    font-size: 10px;
+    gap: 14px;
+  }
+  .journey {
+    height: 330svh;
+  }
+  .stage {
+    min-height: 620px;
+  }
+  .chapter {
+    top: 91px;
+    left: 23px;
+    font-size: 8px;
+    gap: 12px;
+  }
+  .copy {
+    left: 25px;
+    top: 23%;
+    right: 20px;
+  }
+  .copy h1 {
+    font-size: 57px;
+  }
+  .copy p:not(.eyebrow) {
+    font-size: 15px;
+    margin-top: 16px;
+    max-width: 290px;
+  }
+  .copy-turn {
+    left: 28px;
+    top: 22%;
+  }
+  .copy-turn h2 {
+    font-size: 43px;
+  }
+  .copy-turn .eyebrow {
+    font-size: 7px;
+    margin-bottom: 14px;
+  }
+  .world {
+    transform-origin: 0 100%;
+  }
+  .brief-paper {
+    width: calc(100% - 38px);
+    height: 540px;
+    padding: 20px 21px;
+    max-width: 500px;
+  }
+  .form-content {
+    padding: 25px 0 0;
+  }
+  .form-content h2 {
+    font-size: 43px;
+    letter-spacing: -2.5px;
+    margin-bottom: 25px;
+  }
+  .form-content > .eyebrow {
+    font-size: 6.4px;
+    letter-spacing: 0.8px;
+  }
+  .form-content textarea {
+    font-size: 16px;
+    min-height: 116px;
+    max-height: 140px;
+  }
+  .paper-footer {
+    font-size: 5.7px;
+    letter-spacing: 0.65px;
+  }
+  .form-bottom > span {
+    font-size: 8px;
+  }
+  .form-bottom button {
+    padding: 12px;
+    font-size: 10px;
+  }
+  .form-bottom button span {
+    margin-left: 8px;
+  }
+  .bottom-note {
+    bottom: 24px;
+    left: 23px;
+    right: 23px;
+    font-size: 6px;
+    letter-spacing: 0.7px;
+  }
+  .direction-label {
+    max-width: 80px;
+    text-align: right;
+    line-height: 1.5;
+  }
+  .paper-shadow {
+    width: 80%;
+    left: 10%;
+  }
+  .afterword {
+    padding-top: 80px;
+  }
+  .afterword > p:not(.eyebrow) {
+    font-size: 27px;
+    letter-spacing: -0.8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .journey {
+    height: auto;
+  }
+  .stage {
+    position: relative;
+    height: 1100px;
+    min-height: 0;
+  }
+  .chapter {
+    top: 90px;
+  }
+  .copy-mess {
+    top: 150px;
+  }
+  .copy-turn {
+    display: none;
+  }
+  .world {
+    display: none;
+  }
+  .brief-paper {
+    top: 460px !important;
+    transform: translate(-50%, 0) !important;
+    opacity: 1 !important;
+  }
+  .bottom-note,
+  .paper-shadow,
+  .progress {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .copy-mess {
+    top: 20%;
+  }
+  .bottom-note {
+    background: white;
+    bottom: 0;
+    padding: 16px 0;
+    left: 23px;
+    right: 23px;
+  }
+  .world-sign {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .sl-two {
+    right: 38px;
+    top: 170px;
+    font-size: 7px;
+  }
+  .world-sign {
+    display: none;
+  }
+  .calm {
+    display: none;
+  }
+}
+
+/* The view frames the drawing, rather than leaving it on the bottom edge. */
+.copy-turn {
+  top: 19%;
+}
+.chapter {
+  font-size: 10px;
+}
+.eyebrow {
+  font-size: 10px;
+}
+.bottom-note {
+  font-size: 9px;
+}
+.direction-label {
+  letter-spacing: 0.7px;
+}
+@media (max-width: 700px) {
+  .copy-turn {
+    top: 20%;
+  }
+  .copy-turn .eyebrow {
+    font-size: 9px;
+  }
+  .chapter {
+    font-size: 9px;
+    letter-spacing: 0.8px;
+  }
+  .bottom-note {
+    font-size: 8px;
+  }
+  .direction-label {
+    max-width: 120px;
+  }
+  .form-content > .eyebrow {
+    font-size: 8px;
+    letter-spacing: 0.5px;
+  }
+  .paper-footer {
+    font-size: 7px;
+    letter-spacing: 0.4px;
+  }
+}
+/* Revision 2: the approved horizontal opening exits by normal vertical scroll. */
+.journey {
+  height: 273svh;
+}
+.atelier {
+  height: 250svh;
+  position: relative;
+  background: #fff;
+}
+.atelier-stage {
+  height: 100svh;
+  min-height: 620px;
+  position: sticky;
+  top: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+.atelier-top {
+  position: absolute;
+  top: 38px;
+  left: 4.3%;
+  right: 4.3%;
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  z-index: 4;
+}
+.planning-world {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+.desk-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.thinking-person {
+  position: absolute;
+  left: 6%;
+  top: 19%;
+  height: 54%;
+  max-width: 30%;
+  object-fit: contain;
+  object-position: bottom;
+}
+.idea-board {
+  position: absolute;
+  width: 32%;
+  height: 39%;
+  top: 18%;
+  right: 8%;
+  border: 1.5px solid #141414;
+  transform: rotate(3deg);
+  background: white;
+  box-shadow: 3px 4px 0 #141414;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.idea-board img {
+  height: 72%;
+  width: 95%;
+  object-fit: contain;
+}
+.board-note {
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  font-weight: 500;
+}
+.board-caption {
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  margin-top: 8px;
+}
+.board-pin {
+  width: 9px;
+  height: 9px;
+  background: #141414;
+  border: 2px solid white;
+  outline: 1px solid #141414;
+  border-radius: 50%;
+  position: absolute;
+  top: 9px;
+  left: 50%;
+}
+.notes-stack {
+  position: absolute;
+  left: 39%;
+  top: 24%;
+  height: 35%;
+  width: 18%;
+  transform: rotate(-6deg);
+}
+.mini-note {
+  position: absolute;
+  width: 168px;
+  min-height: 88px;
+  border: 1px solid #141414;
+  padding: 15px;
+  background: #fff;
+  font-size: 17px;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+}
+.mini-note i {
+  font:
+    15.7px/1.4 var(--serif);
+  letter-spacing: 0;
+}
+.note-a {
+  left: 0;
+  top: 0;
+  transform: rotate(7deg);
+}
+.note-b {
+  left: 20%;
+  top: 96px;
+  transform: rotate(-5deg);
+}
+.note-c {
+  left: -5%;
+  top: 192px;
+  transform: rotate(4deg);
+}
+.desk-helper {
+  position: absolute;
+  right: 5%;
+  top: 51%;
+  height: 95px;
+  transform: rotate(-7deg);
+}
+.desk-scribble {
+  position: absolute;
+  width: 180px;
+  left: 28%;
+  top: 66%;
+  height: 90px;
+}
+.atelier-caption {
+  position: absolute;
+  left: 8%;
+  bottom: 12%;
+  font:
+    clamp(22.4px, 2.5vw, 39.2px)/1.25 var(--serif);
+  letter-spacing: -0.8px;
+  margin: 0;
+  max-width: 70%;
+  z-index: 3;
+}
+.atelier-caption em {
+  font-style: italic;
+}
+.workspace-input {
+  position: absolute;
+  left: 50%;
+  bottom: 12%;
+  width: 72%;
+  max-width: 1060px;
+  z-index: 6;
+  transform: translate(-50%, calc(100svh));
+  will-change: transform, width;
+  opacity: 0;
+}
+.workspace-input .form-content {
+  padding: 0;
+}
+.workspace-input .eyebrow,
+.workspace-input h2,
+.workspace-input .form-bottom > span,
+.workspace-input .paper-footer {
+  display: none;
+}
+.workspace-input form {
+  position: relative;
+  border: 1.5px solid #141414;
+  background: #fff;
+  box-shadow: 3px 4px 0 #141414;
+  min-height: 98px;
+  padding: 18px 95px 14px 24px;
+}
+.workspace-input label {
+  font-size: 10px;
+  margin-bottom: 5px;
+}
+.workspace-input textarea {
+  border: 0;
+  min-height: 44px;
+  max-height: 110px;
+  padding: 0;
+  resize: none;
+  font:
+    20.2px/1.4 var(--serif);
+}
+.workspace-input .form-bottom {
+  position: absolute;
+  right: 18px;
+  bottom: 23px;
+  margin: 0;
+}
+.workspace-input .form-bottom button {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.workspace-input .form-bottom button span {
+  font-size: 25px;
+  margin: 0;
+}
+.workspace-input.is-folded {
+  height: auto;
+}
+.atelier-bottom {
+  position: absolute;
+  bottom: 26px;
+  left: 4.3%;
+  right: 4.3%;
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  letter-spacing: 0.7px;
+  font-weight: 500;
+  z-index: 8;
+}
+.atelier-bottom > span:last-child {
+  color: var(--quiet);
+  font-weight: 400;
+}
+.workspace-input [hidden] {
+  display: none;
+}
+.afterword {
+  padding-top: 90px;
+}
+@media (max-width: 700px) {
+  .journey {
+    height: 247svh;
+  }
+  .atelier {
+    height: 235svh;
+  }
+  .atelier-top {
+    top: 30px;
+    left: 23px;
+    right: 23px;
+    font-size: 8px;
+    letter-spacing: 0.5px;
+  }
+  .atelier-top > span:last-child {
+    display: none;
+  }
+  .thinking-person {
+    left: 1%;
+    top: 25%;
+    height: 34%;
+    max-width: 47%;
+  }
+  .idea-board {
+    right: 6%;
+    top: 15%;
+    width: 48%;
+    height: 25%;
+    padding: 15px 10px;
+  }
+  .board-note {
+    font-size: 9px;
+  }
+  .board-caption {
+    font-size: 6px;
+    letter-spacing: 0.2px;
+    text-align: center;
+  }
+  .notes-stack {
+    left: 52%;
+    top: 44%;
+    width: 40%;
+  }
+  .mini-note {
+    width: 118px;
+    min-height: 66px;
+    padding: 10px;
+    font-size: 14px;
+  }
+  .mini-note i {
+    font-size: 12px;
+  }
+  .note-b {
+    top: 75px;
+    left: 5%;
+  }
+  .note-c {
+    top: 150px;
+    left: -5%;
+  }
+  .desk-helper {
+    right: 10%;
+    top: 67%;
+    height: 65px;
+  }
+  .desk-scribble {
+    left: 10%;
+    top: 61%;
+    width: 100px;
+  }
+  .atelier-caption {
+    left: 25px;
+    bottom: 13%;
+    font-size: 24px;
+    max-width: 88%;
+    letter-spacing: -0.5px;
+  }
+  .workspace-input {
+    bottom: 12%;
+    max-width: none;
+  }
+  .workspace-input form {
+    padding: 16px 65px 12px 16px;
+    min-height: 110px;
+  }
+  .workspace-input textarea {
+    font-size: 16px;
+    min-height: 64px;
+    max-height: 140px;
+  }
+  .workspace-input label {
+    font-size: 9px;
+    line-height: 1.3;
+  }
+  .workspace-input .form-bottom {
+    right: 12px;
+    bottom: 20px;
+  }
+  .workspace-input .form-bottom button {
+    width: 39px;
+    height: 39px;
+  }
+  .atelier-bottom {
+    bottom: 24px;
+    left: 23px;
+    right: 23px;
+    font-size: 7px;
+    letter-spacing: 0.3px;
+  }
+  .atelier-hint {
+    max-width: 160px;
+  }
+  .atelier-bottom > span:last-child {
+    max-width: 100px;
+    text-align: right;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .journey {
+    height: auto;
+  }
+  .stage {
+    height: 470px;
+  }
+  .atelier {
+    height: auto;
+  }
+  .atelier-stage {
+    position: relative;
+    height: 1050px;
+    min-height: 0;
+  }
+  .planning-world {
+    height: 650px;
+  }
+  .atelier-caption {
+    top: 660px;
+    bottom: auto;
+    font-size: 25px;
+  }
+  .workspace-input {
+    opacity: 1 !important;
+    transform: translateX(-50%) !important;
+    width: 88% !important;
+    bottom: 90px !important;
+  }
+  .atelier-bottom {
+    bottom: 25px;
+  }
+}
+/* A smaller invitation, integrated with the desk rather than a second hero. */
+.workspace-input {
+  max-width: 680px;
+  bottom: 14%;
+}
+.workspace-input form {
+  min-height: 82px;
+  padding: 16px 76px 12px 20px;
+  box-shadow: 2px 3px 0 #141414;
+  border-radius: 8px;
+}
+.workspace-input textarea {
+  font-size: 16px;
+  min-height: 38px;
+  max-height: 68px;
+}
+.workspace-input label {
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+.workspace-input .form-bottom {
+  right: 14px;
+  bottom: 18px;
+}
+.workspace-input .form-bottom button {
+  width: 38px;
+  height: 38px;
+}
+.workspace-input .form-bottom button span {
+  font-size: 22px;
+}
+@media (max-width: 700px) {
+  .workspace-input {
+    bottom: 11%;
+  }
+  .workspace-input form {
+    min-height: 94px;
+    padding: 14px 60px 12px 15px;
+  }
+  .workspace-input textarea {
+    font-size: 15px;
+    min-height: 48px;
+    max-height: 76px;
+  }
+  .workspace-input label {
+    font-size: 10px;
+  }
+  .workspace-input .form-bottom {
+    right: 12px;
+    bottom: 22px;
+  }
+  .workspace-input .form-bottom button {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+/* the box shows its own focus: the field inside does not draw a second frame */
+.workspace-input textarea:focus-visible { outline: none; }
+.workspace-input form:focus-within { outline: 2px solid var(--navy); outline-offset: 4px; }
+
+/* One paper from the first screen to the last: the ground of the opening is the ground of the rooms after it, so moving on never flashes.
+   The drawn labels, notes and board stay white: they are paper on the table, not the table. */
+.opening-root, .opening-root .journey, .opening-root .stage, .opening-root .atelier, .opening-root .atelier-stage { background: var(--paper); }
+.opening-root > header { background: var(--paper); }
+
+/* The writing box: the drawn compact paper, with its action said in words and its helper line shown under it. */
+.workspace-input .form-bottom { position: static; }
+.workspace-input form { padding-right: 190px; }
+.workspace-input .form-bottom button {
+  position: absolute; right: 14px; bottom: 16px; width: auto; height: 44px; padding: 0 20px 0 22px; gap: 10px;
+  font-size: 14px; font-weight: 500; border-radius: 9999px; white-space: nowrap;
+}
+.workspace-input .form-bottom button span { font-size: 18px; margin: 0; }
+.workspace-input .form-bottom > span { display: block; position: absolute; left: 4px; top: calc(100% + 16px); font-size: 12px; letter-spacing: 0; color: var(--quiet); }
+.workspace-input .form-error { position: absolute; left: 4px; top: calc(100% + 40px); margin: 0; font-size: 13px; color: #8a1f1f; }
+.workspace-input .form-error:empty { display: none; }
+@media (max-width: 700px) {
+  .workspace-input form { padding-right: 16px; padding-bottom: 64px; }
+  .workspace-input .form-bottom button { height: 40px; padding: 0 16px 0 18px; font-size: 13px; right: 12px; bottom: 12px; }
+}

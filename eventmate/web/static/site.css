@@ -61,3 +61,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 
 @media (max-width: 900px) { .nav-links { display: none; } .nav-grid { grid-template-columns: 1fr auto; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .btn { transition: none; } .btn:hover { transform: none; } }
+
+/* moving between the landing page, the planning page and the dashboard is a crossfade, not a flash (browsers without it just navigate) */
+@view-transition { navigation: auto; }
+@media (prefers-reduced-motion: reduce) { @view-transition { navigation: none; } }

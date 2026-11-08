@@ -1,0 +1,29 @@
+/* The planning page sits on the site's own look (site.css: Instrument Serif, Inter, navy and black pills).
+   These are only the names the illustrated scenes use, mapped onto it, plus the paper colour of the drawings. */
+@font-face { font-family: 'Instrument Serif'; font-style: italic; font-weight: 400; font-display: swap; src: url(/static/plan-instrument-serif-italic.ttf) format('truetype'); }
+
+:root {
+  --ink: #171817;
+  --paper: #f6f5f1;
+  --paper-bright: #f6f5f1;
+  --card: #fdfdf9;
+  --tape: #e5e3dc;
+  --quiet: #6b6f63;
+  --sage: #a0ad90;
+  --sage-wash: #e1e9d4;
+  --rule: #d9d8d0;
+  --serif: var(--font-display);
+  --sans: var(--font-body);
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --p: 0;
+}
+
+html:has(#root) { scroll-behavior: auto; }
+body { background: var(--paper); color: var(--ink); }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.plan-noscript { padding: 48px; font-size: 18px; }
+
+@view-transition { navigation: auto; }
+@media (prefers-reduced-motion: reduce) { @view-transition { navigation: none; } }

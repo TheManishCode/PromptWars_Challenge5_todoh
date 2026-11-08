@@ -35,12 +35,17 @@ STATIC_FILES = {
     # the landing page (/) and the planner (/app); the look they share is site.css
     "site.css": "text/css; charset=utf-8", "landing.css": "text/css; charset=utf-8", "landing.js": "text/javascript; charset=utf-8",
     "app.css": "text/css; charset=utf-8", "app.js": "text/javascript; charset=utf-8",
+    # the planning front door (/plan): built from ui/ (npm run build). The two reference-* drawings are not in the repository (their licence is unconfirmed): the page works without them.
+    "plan.css": "text/css; charset=utf-8", "plan.js": "text/javascript; charset=utf-8", "plan-instrument-serif-italic.ttf": "font/ttf",
+    "plan-story-knot.webp": "image/webp", "plan-story-relaxed.webp": "image/webp", "plan-story-table-sketch.webp": "image/webp", "plan-story-char-cat.webp": "image/webp",
+    "plan-story-char-duck.webp": "image/webp", "plan-story-char-frog.webp": "image/webp", "plan-story-char-music.webp": "image/webp", "plan-story-char-robot.webp": "image/webp",
+    "plan-story-char-tallbird.webp": "image/webp", "plan-reference-cap.webp": "image/webp", "plan-reference-head-open.webp": "image/webp", "plan-reference-head-closed.webp": "image/webp",
     # fonts and hero media served from this origin: the CSP allows no third party. The poster and the video are not in the repository (their licence is unconfirmed): without
     # them the hero shows its plain gradient, and a file that is absent is a 404.
     "landing-poster.jpg": "image/jpeg", "landing-hero.mp4": "video/mp4",
     "landing-instrument-serif.ttf": "font/ttf", "landing-inter-400.ttf": "font/ttf", "landing-inter-500.ttf": "font/ttf",
 }
-LONG_CACHE = frozenset({"landing-poster.jpg", "landing-hero.mp4", "landing-instrument-serif.ttf", "landing-inter-400.ttf", "landing-inter-500.ttf"})  # large and unchanging: not re-sent on every page load
+LONG_CACHE = frozenset({"landing-poster.jpg", "landing-hero.mp4", "landing-instrument-serif.ttf", "landing-inter-400.ttf", "landing-inter-500.ttf", "plan-instrument-serif-italic.ttf"})  # large and unchanging: not re-sent on every page load
 GZIP_MIN = 1024  # below this the header overhead outweighs the saving
 GZIP_MAX = 6 * 1024 * 1024  # above this a file (the hero video) is streamed as it is, with ETag and Range, never read whole into memory; compression is done once per file and cached
 _gzip_cache: dict[tuple, bytes] = {}  # (name, mtime_ns) -> compressed bytes; the file set is fixed and small
@@ -113,6 +118,11 @@ class QuoteConfirmBody(_Strict):
     valid_days: str | None = Field(default=None, max_length=20)  # how long the price holds, when the user is confirming the price and the reply did not say
 
 
+class QuotePromoteBody(_Strict):
+    by: str = Field(min_length=1, max_length=60)
+    setting: str | None = Field(default=None, max_length=10)  # a venue only: "indoor" or "outdoor"
+
+
 class QuoteRetractBody(_Strict):
     field: str = Field(min_length=1, max_length=30)
     by: str = Field(min_length=1, max_length=60)
@@ -127,6 +137,7 @@ class IntakeCommitBody(_Strict):
     version: int = Field(ge=1)
     draft_hash: str = Field(pattern=r"^[0-9a-f]{64}$")  # the draft as the user saw it: a different one is refused
     guest_list_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    from_quotes: bool = False  # plan only from vendors whose quote the user confirmed and promoted: no seed or catalogue vendor is considered
 
 
 class IntakeConfirmBody(_Strict):
@@ -306,6 +317,22 @@ class TestVendorBody(_Strict):
     owns_address: bool
     by: str = Field(min_length=1, max_length=60)
     city: str | None = Field(default=None, max_length=80)
+
+
+class PasteReplyBody(_Strict):
+    vendor_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    text: str = Field(min_length=3, max_length=4000)
+    by: str = Field(min_length=1, max_length=60)
+    channel: Literal["email", "whatsapp"] = "email"
+
+
+class UserVendorBody(_Strict):
+    name: str = Field(min_length=1, max_length=120)
+    category: VendorCategory
+    by: str = Field(min_length=1, max_length=60)  # who is adding it
+    city: str | None = Field(default=None, max_length=80)  # the brief's city when left out
+    email: str | None = Field(default=None, max_length=254)
+    whatsapp: str | None = Field(default=None, max_length=30)
 
 
 class SessionClearBody(_Strict):
