@@ -4,7 +4,7 @@ Each workspace is kept apart from every other (``workspaces.py``); this is the o
 say *which vendor* without naming anyone: the Google place id, or a hash of the email or WhatsApp number the vendor was reached on (never the name: names are not unique). Only a reply that came through the app is shared, never words a user typed in. The next user who adds the same vendor
 is shown "an earlier quote" while their own request for a fresh one is out. It is shown for orientation only and never used as a price (``earlier_quotes`` in the service).
 
-What is kept: the vendor keys, its kind, the amount and whether it is per plate or in total, the guest count (to the nearest ten) and date it was for, the day it was given and until when it holds (dropped 90 days after that), and whether taxes were
+What is kept: the vendor keys, its kind, the amount and whether it is per plate or in total, the guest count (to the nearest ten) and month it was for (never the day: anyone who knows which vendor a person used could otherwise read the date of their event), the day it was given and until when it holds (dropped 90 days after that), and whether taxes were
 included. What is never kept: who confirmed it, the reply's words, the vendor's name or contact details, the brief, and anything from a Google listing but its place id (Google's policy).
 Test vendors are never shared. ``EVENTMATE_SHARED_QUOTES=0`` turns the whole thing off.
 """
@@ -19,7 +19,7 @@ from collections.abc import Callable, Iterable
 from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from eventmate import migrations
 from eventmate.jsonl import InterProcessLock, JsonlLog
@@ -42,10 +42,15 @@ class SharedQuote(_Model):
     amount_inr: int = Field(gt=0, le=MAX_BUDGET_INR)
     basis: str = Field(pattern=r"^(per_plate|total)$")
     guest_count: int | None = Field(default=None, ge=1, le=MAX_GUESTS)
-    quoted_for_date: date | None = None
+    quoted_for_date: date | None = None  # always the first of the month it was for: a record with an exact day is read back coarsened
     observed_at: datetime
     expires_at: date
     taxes_included: bool | None = None
+
+    @field_validator("quoted_for_date")
+    @classmethod
+    def _month_only(cls, v: date | None) -> date | None:
+        return v.replace(day=1) if v else v
 
 
 class _File(JsonlLog[SharedQuote]):
@@ -122,3 +127,14 @@ class SharedQuoteStore:
         want = set(keys)
         floor = self.now().date() - KEEP_AFTER_EXPIRY  # read-side too, so nothing old is shown even before the next write prunes it
         return sorted((q for q in self._all() if q.category == category and want & set(q.keys) and q.expires_at >= floor), key=lambda q: q.observed_at)
+
+
+def reasons(q: SharedQuote, today: date, guests: int | None, event_date: date | None) -> list[str]:
+    """Why this quote may not hold for the viewer's event, worked out here against the viewer's own date so that no date of the other person's event leaves the store:
+    it can say "a different month", never which."""
+    from eventmate.pricing.observations import old_reasons
+
+    why = list(old_reasons(q.model_copy(update={"quoted_for_date": None}), today, guests, event_date))  # type: ignore[arg-type]  (a SharedQuote has the fields old_reasons reads)
+    if event_date and q.quoted_for_date and (q.quoted_for_date.year, q.quoted_for_date.month) != (event_date.year, event_date.month):
+        why.append("it was for a different month than your event")
+    return why

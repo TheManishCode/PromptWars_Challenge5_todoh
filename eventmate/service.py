@@ -1069,8 +1069,8 @@ class EventMate:
             return []
         mine = {(o.amount_inr, o.observed_at.date()) for o in self.observations.quotes(vendor_id)}  # this user's own quote is already on the card
         return [
-            {"amount_inr": q.amount_inr, "basis": q.basis, "guest_count": q.guest_count, "quoted_for_date": q.quoted_for_date.isoformat() if q.quoted_for_date else None, "observed_at": q.observed_at.isoformat(),
-             "expires_at": q.expires_at.isoformat(), "taxes_included": q.taxes_included, "old": list(old_reasons(q, today, guests, event_date))}  # type: ignore[arg-type]  (a SharedQuote has the fields old_reasons reads)
+            {"amount_inr": q.amount_inr, "basis": q.basis, "guest_count": q.guest_count, "observed_at": q.observed_at.isoformat(),
+             "expires_at": q.expires_at.isoformat(), "taxes_included": q.taxes_included, "old": shared_quotes.reasons(q, today, guests, event_date)}  # the other person's event date never leaves the store
             for q in reversed(self.shared_quotes.earlier(keys, biz.category)) if (q.amount_inr, q.observed_at.date()) not in mine
         ]
 

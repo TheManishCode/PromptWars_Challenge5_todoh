@@ -227,7 +227,7 @@ def test_a_reply_the_user_pastes_is_read_confirmed_and_planned_from_like_any_oth
     confirm_all(em, brief, msg.message_id)
     em.promote_quote(brief, msg.message_id, "Asha")
     assert em.observations.quotes(biz.vendor_id), "the user's own confirmed price is still theirs to plan from"
-    assert not (tmp_path / "shared" / "shared_quotes" / "shared_quote-all.jsonl").exists(), "words a user typed in never reach another person"
+    assert not list((tmp_path / "shared").rglob("*.jsonl")), "words a user typed in never reach another person: nothing at all is written to the shared store"
 
 
 def test_pasting_refuses_what_it_cannot_use(tmp_path):

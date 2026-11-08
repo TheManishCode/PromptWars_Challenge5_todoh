@@ -2,7 +2,7 @@
 
 import json
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 from eventmate.messaging.channels import Inbound
 from eventmate.messaging.conversations import SendPolicy
@@ -161,3 +161,24 @@ def test_what_is_kept_is_coarse_and_old_quotes_are_dropped(tmp_path):
     assert [q.amount_inr for q in store.earlier(["email:" + "b" * 16], C.CATERER)] == [], "out of date for more than 90 days: not shown"
     store.add(["email:" + "c" * 16], C.CATERER, 700, "per_plate", 40, None, datetime(2027, 2, 21, tzinfo=UTC), now.date(), None)  # a write prunes
     assert sorted(q.amount_inr for q in store._all()) == [650, 700]
+
+
+def test_the_shared_store_keeps_the_month_of_the_event_never_the_day(tmp_path):
+    first = person(tmp_path, "first")
+    quoted(*first, own_vendor(first[0], first[3]))
+    text = "".join(p.read_text() for p in (tmp_path / "shared").rglob("*.jsonl"))
+    assert json.loads(text.splitlines()[0])["quoted_for_date"] == "2026-11-01" and "2026-11-14" not in text  # the brief was for 14 November
+    row = shared_quotes.SharedQuote.model_validate({**json.loads(text.splitlines()[0]), "quoted_for_date": "2026-11-14"})
+    assert row.quoted_for_date.isoformat() == "2026-11-01", "a record with an exact day is read back coarsened"
+
+
+def test_what_is_shown_to_the_next_person_says_a_different_month_and_never_which(tmp_path):
+    first = person(tmp_path, "first")
+    quoted(*first, own_vendor(first[0], first[3]))
+    em, _, _, brief = person(tmp_path, "second")
+    vid = own_vendor(em, brief).vendor_id
+    same = em.shared_earlier(vid, TODAY, 40, date(2026, 11, 28))  # another day of the same month
+    assert same and not any("month" in r or "2026-11" in r for r in same[0]["old"]) and "quoted_for_date" not in same[0]
+    other = em.shared_earlier(vid, TODAY, 40, date(2027, 2, 14))
+    assert "it was for a different month than your event" in other[0]["old"]
+    assert "2026-11" not in json.dumps(other) and "quoted_for_date" not in other[0]

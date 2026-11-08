@@ -22,3 +22,9 @@
 - Every first request ends with "(Written with to;doh on behalf of <sender>. Reply STOP and we will not write again.)" inside the hashed body, on email and WhatsApp, and in the mailto/wa.me fallback.
 - A reply that is just STOP suppresses the address; quoting the footer does not. `tests/test_outbound_safety.py`, each check shown to fail when its code is removed.
 - R-010: the feedback masking test checks the comment, not an envelope that holds a random id.
+
+### L3 (shared quote privacy)
+- The shared pool keeps the month of the event (first of the month), never the day; old rows read back coarsened. `shared_earlier` no longer returns the date and says "a different month than your event", worked out on the server.
+- Docs made true: the pool is dormant in every shipped mode (PRIVACY.md, HANDOFF section 7, BLOCKED.md, D-009).
+- Tests: month-only storage, no date in what is shown, and a pasted reply writes nothing at all under `shared/` (negative controls: day kept; paste allowed).
+
