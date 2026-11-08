@@ -41,3 +41,10 @@ Three categories only. **Done**: a command was run on a named commit and passed.
 - The per-brief cap restarts when a brief becomes a plan (D-011); the global 30 a day is the real bound.
 - Stop shapes still not read: "pls stop", "stop it", "STOP - Ravi" on one line.
 - Python versions other than 3.14 here, another proxy (Caddy, a cloud load balancer), traffic from more than one machine.
+
+## The live program (mail, quotes, money, live data, hosting): see `docs/LIVE_REPORT.md`
+
+Done, with evidence (reviewer's clean-tree gates; the last full suite 5221 passed, 4 skipped, 0 failed at `82a3a45`): quote fit (A1), reply matching and brief links (A2, A4), mail polling and honest status words (A3, A5), OAuth sign-in logic (A6), un-promote and per-line evidence, WhatsApp links / contact log / menu tiers / quote-file lines, deposits and balances with hash-bound approvals and unknown-outcome handling, service states and capped evals, the seeded reply corpus and the money chain test.
+
+**Nothing in this program is marked live: no real mailbox, Google, PayPal, outside service, model or host was contacted.** Needs a human or the owner: the real mailbox round trip and bounce test (owner's addresses, approval of the exact words first); the OAuth client and token; the payment-route questions; a model key for the evals (free route, capped); the host, domain and certificate (`docs/HOSTING_PLAN.md`); the decisions and counsel questions in `docs/OWNER_DECISIONS.md`.
+
