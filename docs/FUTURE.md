@@ -20,8 +20,7 @@ Each one is also a comment in the code it touches, tagged `FUTURE(<topic>)`. Fin
 | `places-city` | Restrict Places to the city's coordinates | `integrations/places.py` |
 | `quotes-register` | Save discovered places as businesses when shown | `sourcing/search.py` |
 | `quotes-carry` | Link a brief's requests to its plan; keep the brief while requests are unanswered | `sourcing/search.py` |
-| `quotes-promote` | A confirmed quote becomes a plannable record (needs an ADR exception) | `sourcing/search.py` |
-| `quotes-compare` | Quote comparison and a recommended combination | `sourcing/search.py` |
+| `quotes-compare` | A recommended caterer + venue + photographer combination for the budget (per-category ranking exists) | `sourcing/search.py` |
 | `quotes-silent` | Vendors that do not reply; WhatsApp or phone fallback | `sourcing/search.py` |
 | `quotes-simulator` | Simulated vendor replies to the user's own addresses | `sourcing/search.py` |
 | `quotes-limits` | Send caps, suppression list, sender identity | `sourcing/search.py` |
