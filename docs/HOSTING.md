@@ -58,3 +58,6 @@ balancer or another nginx version were not tested; check yours with that test's 
 
 The reference proxy sends `Host $http_host`, the host **with the port the visitor used**. The application refuses a write whose `Origin` header does not match the request's host, and a browser's `Origin` keeps a non-default port (`https://todoh.example:8443`), so a proxy that sends `Host $host` (no port) makes every write fail with 403 "cross-origin request refused" on any port but 443. If you change the file, keep `$http_host`. The `server_name` check (421) still applies, and the application's own Host check ignores the port.
 
+## Going live
+The ordered steps, what free hosts say today (with dates) and the checklist are in `docs/HOSTING_PLAN.md`. Nothing there has been run.
+

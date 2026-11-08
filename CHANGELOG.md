@@ -103,3 +103,6 @@
 - `docs/INTEGRATIONS.md`: the free allowance of Google Places (per-SKU monthly caps, ids-only calls unlimited, place ids storable), Overpass (10,000 queries a day, 100 for regular use), OpenWeather (60 a minute, 1,000,000 a month), Brave ($5 monthly credit), with URLs, dates and what is not known; OpenRouter and NVIDIA noted as not fully readable.
 - Tests: `tests/test_service_health.py` (13). Controls: failures not recorded (2 fail), no cap (1), model failures not recorded (1), quota never lapses (1). New variable, placeholder only: `EVENTMATE_EVAL_MAX_CALLS`. Live calls and evals: NOT RUN.
 
+### WP6: hosting for real (docs only)
+- `docs/HOSTING_PLAN.md`: what the app needs from a host (always-on, persistent disk, about 250 MB RAM, outbound SMTP/IMAP, Landlock), what Render, Fly, Google Cloud, Oracle, Railway and Koyeb say today (dated), the ordered steps and a checklist with every item "needs the owner" or "not run". Nothing deployed, no account created. BLOCKED.md and INTEGRATIONS.md updated; the reconciliation note kept in BLOCKED.md.
+

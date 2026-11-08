@@ -54,6 +54,10 @@ All read 2026-11-09. **A free allowance is not a promise: each provider can chan
 
 **The behavioural evals** (`python -m eventmate.assistant.evals --behavioral`, 20 cases; `prompts/assistant.lock.json` says `not_run`) can use a free model route. They stop between cases once `--max-calls` (default 120, or `EVENTMATE_EVAL_MAX_CALLS`) model calls have been made, and a cut-short run says so and is never a pass or a lock update. **Not run**: they need a key the owner supplies; use only a free route (an OpenRouter `:free` model or NVIDIA's free credits if the owner confirms their terms) and keep the cap.
 
+## Hosting (WP6)
+
+Read 2026-11-09; the table with what each means for this app is in `docs/HOSTING_PLAN.md`. Render Free (sleeps after 15 minutes; no persistent disk on a free web service: https://render.com/docs/free); Fly.io (no free tier; $1 trial for 7 days; $2.19 per 30 days for the smallest always-on Machine: https://fly.io/docs/about/pricing/); Google Compute Engine free tier (1 e2-micro, 30 GB-months standard disk, 1 GB outbound a month, US regions: https://cloud.google.com/free/docs/free-cloud-features, 2026-10-27); Oracle Always Free (unlimited period; AMD and Arm compute and block volume listed; card needed; idle accounts may be suspended: https://www.oracle.com/cloud/free/). Railway and Koyeb: not assessed.
+
 ## Not yet read (later work packages)
 
 WhatsApp Cloud API and WAHA, Resend, Google Places / Brave / OpenWeather free-tier terms, free hosting terms: **not read, not relied on**. Each is added here with its URL and date when its work package reads it.

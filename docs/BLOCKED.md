@@ -31,3 +31,10 @@ Not run: the PayPal sandbox round trip (needs sandbox credentials from the owner
 - **Behavioural evals: not run** (`prompts/assistant.lock.json` stays `not_run`). Needs a key the owner supplies through the secure route, on a free route only; the run stops at `EVENTMATE_EVAL_MAX_CALLS` (default 120). The owner should confirm the free-tier terms of the chosen provider first (OpenRouter's free-model limits were not rendered, NVIDIA's pages gave no text: `docs/INTEGRATIONS.md`).
 - Owner actions that may involve an account or a payment method: a Google Maps Platform key (billing account), a Brave key (prepaid credits), an OpenWeather key (free, email sign-up). Nothing was created.
 
+## Hosting (WP6): nothing run, nothing chosen
+- **The host is the owner's to choose.** `docs/HOSTING_PLAN.md` has what free hosts say (2026-11-09) and the ordered steps. Render's free tier cannot keep this app's data; Fly has no free tier; the free options that fit are a VM (Google e2-micro, Oracle Always Free), each needing a card and a check of its own terms. An Arm host needs an Arm image, untested.
+- Not run: any deploy, any real host, DNS, a certificate, persistence across a restart, outbound mail from a host, a restore on a real host.
+
+## Payments: reconciliation
+- Reconciliation of an unknown payment outcome is the user's two steps ("it went through" / "it did not") until a documented lookup by sender batch id is confirmed. No unverified endpoint is called on a money path.
+
