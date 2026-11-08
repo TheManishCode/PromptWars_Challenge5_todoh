@@ -18,9 +18,25 @@ fi
 echo "licences travel with the tools"
 run --entrypoint sh "$IMAGE" -c 'test -f /opt/solvers/NOTICE.txt && test -f /opt/solvers/downward/LICENSE.md && test -f /opt/solvers/VAL/LICENSE && test -d /opt/solvers/downward/src' && ok "NOTICE, both licence texts and Fast Downward's source are in the image" || bad "a licence file or the Fast Downward source is missing"
 
-echo "no run-time data or unconfirmed media is baked in"
-LEAK=$(run --entrypoint sh "$IMAGE" -c 'cd /app 2>/dev/null || cd "$(python -c "import eventmate,os;print(os.path.dirname(os.path.dirname(eventmate.__file__)))")"; ls -d eventmate/plans eventmate/logs eventmate/wall_data eventmate/workspaces eventmate/web/static/plan-reference-* eventmate/web/static/landing-poster.jpg eventmate/web/static/landing-hero.mp4 .env 2>/dev/null')
-[ -z "$LEAK" ] && ok "no plans/, logs/, wall_data/, workspaces/, .env or unconfirmed media in the image" || bad "the image contains: $LEAK"
+echo "no run-time data, borrowed art or unlisted media is baked in"
+# the code that runs is the installed package (the Dockerfile removes /app/eventmate after pip install), so look there, and in /app too
+LEAK=$(run --entrypoint python "$IMAGE" -c "
+import eventmate, glob, os
+from eventmate.web.base import STATIC_FILES
+pkg = os.path.dirname(eventmate.__file__)
+bad = []
+for root in (pkg, '/app/eventmate'):
+    for name in ('plans', 'logs', 'wall_data', 'workspaces'):
+        if os.path.exists(os.path.join(root, name)): bad.append(os.path.join(root, name))
+    static = os.path.join(root, 'web', 'static')
+    if os.path.isdir(static):
+        for f in sorted(os.listdir(static)):
+            if f not in STATIC_FILES and not f.endswith('.html') and f != 'LICENSES.txt': bad.append(os.path.join(static, f))
+for f in ('/app/.env', '/app/eventmate/.env'): 
+    if os.path.exists(f): bad.append(f)
+print(' '.join(bad))
+" 2>&1 | tail -1)
+[ -z "$LEAK" ] && ok "no plans/, logs/, wall_data/, workspaces/, .env, and no file in static/ that is not on the served list" || bad "the image contains: $LEAK"
 
 echo "shared mode refuses to start without its settings"
 OUT=$(run -e EVENTMATE_MODE=shared "$IMAGE" python -m eventmate.web --host 127.0.0.1 --port 8000 --allow-remote 2>&1); CODE=$?

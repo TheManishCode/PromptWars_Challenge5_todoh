@@ -31,6 +31,7 @@ deploy/prometheus/owner_token
 *.egg-info
 # media whose licence is not confirmed (same list as .gitignore)
 eventmate/web/static/plan-reference-*.webp
+eventmate/web/static/plan-story-*.webp
 eventmate/web/static/landing-poster.jpg
 eventmate/web/static/landing-hero.mp4
 ui
