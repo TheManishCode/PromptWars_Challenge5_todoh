@@ -92,3 +92,7 @@
 .resuming span { font-family: var(--serif); font-size: 40px; }
 .resuming p { color: var(--quiet); font-size: 14px; }
 a.wordmark { color: inherit; text-decoration: none; }
+.provenance { margin-top: 8px; font-size: 13px; }
+.provenance summary { cursor: pointer; color: var(--ink-soft, #555); }
+.prov-lines { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
+.prov-lines small { display: block; }

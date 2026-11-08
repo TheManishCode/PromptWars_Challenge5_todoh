@@ -203,6 +203,14 @@ def register(app, k):
             a = em.promote_quote(plan_id, message_id, b.by, b.setting)
         return out(a, 201)
 
+    @app.post("/api/plans/<plan_id>/quote-readings/<message_id>/unpromote")
+    def quote_readings_unpromote(plan_id, message_id):
+        """Take back "plan with this vendor". The quote stays; the planner stops using the vendor until you choose it again."""
+        plan_id, message_id, b = pid(plan_id), pid(message_id), body(ByBody)
+        with lock:
+            a = em.unpromote_quote(plan_id, message_id, b.by)
+        return out(a)
+
     @app.post("/api/plans/<plan_id>/quote-readings/<message_id>/retract")
     def quote_readings_retract(plan_id, message_id):
         plan_id, message_id, b = pid(plan_id), pid(message_id), body(QuoteRetractBody)

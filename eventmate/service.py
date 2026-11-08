@@ -1018,6 +1018,19 @@ class EventMate:
         self.quoted.add(message_id, provider, by)
         return a
 
+    def unpromote_quote(self, plan_id: str, message_id: str, by: str) -> QuoteAssessment:
+        """The user takes back "plan with this vendor". The planner no longer sees the vendor from this reply; the quote stays recorded and confirmed, and the choice can be made again. A plan already
+        built keeps what it was built with, but planning again will not include this vendor until it is chosen again."""
+        self._scope(plan_id)
+        by = (by or "").strip()
+        if not 1 <= len(by) <= 60:
+            raise ValueError("say who is taking this back (a name)")
+        msg = self._reply(plan_id, message_id)
+        if self.quoted.withdraw(message_id, by) is None:
+            raise ValueError("this vendor is not chosen from this reply")
+        self.repo.quoted = self.quoted.providers  # the planner reads the store afresh
+        return next(x for x in self.quote_assessments(plan_id) if x.message_id == msg.message_id)
+
     def paste_reply(self, plan_id: str, vendor_id: str, text: str, by: str, channel: str = "email") -> InboundMessage:
         """A reply the user got outside the app (their own mail, a call, WhatsApp) and typed or pasted in. It is read and confirmed field by field exactly like one that arrived by mail, but it is
         marked as the user's own words: nothing in it is ever shared with another person, because anyone could write anything here."""

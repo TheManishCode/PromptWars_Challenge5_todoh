@@ -272,3 +272,53 @@ def test_a_reply_is_promoted_with_its_own_quote_not_the_vendors_latest(world):
     (p,) = [x for x in em.repo.providers(C.CATERER) if x.id == biz.vendor_id]
     assert p.price_per_plate == 650 and p.source == f"database:quote/{first}"
     assert em.observations.quote_for_reply(biz.vendor_id, first).amount_inr == 650 and em.observations.quote_for_reply(biz.vendor_id, second).amount_inr == 900
+
+
+def test_taking_back_a_choice_removes_the_vendor_from_the_planner_and_keeps_the_quote(world):
+    em, chans, clock, brief, biz = world
+    em._clock(TODAY)
+    mid = reply(world, OK_FOR_40)
+    confirm_all(em, brief, mid)
+    em.promote_quote(brief, mid, "Asha")
+    assert [x for x in em.repo.providers(C.CATERER) if x.id == biz.vendor_id] and mid in em.compare_quotes(brief, True).categories[0].chosen
+    a = em.unpromote_quote(brief, mid, "Asha")
+    assert a.comparable, "the quote stays confirmed and comparable"
+    assert not [x for x in em.repo.providers(C.CATERER) if x.id == biz.vendor_id], "the planner no longer sees the vendor"
+    assert em.compare_quotes(brief, True).categories[0].chosen == ()
+    assert em.observations.quote_for_reply(biz.vendor_id, mid).amount_inr == 650
+    with pytest.raises(ValueError, match="not chosen"):
+        em.unpromote_quote(brief, mid, "Asha")
+    em.promote_quote(brief, mid, "Asha")  # and it can be chosen again
+    assert [x for x in em.repo.providers(C.CATERER) if x.id == biz.vendor_id] and mid in em.compare_quotes(brief, True).categories[0].chosen
+
+
+def test_taking_back_the_newer_choice_brings_the_older_quote_back(world):
+    em, chans, clock, brief, biz = world
+    em._clock(TODAY)
+    first = reply(world, OK_FOR_40)
+    confirm_all(em, brief, first)
+    em.promote_quote(brief, first, "Asha")
+    second = reply(world, OK_FOR_40.replace("650", "900"))
+    confirm_all(em, brief, second)
+    em.promote_quote(brief, second, "Asha")
+    (p,) = [x for x in em.repo.providers(C.CATERER) if x.id == biz.vendor_id]
+    assert p.price_per_plate == 900
+    em.unpromote_quote(brief, second, "Asha")
+    (p,) = [x for x in em.repo.providers(C.CATERER) if x.id == biz.vendor_id]
+    assert p.price_per_plate == 650 and p.source == f"database:quote/{first}"
+
+
+def test_the_route_takes_a_choice_back_and_the_history_says_who(world, tmp_path):
+    em, chans, clock, brief, biz = world
+    em._clock(TODAY)
+    mid = reply(world, OK_FOR_40)
+    confirm_all(em, brief, mid)
+    client = create_app(em, today_fn=lambda: TODAY, poll_seconds=0).test_client()
+    token = client.get("/api/session").get_json()["csrf"]
+    h = {"X-EventMate-CSRF": token}
+    url = f"/api/plans/{brief}/quote-readings/{mid}"
+    assert client.post(url + "/unpromote", json={"by": "Asha"}, headers=h).status_code == 400, "nothing chosen yet"
+    assert client.post(url + "/promote", json={"by": "Asha"}, headers=h).status_code == 201
+    assert client.post(url + "/unpromote", json={"by": "Asha"}, headers=h).status_code == 200
+    lines = [ln for ln in (em.store.root / "quoted_providers" / "quoted_provider-all.jsonl").read_text().splitlines() if ln.strip()]
+    assert len(lines) == 2 and '"withdrawn_by":"Asha"' in lines[-1].replace(" ", ""), "the choice and its withdrawal are both on record"

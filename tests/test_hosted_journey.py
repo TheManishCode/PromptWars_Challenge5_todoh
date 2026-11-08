@@ -15,7 +15,7 @@ import pytest
 from eventmate.web import serve
 from eventmate.web.app import create_app
 from eventmate.workspaces import WorkspaceRegistry
-from tests.browser_helpers import BROWSER_ARGS, CHROMIUM, NOISE
+from tests.browser_helpers import BROWSER_ARGS, CHROMIUM, NOISE, axe_violations, fmt_axe
 from tests.test_proxy_deploy import EXAMPLE, NAME, TOKEN, free_port
 
 pw = pytest.importorskip("playwright.sync_api")
@@ -179,6 +179,28 @@ def test_a_visitor_reaches_a_validated_plan_through_the_proxy_with_nothing_sent(
                     choose.first.click()
                 assert chosen.value.status < 300, f"{chosen.value.status} {chosen.value.text()[:300]}"
                 page.wait_for_timeout(600)
+
+            # WP1: each price shows the vendor's own words and date, and a choice can be taken back and made again
+            assert page.locator("details.provenance").count() == len(LABEL)
+            page.locator("details.provenance summary").first.click()
+            rests = page.locator("details.provenance").first.inner_text()
+            assert "the vendor wrote" in rests and "confirmed by Asha" in rests and "From the vendor’s reply of" in rests, rests
+            found = axe_violations(page)
+            assert found == [], fmt_axe(found)  # the Compare step with real quotes and the evidence open
+            with page.expect_response(lambda r: "/unpromote" in r.url) as undone:
+                page.get_by_role("button", name="Take this choice back").first.click()
+            assert undone.value.status == 200, undone.value.text()[:300]
+            page.wait_for_selector("button:has-text('Plan with this vendor')")
+            _step(page, origin, "plan")
+            assert page.get_by_role("button", name="Build the plan").is_disabled(), "a choice taken back leaves Build off until the vendor is chosen again"
+            _step(page, origin, "compare")
+            sel = page.locator("select[aria-label='Indoor or outdoor']")
+            if sel.count():
+                sel.first.select_option(index=1)
+            with page.expect_response(lambda r: "/promote" in r.url) as again:
+                page.get_by_role("button", name="Plan with this vendor").first.click()
+            assert again.value.status < 300, again.value.text()[:300]
+            page.wait_for_timeout(600)
 
             _step(page, origin, "plan")
             build = page.get_by_role("button", name="Build the plan")

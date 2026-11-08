@@ -27,6 +27,8 @@ class QuotedProvider(_Model):
     promoted_by: str = Field(min_length=1, max_length=60)
     promoted_at: datetime
     provider: Venue | Vendor
+    withdrawn_at: datetime | None = None  # the user took the choice back: the planner no longer sees this record (the line stays, so the history does)
+    withdrawn_by: str | None = Field(default=None, min_length=1, max_length=60)
 
 
 class _File(JsonlLog[QuotedProvider]):
@@ -50,20 +52,39 @@ class QuotedProviderStore:
         with self._lock():
             return _File(self.root, run_id="all")._append(rec, rec.record_id)
 
-    def message_ids(self) -> frozenset[str]:
-        """The replies the user has chosen to plan with."""
+    def _live(self) -> list[QuotedProvider]:
+        """The records still in force, in the order they were last written: for each reply its newest line, none that was withdrawn."""
         path = self._path()
-        return frozenset(r.message_id for r in _File(self.root, run_id="all").read()) if path.exists() else frozenset()
+        if not path.exists():
+            return []
+        newest: dict[str, QuotedProvider] = {}
+        for rec in _File(self.root, run_id="all").read():
+            newest.pop(rec.message_id, None)  # re-inserted below, so the dict stays in order of last write
+            newest[rec.message_id] = rec
+        return [r for r in newest.values() if r.withdrawn_at is None]
+
+    def withdraw(self, message_id: str, by: str) -> QuotedProvider | None:
+        """Take a choice back. None if that reply was not chosen (or already taken back). The record is not deleted: a line saying it was withdrawn, and by whom, is added."""
+        with self._lock():
+            rec = next((r for r in self._live() if r.message_id == message_id), None)
+            if rec is None:
+                return None
+            gone = rec.model_copy(update={"record_id": uuid.uuid4().hex, "withdrawn_at": self.now(), "withdrawn_by": by.strip()})
+            return _File(self.root, run_id="all")._append(gone, gone.record_id)
+
+    def message_ids(self) -> frozenset[str]:
+        """The replies the user has chosen to plan with, and has not taken back."""
+        return frozenset(r.message_id for r in self._live())
 
     def providers(self) -> tuple[Venue | Vendor, ...]:
-        """The newest record of each business, in file order. Re-read only when the file changes."""
+        """The newest record in force of each business, in file order. Re-read only when the file changes."""
         path = self._path()
         if not path.exists():
             return ()
         st = path.stat()
         if self._seen != (st.st_mtime_ns, st.st_size):
             latest: dict[str, Venue | Vendor] = {}
-            for rec in _File(self.root, run_id="all").read():
+            for rec in self._live():
                 latest[rec.provider.id] = rec.provider
             self._cache, self._seen = tuple(latest.values()), (st.st_mtime_ns, st.st_size)
         return self._cache
