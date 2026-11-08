@@ -2,6 +2,8 @@
 
 2026-11-09. builder-todoh and reviewer-todoh. Base: `main` at `49619a5` (m6-done). Everything is on `live/integration` (not merged to `main`: the owner has not approved). Tags `live-m1-done` to `live-wp8-done` (as each is passed). **Nothing was sent, connected, deployed, paid for or pushed by this program; no account was created.** The only thing sent anywhere is the earlier push of `main` to GitHub, at the owner's request, before this program began.
 
+Final gate (reviewer, clean worktree, `bebfb5d`): pytest **5221 passed, 4 skipped, 0 failed**; ruff, pyflakes, node, bandit 0; gitleaks on history and tracked files 0; `.env` untracked; `make ui` reproduces. The 4 skips are the opt-in Docling (2), live flights and voice-engine tests.
+
 ## 1. What is actually live
 
 | Capability | Built | Tested on | Round-tripped for real? | Live? |
