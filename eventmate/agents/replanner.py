@@ -405,7 +405,7 @@ class ReplannerAgent:
             if s.booking_status != BookingStatus.CONFIRMED or s.vendor_id in release:
                 continue
             rec = self.repo.get(s.category, s.vendor_id)
-            failed = [c for c in (evaluate(rec, request, s.category, _NO_CAP, price=self.repo.price(rec, request.guest_count), quote_expired=self.repo.quote_expired(rec)) if rec else []) if not c.passed]
+            failed = [c for c in (evaluate(rec, request, s.category, _NO_CAP, price=self.repo.price(rec, request.guest_count, request.event_date), quote_expired=self.repo.quote_expired(rec, request.guest_count, request.event_date)) if rec else []) if not c.passed]
             if rec is None or failed:
                 why = "; ".join(f"{c.name}: {c.detail}" for c in failed) or "vendor no longer in the database"
                 conflicts.append(
@@ -416,7 +416,7 @@ class ReplannerAgent:
                     )
                 )
                 continue
-            forced[s.category] = s.model_copy(update={"cost": self.repo.price(rec, request.guest_count)})
+            forced[s.category] = s.model_copy(update={"cost": self.repo.price(rec, request.guest_count, request.event_date)})
         return forced, conflicts
 
     @staticmethod

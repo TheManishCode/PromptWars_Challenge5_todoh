@@ -469,9 +469,10 @@ class EventMate:
             return None
         return out["document"] if out["lines"] else None
 
-    def confirm_quote_line(self, vendor_id: str, document: str, line: str, valid_days: int):
+    def confirm_quote_line(self, vendor_id: str, document: str, line: str, valid_days: int, plan_id: str | None = None):
         """The user's tap on a line read from a quote file ("1".."n", or "grand_total"). The amount is the one this app extracted and kept, never one the caller sends, and
-        a line that does not say what it covers cannot be confirmed. It becomes a quote observation the user vouches for, valid for the days they choose."""
+        a line that does not say what it covers cannot be confirmed. It becomes a quote observation the user vouches for, valid for the days they choose. Given the plan it is
+        confirmed for, it is recorded for that plan's event date and prices that event; without one the date is unknown and the quote is history, never a price (a quote prices only the event it was given for)."""
         if not (isinstance(valid_days, int) and not isinstance(valid_days, bool) and 1 <= valid_days <= 90):
             raise ValueError("say how many days (1-90) this price should be treated as valid")
         if not re.fullmatch(r"[0-9a-f]{10}", document or "") or not re.fullmatch(r"grand_total|[1-9][0-9]{0,2}", line or ""):
@@ -487,9 +488,10 @@ class EventMate:
         if category is None:
             raise ValueError("unknown vendor")
         now = self.outreach_store.now()
+        for_date = self._scope(plan_id).request.event_date if plan_id else None
         obs = self.observe_quote(
             vendor_id, category, source_type=ObservationSource.VENDOR_QUOTE, entered_by="user_confirmed", observed_at=now, expires_at=(now + timedelta(days=valid_days)).date(),
-            confidence=0.7, evidence_ref=f"doc:{document} {line}", amount_inr=amount, basis="total",
+            confidence=0.7, evidence_ref=f"doc:{document} {line}", amount_inr=amount, basis="total", quoted_for_date=for_date,
             note=f"{str(rec.value.get('label', ''))[:80]}: from a quote file; valid {valid_days} days, your choice at confirmation"[:200])
         self.evidence.record(vendor_id, field, rec.value, FactState.USER_CONFIRMED, "user_input")
         return obs
@@ -543,7 +545,7 @@ class EventMate:
         rows = []
         for s in plan.selections:
             rec = self.repo.get(s.category, s.vendor_id)
-            current = self.repo.price(rec, plan.request.guest_count) if rec else s.cost
+            current = self.repo.price(rec, plan.request.guest_count, plan.request.event_date) if rec else s.cost
             confirmed = s.booking_status == BookingStatus.CONFIRMED
             by = None
             if confirmed:
@@ -937,12 +939,14 @@ class EventMate:
         if VendorRef.of(msg.vendor_id).kind != "external":
             raise ValueError("this vendor is already in the database: confirm the quote and the planner uses it")
         a = next(x for x in self.quote_assessments(plan_id) if x.message_id == message_id)
-        q = self.observations.pricing_quote(msg.vendor_id)
-        if q is None or not q.evidence_ref.startswith(f"reply {message_id}:"):
+        q = self.observations.quote_for_reply(msg.vendor_id, message_id)  # this reply's own quote, not whatever the vendor quoted last
+        if q is None:
             raise ValueError("confirm this reply's price and how long it holds first: that records the quote the plan will use")
         if self.repo.clock() > q.expires_at:
             raise ValueError("this quote has run out: ask the vendor for a new one")
         req = scope.request
+        if q.quoted_for_date is not None and q.quoted_for_date != req.event_date:
+            raise ValueError(f"this quote was given for {q.quoted_for_date.isoformat()}, not {req.event_date.isoformat()}: ask the vendor for a quote for this date")
         provider = to_provider(a, msg.vendor_id, self.externals.get(msg.vendor_id).name, req.city, req.event_date, setting)
         self.quoted.add(message_id, provider, by)
         return a

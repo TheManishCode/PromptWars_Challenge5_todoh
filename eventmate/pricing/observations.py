@@ -96,6 +96,11 @@ class ObservationStore:
         usable = [o for o in self.quotes(vendor_id) if o.source_type != ObservationSource.PUBLIC_LISTING]
         return usable[-1] if usable else None
 
+    def quote_for_reply(self, vendor_id: str, message_id: str) -> QuoteObservation | None:
+        """The quote recorded from this very reply, whatever the vendor quoted since: a reply is promoted with its own price, never the vendor's latest."""
+        mine = [o for o in self.quotes(vendor_id) if o.evidence_ref.startswith(f"reply {message_id}:")]
+        return mine[-1] if mine else None
+
     def vendor_confirmed(self, vendor_id: str) -> bool:
         """True if a vendor_confirmation observation (which always carries an evidence_ref) exists for this vendor."""
         return any(o.source_type == ObservationSource.VENDOR_CONFIRMATION for o in self.quotes(vendor_id))

@@ -52,7 +52,7 @@ def test_a_fully_confirmed_caterer_quote_becomes_a_record_for_this_city_and_date
     (p,) = [x for x in em.repo.providers(C.CATERER) if x.id == biz.vendor_id]
     assert (p.city, p.available_dates, p.price_per_plate, p.min_guests, p.max_guests, p.rating) == ("Mysuru", (TODAY.replace(day=14, month=11),), 650, 20, 300, 0.0)
     assert p.source == f"database:quote/{mid}" and sorted(d.value for d in p.dietary_options) == ["jain", "vegetarian"] and "Mysuru" in em.repo.cities()
-    assert em.repo.price(p, 40) == 26000, "the price comes from the recorded quote"
+    assert em.repo.price(p, 40, TODAY.replace(day=14, month=11)) == 26000, "the price comes from the recorded quote"
 
 
 def test_a_reply_that_is_not_fully_confirmed_is_not_promoted(world):
@@ -81,7 +81,7 @@ def test_a_quote_that_has_run_out_is_not_promoted_and_a_promoted_one_fails_the_p
     em.promote_quote(brief, mid, "Asha")
     p = next(x for x in em.repo.providers(C.CATERER) if x.id == biz.vendor_id)
     em.repo.clock = lambda: TODAY + timedelta(days=60)
-    assert em.repo.quote_expired(p)
+    assert em.repo.quote_expired(p, 40, TODAY.replace(day=14, month=11))
     with pytest.raises(ValueError, match="run out"):
         em.promote_quote(brief, mid, "Asha")
 
@@ -258,3 +258,17 @@ def test_the_page_api_pastes_a_reply_in_a_hosted_workspace_where_nothing_can_be_
     q = v._call("GET", f"/api/plans/{key}/quote-readings").get_json()["quotes"]
     assert len(q) == 1 and q[0]["read_required"] == q[0]["required_total"]
     assert v._call("POST", f"/api/plans/{key}/replies/paste", {"vendor_id": biz["vendor_id"], "text": "hi", "by": "A", "extra": 1}).status_code in (400, 422)
+
+
+def test_a_reply_is_promoted_with_its_own_quote_not_the_vendors_latest(world):
+    """Audit A1: promote used the vendor's newest quote. A later, different quote from the same vendor must not change what an earlier reply promotes."""
+    em, chans, clock, brief, biz = world
+    em._clock(TODAY)
+    first = reply(world, OK_FOR_40)
+    confirm_all(em, brief, first)
+    second = reply(world, OK_FOR_40.replace("650", "900"))
+    confirm_all(em, brief, second)
+    em.promote_quote(brief, first, "Asha")
+    (p,) = [x for x in em.repo.providers(C.CATERER) if x.id == biz.vendor_id]
+    assert p.price_per_plate == 650 and p.source == f"database:quote/{first}"
+    assert em.observations.quote_for_reply(biz.vendor_id, first).amount_inr == 650 and em.observations.quote_for_reply(biz.vendor_id, second).amount_inr == 900

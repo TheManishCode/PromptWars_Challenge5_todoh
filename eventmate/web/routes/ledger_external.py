@@ -88,7 +88,7 @@ def register(app, k):
         """The only place a line read from a quote file becomes a recorded quote. The user chooses how long the price is treated as valid."""
         b = body(QuoteLineConfirmBody)
         with lock:
-            obs = em.confirm_quote_line(pid(vendor_id), document, line, b.valid_days)
+            obs = em.confirm_quote_line(pid(vendor_id), document, line, b.valid_days, pid(b.plan_id) if b.plan_id else None)
             report = em.observations.report(vendor_id, today_fn())
             effect = em.price_effect(pid(b.plan_id), vendor_id, document, line, today_fn()) if b.plan_id else None
         return jsonify({"observation": json.loads(obs.model_dump_json()), "report": json.loads(report.model_dump_json()), "effect": effect}), 201

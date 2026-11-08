@@ -28,6 +28,7 @@ from eventmate.schemas import (
     BudgetAllocation,
     ConstraintCheck,
     ConstraintViolation,
+    ObservationSource,
     DecisionType,
     EventRequest,
     RejectedVendor,
@@ -69,6 +70,19 @@ def _load_records(path: Path) -> list[dict]:
 _QUOTED_ONLY: contextvars.ContextVar[bool] = contextvars.ContextVar("quoted_only", default=False)
 
 
+def quote_fits(q, provider: Provider, guests: int | None, event_date: date | None) -> bool:
+    """Whether a recorded quote may price this event: it was given for the same date, and for a per-plate price the guest count is the one quoted or inside the range the
+    vendor itself states (min and max guests). A flat price is for the date, not the headcount. Without the event's date nothing fits: a quote never prices an event it was not given for."""
+    if event_date is None or q.quoted_for_date != event_date:
+        return False
+    if q.basis != "per_plate":
+        return True
+    if guests is None:
+        return False
+    lo, hi = getattr(provider, "min_guests", None), getattr(provider, "max_guests", None)
+    return q.guest_count == guests or (lo is not None and hi is not None and lo <= guests <= hi)
+
+
 class VendorRepository:
     """Read-only, validated view over the seed JSON files."""
 
@@ -101,20 +115,25 @@ class VendorRepository:
         venue = self.get(VendorCategory.VENUE, venue_id)
         return getattr(venue, "accessibility", None)
 
-    def _quote(self, provider: Provider):
-        return self.quotes.pricing_quote(provider.id) if self.quotes is not None else None
+    def _quote(self, provider: Provider, guests: int | None = None, event_date: date | None = None):
+        """The newest recorded quote that prices THIS event, or None. A quote prices an event it fits (``quote_fits``); a quote given for another date or size is only history."""
+        if self.quotes is None:
+            return None
+        fitting = [o for o in self.quotes.quotes(provider.id) if o.source_type != ObservationSource.PUBLIC_LISTING and quote_fits(o, provider, guests, event_date)]
+        return fitting[-1] if fitting else None
 
-    def quote_expired(self, provider: Provider) -> bool:
-        q = self._quote(provider)
+    def quote_expired(self, provider: Provider, guests: int | None = None, event_date: date | None = None) -> bool:
+        q = self._quote(provider, guests, event_date)
         return q is not None and self.clock() > q.expires_at
 
-    def price(self, provider: Provider, guests: int) -> int:
-        """Price for ``guests``: the latest unexpired recorded quote (plus its known hidden costs), else the seed record.
+    def price(self, provider: Provider, guests: int, event_date: date | None = None) -> int:
+        """Price for ``guests`` on ``event_date``: the newest unexpired recorded quote that fits this event (plus its known hidden costs), else the seed record.
 
-        An expired quote is not used; ``evaluate`` then fails the vendor on ``quote_valid`` instead of silently using stale money.
+        A quote for another date, or for a guest count outside what the vendor stated, never prices this event (A1). An expired one is not used either;
+        ``evaluate`` then fails the vendor on ``quote_valid`` instead of silently using stale money.
         """
-        q = self._quote(provider)
-        if q is None or self.quote_expired(provider):
+        q = self._quote(provider, guests, event_date)
+        if q is None or self.clock() > q.expires_at:
             return provider.cost_for(guests)
         base = q.amount_inr * guests if q.basis == "per_plate" else q.amount_inr
         return base + sum(h.amount_inr for h in q.hidden_costs if h.amount_inr)
@@ -264,12 +283,12 @@ class VendorAgent:
         rejected: list[tuple[Provider, list[ConstraintCheck]]] = []
         providers = self.repo.providers(category)
         for p in providers:
-            checks = evaluate(p, request, category, cap, excluded=p.id in exclude_ids, price=self.repo.price(p, request.guest_count), quote_expired=self.repo.quote_expired(p))
+            checks = evaluate(p, request, category, cap, excluded=p.id in exclude_ids, price=self.repo.price(p, request.guest_count, request.event_date), quote_expired=self.repo.quote_expired(p, request.guest_count, request.event_date))
             failed = [c for c in checks if not c.passed]
             if failed:
                 rejected.append((p, failed))
             else:
-                cost = self.repo.price(p, request.guest_count)
+                cost = self.repo.price(p, request.guest_count, request.event_date)
                 passed.append((p, cost, _score(p.rating, cost, cap), checks))
         passed.sort(key=lambda t: (-t[2], t[1], t[0].id))
         top, rest = passed[: self.max_candidates], passed[self.max_candidates :]
@@ -291,7 +310,7 @@ class VendorAgent:
                 vendor_id=p.id,
                 name=p.name,
                 category=category,
-                estimated_cost=self.repo.price(p, request.guest_count),
+                estimated_cost=self.repo.price(p, request.guest_count, request.event_date),
                 failed=tuple(f),
             )
             for p, f in sorted(rejected, key=lambda t: t[0].id)
@@ -319,7 +338,7 @@ class VendorAgent:
                     repair=f"add {label} records to the database before planning",
                 )
             ]
-        only_budget = [(p, self.repo.price(p, request.guest_count)) for p, f in rejected if {c.name for c in f} == {"budget_cap"}]
+        only_budget = [(p, self.repo.price(p, request.guest_count, request.event_date)) for p, f in rejected if {c.name for c in f} == {"budget_cap"}]
         if only_budget:
             p, cost = min(only_budget, key=lambda t: (t[1], t[0].id))
             return [

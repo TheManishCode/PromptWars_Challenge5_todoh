@@ -142,11 +142,11 @@ class ValidatorAgent:
             out.append(_chk(p + "vendor_exists", True, f"{rec.name} found"))
             confirmed = s.booking_status == BookingStatus.CONFIRMED
             cap = d.allocation.cap_for(s.category) if s.category in d.request.services else 0
-            for c in evaluate(rec, eff, s.category, cap, excluded=s.vendor_id in d.excluded_vendor_ids, price=self.repo.price(rec, d.request.guest_count), quote_expired=self.repo.quote_expired(rec)):
+            for c in evaluate(rec, eff, s.category, cap, excluded=s.vendor_id in d.excluded_vendor_ids, price=self.repo.price(rec, d.request.guest_count, d.request.event_date), quote_expired=self.repo.quote_expired(rec, d.request.guest_count, d.request.event_date)):
                 if c.name == "budget_cap" and confirmed:
                     continue  # a preserved booking is held to the total budget, not the category cap
                 out.append(_chk(p + c.name, c.passed, c.detail))
-            expected = self.repo.price(rec, d.request.guest_count)
+            expected = self.repo.price(rec, d.request.guest_count, d.request.event_date)
             out.append(_chk(p + "cost_matches_database", s.cost == expected, f"plan cost INR {s.cost:,}, database says INR {expected:,}"))
             if confirmed:
                 ok = s.vendor_id in newly or (parent is not None and any(x.vendor_id == s.vendor_id and x.booking_status == BookingStatus.CONFIRMED for x in parent.selections))

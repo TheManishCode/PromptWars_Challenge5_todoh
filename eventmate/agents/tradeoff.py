@@ -167,7 +167,7 @@ class TradeoffAgent:
     def _cheapest_by_category(self, request: EventRequest) -> dict[VendorCategory, int] | None:
         """Cheapest eligible price per service with the caps lifted, or None if a service has no eligible vendor."""
         found, missing = cheapest_eligible(self.repo, request)
-        return None if missing is not None else {c: self.repo.price(p, request.guest_count) for c, p in found.items()}
+        return None if missing is not None else {c: self.repo.price(p, request.guest_count, request.event_date) for c, p in found.items()}
 
     def _rebalanced(self, request: EventRequest) -> tuple[EventRequest, float, str, int] | None:
         """(request with cap_weights, harm, description, cheapest total) if re-splitting the caps makes it fit."""

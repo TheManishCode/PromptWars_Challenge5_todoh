@@ -329,7 +329,7 @@ def planned(tmp_path):
 
 def test_confirming_says_what_it_does_to_the_plans_price_and_when_a_line_is_only_part(planned):
     em, plan, cat, doc, today = planned
-    em.confirm_quote_line(cat.vendor_id, doc, "1", 30)
+    em.confirm_quote_line(cat.vendor_id, doc, "1", 30, plan.plan_id)
     part = em.price_effect(plan.plan_id, cat.vendor_id, doc, "1", today)
     assert part == {"in_plan": True, "plan_cost": cat.cost, "now_costs": 50_000, "price_stale": True, "covers_whole_quote": False, "quote_total": 55_000}
     assert em.price_effect(plan.plan_id, cat.vendor_id, doc, "grand_total", today)["covers_whole_quote"] is True
@@ -337,7 +337,7 @@ def test_confirming_says_what_it_does_to_the_plans_price_and_when_a_line_is_only
 
 def test_re_pricing_makes_a_new_version_with_the_confirmed_price_and_says_why(planned):
     em, plan, cat, doc, today = planned
-    em.confirm_quote_line(cat.vendor_id, doc, "grand_total", 30)
+    em.confirm_quote_line(cat.vendor_id, doc, "grand_total", 30, plan.plan_id)
     out = em.reprice(plan.plan_id, today)
     assert out.status == "replanned" and out.plan.version == plan.version + 1 and out.plan.change_reason == "re-priced from the quotes you confirmed"
     assert next(s for s in out.plan.selections if s.category.value == "caterer").cost == 55_000
@@ -376,7 +376,7 @@ def test_a_booking_the_user_confirmed_keeps_its_vendor_and_takes_the_confirmed_p
 
     em, plan, cat, doc, today = planned
     em.confirm(plan.plan_id, VendorCategory.CATERER)
-    em.confirm_quote_line(cat.vendor_id, doc, "grand_total", 30)
+    em.confirm_quote_line(cat.vendor_id, doc, "grand_total", 30, plan.plan_id)
     out = em.reprice(plan.plan_id, today)
     kept = next(s for s in out.plan.selections if s.category.value == "caterer")
     assert out.status == "replanned" and (kept.vendor_id, kept.cost, kept.booking_status.value) == (cat.vendor_id, 55_000, "confirmed")

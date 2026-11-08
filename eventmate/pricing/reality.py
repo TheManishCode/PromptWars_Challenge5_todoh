@@ -20,11 +20,11 @@ def cheapest_eligible(repo: VendorRepository, request: EventRequest) -> tuple[di
     for category in request.services:
         eligible = [
             p for p in repo.providers(category)
-            if all(c.passed for c in evaluate(p, request, category, NO_CAP, price=repo.price(p, request.guest_count), quote_expired=repo.quote_expired(p)))
+            if all(c.passed for c in evaluate(p, request, category, NO_CAP, price=repo.price(p, request.guest_count, request.event_date), quote_expired=repo.quote_expired(p, request.guest_count, request.event_date)))
         ]
         if not eligible:
             return found, category
-        found[category] = min(eligible, key=lambda p: (repo.price(p, request.guest_count), p.id))
+        found[category] = min(eligible, key=lambda p: (repo.price(p, request.guest_count, request.event_date), p.id))
     return found, None
 
 
@@ -76,7 +76,7 @@ def reality_check(request: EventRequest, repo: VendorRepository, policy: BudgetP
             basis=basis,
         )
     rows = tuple(
-        CategoryFloor(category=c, vendor_id=p.id, vendor_name=p.name, cost=repo.price(p, request.guest_count)) for c, p in found.items()
+        CategoryFloor(category=c, vendor_id=p.id, vendor_name=p.name, cost=repo.price(p, request.guest_count, request.event_date)) for c, p in found.items()
     )
     floor = sum(r.cost for r in rows)
     pool = budget - budget * policy.contingency_bp // 10_000
