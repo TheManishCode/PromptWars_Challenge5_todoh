@@ -24,7 +24,7 @@ function Entry({ r, category, name, sourcing, chosen, onChosen, guests }) {
 
   return (
     <li className="rank">
-      <span className="rank-n">{r.rank}</span>
+      <span className="rank-n" aria-hidden={r.rank ? undefined : 'true'}>{r.rank || '·'}</span>
       <div>
         <div className="rank-head"><b>{name}</b><span className="rank-total">{inr(r.total_inr)}</span></div>
         <small className="quiet">{r.basis === 'per_plate' ? `${inr(r.price_inr)} a plate, for ${guests} guests` : 'as quoted'}</small>
@@ -58,8 +58,14 @@ function Category({ c, guests, names, sourcing, chosen, onChosen, closed, onClos
           </ol>
         </div>
       ))}
+      {c.status === 'waiting' && c.open_quotes.length > 0 && (
+        <ul className="ranks">
+          {c.open_quotes.map((r) => <Entry key={r.message_id} r={r} guests={guests} category={c.category} name={names[r.vendor_id] || 'A vendor'} sourcing={sourcing} chosen={chosen.has(r.message_id)} onChosen={onChosen} />)}
+        </ul>
+      )}
       {c.status === 'waiting' && (
         <>
+          {c.comparable === 1 && <p className="quiet">Only one quote so far, so there is nothing to compare it with. You can still plan with it.</p>}
           <p>{c.comparable} of {c.needed} needed quotes are confirmed. The first answer is not simply the winner, so ranking waits.</p>
           {c.comparable > 0 && !closed && <button type="button" className="chip" onClick={onClose}>I’m done waiting: rank what I have</button>}
         </>
@@ -72,9 +78,10 @@ function Category({ c, guests, names, sourcing, chosen, onChosen, closed, onClos
 
 export function ComparePanel({ sourcing }) {
   const [closed, setClosed] = useState(false);
-  const [chosen, setChosen] = useState(() => new Set());
+  const [picked, setPicked] = useState(() => new Set());
   const closedView = useResource(closed ? `${sourcing.base}/quote-comparison?closed=1` : null);
   const comparison = (closed && closedView.data) || sourcing.comparison;
+  const chosen = new Set([...picked, ...(comparison?.categories || []).flatMap((c) => c.chosen || [])]);  // what the server holds, so a reload still shows it
   const names = Object.fromEntries(sourcing.cards.map((c) => [c.vendor_id, nameOf(c)]));
   const out = [<NameNote key="name" by={sourcing.by} setBy={sourcing.setBy} />];
 
@@ -82,6 +89,6 @@ export function ComparePanel({ sourcing }) {
   out.push(<Note key="rule" tag="THE RULE" title="How this is ranked"><p>{comparison.rule}</p></Note>);
   const live = comparison.categories.filter((c) => c.comparable || c.pending.length || c.status !== 'none');
   if (!live.length) out.push(<Note key="none" title="Nothing to compare yet"><p>Once two businesses in a category have answered and you have confirmed their lines, they are ranked here. One quote is never a ranking.</p></Note>);
-  for (const c of live) out.push(<Category key={c.category} c={c} guests={comparison.guests} names={names} sourcing={sourcing} chosen={chosen} onChosen={(id) => setChosen((s) => new Set(s).add(id))} closed={closed} onClose={() => setClosed(true)} />);
+  for (const c of live) out.push(<Category key={c.category} c={c} guests={comparison.guests} names={names} sourcing={sourcing} chosen={chosen} onChosen={(id) => setPicked((s) => new Set(s).add(id))} closed={closed} onClose={() => setClosed(true)} />);
   return <Collage>{out}</Collage>;
 }

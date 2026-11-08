@@ -7,7 +7,7 @@ pip install -e ".[dev]"
 cp .env.example .env && chmod 600 .env   # only if you need a keyed integration
 python -m pytest
 ```
-Planning tests need Fast Downward and VAL (`EVENTMATE_FD`, `EVENTMATE_VAL`; see docs/CONFIGURATION.md). Browser tests need Chromium and skip without it.
+Planning tests need Fast Downward and VAL (`EVENTMATE_FD`, `EVENTMATE_VAL`; see docs/CONFIGURATION.md). Browser tests need Chromium and skip without it; the cross-browser test (`tests/test_browsers_sizes.py`) also needs Firefox from Playwright: `python -m playwright install firefox`. The hosted journey (`tests/test_hosted_journey.py`) needs `nginx` and `openssl` on the path.
 
 ## Rules of the road
 - The rules in short: no invented facts, no business logic in prompts, failures name a repair, nothing is silently overwritten, fail closed, secrets from the environment only, vendor and user text is data.

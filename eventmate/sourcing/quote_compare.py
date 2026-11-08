@@ -48,6 +48,8 @@ class CategoryComparison(_Model):
     needed: int
     groups: tuple[Group, ...] = ()
     pending: tuple[Pending, ...] = ()
+    open_quotes: tuple[Ranked, ...] = ()  # while ranking waits: what is confirmed so far, unranked (rank 0, by vendor id so order plays no part), so it can still be chosen
+    chosen: tuple[str, ...] = ()  # the replies of this kind the user has already chosen to plan with
 
 
 class Comparison(_Model):
@@ -96,7 +98,7 @@ def _groups(found: list[QuoteAssessment], guests: int) -> tuple[Group, ...]:
     return tuple(out)
 
 
-def compare(assessments: Iterable[QuoteAssessment], guests: int, closed: bool = False, min_quotes: int = MIN_QUOTES) -> Comparison:
+def compare(assessments: Iterable[QuoteAssessment], guests: int, closed: bool = False, min_quotes: int = MIN_QUOTES, chosen: frozenset[str] = frozenset()) -> Comparison:
     by_cat: dict[VendorCategory, list[QuoteAssessment]] = defaultdict(list)
     for a in assessments:
         by_cat[a.category].append(a)
@@ -107,5 +109,8 @@ def compare(assessments: Iterable[QuoteAssessment], guests: int, closed: bool = 
         pending = tuple(sorted((Pending(vendor_id=a.vendor_id, message_id=a.message_id, why=_why(a)) for a in mine if not a.comparable and a.vendor_id not in {o.vendor_id for o in ok}),
                                key=lambda p: (p.vendor_id, p.message_id)))
         status = "none" if not ok else "ranked" if closed or len(ok) >= min_quotes else "waiting"
-        cats.append(CategoryComparison(category=cat, status=status, comparable=len(ok), needed=min_quotes, groups=_groups(ok, guests) if status == "ranked" else (), pending=pending))
+        unranked = tuple(Ranked(rank=0, vendor_id=a.vendor_id, message_id=a.message_id, total_inr=t, price_inr=p, basis="per_plate" if a.category == VendorCategory.CATERER else "total", taxes_included=x)
+                         for a in sorted(ok, key=lambda a: a.vendor_id) for t, p, x in [_entry(a, guests)]) if status == "waiting" else ()
+        cats.append(CategoryComparison(category=cat, status=status, comparable=len(ok), needed=min_quotes, groups=_groups(ok, guests) if status == "ranked" else (), pending=pending,
+                                       open_quotes=unranked, chosen=tuple(sorted(a.message_id for a in mine if a.message_id in chosen))))
     return Comparison(rule=RULE, guests=guests, categories=tuple(cats))

@@ -50,9 +50,10 @@ const friendly = (v) => (v.constraint === 'vendor_coverage' && NO_QUOTE.test(v.d
 
 export function PlanPanel({ brief, sourcing, categories }) {
   const { status, error, start, reopen } = usePlanBuild(brief.turn.staged_id, brief.adopt);
-  const have = new Set((sourcing.comparison?.categories || []).filter((c) => c.comparable > 0).map((c) => c.category));
-  const missing = (categories || []).filter((c) => !have.has(c));
-  const answered = have.size > 0;
+  const byCat = Object.fromEntries((sourcing.comparison?.categories || []).map((c) => [c.category, c]));
+  const missing = (categories || []).filter((c) => !(byCat[c]?.chosen?.length > 0));  // a vendor must be chosen under Compare, not just have answered
+  const toChoose = missing.filter((c) => byCat[c]?.comparable > 0);
+  const toAsk = missing.filter((c) => !(byCat[c]?.comparable > 0));
   if (!status) return <Collage><Note title="Reading…"><p className="quiet">Looking at where the plan stands.</p></Note></Collage>;
 
   if (status.state === 'done') return <Built result={status.result} />;
@@ -69,9 +70,9 @@ export function PlanPanel({ brief, sourcing, categories }) {
     <Collage>
     <Note tone="story" title="Plan from who answered">
       <p>The plan is built only from vendors whose quote you confirmed and chose under “Compare”. Nothing is picked from a built-in list.</p>
-      {!answered && <Notice tone="warn">No confirmed quote yet. Ask a few businesses first.</Notice>}
-      {answered && missing.length > 0 && <Notice tone="warn">Still no confirmed quote for: {missing.map(categoryLabel).join(', ')}. The plan needs one of each before it can be built.</Notice>}
-      <button type="button" className="btn btn--small" disabled={!answered || missing.length > 0} onClick={() => start(true)}>Build the plan</button>
+      {toChoose.length > 0 && <Notice tone="warn">Choose {toChoose.map(categoryLabel).join(', ')} under “Compare”: press “Plan with this vendor” beside the quote you want.</Notice>}
+      {toAsk.length > 0 && <Notice tone="warn">No confirmed quote yet for: {toAsk.map(categoryLabel).join(', ')}. Ask a few businesses, confirm a reply, and choose one under “Compare”. The plan needs one of each before it can be built.</Notice>}
+      <button type="button" className="btn btn--small" disabled={missing.length > 0} onClick={() => start(true)}>Build the plan</button>
       {error && <Notice tone="bad">{error}</Notice>}
     </Note>
     </Collage>

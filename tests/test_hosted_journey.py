@@ -62,10 +62,8 @@ def site(tmp_path_factory):
     server = EXAMPLE.read_text()
     for placeholder, value in {"server_name": NAME, "https_listen": f"127.0.0.1:{front}", "cert": cert, "key": key, "backend": f"127.0.0.1:{back}"}.items():
         server = server.replace("{{" + placeholder + "}}", str(value))
-    # R-011: the shipped file forwards `Host $host`, which drops the port, while the browser's Origin keeps it, so on any port but 443 every write is refused as
-    # cross-origin. On 443 `$http_host` is the same value (a browser leaves the default port out), so this runs the journey as a host on 443 would.
-    assert "proxy_set_header Host $host;" in server
-    server = server.replace("proxy_set_header Host $host;", "proxy_set_header Host $http_host;")
+    # R-011: the shipped file forwards `Host $http_host`, which keeps the port the browser used; `$host` dropped it, so on any port but 443 the Origin check refused every write
+    assert "proxy_set_header Host $http_host;" in server and "proxy_set_header Host $host;" not in server
     (tmp / "nginx.conf").write_text(f"""worker_processes 1; pid {tmp}/nginx.pid; error_log {tmp}/err.log;
 events {{ worker_connections 64; }}
 http {{ access_log off; client_body_temp_path {tmp}/b; proxy_temp_path {tmp}/p; fastcgi_temp_path {tmp}/f; uwsgi_temp_path {tmp}/u; scgi_temp_path {tmp}/s;
@@ -162,13 +160,14 @@ def test_a_visitor_reaches_a_validated_plan_through_the_proxy_with_nothing_sent(
                 btn.click()
                 page.wait_for_timeout(300)
 
+            # R-012: with every line confirmed but nobody chosen yet, Build is off and says what to do; and a single quote can be chosen without pressing "done waiting"
+            _step(page, origin, "plan")
+            assert page.get_by_role("button", name="Build the plan").is_disabled()
+            notice = page.locator(".finding-room").inner_text()
+            assert "under “Compare”" in notice and "Plan with this vendor" in notice and "No confirmed quote" not in notice, notice[:800]
             _step(page, origin, "compare")
-            for _ in range(len(LABEL)):  # one quote per kind: the ranking waits for a second unless the visitor says they are done waiting
-                done = page.get_by_role("button", name="I’m done waiting: rank what I have")
-                if not done.count():
-                    break
-                done.first.click()
-                page.wait_for_timeout(600)
+            assert page.get_by_text("Only one quote so far").count() >= 1
+            assert page.get_by_role("button", name="Plan with this vendor").count() == len(LABEL)
             for _ in range(len(LABEL)):
                 choose = page.get_by_role("button", name="Plan with this vendor")
                 if not choose.count():

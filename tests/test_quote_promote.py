@@ -149,7 +149,7 @@ def test_quotes_only_mode_hides_every_seed_vendor_even_in_a_city_that_has_them(w
     with em.repo.quoted_only():
         assert em.repo.providers(C.CATERER) == () and em.repo.providers(C.VENUE) == () and em.repo.cities() == ()
     assert em.repo.providers(C.CATERER), "outside the block the catalogue is back"
-    with pytest.raises(ValueError, match="confirmed quote yet"):
+    with pytest.raises(ValueError, match="confirmed and chosen quote yet"):
         em.commit_staged(pune.staged_id, pune.version, pune.draft_hash, TODAY, quoted_only=True)
 
 

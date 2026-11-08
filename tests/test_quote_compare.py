@@ -66,3 +66,11 @@ def test_a_venue_is_priced_as_quoted_and_categories_are_kept_apart():
 
 def test_no_replies_is_an_empty_table():
     assert qc.compare([], 40).categories == ()
+
+
+def test_a_single_quote_can_be_chosen_while_ranking_waits_and_what_is_chosen_is_reported():
+    c = qc.compare([quote("a", 650)], 40).categories[0]
+    assert c.status == "waiting" and c.groups == () and [(r.vendor_id, r.rank, r.total_inr) for r in c.open_quotes] == [("a", 0, 26_000)] and c.chosen == ()
+    c = qc.compare([quote("a", 650), quote("b", 700, comparable=False)], 40, chosen=frozenset({"m_a", "m_elsewhere"})).categories[0]
+    assert c.chosen == ("m_a",), "only a reply of this kind in this brief counts as chosen"
+    assert [r.vendor_id for r in qc.compare([quote("z", 650), quote("a", 700)], 40, closed=False).categories[0].groups[0].ranked] == ["z", "a"]

@@ -253,7 +253,7 @@ class EventMate:
             with self._vendors_visible(quoted_only):
                 known = {c.lower() for c in self.repo.cities()}
             if cur.draft.city and cur.draft.city.lower() not in known:
-                raise intake.IntakeError(f"I have no vendor records for {cur.draft.city} yet, so a plan there cannot be built" if not quoted_only else f"no vendor in {cur.draft.city} has a confirmed quote yet: ask for quotes and confirm them first")
+                raise intake.IntakeError(f"I have no vendor records for {cur.draft.city} yet, so a plan there cannot be built" if not quoted_only else f"no vendor in {cur.draft.city} has a confirmed and chosen quote yet: ask for quotes, confirm them, and choose one under Compare")
             intake.to_request(cur.draft, "\n".join(cur.messages)[:2000], today, cur.source, list(cur.messages))  # raises IntakeError for anything missing, open or skipped
         return self.staging.begin_commit(staged_id, version, digest)
 
@@ -979,7 +979,7 @@ class EventMate:
 
     def compare_quotes(self, plan_id: str, closed: bool = False) -> quote_compare.Comparison:
         """Fully confirmed quotes ranked by a rule fixed in advance (``quote_compare.RULE``): order-blind, and withheld until enough vendors have answered or the user says they are done waiting."""
-        return quote_compare.compare(self.quote_assessments(plan_id), self._scope(plan_id).request.guest_count, closed)
+        return quote_compare.compare(self.quote_assessments(plan_id), self._scope(plan_id).request.guest_count, closed, chosen=self.quoted.message_ids())
 
     def confirm_quote_fields(self, plan_id: str, message_id: str, items: dict[str, str | None], by: str, valid_days: str | None = None) -> QuoteAssessment:
         """The user confirms fields of a reply: each as read (value None) or with the value they typed, which must read safely. An amount is confirmed on its own, never in a batch. Nothing is saved unless

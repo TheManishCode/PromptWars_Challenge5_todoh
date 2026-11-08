@@ -31,3 +31,11 @@
 - `tools/pre-commit` and `make hooks`: refuse staged .env, run-time data, caches, solvers and secrets; installed in .git/hooks.
 
 - Stop detection is word-based, not a pattern (a pattern version failed the quadratic-time guard). Test fix: the Google-listing-on-disk check matched "581" inside random hex ids (failed about one run in six); it now matches whole tokens (30/30 reruns pass).
+
+### L4 (hosted dress rehearsal) and L5 (browsers)
+- `tests/test_hosted_journey.py` (from review/l4-hosted-journey): shared mode, waitress behind the shipped nginx with TLS, real Chromium, `/` to a built plan, nothing sent.
+- R-011: the reference nginx sends `Host $http_host` (with the port), so writes are not refused as cross-origin on a port other than 443; documented in HOSTING.md; the journey test no longer patches the file.
+- R-012: "Build the plan" is on only when each needed kind has a chosen vendor, and says which to choose or ask; the Compare step offers "Plan with this vendor" for a single confirmed quote ("Only one quote so far"); chosen vendors come from the server so a reload still shows them; the server's refusal reads "confirmed and chosen quote". Browser test asserts the disabled state and the wording (control: with Build always enabled it fails).
+- `tests/test_browsers_sizes.py` (from review/l5-browsers): `/`, `/app` and every `/plan` room in Chromium and Firefox at 390, 820 and 1440 px, axe clean, no overflow, no console error. Needs `python -m playwright install firefox`.
+- BLOCKED.md: the screen-reader pass is a human task, with a checklist.
+

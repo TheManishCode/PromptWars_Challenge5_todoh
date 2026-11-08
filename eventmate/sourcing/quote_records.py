@@ -50,6 +50,11 @@ class QuotedProviderStore:
         with self._lock():
             return _File(self.root, run_id="all")._append(rec, rec.record_id)
 
+    def message_ids(self) -> frozenset[str]:
+        """The replies the user has chosen to plan with."""
+        path = self._path()
+        return frozenset(r.message_id for r in _File(self.root, run_id="all").read()) if path.exists() else frozenset()
+
     def providers(self) -> tuple[Venue | Vendor, ...]:
         """The newest record of each business, in file order. Re-read only when the file changes."""
         path = self._path()
