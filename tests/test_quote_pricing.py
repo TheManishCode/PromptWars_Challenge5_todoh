@@ -18,7 +18,8 @@ def em(tmp_path):
 
 def rec(em, vendor=RASOI, category=C.CATERER, **kw):
     base = {"source_type": "user_input", "entered_by": "asha", "observed_at": datetime(2026, 10, 30, tzinfo=UTC),
-                "expires_at": date(2026, 11, 20), "confidence": 0.8, "amount_inr": 500, "basis": "per_plate", "guest_count": 100}
+                "expires_at": date(2026, 11, 20), "confidence": 0.8, "amount_inr": 500, "basis": "per_plate", "guest_count": 100,
+                "quoted_for_date": date(2026, 12, 12)}  # the event the example plans: a quote prices only the event it was given for
     base.update(kw)
     return em.observe_quote(vendor, category, **base)
 

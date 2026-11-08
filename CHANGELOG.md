@@ -48,6 +48,6 @@
 ### LM1: a quote prices only the event it fits (audit A1)
 - `VendorRepository.price(provider, guests, event_date)` and `quote_expired(...)` use the newest quote that fits the event (`agents/vendor.py: quote_fits`): same `quoted_for_date`, and for a per-plate price the guest count quoted or inside the vendor's own min/max. Anything else is history and the seed or catalogue price applies. All callers pass the event date.
 - `promote_quote` takes the reply's own quote (`ObservationStore.quote_for_reply`), not the vendor's latest, and refuses a quote given for another date.
+- A quote confirmed through a follow-up job also records the plan's event date. A quote typed in through the API (`POST /api/observations/<vendor>/quotes`) prices only if it names `quoted_for_date`.
 - A quote confirmed from a document line is recorded for a plan's event date when the plan is named (`confirm_quote_line(..., plan_id)`, the page already sends it); without one the date is unknown and it never prices (D-013).
 - Tests: `tests/test_quote_event_fit.py` (reviewer probes `cc49526` plus fit and expiry cases), `tests/test_quote_promote.py`. Controls: date check removed (2 fail), guest check removed (1 fails), promote on latest (1 fails).
-

@@ -164,7 +164,7 @@ class JobWorker:
         self.em.observe_quote(
             claim.vendor_id, VendorCategory(job.category), source_type=ObservationSource.VENDOR_QUOTE, entered_by="user_confirmed", observed_at=now,
             expires_at=(now + timedelta(days=valid_days)).date(), confidence=CONFIRM_CONFIDENCE, evidence_ref=claim.message_id[:200], amount_inr=claim.amount_inr,
-            basis=claim.basis, guest_count=plan.request.guest_count if claim.basis == "per_plate" else None,
+            basis=claim.basis, guest_count=plan.request.guest_count if claim.basis == "per_plate" else None, quoted_for_date=plan.request.event_date,
             note=f"valid {valid_days} days: your choice at confirmation; check taxes and extras in the vendor's words"[:200],
         )
         claims = tuple(
