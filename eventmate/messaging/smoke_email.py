@@ -21,6 +21,7 @@ import sys
 from collections.abc import Callable, Mapping
 
 from eventmate.messaging.channels import ChannelError, EmailChannel, EmailConfig
+from eventmate.messaging.mail_oauth import OAuth2TokenSource, TokenError
 from eventmate.env import load_env
 from eventmate.schemas import _EMAIL
 import contextlib
@@ -29,6 +30,8 @@ Row = tuple[str, str, str]  # (status, name, text)
 
 
 def _category(exc: BaseException) -> str:
+    if isinstance(exc, TokenError):
+        return "no access token (" + str(exc).split(":")[0].split(";")[0][:80] + ")"  # the category only; the message carries no secret
     if isinstance(exc, (smtplib.SMTPAuthenticationError, imaplib.IMAP4.error)):
         return "login rejected"
     if isinstance(exc, (smtplib.SMTPException, OSError, ssl.SSLError, TimeoutError)):
@@ -36,13 +39,14 @@ def _category(exc: BaseException) -> str:
     return "failed"
 
 
-def check_smtp(cfg: EmailConfig, factory: Callable) -> Row:
-    if not (cfg.smtp_host and cfg.user and cfg.password):
-        return ("FAIL", "smtp", "not set: EVENTMATE_SMTP_HOST, EVENTMATE_SMTP_USER, EVENTMATE_SMTP_PASSWORD")
+def check_smtp(cfg: EmailConfig, factory: Callable, channel: EmailChannel | None = None) -> Row:
+    channel = channel or EmailChannel(cfg)
+    if not (cfg.smtp_host and cfg.user and (cfg.password if cfg.auth == "password" else cfg.oauth.complete)):
+        return ("FAIL", "smtp", "not set: EVENTMATE_SMTP_HOST, EVENTMATE_SMTP_USER, " + ("EVENTMATE_SMTP_PASSWORD" if cfg.auth == "password" else ", ".join(cfg.oauth.missing() or ["the OAuth settings"])))
     try:
         server = factory()
         try:
-            server.login(cfg.user, cfg.password)
+            channel.login_smtp(server)
             noop = getattr(server, "noop", None)
             if noop:
                 noop()
@@ -51,18 +55,19 @@ def check_smtp(cfg: EmailConfig, factory: Callable) -> Row:
                 server.quit()
     except Exception as exc:  # never show the server's own words: they can echo the user name or password
         return ("FAIL", "smtp", f"{_category(exc)} ({cfg.smtp_host})")
-    return ("PASS", "smtp", f"logged in ({cfg.smtp_host}); nothing sent")
+    return ("PASS", "smtp", f"logged in by {'OAuth' if cfg.auth == 'oauth2' else 'password'} ({cfg.smtp_host}); nothing sent")
 
 
-def check_imap(cfg: EmailConfig, factory: Callable) -> Row:
+def check_imap(cfg: EmailConfig, factory: Callable, channel: EmailChannel | None = None) -> Row:
     if not cfg.imap_host:
         return ("SKIP", "imap", "EVENTMATE_IMAP_HOST is not set, so replies cannot be read")
-    if not (cfg.user and cfg.password):
-        return ("FAIL", "imap", "not set: EVENTMATE_SMTP_USER, EVENTMATE_SMTP_PASSWORD")
+    if not (cfg.user and (cfg.password if cfg.auth == "password" else cfg.oauth.complete)):
+        return ("FAIL", "imap", "not set: EVENTMATE_SMTP_USER, " + ("EVENTMATE_SMTP_PASSWORD" if cfg.auth == "password" else ", ".join(cfg.oauth.missing() or ["the OAuth settings"])))
+    channel = channel or EmailChannel(cfg)
     try:
         box = factory()
         try:
-            box.login(cfg.user, cfg.password)
+            channel.login_imap(box)
             box.select("INBOX", readonly=True)  # read-only: nothing is marked seen or deleted
         finally:
             with contextlib.suppress(Exception):
@@ -72,7 +77,7 @@ def check_imap(cfg: EmailConfig, factory: Callable) -> Row:
     return ("PASS", "imap", f"logged in and opened the inbox read-only ({cfg.imap_host})")
 
 
-def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None, smtp_factory: Callable | None = None, imap_factory: Callable | None = None) -> int:
+def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None, smtp_factory: Callable | None = None, imap_factory: Callable | None = None, token_fetch: Callable | None = None) -> int:
     ap = argparse.ArgumentParser(prog="eventmate.messaging.smoke_email", description="Check the mailbox settings. With --send-test-to it sends ONE DIRECT TEST MESSAGE to your own address: that send is outside the app's sending controls (the pause, the kill switch, the do-not-contact list and the limits do not apply).")
     ap.add_argument("--send-test-to", metavar="ADDRESS", help="also send one real test message to this address (it must be yours)")
     ap.add_argument("--i-own-this-address", action="store_true", help="required with --send-test-to")
@@ -88,11 +93,14 @@ def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None, sm
         env = os.environ
     cfg = EmailConfig.from_env(env)
     channel = EmailChannel(cfg)
-    rows = [check_smtp(cfg, smtp_factory or channel._smtp), check_imap(cfg, imap_factory or channel._imap)]
+    if token_fetch is not None and channel.tokens is not None:  # tests hand in a fake token service; the real run asks Google for one access token, read-only, and sends nothing
+        channel.tokens = OAuth2TokenSource(cfg.oauth, fetch=token_fetch)
+    rows = [check_smtp(cfg, smtp_factory or channel._smtp, channel), check_imap(cfg, imap_factory or channel._imap, channel)]
     if a.send_test_to and rows[0][0] == "PASS":
         print("DIRECT TEST SEND: one message goes now to the address you named. It does not go through the app's sending controls (pause, kill switch, do-not-contact, limits) and is not recorded in any plan.")
         try:
             sender = EmailChannel(cfg, smtp_factory=smtp_factory) if smtp_factory else channel
+            sender.tokens = channel.tokens
             sender.send(a.send_test_to.strip(), "to;doh-the event planner mail test", "This is a test message from to;doh-the event planner's mail check. Nothing else was sent.", None)
             rows.append(("PASS", "send", f"one test message sent to the address you named ({cfg.smtp_host})"))
         except ChannelError:

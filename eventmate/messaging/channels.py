@@ -31,6 +31,7 @@ from typing import Protocol
 from collections.abc import Callable, Mapping, Sequence
 from urllib.parse import quote, urlencode, urlsplit
 
+from eventmate.messaging.mail_oauth import OAuth2TokenSource, OAuthConfig, TokenError, xoauth2_string
 from eventmate.netutil import NETWORK_ERRORS, loads, read_capped
 from eventmate.schemas import ChannelStatus, _EMAIL
 import contextlib
@@ -206,6 +207,8 @@ class EmailConfig:
     user: str = ""
     password: str = field(default="", repr=False)
     from_addr: str = ""
+    auth: str = "password"  # "password" (an app password, the default) or "oauth2" (SASL XOAUTH2, EVENTMATE_MAIL_AUTH)
+    oauth: OAuthConfig = field(default_factory=OAuthConfig, repr=False)
     spam_folder: str = ""  # optional: a folder to look in, read-only, for replies the provider filed as spam (EVENTMATE_IMAP_SPAM_FOLDER); empty means it is not looked at
 
     @classmethod
@@ -220,6 +223,8 @@ class EmailConfig:
             imap_host=env.get("EVENTMATE_IMAP_HOST", "").strip(), imap_port=num("EVENTMATE_IMAP_PORT", 993),
             user=user, password=env.get("EVENTMATE_SMTP_PASSWORD", ""), from_addr=env.get("EVENTMATE_MAIL_FROM", "").strip() or user,
             spam_folder=env.get("EVENTMATE_IMAP_SPAM_FOLDER", "").strip()[:100],
+            auth="oauth2" if env.get("EVENTMATE_MAIL_AUTH", "").strip().lower() == "oauth2" else "password",  # anything else is the password route: a typo never switches the sign-in
+            oauth=OAuthConfig(env.get("EVENTMATE_GMAIL_CLIENT_ID", "").strip(), env.get("EVENTMATE_GMAIL_CLIENT_SECRET", "").strip(), env.get("EVENTMATE_GMAIL_REFRESH_TOKEN", "").strip()),
         )
 
 
@@ -236,13 +241,39 @@ class EmailChannel:
         self._smtp = smtp_factory or self._default_smtp
         self._imap = imap_factory or self._default_imap
         self._now = now
+        self.tokens = OAuth2TokenSource(config.oauth) if config.auth == "oauth2" else None  # a source only when OAuth is the chosen sign-in; it opens no connection until a token is needed
 
     def status(self) -> ChannelStatus:
         c = self.config
-        can_send = bool(c.smtp_host and c.user and c.password and c.from_addr)
-        can_receive = bool(c.imap_host and c.user and c.password)
-        missing = [n for n, ok in (("EVENTMATE_SMTP_HOST/USER/PASSWORD", can_send), ("EVENTMATE_IMAP_HOST", can_receive)) if not ok]
+        have = bool(c.password) if c.auth == "password" else c.oauth.complete
+        can_send = bool(c.smtp_host and c.user and have and c.from_addr)
+        can_receive = bool(c.imap_host and c.user and have)
+        sign_in = "EVENTMATE_SMTP_HOST/USER/PASSWORD" if c.auth == "password" else "EVENTMATE_SMTP_HOST/USER and " + ", ".join(c.oauth.missing() or ["the OAuth settings"])
+        missing = [n for n, ok in ((sign_in, can_send), ("EVENTMATE_IMAP_HOST", can_receive)) if not ok]
         return ChannelStatus(channel="email", can_send=can_send, can_receive=can_receive, detail="ready" if not missing else "not set: " + ", ".join(missing))
+
+    def login_smtp(self, server) -> None:
+        """Sign in to the SMTP server by the chosen route: the password, or an OAuth access token (SASL XOAUTH2). A token that cannot be had raises ``TokenError`` before anything is sent."""
+        c = self.config
+        if self.tokens is None:
+            server.login(c.user, c.password)
+            return
+        auth = xoauth2_string(c.user, self.tokens.token())
+        server.auth("XOAUTH2", lambda challenge=None: auth if challenge is None else "", initial_response_ok=True)  # an error challenge is answered with an empty line, as the protocol asks
+
+    def login_imap(self, box) -> None:
+        c = self.config
+        if self.tokens is None:
+            box.login(c.user, c.password)
+            return
+        auth = xoauth2_string(c.user, self.tokens.token()).encode("ascii")
+        answered: list[int] = []
+
+        def respond(_challenge) -> bytes:
+            answered.append(1)
+            return auth if len(answered) == 1 else b""  # the first prompt gets the credentials; a second one is the error challenge, which is answered with an empty line
+
+        box.authenticate("XOAUTH2", respond)
 
     def _default_smtp(self):
         c = self.config
@@ -276,7 +307,12 @@ class EmailChannel:
         server = None
         try:
             server = self._smtp()
-            server.login(c.user, c.password)
+            self.login_smtp(server)
+        except TokenError as exc:
+            if server is not None:
+                with contextlib.suppress(Exception):
+                    server.quit()
+            raise ChannelError(str(exc)) from None
         except (smtplib.SMTPException, OSError, ssl.SSLError) as exc:
             if server is not None:  # connected but not logged in: do not leave the connection open
                 with contextlib.suppress(Exception):
@@ -311,7 +347,7 @@ class EmailChannel:
         try:
             box = self._imap()
             try:
-                box.login(self.config.user, self.config.password)
+                self.login_imap(box)
                 box.select("INBOX", readonly=True)
                 mine, window, mode = self._search(box, since, threads)
                 take = mine[-MAX_THREAD_MESSAGES:] + [n for n in window if n not in set(mine)][-MAX_OTHER_MESSAGES:]
@@ -322,6 +358,8 @@ class EmailChannel:
             finally:
                 with contextlib.suppress(Exception):
                     box.logout()
+        except TokenError as exc:
+            raise ChannelError(str(exc)) from None
         except imaplib.IMAP4.error:
             raise ChannelError("the mail server rejected the login or the request") from None
         except (OSError, ssl.SSLError):
