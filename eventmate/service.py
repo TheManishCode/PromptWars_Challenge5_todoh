@@ -43,7 +43,8 @@ from eventmate.messaging.digests import DigestStore
 from eventmate.messaging.notify import OwnerNotifier
 from eventmate.planning.ideas import IdeaService
 from eventmate.messaging.channels import Channel, channels_from_env
-from eventmate.messaging.conversations import ConversationService, HeldMessages
+from eventmate.messaging.reply_review import ReplyReviewStore
+from eventmate.messaging.conversations import LOOKBACK, ConversationService, HeldMessages
 from eventmate.messaging.outreach import OutreachStore, normalise_phone
 from eventmate.followthrough.worker import JobWorker
 from eventmate.followthrough.jobs import JobStore
@@ -52,6 +53,7 @@ from eventmate.sourcing.externals import ExternalStore, ResolvedVendor, clean_em
 from eventmate.evidence.ledger import EvidenceLedger, FactState
 from eventmate.followthrough.watches import WatchRunner, WatchStore
 from eventmate.planning import brief_scope, plan_graph
+from eventmate.planning.brief_links import BriefLinks
 from eventmate.planning.staging import StageClosed, StageGone, StagingStore, StagedIntake
 from eventmate.messaging import outreach as outreach_mod
 from eventmate.sourcing import cards, quote_compare, quote_template
@@ -140,6 +142,8 @@ class EventMate:
         self.quote_confirmations = QuoteConfirmationStore(self.store.root)  # what the user confirmed, field by field, from a vendor's reply
         self.staging = StagingStore(self.store.root)  # briefs waiting for the user's approval; nothing is planned from one until it is committed
         self.shortlist = ShortlistStore(self.store.root, evidence=self.evidence)
+        self.brief_links = BriefLinks(self.store.root)  # which plan a brief became: its requests and replies follow it (planning/brief_links.py)
+        self.shortlist.home = self.quote_confirmations.home = self.brief_links.home
         self.observations.external_lookup = self.externals.get
         self.suppressions = SuppressionStore(self.store.root)
         self.unmatched = UnmatchedStore(self.store.root)
@@ -151,6 +155,8 @@ class EventMate:
         self.voice_notes = VoiceNoteStore(self.store.root)
         self.repo.access = self.access_store
         self.outreach_store = OutreachStore(self.store.root, self.observations.checklists)
+        self.outreach_store.home = self.brief_links.home
+        self.staging.protect = self._brief_awaits_replies
         self._jobs: JobWorker | None = None
         self.jobs_clock = None  # tests inject a clock here before the worker is first used
         self._job_store: JobStore | None = None
@@ -160,6 +166,9 @@ class EventMate:
         self.conversations.health = self.integrity.blocker
         self.conversations.guards.append(self._job_guard)
         self.conversations.suppressions, self.conversations.unmatched = self.suppressions, self.unmatched
+        self.reply_reviews = ReplyReviewStore(self.store.root)
+        self.conversations.reviews, self.conversations.event_key = self.reply_reviews, self.brief_links.event_key
+        self.conversations.on_reply = self._reply_landed
         if os.environ.get("EVENTMATE_READ_QUOTE_ATTACHMENTS") == "1":  # off unless the user turns it on: an attachment is a stranger's file
             self.conversations.read_attachment = self._read_attachment
         self.notifier = OwnerNotifier(
@@ -281,6 +290,8 @@ class EventMate:
             "reality": json.loads(outcome.intake.reality.model_dump_json()) if outcome.intake.reality else None,
             "graph": plan_graph.build(outcome.plan) if outcome.plan else None,  # the finished plan as nodes and edges, in the same payload the page follows
         }
+        if outcome.plan is not None:
+            self.brief_links.link(staged_id, outcome.plan.plan_id)  # what was asked and answered under the brief now belongs to the plan too
         return self.staging.finish(staged_id, outcome.plan is not None, result, "" if outcome.plan else "The plan could not pass the hard checks, so nothing was stored.")
 
     def _intake_model(self):
@@ -401,6 +412,9 @@ class EventMate:
             raise PlanBusy("a message for this plan is being sent; try again in a moment")
         self.guest_lists.delete(plan_id)  # also drops any preview still waiting for a commit
         files = delete_plan_files(self.store.root, plan_id) + self.voice_notes.delete_plan(plan_id)
+        brief = self.brief_links.brief_of(plan_id)
+        if brief:  # the requests and replies were filed under the brief this plan was built from: they are this plan's, and go with it
+            files += delete_plan_files(self.store.root, brief)
         jobs = self.jobs.store.delete_plan(plan_id) if (self.store.root / "jobs.db").exists() else 0
         # Order matters for a crash: everything that merely mentions the plan goes first, the versions go LAST. Until they are gone the plan still lists, so a delete that was
         # interrupted anywhere can simply be run again; if the versions went first, a crash would leave its id in the logs with no way left to delete it (found by crash-point testing).
@@ -658,11 +672,39 @@ class EventMate:
     def _scope(self, plan_id: str):
         """What a sourcing step reads its facts from: a stored plan, or, for ``brief_<id>``, the staged brief that has no plan yet. Unknown, hostile or timed-out ids fail here."""
         if brief_scope.is_brief(plan_id):
+            built = self.brief_links.plan_of(plan_id)
+            if built is not None:  # the brief became a plan: the plan is the authority on the event from then on, and outlives the brief's row
+                return self.store.latest(built)
             row = self.staging.require(brief_scope.staged_id_of(plan_id))
             if row.state == "expired":
                 raise StageGone("that brief timed out; start it again")
             return brief_scope.scope_of(row)
         return self.store.latest(plan_id)
+
+    def _reply_landed(self, plan_id: str) -> None:
+        """A reply came in under this brief: keep the brief a while longer, so what the user does with it has a brief to act on."""
+        if brief_scope.is_brief(plan_id) and self.brief_links.plan_of(plan_id) is None:
+            try:
+                self.staging.keep(brief_scope.staged_id_of(plan_id))
+            except StageGone:
+                pass
+
+    def reply_reviews_open(self) -> list:
+        return self.reply_reviews.open()
+
+    def assign_reply(self, review_id: str, plan_id: str):
+        """The user's choice of event for a held reply."""
+        return self.conversations.assign_review(review_id, plan_id)
+
+    def dismiss_reply_review(self, review_id: str):
+        return self.conversations.dismiss_review(review_id)
+
+    def _brief_awaits_replies(self, staged_id: str) -> bool:
+        """A request was sent under this brief and nothing has come back, within the time replies are still looked for: the brief is kept, so a late reply has somewhere to land."""
+        pid = brief_scope.BRIEF_PREFIX + staged_id
+        since = self.outreach_store.now() - LOOKBACK
+        sent = [d for d in self.outreach_store.list(pid) if d.kind == "request" and d.status == "sent" and d.sent_at is not None and d.sent_at >= since]
+        return bool(sent) and not self.outreach_store.inbound(pid)
 
     def draft_outreach(self, plan_id: str, category: VendorCategory, channel: str, recipient: str, sender_name: str, vendor_id: str | None = None):
         """Write a quote request for a vendor in the plan, or for another vendor of the category when ``vendor_id`` is given (to compare quotes).
@@ -974,7 +1016,7 @@ class EventMate:
         msg = InboundMessage(
             message_id=uuid.uuid4().hex, plan_id=plan_id, draft_id=asked[-1].draft_id if asked else "pasted", vendor_id=vendor_id, vendor_name=biz.name, vendor_origin=biz.origin, category=biz.category,
             channel=channel, sender=f"entered by {by}"[:254], received_at=self.outreach_store.now(), external_id=f"pasted:{uuid.uuid4().hex}", body=body,
-            analysis=analyze_reply(body, self.outreach_store.checklists.get(biz.category.value, ())), pasted_by=by, auto_handled=True,
+            analysis=analyze_reply(body, self.outreach_store.checklists.get(biz.category.value, ())), pasted_by=by, match_method="pasted", auto_handled=True,
         )
         stored = self.outreach_store.add_inbound(msg)
         if stored is None:

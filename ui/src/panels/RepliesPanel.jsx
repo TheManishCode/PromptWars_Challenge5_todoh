@@ -4,7 +4,14 @@ import { useAction } from '../hooks/useAction';
 import { api } from '../lib/api';
 import { inr, shortDate } from '../lib/format';
 import { nameOf } from '../lib/vendors';
+import { useResource } from '../hooks/useResource';
 import { NameNote } from './NameNote';
+
+const HOW = {
+  sender: 'Matched by the sender’s address, not by the thread: check that this answers this event.',
+  assigned: 'Filed here because you chose this event.',
+  pasted: 'Pasted by you.',
+};
 
 const STATE = { confirmed: 'confirmed', read: 'read, waiting for you', unclear: 'unclear', missing: 'not in the reply' };
 const PRICE_KEYS = ['price', 'price_total', 'package'];
@@ -81,6 +88,7 @@ function Reading({ a, name, sourcing }) {
 
   return (
     <Note tone="vendor" tag={`REPLY OF ${shortDate(a.received_at).toUpperCase()}`} title={name} data-message={a.message_id} busy={state.busy}>
+      {HOW[a.match_method] && <Notice tone={a.match_method === 'sender' ? 'warn' : 'quiet'}>{HOW[a.match_method]}</Notice>}
       <p className={`comparable${a.comparable ? ' is-yes' : ''}`}>{a.comparable ? 'Comparable: every required line is confirmed.' : 'Not comparable yet.'}</p>
       <progress max={a.required_total} value={a.confirmed_required} aria-label="Required lines confirmed" />
       <p className="quiet">
@@ -150,6 +158,35 @@ function PasteReply({ sourcing }) {
   );
 }
 
+/** A reply from an address we wrote to for more than one event, with nothing in it that says which. It is filed nowhere until the person picks. */
+function HeldReplies({ sourcing }) {
+  const held = useResource('/api/reply-reviews');
+  const [state, run] = useAction('That reply could not be filed');
+  const items = held.data || [];
+  if (!items.length) return null;
+  const assign = (id, planId) => run(async () => {
+    const res = await api(`/api/reply-reviews/${encodeURIComponent(id)}/assign`, { method: 'POST', body: { plan_id: planId } });
+    await Promise.all([held.reload(), sourcing.refresh()]);
+    return res;
+  });
+  const dismiss = (id) => run(async () => {
+    const res = await api(`/api/reply-reviews/${encodeURIComponent(id)}/dismiss`, { method: 'POST', body: {} });
+    await held.reload();
+    return res;
+  });
+  return items.map((r) => (
+    <Note key={r.review_id} tone="warn" tag="WHICH EVENT?" title="A reply is waiting for you" busy={state.busy}>
+      <p>{r.sender} answered, but nothing in the message says which of your requests it answers. It is not filed anywhere until you say.</p>
+      <pre className="exact">{r.body}</pre>
+      <div className="row">
+        {r.candidates.map((c) => <button key={c.draft_id} type="button" className="chip" disabled={state.busy} onClick={() => assign(r.review_id, c.plan_id)}>It answers: {c.event || c.vendor_name}{c.asked_at ? `, asked ${shortDate(c.asked_at)}` : ''}</button>)}
+        <button type="button" className="linkish" disabled={state.busy} onClick={() => dismiss(r.review_id)}>It answers none of these</button>
+      </div>
+      {state.error && <Notice tone="bad">{state.error}</Notice>}
+    </Note>
+  ));
+}
+
 export function RepliesPanel({ sourcing }) {
   const [state, run] = useAction('Replies could not be checked');
   const names = Object.fromEntries(sourcing.cards.map((c) => [c.vendor_id, nameOf(c)]));
@@ -168,6 +205,7 @@ export function RepliesPanel({ sourcing }) {
       {state.error && <Notice tone="bad">{state.error}</Notice>}
     </Note>,
   ];
+  out.push(<HeldReplies key="held" sourcing={sourcing} />);
   out.push(<PasteReply key="paste" sourcing={sourcing} />);
   if (!sourcing.readings.length) out.push(<Note key="none" title="Nothing has come back yet"><p>When a business answers the request you approved, it appears here, read line by line.</p></Note>);
   for (const a of sourcing.readings) out.push(<Reading key={a.message_id} a={a} name={names[a.vendor_id] || 'A vendor'} sourcing={sourcing} />);

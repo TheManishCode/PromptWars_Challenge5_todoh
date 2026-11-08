@@ -597,6 +597,7 @@ class InboundMessage(_Model):
     read: bool = False
     sender_differs: bool = False  # an email reply carrying the thread's headers from an address other than the one written to: shown, never trusted or answered automatically
     pasted_by: str | None = Field(default=None, min_length=1, max_length=60)  # the user typed or pasted these words in (a reply that came by phone, WhatsApp or their own mail): never shared with anyone else
+    match_method: Literal["header", "sender", "assigned", "pasted", "unknown"] = "unknown"  # how it was filed: by the thread headers we sent, by the sender's address alone (labelled so), by the user's choice, pasted by the user; "unknown" on records from before this was kept
     auto_handled: bool = False  # the standing permission has already looked at this reply (answered it or handed it to the user)
     notice: str = "The vendor's own words, shown as text. Nothing in a reply changes a plan or records a quote until you do."
 
@@ -642,6 +643,7 @@ class PollResult(_Model):
     sent: int = Field(default=0, ge=0)  # approved drafts dispatched in this round
     waiting: tuple[str, ...] = ()  # why approved drafts have not gone out yet
     errors: tuple[str, ...] = ()
+    held: int = Field(default=0, ge=0)  # replies held for the user to say which event they answer: the sender wrote to us about more than one
 
 
 MANDATE_MAX_HOURS = 168
@@ -1066,6 +1068,35 @@ class UnmatchedMessage(_Model):
     reviewed: bool = False
 
     @field_validator("sender", "body")
+    @classmethod
+    def _text_ok(cls, v: str) -> str:
+        return "".join(ch for ch in v if ch in "\n\t" or unicodedata.category(ch) != "Cc")
+
+
+class ReplyCandidate(_Model):
+    plan_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")  # the event: a brief or a plan
+    draft_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    vendor_name: str = Field(min_length=1, max_length=120)
+    asked_at: datetime | None = None
+    event: str = Field(default="", max_length=160)  # what the user would recognise: the kind of event, the place, the date and the guests
+
+
+class ReplyReview(_Model):
+    """A reply that carries none of our thread headers, from an address we wrote to for more than one event. It is not filed under a guess: the user says which event it answers."""
+
+    review_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    channel: Literal["email", "whatsapp"]
+    sender: str = Field(max_length=254)
+    received_at: datetime
+    external_id: str = Field(min_length=1, max_length=400)
+    subject: str = Field(default="", max_length=200)
+    body: str = Field(max_length=4000)
+    candidates: tuple[ReplyCandidate, ...] = Field(min_length=2, max_length=20)
+    status: Literal["open", "assigned", "dismissed"] = "open"
+    assigned_plan_id: str | None = None
+    notice: str = "Which event did this answer? Nothing is filed, read or priced until you say."
+
+    @field_validator("sender", "subject", "body")
     @classmethod
     def _text_ok(cls, v: str) -> str:
         return "".join(ch for ch in v if ch in "\n\t" or unicodedata.category(ch) != "Cc")

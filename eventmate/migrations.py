@@ -18,7 +18,7 @@ from typing import Any
 from collections.abc import Callable
 
 # Money and send state: a damaged file here stops sending (integrity.py), and nothing may be appended behind a cut-off line (jsonl.py)
-AUTHORITATIVE = frozenset({"ledger", "outreach", "inbound", "mandate", "contact", "suppression", "unmatched"})
+AUTHORITATIVE = frozenset({"ledger", "outreach", "inbound", "mandate", "contact", "suppression", "unmatched", "reply_review", "brief_link"})
 CURRENT: dict[str, int] = {}  # kind -> the version this application writes; a kind not listed is at 1
 UPGRADERS: dict[tuple[str, int], Callable[[dict[str, Any]], dict[str, Any]]] = {}  # (kind, from_version) -> the document as the next version
 

@@ -151,6 +151,7 @@ class OutreachStore:
         self.now = now
         self._lock = threading.RLock()
         self._depth = 0
+        self.home: Callable[[str], str] = lambda plan_id: plan_id  # a brief that became a plan keeps its requests and replies under the brief's id (planning/brief_links.py)
 
     @contextlib.contextmanager
     def _locked(self):
@@ -180,10 +181,10 @@ class OutreachStore:
     # ------------------------------------------------------------ files
 
     def _file(self, plan_id: str) -> _OutreachFile:
-        return _OutreachFile(self.root, run_id=plan_id)
+        return _OutreachFile(self.root, run_id=self.home(plan_id))
 
     def _inbound(self, plan_id: str) -> _InboundFile:
-        return _InboundFile(self.base / "inbound", run_id=plan_id)
+        return _InboundFile(self.base / "inbound", run_id=self.home(plan_id))
 
     def _contacts(self) -> _ContactFile:
         return _ContactFile(self.base / "contacts", run_id="all")

@@ -46,6 +46,7 @@ class QuoteConfirmationStore:
         self.root = Path(root) / "quote_confirmations"
         self.now = now
         self._lock = InterProcessLock(self.root / ".lock")
+        self.home: Callable[[str], str] = lambda plan_key: plan_key  # a brief that became a plan: both ids name the same event (planning/brief_links.py)
 
     def _file(self) -> _File:
         return _File(self.root, run_id="all")
@@ -53,7 +54,7 @@ class QuoteConfirmationStore:
     def history(self, plan_key: str, message_id: str) -> list[QuoteConfirmation]:
         if not (self.root / "quote_confirmation-all.jsonl").exists():
             return []
-        return [c for c in self._file().read() if c.plan_key == plan_key and c.message_id == message_id]
+        return [c for c in self._file().read() if self.home(c.plan_key) == self.home(plan_key) and c.message_id == message_id]
 
     def latest(self, plan_key: str, message_id: str) -> dict[str, QuoteConfirmation]:
         out: dict[str, QuoteConfirmation] = {}
@@ -106,6 +107,7 @@ class QuoteAssessment(_Model):
     index: float  # confirmed required fields over required fields
     comparable: bool
     issues: tuple[Issue, ...] = ()
+    match_method: str = "unknown"  # how the reply was filed under this event: header, sender, assigned, pasted (see InboundMessage)
 
 
 def _issues(category: VendorCategory, by: dict[str, FieldView], guests: int, diets: tuple[str, ...]) -> list[Issue]:
@@ -158,7 +160,7 @@ def assess(msg: InboundMessage, category: VendorCategory, confirmations: dict[st
     comparable = confirmed == len(required) and by["available"].value == "yes" and not any(i.blocking and not i.tentative for i in issues)
     return QuoteAssessment(
         message_id=msg.message_id, vendor_id=msg.vendor_id, category=category, received_at=msg.received_at, template_used=reading.template_used, fields=tuple(views), required_total=len(required),
-        confirmed_required=confirmed, read_required=read, index=round(confirmed / len(required), 3), comparable=comparable, issues=tuple(issues),
+        confirmed_required=confirmed, read_required=read, index=round(confirmed / len(required), 3), comparable=comparable, issues=tuple(issues), match_method=msg.match_method,
     )
 
 

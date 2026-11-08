@@ -301,6 +301,10 @@ class LiftBody(_Strict):
     acknowledge_reason: bool = False  # required for an address that bounced: you confirm you have read why
 
 
+class AssignReplyBody(_Strict):
+    plan_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")  # the event (a plan or a brief) the held reply answered
+
+
 class ByBody(_Strict):
     by: str = Field(min_length=1, max_length=80)
 

@@ -24,8 +24,9 @@ from eventmate.sourcing.suppression import SuppressionStore, UnmatchedStore, nor
 from eventmate.messaging.channels import Channel, ChannelError, Inbound, KnownThread, OutcomeUnknown, ThreadRef
 from eventmate.integrations.deals import extract_mentions
 from eventmate.messaging.outreach import OutreachStore, basis_sha256
+from eventmate.messaging.reply_review import ReplyReviewStore
 from eventmate.schemas import (
-    AmountMention, AutoreplyStatus, ConversationThread, Inbox, InboundMessage, Mandate, OutreachDraft, PlanVersion, PollResult, ReplyAnalysis,
+    AmountMention, AutoreplyStatus, ConversationThread, Inbox, InboundMessage, Mandate, OutreachDraft, PlanVersion, PollResult, ReplyAnalysis, ReplyCandidate, ReplyReview,
 )
 
 def _address_key(channel: str, value: str) -> str:
@@ -126,6 +127,9 @@ class ConversationService:
         self._last_whatsapp: datetime | None = None
         self.suppressions: SuppressionStore | None = None  # set by to;doh-the event planner: the do-not-contact list, checked at approval and again when a message is about to be sent
         self.unmatched: UnmatchedStore | None = None  # set by to;doh-the event planner: stop-like mail and bounces that are not tied to anything we sent, for the user to review
+        self.reviews: ReplyReviewStore | None = None  # set by to;doh-the event planner: replies that cannot be tied to one event, held for the user to assign
+        self.event_key: Callable[[str], str] = lambda plan_id: plan_id  # set by the planner: a brief that became a plan is the same event as that plan
+        self.on_reply: Callable[[str], None] = lambda plan_id: None  # set by the planner: a reply landed under this brief or plan
         self.guards: list[Callable[[OutreachDraft], str | None]] = []  # each may veto an automatic send at dispatch time (for example: its job was cancelled)
         self.read_attachment: Callable[[str, str, bytes], str | None] | None = None  # set by to;doh-the event planner only when the user turned it on: (vendor id, file name, bytes) -> the quote document id, or None
         self.health: Callable[[], str | None] | None = None  # set by to;doh-the event planner: why nothing may be sent or approved right now (a damaged record file), or None
@@ -323,7 +327,7 @@ class ConversationService:
         """Send what is due, read every channel for replies, let a standing permission answer routine ones, then send again. A failing channel is reported, not fatal."""
         sent, waiting = self.dispatch()
         sent_drafts = self._threads()
-        new = ignored = 0
+        new = ignored = held = 0
         touched: list[tuple[str, str]] = []
         errors: list[str] = []
         for name, channel in self.channels.items():
@@ -347,6 +351,14 @@ class ConversationService:
                     ignored += 1
                     continue
                 match = self._match(item, [(pid, d) for pid, d in sent_drafts if d.channel == name])
+                if isinstance(match, list):  # two or more events were written to at this address and nothing in the reply says which: the user says
+                    if self.reviews is not None and not self.reviews.seen(item.channel, item.external_id):
+                        self.reviews.add(item.channel, item.sender, item.received_at, item.external_id, item.subject, item.body, [
+                            ReplyCandidate(plan_id=p, draft_id=d.draft_id, vendor_name=d.vendor_name, asked_at=d.sent_at, event=self._event_label(p)) for p, d in match])
+                        held += 1
+                    else:
+                        ignored += 1
+                    continue
                 if match is None:
                     if self.unmatched is not None and analyze_reply(item.body, ()).asks_to_stop:
                         self.unmatched.add(item.channel, item.sender, item.received_at, item.external_id, "stop_like", item.body)  # not tied to anything we sent: shown to the user, changes nothing
@@ -362,24 +374,37 @@ class ConversationService:
         if queued:
             more, waiting = self.dispatch()
             sent += more
-        return PollResult(new_messages=new, ignored=ignored, sent=sent, waiting=tuple(waiting), errors=tuple(errors))
+        return PollResult(new_messages=new, ignored=ignored, sent=sent, waiting=tuple(waiting), errors=tuple(errors), held=held)
 
-    @staticmethod
-    def _match(item: Inbound, candidates: list[tuple[str, OutreachDraft]]) -> tuple[str, OutreachDraft] | None:
-        """Which sent message does this answer? An email's reply headers first, then the sender's address; strangers match nothing."""
+    def _match(self, item: Inbound, candidates: list[tuple[str, OutreachDraft]]) -> tuple[str, OutreachDraft, str] | list[tuple[str, OutreachDraft]] | None:
+        """Which sent message does this answer? Returns ``(plan id, draft, method)``; a list when it cannot be said; None for a stranger.
+
+        An email's reply headers first (method ``header``). Without them, the sender's address: if only one event was ever written to at that address the reply is matched there, labelled
+        ``sender``; if two or more were, the newest draft of each is returned as a list and the reply goes to the user to assign. The address never picks between events."""
         refs = set((item.in_reply_to + " " + item.references).split())
         if item.channel == "email":
             by_header = [(p, d) for p, d in candidates if d.external_id and d.external_id in refs]
             if by_header:
-                return by_header[-1]
+                return (*by_header[-1], "header")
         same = [(p, d) for p, d in candidates if d.sent_at is not None and d.recipient.lower() == item.sender.lower() and item.received_at >= d.sent_at - timedelta(seconds=60)]
-        return max(same, key=lambda pd: pd[1].sent_at or datetime.min.replace(tzinfo=item.received_at.tzinfo)) if same else None
+        if not same:
+            return None
+        floor = datetime.min.replace(tzinfo=item.received_at.tzinfo)
+        newest: dict[str, tuple[str, OutreachDraft]] = {}  # one per event, the newest request to this address
+        for p, d in same:
+            key = self.event_key(d.plan_id if d.plan_id else p)
+            if key not in newest or (d.sent_at or floor) >= (newest[key][1].sent_at or floor):
+                newest[key] = (p, d)
+        if len(newest) > 1:
+            return sorted(newest.values(), key=lambda pd: pd[1].sent_at or floor)
+        p, d = next(iter(newest.values()))
+        return p, d, "sender"
 
-    def _store(self, item: Inbound, pid: str, d: OutreachDraft) -> InboundMessage | None:
+    def _store(self, item: Inbound, pid: str, d: OutreachDraft, method: str = "unknown") -> InboundMessage | None:
         checklist = self.store.checklists.get(d.category.value, ())
         msg = InboundMessage(
             message_id=uuid.uuid4().hex, plan_id=pid, draft_id=d.parent_id or d.draft_id, vendor_id=d.vendor_id, vendor_name=d.vendor_name, vendor_origin=d.vendor_origin, category=d.category,
-            channel=item.channel, sender=item.sender, received_at=item.received_at, external_id=item.external_id, body=item.body, truncated=item.truncated,
+            channel=item.channel, sender=item.sender, received_at=item.received_at, external_id=item.external_id, body=item.body, truncated=item.truncated, match_method=method,
             attachments=item.attachments, analysis=analyze_reply(item.body, checklist),
             sender_differs=item.channel == "email" and _address_key(item.channel, item.sender) != _address_key(item.channel, d.recipient),
             auto_handled=not self.autoreply_status(pid).active,  # a reply that arrives while no permission is active can never be answered automatically later
@@ -395,6 +420,8 @@ class ConversationService:
                     docs.append(doc)
             msg = msg.model_copy(update={"quote_documents": tuple(docs[:2])})
         stored = self.store.add_inbound(msg)
+        if stored is not None:
+            self.on_reply(pid)
         if stored is not None and stored.analysis.asks_to_stop:
             if stored.sender_differs:  # right thread, wrong address: anyone could have written it, so it adds nothing; the user reads it
                 if self.unmatched is not None:
@@ -403,6 +430,41 @@ class ConversationService:
                 self.suppressions.add(d.channel, d.recipient, "stop_request", stored.message_id, "system: stop request in a matched reply")
                 self.apply_block(d.channel, d.recipient)
         return stored
+
+    # ------------------------------------------------------------ replies held for the user
+
+    def _event_label(self, plan_id: str) -> str:
+        try:
+            r = self.plan_lookup(plan_id).request
+            return f"{r.event_type.value.replace('_', ' ')} in {r.city} on {r.event_date.isoformat()} for {r.guest_count} guests"[:160]
+        except Exception:
+            return ""
+
+    def assign_review(self, review_id: str, plan_id: str) -> InboundMessage | None:
+        """The user says which event a held reply answers. It is filed there, labelled as the user's choice, read and handled like any other reply."""
+        if self.reviews is None:
+            raise ValueError("no replies are held here")
+        review = self.reviews.get(review_id)
+        if review is None:
+            raise ValueError("no such reply")
+        if review.status != "open":
+            raise ValueError(f"this reply is already {review.status}")
+        want = self.event_key(plan_id)
+        cand = next((c for c in review.candidates if self.event_key(c.plan_id) == want or c.plan_id == plan_id), None)
+        if cand is None:
+            raise ValueError("that event is not one this vendor was asked about at this address")
+        d = self.store.get(cand.plan_id, cand.draft_id)
+        if d is None:
+            raise ValueError("the request this would answer is no longer here")
+        item = Inbound(channel=review.channel, sender=review.sender, external_id=review.external_id, received_at=review.received_at, body=review.body, subject=review.subject)
+        stored = self._store(item, cand.plan_id, d, "assigned")
+        self.reviews.resolve(review_id, "assigned", plan_id)
+        return stored
+
+    def dismiss_review(self, review_id: str) -> ReplyReview:
+        if self.reviews is None:
+            raise ValueError("no replies are held here")
+        return self.reviews.resolve(review_id, "dismissed")
 
     # ------------------------------------------------------------ do not contact
 

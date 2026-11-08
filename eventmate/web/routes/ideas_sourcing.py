@@ -14,6 +14,7 @@ from eventmate.web.base import (
     UserVendorBody,
     QuoteRetractBody,
     AccessBody,
+    AssignReplyBody,
     ByBody,
     CommunityItemBody,
     ConfirmContactBody,
@@ -337,6 +338,28 @@ def register(app, k):
         with lock:
             s = em.suppress_unmatched(message_id, b.by)
         return out(s, 201)
+
+    @app.get("/api/reply-reviews")
+    def reply_reviews_get():
+        """Replies from an address we wrote to for more than one event, with nothing in them saying which. Nothing is filed, read or priced until you pick the event."""
+        with lock:
+            items = em.reply_reviews_open()
+        return jsonify([json.loads(r.model_dump_json()) for r in items])
+
+    @app.post("/api/reply-reviews/<review_id>/assign")
+    def reply_review_assign(review_id):
+        review_id, b = pid(review_id), body(AssignReplyBody)
+        with lock:
+            msg = em.assign_reply(review_id, b.plan_id)
+        return out(msg, 201)
+
+    @app.post("/api/reply-reviews/<review_id>/dismiss")
+    def reply_review_dismiss(review_id):
+        review_id = pid(review_id)
+        body(EmptyBody)
+        with lock:
+            r = em.dismiss_reply_review(review_id)
+        return out(r)
 
     @app.get("/api/community/profiles")
     def community_profiles():

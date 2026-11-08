@@ -82,6 +82,7 @@ class StagingStore:
         self.root = Path(root) / "staging"
         self.now = now
         self._lock = InterProcessLock(self.root / ".lock")
+        self.protect: Callable[[str], bool] = lambda staged_id: False  # set by the service: a brief with a request still unanswered is neither expired nor swept (audit A4)
 
     def _file(self, staged_id: str) -> _StagedFile:
         if not STAGED_ID.fullmatch(staged_id or ""):
@@ -94,7 +95,7 @@ class StagingStore:
 
     def _view(self, row: StagedIntake) -> StagedIntake:
         """A pending one past its time reads as expired; nothing is written for that."""
-        if row.state == "pending_validation" and self.now() >= row.expires_at:
+        if row.state == "pending_validation" and self.now() >= row.expires_at and not self.protect(row.staged_id):
             return row.model_copy(update={"state": "expired"})
         return row
 
@@ -184,7 +185,7 @@ class StagingStore:
             if row is None:
                 continue
             old = row.expires_at if row.state == "pending_validation" else row.updated_at + KEEP_FINISHED
-            if row.state != "processing" and now > old and not p.is_symlink():
+            if row.state != "processing" and now > old and not p.is_symlink() and not (row.state == "pending_validation" and self.protect(row.staged_id)):
                 try:
                     os.unlink(p)
                 except FileNotFoundError:

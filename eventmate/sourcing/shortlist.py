@@ -37,9 +37,10 @@ class ShortlistStore:
         self.now = now
         self.evidence = evidence  # an EvidenceLedger: every address found is written there as discovered, under its own field
         self._lock = InterProcessLock(self.root / ".lock")
+        self.home: Callable[[str], str] = lambda plan_id: plan_id  # a brief that became a plan keeps its list under the brief's id (planning/brief_links.py)
 
     def _entries(self, plan_id: str) -> _EntryFile:
-        return _EntryFile(self.root, run_id=plan_id)
+        return _EntryFile(self.root, run_id=self.home(plan_id))
 
     def _cands(self) -> _CandidateFile:
         return _CandidateFile(self.root, run_id="candidates")
