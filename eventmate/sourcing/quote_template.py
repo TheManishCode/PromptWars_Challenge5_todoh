@@ -81,6 +81,7 @@ def _label_re(label: str) -> re.Pattern:
     return re.compile(r"^[\s>*\-\u2022\d.)]*" + r"\s+".join(words) + r"\s*[:=\-\u2013]\s*(?P<v>.*)$", re.I)
 
 
+_DEPOSIT_WORDS = re.compile(r"\b(?:deposit|advance|booking amount|token amount|baana|bayana|advnce|depost)\b", re.I)
 _LABELS = {key: _label_re(FIELDS[key][0]) for key in FIELDS}
 
 
@@ -232,6 +233,10 @@ def read_message(msg: InboundMessage, category: VendorCategory) -> Reading:
         elif problem:
             out[pk] = Read(pk, "unclear", source="free_text", note=problem)
         sentences = [x for x in re.split(r"(?<=[.!?])\s+|\n+", clean) if x.strip()]
+        if "deposit" in out and out["deposit"].state == "missing":  # a deposit or advance written in the vendor's own words: shown for the user to type, never read into the field (rule 6: a price with a deposit is the user's to look at)
+            dep = next((x for x in sentences if _DEPOSIT_WORDS.search(x) and not _INSTRUCTION.search(x)), "")
+            if dep:
+                out["deposit"] = Read("deposit", "unclear", evidence=" ".join(dep.split())[:200], source="free_text", note="they mention a deposit or advance in their own words, not on the labelled line: read it and type the amount")
         talk = [x for x in sentences if _INSTRUCTION.search(x)]  # a sentence that gives an order is not an answer, whatever words it contains
         said = [x for x in sentences if x not in talk]
         no = [x for x in said if re.search(r"\bnot\s+available|\bunavailable\b|\bbooked\b|can'?t\s+make\s+it", x, re.I)]

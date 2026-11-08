@@ -106,3 +106,10 @@
 ### WP6: hosting for real (docs only)
 - `docs/HOSTING_PLAN.md`: what the app needs from a host (always-on, persistent disk, about 250 MB RAM, outbound SMTP/IMAP, Landlock), what Render, Fly, Google Cloud, Oracle, Railway and Koyeb say today (dated), the ordered steps and a checklist with every item "needs the owner" or "not run". Nothing deployed, no account created. BLOCKED.md and INTEGRATIONS.md updated; the reconciliation note kept in BLOCKED.md.
 
+### WP7: tests and evidence
+- `tests/fixtures/replies/corpus.json`: 23 seeded vendor replies (clear, messy, wrong, late, several amounts and menu tiers, deposit wording, injection attempts in a field, in free text, on the free line, in a menu label and in a deposit sentence, Hinglish, typos, no answer) with the expected state and value of each field, and the rubric in the file. `tests/test_reply_corpus.py` (54): each reply reads as the rubric says; every read value carries the vendor's own words and an unclear field carries no value; an instruction never becomes a value that decides anything; no reply in the corpus records a quote or chooses a vendor.
+- A change the corpus asked for (rubric rule 6, "a reply with a deposit plus a price is the user's to look at"): a deposit or advance written in the vendor's own words (including "advance", "baana", "bayana") now shows on the deposit line as `unclear` with the sentence and "type the amount"; it is never read from free text. An order-like sentence is not offered as a deposit.
+- `tests/test_e2e_money.py`: enquiry, reply, line-by-line confirmation, comparison, choosing the vendor, deposit terms, approval bound to the exact payment, how-to-pay, "I paid", ledger, balance, refund and taking the choice back, on fakes; the only thing sent is the approved enquiry.
+- Controls (each break shown to fail): free-text deposit not surfaced (3), a total accepted as a per-plate price (1), menu labels not screened for orders (1, after adding the case), orders not set apart from answers (2).
+- Existing end-to-end coverage kept: the hosted journey (`tests/test_hosted_journey.py`), reply matching, mail polling, OAuth, payments, quote fit.
+
