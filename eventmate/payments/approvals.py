@@ -20,8 +20,9 @@ from eventmate.jsonl import InterProcessLock, JsonlLog
 from eventmate.schemas import MAX_BUDGET_INR, _Model
 
 APPROVAL_TTL = timedelta(hours=24)
-LIVE = ("proposed", "approved", "executing", "instructed", "submitted")  # a proposal in one of these holds its (terms, kind): no second one is made beside it
-Status = Literal["proposed", "approved", "executing", "instructed", "submitted", "paid", "failed", "cancelled", "expired"]
+EXECUTING_LEASE = timedelta(minutes=5)  # a payment claimed for carrying out and never finished (the process died) is treated as unknown after this, never as failed and never carried out again
+LIVE = ("proposed", "approved", "executing", "instructed", "submitted", "outcome_unknown")  # a proposal in one of these holds its (terms, kind): no second one is made beside it. "outcome_unknown" stays here on purpose
+Status = Literal["proposed", "approved", "executing", "instructed", "submitted", "outcome_unknown", "paid", "failed", "cancelled", "expired"]
 
 
 def payment_hash(plan_id: str, terms_id: str, terms_version: int, kind: str, amount_inr: int, currency: str, payee_name: str, payee_method: str, payee_handle: str, quote_message_id: str) -> str:
@@ -51,6 +52,7 @@ class PaymentProposal(_Model):
     approved_at: datetime | None = None
     provider: str = Field(default="", max_length=30)
     provider_ref: str = Field(default="", max_length=100)
+    executing_since: datetime | None = None  # when it was claimed for carrying out
     instruction: str = Field(default="", max_length=1500)
     paid_by: str | None = Field(default=None, min_length=1, max_length=60)
     paid_at: datetime | None = None
@@ -77,7 +79,7 @@ class PaymentEvent(_Model):
     event_id: str = Field(pattern=r"^[0-9a-f]{32}$")
     plan_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     at: datetime
-    kind: Literal["terms_proposed", "terms_confirmed", "proposed", "approved", "refused", "attempted", "instructed", "submitted", "paid", "failed", "cancelled", "expired", "reconciled", "refund", "note"]
+    kind: Literal["terms_proposed", "terms_confirmed", "proposed", "approved", "refused", "attempted", "instructed", "submitted", "unknown", "paid", "failed", "cancelled", "expired", "reconciled", "refund", "note"]
     by: str = Field(default="", max_length=60)
     proposal_id: str = Field(default="", max_length=32)
     terms_id: str = Field(default="", max_length=32)

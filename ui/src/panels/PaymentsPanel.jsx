@@ -9,6 +9,7 @@ import { categoryLabel } from '../lib/vendors';
 const METHODS = { upi: 'UPI', bank_transfer: 'Bank transfer', paypal: 'PayPal', cash: 'Cash', cheque: 'Cheque', card_link: 'A card payment link', other: 'Another way' };
 const STATE = {
   proposed: 'Waiting for your approval', approved: 'Approved: now say how it will be paid', instructed: 'Waiting for you to pay and confirm', submitted: 'Submitted to the provider: confirm when it is paid',
+  outcome_unknown: 'We could not tell whether it went through: look, then say',
   paid: 'Paid, as you confirmed', failed: 'Did not go through', cancelled: 'Cancelled', expired: 'Expired: propose it again',
 };
 
@@ -51,6 +52,16 @@ function Payment({ p, post, busy }) {
         </div>
       )}
       {p.status === 'approved' && <div className="row"><button type="button" className="btn btn--small" disabled={busy} onClick={() => post(`/${p.proposal_id}/instruct`, { provider: 'manual' })}>Show me how to pay</button></div>}
+      {p.status === 'outcome_unknown' && (
+        <>
+          <Notice tone="warn">{p.error || 'The answer was lost, so nobody knows whether this was paid.'} Nothing will be sent again by itself. Check with the provider or your bank, then tell the app what you found.</Notice>
+          <label className="field"><span>The reference, if it went through (optional)</span><input type="text" maxLength={100} value={ref} onChange={(e) => setRef(e.target.value)} /></label>
+          <div className="row">
+            <button type="button" className="chip chip--strong" disabled={busy} onClick={() => post(`/${p.proposal_id}/paid`, { reference: ref.trim() })}>It went through</button>
+            <button type="button" className="chip" disabled={busy} onClick={() => post(`/${p.proposal_id}/failed`, { note: 'checked: it did not go through' })}>It did not go through</button>
+          </div>
+        </>
+      )}
       {(p.status === 'instructed' || p.status === 'submitted') && (
         <>
           {p.instruction && <p className="exact-note">{p.instruction}</p>}
@@ -69,7 +80,7 @@ function Payment({ p, post, busy }) {
 
 function Terms({ t, payments, post, busy }) {
   const mine = payments.filter((p) => p.terms_id === t.terms_id);
-  const live = mine.some((p) => ['proposed', 'approved', 'executing', 'instructed', 'submitted'].includes(p.status));
+  const live = mine.some((p) => ['proposed', 'approved', 'executing', 'instructed', 'submitted', 'outcome_unknown'].includes(p.status));
   const [refund, setRefund] = useState('');
   return (
     <div className="terms" data-terms={t.terms_id}>

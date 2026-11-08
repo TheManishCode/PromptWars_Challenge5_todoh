@@ -31,7 +31,12 @@ SANDBOX_HOST = "api-m.sandbox.paypal.com"  # the only host this adapter will tal
 
 
 class ProviderError(Exception):
-    """A provider could not carry out or report a payment. The message is fixed wording: no secret, none of the provider's own text."""
+    """A provider refused, or could not even be asked: the payment definitely did not happen. The message is fixed wording: no secret, none of the provider's own text."""
+
+
+class ProviderOutcomeUnknown(ProviderError):
+    """The request may have reached the provider and the answer was lost (a connection that failed or timed out after sending, or a 5xx or 429): the payment may or may not have happened. It is NEVER
+    retried and never called failed; only the user, looking at the provider or their bank, can say which. The same shape as the email side's ``OutcomeUnknown``."""
 
 
 @dataclass(frozen=True)
@@ -75,6 +80,8 @@ class PaymentProvider(Protocol):
 
     def reconcile(self, req: PaymentRequest, reference: str) -> tuple[str, str]: ...
 
+    def find(self, proposal_id: str) -> ProviderStatus: ...  # an attempt whose outcome is unknown: what the provider can say about it from our own id
+
 
 class ManualProvider:
     name = "manual"
@@ -92,6 +99,9 @@ class ManualProvider:
 
     def reconcile(self, req: PaymentRequest, reference: str) -> tuple[str, str]:
         return "unknown", "only you can say whether a manual payment was made"
+
+    def find(self, proposal_id: str) -> ProviderStatus:
+        return ProviderStatus(reference="", state="unknown", detail="a manual payment is confirmed by you")
 
 
 @dataclass(frozen=True)
@@ -165,15 +175,19 @@ class PayPalSandboxProvider:
             "items": [{"recipient_type": "EMAIL", "receiver": req.payee_handle, "amount": {"value": f"{req.amount_inr}.00", "currency": req.currency}, "note": f"{req.kind} for the agreed quote"[:200],
                        "sender_item_id": req.proposal_id}],
         }).encode()
+        headers = {"Authorization": f"Bearer {self._access_token()}", "Content-Type": "application/json", "Accept": "application/json", "PayPal-Request-Id": req.proposal_id}  # (a token that cannot be had is a plain failure: nothing was sent yet)
         try:
-            status, doc = self._call("POST", "/v1/payments/payouts", {"Authorization": f"Bearer {self._access_token()}", "Content-Type": "application/json", "Accept": "application/json",
-                                                                         "PayPal-Request-Id": req.proposal_id}, body)
+            status, doc = self._call("POST", "/v1/payments/payouts", headers, body)
         except (OSError, ssl.SSLError, http.client.HTTPException):
-            raise ProviderError("the connection to PayPal's sandbox failed while submitting: check its status before trying again") from None
+            raise ProviderOutcomeUnknown("the connection to PayPal's sandbox failed while submitting: the payment may or may not have been accepted, so it is not retried. Look in PayPal's sandbox for a payout "
+                                         f"with sender batch id {req.proposal_id}, then say whether it went through") from None
         batch = (doc.get("batch_header") or {}).get("payout_batch_id") if isinstance(doc.get("batch_header"), dict) else None
         if status in (200, 201) and isinstance(batch, str) and batch:
             return Instruction(provider=self.name, reference=batch[:100], text="Submitted to PayPal's sandbox. No real money moved.", state="submitted", moved_money=False)
-        raise ProviderError("PayPal's sandbox refused the payment" if status in (400, 403, 422) else f"PayPal's sandbox answered HTTP {status}")
+        if status in (200, 201, 202, 408, 429) or status >= 500:  # an answer that is not a clear yes or no: accepted without an id, throttled, or a server error
+            raise ProviderOutcomeUnknown(f"PayPal's sandbox answered HTTP {status} without a clear result: the payment may or may not have been accepted, so it is not retried. Look in PayPal's sandbox for a payout "
+                                         f"with sender batch id {req.proposal_id}, then say whether it went through")
+        raise ProviderError("PayPal's sandbox refused the payment" if status in (400, 401, 403, 404, 409, 422) else f"PayPal's sandbox answered HTTP {status}")
 
     def status(self, reference: str) -> ProviderStatus:
         self._require()
@@ -192,6 +206,12 @@ class PayPalSandboxProvider:
     def reconcile(self, req: PaymentRequest, reference: str) -> tuple[str, str]:
         st = self.status(reference)
         return st.state, st.detail
+
+    def find(self, proposal_id: str) -> ProviderStatus:
+        """What PayPal can say about an attempt whose outcome is unknown, from our own id. This adapter does NOT claim a lookup by sender batch id: the endpoint for it was not found in the pages read
+        (docs/INTEGRATIONS.md), so the honest answer is "unknown" and where to look. The user's step (it went through / it did not) is the reconciliation."""
+        self._require()
+        return ProviderStatus(reference="", state="unknown", detail=f"look for a payout with sender batch id {proposal_id} in PayPal's sandbox, then tell the app what you find")
 
 
 def provider_from_env(env: Mapping[str, str], transport: Transport | None = None) -> dict[str, PaymentProvider]:

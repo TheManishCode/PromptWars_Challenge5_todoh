@@ -310,12 +310,106 @@ def test_the_sandbox_adapter_submits_an_approved_payment_once_with_the_proposal_
         em.payments.instruct(plan_id, p.proposal_id, "paypal_sandbox", "Asha")
 
 
-def test_a_failed_submission_is_final_for_that_proposal_and_names_no_secret(tmp_path):
-    em, plan_id, t, p = paypal_world(tmp_path, FakePayPal(fail=True))
+def payout_posts(fake):
+    return [c for c in fake.calls if c[0] == "POST" and c[1] == "/v1/payments/payouts"]
+
+
+def test_a_refusal_is_a_failure_that_frees_the_slot_and_names_no_secret(tmp_path):
+    fake = FakePayPal(status=422)
+    em, plan_id, t, p = paypal_world(tmp_path, fake)
     done = em.payments.instruct(plan_id, p.proposal_id, "paypal_sandbox", "Asha")
-    assert done.status == "failed" and "check its status before trying again" in done.error and "csecret" not in done.model_dump_json()
+    assert done.status == "failed" and "refused" in done.error and "csecret" not in done.model_dump_json()
     with pytest.raises(ValueError, match="failed"):
         em.payments.instruct(plan_id, p.proposal_id, "paypal_sandbox", "Asha")
+    assert em.payments.propose_payment(plan_id, t.terms_id, "deposit", "Asha").status == "proposed", "a refused payment did not happen: a new one may be proposed"
+
+
+@pytest.mark.parametrize("lost", ["reset", 500, 503, 429])
+def test_a_lost_answer_is_an_unknown_outcome_that_is_never_retried_and_never_paid_twice(tmp_path, lost):
+    """R-020: PayPal accepted the payout and the answer was lost. The app must not call it failed, must not let a second payment be proposed, and must not post it again."""
+    class LosesTheAnswer(FakePayPal):
+        def __call__(self, method, path, headers, body):
+            self.calls.append((method, path, headers, body))  # PayPal received it...
+            if path == "/v1/oauth2/token":
+                return 200, {"access_token": "tok-sandbox", "expires_in": 3000}
+            if lost == "reset":
+                raise OSError("connection reset")  # ...and the answer was lost
+            return lost, {}
+
+    fake = LosesTheAnswer()
+    em, plan_id, t, p = paypal_world(tmp_path, fake)
+    done = em.payments.instruct(plan_id, p.proposal_id, "paypal_sandbox", "Asha")
+    assert done.status == "outcome_unknown" and "may or may not" in done.error and p.proposal_id in done.error and "csecret" not in done.model_dump_json()
+    assert len(payout_posts(fake)) == 1
+    with pytest.raises(ValueError, match="already in progress"):
+        em.payments.propose_payment(plan_id, t.terms_id, "deposit", "Asha")
+    for again in (lambda: em.payments.approve(plan_id, p.proposal_id, p.content_hash, "Asha"), lambda: em.payments.instruct(plan_id, p.proposal_id, "paypal_sandbox", "Asha"),
+                  lambda: em.payments.cancel(plan_id, p.proposal_id, "Asha")):
+        with pytest.raises(ValueError, match="outcome_unknown"):
+            again()
+    assert len(payout_posts(fake)) == 1, "nothing was posted a second time"
+    says = em.payments.provider_says(plan_id, p.proposal_id)
+    assert says["provider_says"] == "unknown" and p.proposal_id in says["detail"] and says["you_confirmed"] is False
+    assert em.ledger_summary(plan_id).paid_total == 0, "unknown is not paid"
+    assert [e.kind for e in em.payments.proposals.events(plan_id) if e.proposal_id == p.proposal_id][-1] == "unknown"
+
+
+def test_the_user_settles_an_unknown_outcome_either_way_with_their_name(tmp_path):
+    class LosesTheAnswer(FakePayPal):
+        def __call__(self, method, path, headers, body):
+            self.calls.append((method, path, headers, body))
+            if path == "/v1/oauth2/token":
+                return 200, {"access_token": "tok-sandbox", "expires_in": 3000}
+            raise OSError("connection reset")
+
+    fake = LosesTheAnswer()
+    em, plan_id, t, p = paypal_world(tmp_path, fake)
+    em.payments.instruct(plan_id, p.proposal_id, "paypal_sandbox", "Asha")
+    em.payments.mark_failed(plan_id, p.proposal_id, "Asha", "checked the sandbox: no payout")  # it did not go through
+    assert em.ledger_summary(plan_id).paid_total == 0
+    again = em.payments.propose_payment(plan_id, t.terms_id, "deposit", "Asha")
+    em.payments.approve(plan_id, again.proposal_id, again.content_hash, "Asha")
+    em.payments.instruct(plan_id, again.proposal_id, "paypal_sandbox", "Asha")  # unknown again
+    em.payments.mark_paid(plan_id, again.proposal_id, "Asha", "BATCH-FOUND")  # it did go through
+    assert em.ledger_summary(plan_id).paid_total == 10_000 and em.payments.proposals.get(plan_id, again.proposal_id).paid_reference == "BATCH-FOUND"
+    assert [(e.kind, e.by) for e in em.payments.proposals.events(plan_id) if e.kind in ("failed", "paid")] == [("failed", "Asha"), ("paid", "Asha")]
+
+
+def test_a_payment_a_dead_process_was_carrying_out_becomes_unknown_never_failed_and_is_not_carried_out_again(tmp_path):
+    fake = FakePayPal()
+    em, plan_id, t, p = paypal_world(tmp_path, fake)
+    em.payments.proposals.transition(plan_id, p.proposal_id, ("approved",), status="executing", provider="paypal_sandbox", executing_since=em.payments.now)  # claimed, and then the process died
+    assert em.payments.settle_stuck(plan_id) == 0, "inside the lease it may still be running"
+    clock = em.outreach_store.now
+    clock.advance(minutes=6)
+    view = em.payment_view(plan_id)
+    assert [x["status"] for x in view["payments"]] == ["outcome_unknown"] and "stopped" in view["payments"][0]["error"]
+    with pytest.raises(ValueError, match="outcome_unknown"):
+        em.payments.instruct(plan_id, p.proposal_id, "paypal_sandbox", "Asha")
+    with pytest.raises(ValueError, match="already in progress"):
+        em.payments.propose_payment(plan_id, t.terms_id, "deposit", "Asha")
+    assert payout_posts(fake) == []
+
+
+# ---- R-021: freshness is checked again at the moment of carrying out
+
+def test_an_approval_that_ran_out_before_it_was_carried_out_is_refused_expired_and_no_provider_is_called(tmp_path):
+    fake = FakePayPal()
+    em, plan_id, t, p = paypal_world(tmp_path, fake)
+    em.outreach_store.now.advance(hours=25)
+    with pytest.raises(ValueError, match="run out"):
+        em.payments.instruct(plan_id, p.proposal_id, "paypal_sandbox", "Asha")
+    assert em.payments.proposals.get(plan_id, p.proposal_id).status == "expired"
+    assert fake.calls == [], "the provider was never asked: not even for a token"
+
+
+def test_terms_that_moved_on_after_the_approval_stop_it_being_carried_out(tmp_path):
+    fake = FakePayPal()
+    em, plan_id, t, p = paypal_world(tmp_path, fake)
+    em.payments.terms.update(plan_id, t.terms_id, payee_name="Someone Else Entirely")  # another path moves the terms after the approval
+    with pytest.raises(ValueError, match="terms changed"):
+        em.payments.instruct(plan_id, p.proposal_id, "paypal_sandbox", "Asha")
+    assert em.payments.proposals.get(plan_id, p.proposal_id).status == "cancelled" and fake.calls == []
 
 
 def test_paypal_pays_only_a_payee_with_a_paypal_address_and_only_when_switched_on():

@@ -5,7 +5,9 @@ Rules, each of them tested with the guard broken:
 * terms are proposed from a vendor reply whose price and deposit the user has confirmed, and confirmed by the user with who is paid and how; deposit and balance always add up to the total;
 * a payment is for exactly one (terms, kind) and never more than what is left to pay; a second live one beside it is refused;
 * approval is bound to a hash of the exact amount, currency, payee and quote, expires after 24 hours, and is refused if the terms changed after it was proposed;
-* an approved payment is carried out once: it is claimed under a cross-process lock and a provider that fails or has an unknown outcome is never retried by itself;
+* an approved payment is carried out once: it is claimed under a cross-process lock. A provider that refuses is a failure. A provider whose answer was lost (a connection that failed after sending, a timeout, a 5xx or 429)
+  is an UNKNOWN outcome: it stays live, so no second payment for the same terms can be proposed, it is never retried, and only the user (looking at the provider or their bank) can say it went through or did not.
+  A payment claimed and then abandoned by a dead process becomes unknown after a lease, never failed;
 * the app records a payment as paid only when the user says so; a provider's own report is shown beside it and never records anything;
 * refunds, failures and disputes are explicit steps by a named person, each a line in the event log and, for money, an entry in the budget ledger;
 * an external provider is never used from a hosted visitor's workspace.
@@ -17,7 +19,7 @@ from collections.abc import Callable
 from datetime import date, datetime
 
 from eventmate.payments import approvals as ap
-from eventmate.payments.providers import Instruction, PaymentProvider, PaymentRequest, ProviderError
+from eventmate.payments.providers import Instruction, PaymentProvider, PaymentRequest, ProviderError, ProviderOutcomeUnknown
 from eventmate.payments.terms import PaymentTerms, TermsStore
 from eventmate.schemas import VendorCategory
 
@@ -70,7 +72,21 @@ class PaymentDesk:
             return max(0, t.deposit_inr - t.paid_inr)
         return max(0, t.total_inr - max(t.paid_inr, t.deposit_inr))
 
+    def settle_stuck(self, plan_id: str) -> int:
+        """A payment claimed for carrying out whose process never finished is now an unknown outcome: it may or may not have reached the provider, so it is neither retried nor called failed."""
+        n = 0
+        for p in self.proposals.all(plan_id):
+            if p.status == "executing" and (p.executing_since is None or self.now - p.executing_since > ap.EXECUTING_LEASE):
+                try:
+                    q = self.proposals.transition(plan_id, p.proposal_id, ("executing",), status="outcome_unknown", error="the app stopped while this was being carried out: it may or may not have gone through")
+                except ValueError:
+                    continue  # someone else settled it first
+                self.proposals.log(plan_id, "unknown", proposal_id=q.proposal_id, amount_inr=q.amount_inr, provider=q.provider, detail="the app stopped while carrying it out")
+                n += 1
+        return n
+
     def propose_payment(self, plan_id: str, terms_id: str, kind: str, by: str) -> ap.PaymentProposal:
+        self.settle_stuck(plan_id)
         t = self.terms.get(plan_id, terms_id)
         if t is None:
             raise ValueError("no such payment terms")
@@ -128,6 +144,7 @@ class PaymentDesk:
 
     def instruct(self, plan_id: str, proposal_id: str, provider_name: str = "manual", by: str = "") -> ap.PaymentProposal:
         """Carry out an approved payment, once. The manual provider says what to pay; an external one submits it. A failure is final for this proposal: nothing retries it by itself."""
+        self.settle_stuck(plan_id)
         providers = self.providers()
         prov: PaymentProvider | None = providers.get(provider_name)
         if prov is None:
@@ -141,12 +158,16 @@ class PaymentDesk:
         if why:
             self.proposals.transition(plan_id, proposal_id, ("approved",), status="expired" if "run out" in why else "cancelled", error=why)
             raise ValueError(why)
-        claimed = self.proposals.transition(plan_id, proposal_id, ("approved",), status="executing", provider=provider_name)  # the claim: only one caller gets past this
+        claimed = self.proposals.transition(plan_id, proposal_id, ("approved",), status="executing", provider=provider_name, executing_since=self.now)  # the claim: only one caller gets past this
         self.proposals.log(plan_id, "attempted", by=by or (claimed.approved_by or ""), proposal_id=proposal_id, amount_inr=claimed.amount_inr, provider=provider_name)
         req = PaymentRequest(proposal_id=claimed.proposal_id, plan_id=plan_id, kind=claimed.kind, amount_inr=claimed.amount_inr, currency=claimed.currency, payee_name=claimed.payee_name,
                              payee_method=claimed.payee_method, payee_handle=claimed.payee_handle, quote_message_id=claimed.quote_message_id)
         try:
             ins: Instruction = prov.create_instruction(req)
+        except ProviderOutcomeUnknown as exc:  # it may have gone through: stays live, is never retried, and waits for the user to say which
+            p = self.proposals.transition(plan_id, proposal_id, ("executing",), status="outcome_unknown", error=str(exc)[:300])
+            self.proposals.log(plan_id, "unknown", by=by, proposal_id=proposal_id, amount_inr=p.amount_inr, provider=provider_name, detail=str(exc)[:300])
+            return p
         except ProviderError as exc:
             p = self.proposals.transition(plan_id, proposal_id, ("executing",), status="failed", error=str(exc)[:300])
             self.proposals.log(plan_id, "failed", by=by, proposal_id=proposal_id, amount_inr=p.amount_inr, provider=provider_name, detail=str(exc)[:300])
@@ -162,6 +183,12 @@ class PaymentDesk:
         if p is None:
             raise ValueError("no such payment")
         prov = self.providers().get(p.provider)
+        if prov is not None and not p.provider_ref and p.status == "outcome_unknown":  # no id came back: ask by our own, which a provider may or may not be able to answer
+            try:
+                st = prov.find(p.proposal_id)
+            except ProviderError as exc:
+                return {"provider": p.provider, "provider_says": "unknown", "detail": str(exc), "you_confirmed": False}
+            return {"provider": p.provider, "provider_says": st.state, "detail": st.detail, "you_confirmed": False}
         if prov is None or not p.provider_ref:
             return {"provider": p.provider, "provider_says": "unknown", "detail": "nothing to ask a provider about", "you_confirmed": p.status == "paid"}
         try:
@@ -184,7 +211,7 @@ class PaymentDesk:
         if t is None:
             raise ValueError("no such payment terms")
         with self.proposals.lock():  # claim the recording once, so two tabs never write the money twice
-            p = self.proposals.transition(plan_id, proposal_id, ("instructed", "submitted"), status="paid", paid_by=by, paid_at=self.now, paid_reference=(reference or "")[:100])
+            p = self.proposals.transition(plan_id, proposal_id, ("instructed", "submitted", "outcome_unknown"), status="paid", paid_by=by, paid_at=self.now, paid_reference=(reference or "")[:100])
         self._ledger_add(plan_id, "payment", t.category, p.amount_inr, f"{p.kind} to {p.payee_name} (confirmed by {by})"[:200])
         paid = t.paid_inr + p.amount_inr
         self.terms.update(plan_id, t.terms_id, paid_inr=paid, status="paid" if paid >= t.total_inr else "deposit_paid")
@@ -195,7 +222,7 @@ class PaymentDesk:
         by = (by or "").strip()
         if not 1 <= len(by) <= 60:
             raise ValueError("say who is recording this (a name)")
-        p = self.proposals.transition(plan_id, proposal_id, ("instructed", "submitted", "approved"), status="failed", error=(note or "the user says the payment did not go through")[:300])
+        p = self.proposals.transition(plan_id, proposal_id, ("instructed", "submitted", "approved", "outcome_unknown"), status="failed", error=(note or "the user says the payment did not go through")[:300])
         self.proposals.log(plan_id, "failed", by=by, proposal_id=proposal_id, amount_inr=p.amount_inr, provider=p.provider, detail=(note or "did not go through")[:300])
         return p
 

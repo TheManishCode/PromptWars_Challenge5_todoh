@@ -1086,6 +1086,7 @@ class EventMate:
     def payment_view(self, plan_id: str) -> dict:
         """Everything about money for a plan: the terms, the payments and what was done to them, the ledger beside them, and the plain statement that the app moves nothing by itself."""
         self.store.latest(plan_id)
+        self.payments.settle_stuck(plan_id)  # a payment a dead process was carrying out is shown as unknown, not as still going
         return {"terms": [json.loads(t.model_dump_json()) for t in self.payments.terms.all(plan_id)], "payments": [json.loads(p.model_dump_json()) for p in self.payments.proposals.all(plan_id)],
                 "events": [json.loads(e.model_dump_json()) for e in self.payments.proposals.events(plan_id)], "external": sorted(k for k in self.payments.providers() if k != "manual") if self.payments.external_allowed else [],
                 "notice": "to;doh-the event planner records and instructs. It does not hold or move your money by itself, a quote is not a booking, and it does not guarantee that a vendor delivers."}
