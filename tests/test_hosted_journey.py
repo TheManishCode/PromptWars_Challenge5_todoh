@@ -132,6 +132,15 @@ def test_a_visitor_reaches_a_validated_plan_through_the_proxy_with_nothing_sent(
                 form.locator("button[type=submit]").click()
                 page.wait_for_selector(f"[data-vendor]:has-text('Our {cat}')")
 
+            # WP3: a contact made outside the app is written down on the card (and sends nothing)
+            card = page.locator("[data-vendor]").first
+            card.get_by_role("button", name="I contacted them myself").click()
+            found = axe_violations(page)
+            assert found == [], fmt_axe(found)  # the form open
+            card.locator("select").first.select_option("phone")
+            card.get_by_role("button", name="Write it down").click()
+            page.wait_for_selector("text=You wrote down: you contacted them by phone")
+
             _step(page, origin, "message")
             page.get_by_role("button", name="Write one request per business").click()
             page.wait_for_selector("text=Send it yourself instead")
