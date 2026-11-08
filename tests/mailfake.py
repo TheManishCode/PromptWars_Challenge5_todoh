@@ -3,7 +3,9 @@
 The vendor is a function: it reads what was sent (the outbox) and writes replies into the mailbox, with real headers, so threading and parsing are exercised.
 """
 
+import email
 import email.utils
+import imaplib
 import smtplib
 from datetime import datetime, timedelta
 from email.message import EmailMessage
@@ -36,32 +38,74 @@ class FakeSMTP:
 
 
 class FakeIMAP:
+    """A mailbox that answers SEARCH the way an IMAP server does for the criteria the app uses (SINCE, FROM, HEADER) and keeps folders apart. Opening anything but read-only fails the test."""
+
     def __init__(self, world):
         self.world = world
+        self.current = "INBOX"
 
     def login(self, user, password):
-        pass
+        if getattr(self.world, "imap_error", None):
+            raise self.world.imap_error
 
     def select(self, box, readonly=False):
         assert readonly  # polling never changes the mailbox
-        return "OK", [b"1"]
+        name = box.strip('"')
+        if name not in self.world.folders:
+            return "NO", [b"no such mailbox"]
+        self.current = name
+        return "OK", [str(len(self.world.folders[name])).encode()]
+
+    def _messages(self):
+        return self.world.folders[self.current]
 
     def search(self, charset, *criteria):
-        return "OK", [b" ".join(str(i + 1).encode() for i in range(len(self.world.inbox)))]
+        self.world.searches.append(criteria)
+        crit = list(criteria)
+        keep = list(range(1, len(self._messages()) + 1))
+        while crit:
+            word = crit.pop(0).upper()
+            if word == "SINCE":
+                day = datetime.strptime(crit.pop(0), "%d-%b-%Y").date()
+                keep = [n for n in keep if _headers(self._messages()[n - 1]).get("date-day", day) >= day]
+            elif word == "FROM":
+                want = crit.pop(0).strip('"').lower()
+                keep = [n for n in keep if want in _headers(self._messages()[n - 1]).get("from", "").lower()]
+            elif word == "HEADER":
+                if self.world.no_header_search:
+                    raise imaplib.IMAP4.error("SEARCH HEADER is not supported")
+                name, want = crit.pop(0).lower(), crit.pop(0).strip('"')
+                keep = [n for n in keep if want in _headers(self._messages()[n - 1]).get(name, "")]
+            else:
+                raise AssertionError(f"the app searched for something this fake does not know: {word}")
+        return "OK", [b" ".join(str(n).encode() for n in keep)]
 
     def fetch(self, num, spec):
         assert "PEEK" in spec
-        return "OK", [(b"1 (BODY[] {n}", self.world.inbox[int(num) - 1]), b")"]
+        return "OK", [(b"1 (BODY[] {n}", self._messages()[int(num) - 1]), b")"]
 
     def logout(self):
         pass
+
+
+def _headers(raw: bytes) -> dict[str, str]:
+    msg = email.message_from_bytes(raw)
+    out = {k.lower(): str(v) for k, v in msg.items()}
+    try:
+        out["date-day"] = email.utils.parsedate_to_datetime(out["date"]).date()
+    except (KeyError, TypeError, ValueError):
+        pass
+    return out
 
 
 class MailWorld:
     def __init__(self, clock):
         self.clock = clock
         self.outbox: list[EmailMessage] = []
-        self.inbox: list[bytes] = []
+        self.folders: dict[str, list[bytes]] = {"INBOX": [], "Spam": []}
+        self.inbox = self.folders["INBOX"]
+        self.searches: list[tuple] = []
+        self.no_header_search = False
         self.send_error: Exception | None = None
         self.login_error: Exception | None = None
         self._n = 0

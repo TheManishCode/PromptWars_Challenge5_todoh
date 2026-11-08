@@ -11,6 +11,7 @@ only to numbers WhatsApp reports as registered.
 
 from __future__ import annotations
 
+import dataclasses
 import email
 import hashlib
 import os
@@ -35,7 +36,9 @@ from eventmate.schemas import ChannelStatus, _EMAIL
 import contextlib
 
 MAX_BODY_CHARS = 4000
-MAX_POLL_MESSAGES = 50
+MAX_POLL_MESSAGES = 50  # WhatsApp: the newest this many chats per poll
+MAX_THREAD_MESSAGES = 200  # email: the newest this many messages that are replies to, or from the people of, threads we know; anything beyond is counted, never dropped silently
+MAX_OTHER_MESSAGES = 20  # email: the newest this many other messages of the window, for stop requests and delivery notices that name nothing we sent
 MAX_FETCH_BYTES = 262_144
 TIMEOUT_S = 20
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -64,6 +67,18 @@ class KnownThread:
 
 
 @dataclass(frozen=True)
+class PollReport:
+    """What the last poll of a channel did, so a quiet mailbox and a mailbox that could not be read in full do not look the same."""
+
+    examined: int = 0  # messages that are replies to, or from the people of, threads we know
+    fetched: int = 0
+    overflow: int = 0  # of those, how many were left for the next poll because of the per-poll limit
+    spam_found: int = 0  # messages found in the optional spam folder, shown to the user and not filed
+    spam_error: str = ""  # why the spam folder could not be read, when it could not
+    mode: str = "threads"  # "threads": searched by the threads we know; "window": the server could not search that way, so the newest messages since the oldest open thread were read
+
+
+@dataclass(frozen=True)
 class Bounce:
     """A delivery-failure notice (an RFC 3464 report). Only the structured fields are read; the remote server's own words are not kept."""
 
@@ -87,6 +102,7 @@ class Inbound:
     attachments: int = 0
     truncated: bool = False
     bounce: Bounce | None = None
+    folder: str = "INBOX"  # where it was found: anything but the inbox (the spam folder) is shown to the user and never filed, read as a quote or acted on
     files: tuple[tuple[str, bytes], ...] = field(default=(), repr=False, compare=False)  # (name, bytes) of up to MAX_QUOTE_FILES attachments a quote could be read from; never stored, only handed to the reader
 
 
@@ -171,6 +187,7 @@ def _strip_html(html: str) -> str:
     return "".join(p.parts)
 
 
+_SAFE_MESSAGE_ID = re.compile(r"<[^\s\"\\<>()]{1,300}>")  # a Message-ID we made ourselves; anything stranger is not put into a search
 _NESTED_PART = re.compile(rb"(?im)^content-type:[ \t]*(?:multipart|message)/")  # header lines only, so a URL in a body that contains "message/" does not count
 MAX_QUOTE_FILES = 2
 QUOTE_FILE_EXTENSIONS = frozenset({".pdf", ".docx", ".xlsx", ".csv", ".html", ".htm", ".txt", ".png", ".jpg", ".jpeg"})
@@ -189,6 +206,7 @@ class EmailConfig:
     user: str = ""
     password: str = field(default="", repr=False)
     from_addr: str = ""
+    spam_folder: str = ""  # optional: a folder to look in, read-only, for replies the provider filed as spam (EVENTMATE_IMAP_SPAM_FOLDER); empty means it is not looked at
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> EmailConfig:
@@ -201,6 +219,7 @@ class EmailConfig:
             smtp_host=env.get("EVENTMATE_SMTP_HOST", "").strip(), smtp_port=num("EVENTMATE_SMTP_PORT", 465),
             imap_host=env.get("EVENTMATE_IMAP_HOST", "").strip(), imap_port=num("EVENTMATE_IMAP_PORT", 993),
             user=user, password=env.get("EVENTMATE_SMTP_PASSWORD", ""), from_addr=env.get("EVENTMATE_MAIL_FROM", "").strip() or user,
+            spam_folder=env.get("EVENTMATE_IMAP_SPAM_FOLDER", "").strip()[:100],
         )
 
 
@@ -210,6 +229,7 @@ def _imap_date(d: datetime) -> str:
 
 class EmailChannel:
     name = "email"
+    last_poll: PollReport = PollReport()
 
     def __init__(self, config: EmailConfig, smtp_factory: Callable | None = None, imap_factory: Callable | None = None, now: Callable[[], datetime] = lambda: datetime.now(UTC)):
         self.config = config
@@ -278,6 +298,10 @@ class EmailChannel:
         return msg["Message-ID"]
 
     def poll(self, threads: Sequence[KnownThread]) -> list[Inbound]:
+        """Replies to the threads we know, found by asking the mail server for them (``FROM`` the people we wrote to, ``In-Reply-To`` / ``References`` our message ids, and delivery failure notices),
+        not by reading the newest few. Up to ``MAX_THREAD_MESSAGES`` of them newest first; what does not fit is counted in ``last_poll.overflow``. A few of the newest other messages are read as
+        well, so a stop request or a failure notice that names nothing we sent still reaches the user. The mailbox is only ever opened read-only."""
+        self.last_poll = PollReport()
         if not threads:
             return []
         if not self.status().can_receive:
@@ -289,14 +313,12 @@ class EmailChannel:
             try:
                 box.login(self.config.user, self.config.password)
                 box.select("INBOX", readonly=True)
-                typ, data = box.search(None, "SINCE", _imap_date(since))
-                ids = (data[0] or b"").split()[-MAX_POLL_MESSAGES:] if typ == "OK" and data else []
-                for num in ids:
-                    typ, parts = box.fetch(num, f"(BODY.PEEK[]<0.{MAX_FETCH_BYTES}>)")
-                    raw = next((p[1] for p in parts or [] if isinstance(p, tuple)), None) if typ == "OK" else None
-                    item = self._parse(raw) if raw else None
-                    if item:
-                        out.append(item)
+                mine, window, mode = self._search(box, since, threads)
+                take = mine[-MAX_THREAD_MESSAGES:] + [n for n in window if n not in set(mine)][-MAX_OTHER_MESSAGES:]
+                out.extend(self._fetch_all(box, take, "INBOX"))
+                spam, spam_error = self._spam(box, since, threads)
+                out.extend(spam)
+                self.last_poll = PollReport(examined=len(mine), fetched=len(take), overflow=max(0, len(mine) - MAX_THREAD_MESSAGES), spam_found=len(spam), spam_error=spam_error, mode=mode)
             finally:
                 with contextlib.suppress(Exception):
                     box.logout()
@@ -305,6 +327,54 @@ class EmailChannel:
         except (OSError, ssl.SSLError):
             raise ChannelError("could not reach the mail server") from None
         return out
+
+    def _search(self, box, since: datetime, threads: Sequence[KnownThread]) -> tuple[list[int], list[int], str]:
+        """(numbers of the messages tied to threads we know, numbers of the whole window since the oldest open thread, how they were found). Numbers, oldest first."""
+        day = _imap_date(since)
+
+        def run(*criteria: str) -> set[int]:
+            typ, data = box.search(None, "SINCE", day, *criteria)
+            return {int(x) for x in (data[0] or b"").split()} if typ == "OK" and data else set()
+
+        window = sorted(run())
+        try:
+            tied: set[int] = set()
+            for addr in sorted({t.recipient.strip().lower() for t in threads if _EMAIL.fullmatch(t.recipient.strip())}):
+                tied |= run("FROM", f'"{addr}"')
+            for t in threads:
+                if _SAFE_MESSAGE_ID.fullmatch(t.external_id or ""):
+                    tied |= run("HEADER", "In-Reply-To", f'"{t.external_id}"') | run("HEADER", "References", f'"{t.external_id}"')
+            tied |= run("FROM", '"mailer-daemon"') | run("FROM", '"postmaster"')  # delivery failure notices
+        except imaplib.IMAP4.error:  # a server that cannot search this way: read the newest of the window, as before, and say so
+            return window[-MAX_POLL_MESSAGES:], [], "window"
+        return sorted(tied), window, "threads"
+
+    def _fetch_all(self, box, numbers: Sequence[int], folder: str) -> list[Inbound]:
+        out = []
+        for num in numbers:
+            typ, parts = box.fetch(str(num).encode(), f"(BODY.PEEK[]<0.{MAX_FETCH_BYTES}>)")
+            raw = next((p[1] for p in parts or [] if isinstance(p, tuple)), None) if typ == "OK" else None
+            item = self._parse(raw) if raw else None
+            if item:
+                out.append(item if folder == "INBOX" else dataclasses.replace(item, folder=folder, files=()))
+        return out
+
+    def _spam(self, box, since: datetime, threads: Sequence[KnownThread]) -> tuple[list[Inbound], str]:
+        """Replies from the people we wrote to that the provider filed as spam, read-only and only if a folder is named. They are for the user to look at: nothing in them is filed, read as a quote or obeyed."""
+        folder = self.config.spam_folder
+        if not folder:
+            return [], ""
+        try:
+            typ, _ = box.select(f'"{folder}"' if " " in folder else folder, readonly=True)
+            if typ != "OK":
+                return [], "the spam folder could not be opened"
+            day, found = _imap_date(since), set()
+            for addr in sorted({t.recipient.strip().lower() for t in threads if _EMAIL.fullmatch(t.recipient.strip())}):
+                typ, data = box.search(None, "SINCE", day, "FROM", f'"{addr}"')
+                found |= {int(x) for x in (data[0] or b"").split()} if typ == "OK" and data else set()
+            return self._fetch_all(box, sorted(found)[-MAX_OTHER_MESSAGES:], folder), ""
+        except imaplib.IMAP4.error:
+            return [], "the spam folder could not be read"
 
     def _when(self, msg) -> datetime:
         """When a message arrived. The Date header is the sender's own claim: missing, unreadable or out of range it becomes now, and a reply is never dated later than now."""

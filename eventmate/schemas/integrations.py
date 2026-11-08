@@ -644,6 +644,9 @@ class PollResult(_Model):
     waiting: tuple[str, ...] = ()  # why approved drafts have not gone out yet
     errors: tuple[str, ...] = ()
     held: int = Field(default=0, ge=0)  # replies held for the user to say which event they answer: the sender wrote to us about more than one
+    overflow: int = Field(default=0, ge=0)  # replies to our requests that the mailbox holds and this poll did not read (a per-poll limit); the next poll continues
+    spam: int = Field(default=0, ge=0)  # messages from the people we wrote to found in the spam folder: shown to the user, not filed
+    warnings: tuple[str, ...] = ()  # what the user should know about how the mailbox was read (a limit reached, a folder that could not be read, a server that cannot search)
 
 
 MANDATE_MAX_HOURS = 168
@@ -1063,7 +1066,7 @@ class UnmatchedMessage(_Model):
     sender: str = Field(max_length=254)
     received_at: datetime
     external_id: str = Field(min_length=1, max_length=400)
-    kind: Literal["stop_like", "bounce"]
+    kind: Literal["stop_like", "bounce", "spam"]  # "spam": a message from an address we wrote to, found in the spam folder: for the user to look at and, if it is a real reply, paste in
     body: str = Field(max_length=1000)
     reviewed: bool = False
 

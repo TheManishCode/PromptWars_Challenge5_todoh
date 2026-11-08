@@ -728,6 +728,31 @@ class EventMate:
         self._scope(plan_id)
         return self.outreach_store.list(plan_id)
 
+    def delivery_of(self, d, replied: set[str], bounced: set[str]) -> dict:
+        """Where a request stands in words that do not say more than is known: written, queued, accepted by the mail server (not proof of delivery), bounced, replied (A5)."""
+        key = d.parent_id or d.draft_id
+        table = {
+            "prepared": ("draft", "Written, waiting for your approval"), "approved": ("queued", "Approved and queued; not handed to the mail server yet"), "sending": ("queued", "Being handed to the mail server now"),
+            "failed": ("failed", "The mail server refused it; nothing was delivered"), "outcome_unknown": ("unknown", "Handed to the mail server, but the connection failed: it may or may not have gone. Check your Sent folder before trying again"),
+            "denied": ("denied", "You chose not to send it"), "expired": ("expired", "Expired before it was approved"), "blocked": ("blocked", "Not sent: the address is on the do-not-contact list"),
+            "stale": ("stale", "Not sent: the brief changed after it was written"), "marked_sent": ("self", "You sent it yourself; the app cannot tell whether it arrived"),
+        }
+        if d.status == "sent":
+            if d.external_id and d.external_id in bounced:
+                return {"state": "bounced", "label": "Bounced: the mail server reported it could not be delivered"}
+            if key in replied:
+                return {"state": "replied", "label": "Replied"}
+            word = "WhatsApp accepted it" if d.channel == "whatsapp" else "Accepted by the mail server"
+            return {"state": "accepted", "label": f"{word}. That is not proof it was delivered or read"}
+        state, label = table.get(d.status, (d.status, d.status))
+        return {"state": state, "label": label}
+
+    def outreach_with_delivery(self, plan_id: str) -> list[dict]:
+        drafts = self.outreach(plan_id)
+        replied = {m.draft_id for m in self.outreach_store.inbound(plan_id)}
+        bounced = {s.source_ref for s in self.suppressions.all() if s.reason == "bad_address"}
+        return [{**json.loads(d.model_dump_json()), "delivery": self.delivery_of(d, replied, bounced)} for d in drafts]
+
     def mark_outreach_sent(self, plan_id: str, draft_id: str):
         """The manual path: the user sent it themselves from the link."""
         self._scope(plan_id)

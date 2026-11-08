@@ -187,12 +187,35 @@ function HeldReplies({ sourcing }) {
   ));
 }
 
+/** Messages from an address we wrote to that the mail provider filed as spam: shown, never filed. If one is the reply, the person pastes it below. */
+function SpamFound() {
+  const found = useResource('/api/unmatched');
+  const [state, run] = useAction('That could not be dismissed');
+  const items = (found.data || []).filter((m) => m.kind === 'spam');
+  if (!items.length) return null;
+  const dismiss = (id) => run(async () => {
+    const res = await api(`/api/unmatched/${encodeURIComponent(id)}/dismiss`, { method: 'POST', body: {} });
+    await found.reload();
+    return res;
+  });
+  return items.map((m) => (
+    <Note key={m.message_id} tone="warn" tag="IN YOUR SPAM FOLDER" title={`${m.sender} wrote to you`} busy={state.busy}>
+      <p>Your mail provider filed this as spam. Nothing in it is filed, read as a quote or acted on. If it is the vendor’s reply, copy it into “Got an answer another way?” below.</p>
+      <pre className="exact">{m.body}</pre>
+      <button type="button" className="linkish" disabled={state.busy} onClick={() => dismiss(m.message_id)}>Dismiss</button>
+      {state.error && <Notice tone="bad">{state.error}</Notice>}
+    </Note>
+  ));
+}
+
 export function RepliesPanel({ sourcing }) {
   const [state, run] = useAction('Replies could not be checked');
+  const [warnings, setWarnings] = useState([]);
   const names = Object.fromEntries(sourcing.cards.map((c) => [c.vendor_id, nameOf(c)]));
   const check = () => run(async () => {
     let res = await api('/api/inbox/poll', { method: 'POST', body: {} });
     if (res.status === 403 && res.data?.code === 'sending_disabled') res = { ...res, data: { error: NO_MAIL } };
+    setWarnings(res.ok ? res.data?.warnings || [] : []);
     await sourcing.refresh();
     return res;
   });
@@ -203,8 +226,10 @@ export function RepliesPanel({ sourcing }) {
       <button type="button" className="btn btn--small" disabled={state.busy} onClick={check}>{state.busy ? 'Checking…' : 'Check for replies now'}</button>
       <p className="quiet">Replies that come to your connected mailbox are read here.</p>
       {state.error && <Notice tone="bad">{state.error}</Notice>}
+      {warnings.map((w) => <Notice key={w} tone="warn">{w}</Notice>)}
     </Note>,
   ];
+  out.push(<SpamFound key="spam" />);
   out.push(<HeldReplies key="held" sourcing={sourcing} />);
   out.push(<PasteReply key="paste" sourcing={sourcing} />);
   if (!sourcing.readings.length) out.push(<Note key="none" title="Nothing has come back yet"><p>When a business answers the request you approved, it appears here, read line by line.</p></Note>);

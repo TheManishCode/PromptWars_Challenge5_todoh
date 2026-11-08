@@ -11,7 +11,7 @@ const STATUS = {
   prepared: 'Waiting for your approval',
   approved: 'Approved, sending',
   sending: 'Sending',
-  sent: 'Sent',
+  sent: 'Accepted by the mail server (that is not proof it was delivered)',
   failed: 'Could not be sent',
   outcome_unknown: 'Sent? The channel did not say',
   denied: 'You chose not to send',
@@ -70,7 +70,7 @@ function Draft({ draft, sourcing }) {
   });
   return (
     <Note tone="vendor" tag={`${categoryLabel(draft.category).toUpperCase()} · ${draft.channel.toUpperCase()}`} title={draft.vendor_name} busy={state.busy}>
-      <p className="quiet">To {draft.recipient} · {STATUS[draft.status] || draft.status}</p>
+      <p className="quiet" data-delivery={draft.delivery?.state}>To {draft.recipient} · {draft.delivery?.label || STATUS[draft.status] || draft.status}</p>
       {draft.subject && <p className="exact-subject">{draft.subject}</p>}
       <pre className="exact">{draft.body}</pre>
       {draft.status === 'prepared' && (

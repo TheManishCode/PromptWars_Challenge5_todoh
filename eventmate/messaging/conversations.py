@@ -327,7 +327,8 @@ class ConversationService:
         """Send what is due, read every channel for replies, let a standing permission answer routine ones, then send again. A failing channel is reported, not fatal."""
         sent, waiting = self.dispatch()
         sent_drafts = self._threads()
-        new = ignored = held = 0
+        new = ignored = held = overflow = spam_n = 0
+        warnings: list[str] = []
         touched: list[tuple[str, str]] = []
         errors: list[str] = []
         for name, channel in self.channels.items():
@@ -345,7 +346,22 @@ class ConversationService:
             except ChannelError as exc:
                 errors.append(f"{name}: {exc}")
                 continue
+            report = getattr(channel, "last_poll", None)
+            if report is not None and name == "email":
+                overflow += report.overflow
+                spam_n += report.spam_found
+                if report.overflow:
+                    warnings.append(f"{report.overflow} more repl{'y' if report.overflow == 1 else 'ies'} to your requests {'is' if report.overflow == 1 else 'are'} in the mailbox and {'was' if report.overflow == 1 else 'were'} not read this time; check again to read more")
+                if report.mode == "window":
+                    warnings.append("the mail server cannot search by thread, so only the newest messages were read; an older reply may be missed")
+                if report.spam_error:
+                    warnings.append(report.spam_error)
             for item in inbound:
+                if item.folder != "INBOX":  # found in the spam folder: for the user to look at, never filed, read as a quote or obeyed
+                    if self.unmatched is not None:
+                        self.unmatched.add(item.channel, item.sender, item.received_at, item.external_id, "spam", item.body)
+                    ignored += 1
+                    continue
                 if item.bounce is not None:
                     self._handle_bounce(item, sent_drafts)
                     ignored += 1
@@ -374,7 +390,7 @@ class ConversationService:
         if queued:
             more, waiting = self.dispatch()
             sent += more
-        return PollResult(new_messages=new, ignored=ignored, sent=sent, waiting=tuple(waiting), errors=tuple(errors), held=held)
+        return PollResult(new_messages=new, ignored=ignored, sent=sent, waiting=tuple(waiting), errors=tuple(errors), held=held, overflow=overflow, spam=spam_n, warnings=tuple(warnings))
 
     def _match(self, item: Inbound, candidates: list[tuple[str, OutreachDraft]]) -> tuple[str, OutreachDraft, str] | list[tuple[str, OutreachDraft]] | None:
         """Which sent message does this answer? Returns ``(plan id, draft, method)``; a list when it cannot be said; None for a stranger.

@@ -883,7 +883,7 @@
           no.addEventListener('click', function () { yes.disabled = no.disabled = true; api(base + '/outreach/' + encodeURIComponent(dr.draft_id) + '/deny', { method: 'POST', body: {} }).then(function () { again(); }); });
           card.appendChild(h('div', { class: 'row' }, yes, no)); card.appendChild(say2); drafts.appendChild(card);
         } else if (dr.status === 'stale') drafts.appendChild(h('p', { class: 'hint', text: 'The request to ' + dr.vendor_name + ' no longer matches your brief. Write the requests again.' }));
-        else if (['sent', 'approved', 'sending'].indexOf(dr.status) >= 0) drafts.appendChild(h('p', { class: 'hint', text: 'Asked ' + dr.vendor_name + ' (' + dr.status + '). Waiting for a reply.' }));
+        else if (['sent', 'approved', 'sending'].indexOf(dr.status) >= 0) drafts.appendChild(h('p', { class: 'hint', text: 'Asked ' + dr.vendor_name + ' (' + ((dr.delivery && dr.delivery.label) || dr.status) + '). Waiting for a reply.' }));
       });
     });
     api(base + '/inbox').then(function (r) {  // what the vendors wrote back: their own words as text, and the amounts and answers read from them. Nothing here records a quote.

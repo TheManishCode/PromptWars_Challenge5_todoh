@@ -36,8 +36,8 @@ def register(app, k):
     def outreach_get(plan_id):
         plan_id = pid(plan_id)
         with lock:
-            items = em.outreach(plan_id)
-        return jsonify([json.loads(x.model_dump_json()) for x in items])
+            items = em.outreach_with_delivery(plan_id)
+        return jsonify(items)
 
     @app.post("/api/plans/<plan_id>/outreach")
     def outreach_add(plan_id):

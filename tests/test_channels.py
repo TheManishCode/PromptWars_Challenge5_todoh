@@ -110,7 +110,7 @@ def raw_mail(sender="Vendor <sales@v.test>", body="Rs 650 per plate.\n\nOn Fri, 
 
 class FakeIMAP:
     def __init__(self, messages, login_error=None):
-        self.messages, self.login_error, self.searched = messages, login_error, None
+        self.messages, self.login_error, self.searched, self.searches = messages, login_error, None, []
 
     def login(self, u, p):
         if self.login_error:
@@ -123,6 +123,7 @@ class FakeIMAP:
 
     def search(self, charset, *criteria):
         self.searched = criteria
+        self.searches.append(criteria)
         return "OK", [b" ".join(str(i + 1).encode() for i in range(len(self.messages)))]
 
     def fetch(self, num, spec):
@@ -145,7 +146,8 @@ def test_poll_returns_the_new_text_only_with_threading_headers():
 def test_poll_searches_by_date_and_does_nothing_without_threads():
     imap = FakeIMAP([raw_mail()])
     mail_channel(imap=imap).poll(T)
-    assert imap.searched == ("SINCE", "29-Oct-2026")
+    assert imap.searches[0] == ("SINCE", "29-Oct-2026")  # the window since the oldest open thread (an hour before it: a day of slack)
+    assert ("SINCE", "29-Oct-2026", "FROM", '"sales@v.test"') in imap.searches and ("SINCE", "29-Oct-2026", "HEADER", "In-Reply-To", '"<sent1@x.test>"') in imap.searches
     assert mail_channel(imap=None).poll([]) == []
 
 
