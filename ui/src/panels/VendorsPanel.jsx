@@ -38,13 +38,12 @@ function AddVendor({ category, sourcing, onDone }) {
   );
 }
 
-/** Says so when an outside lookup is used up or failing, so a short list reads as "missing", not "none exist". */
-function ServiceNotice() {
-  const { data } = useResource('/api/services');
-  const bad = (data || []).filter((s) => ['places', 'overpass', 'search'].includes(s.name) && ['quota_used', 'degraded'].includes(s.state));
+/** Says so when an outside lookup is used up or failing, so a short list reads as "missing", not "none exist". Nothing is drawn (no empty collage cell) when all is well. */
+function serviceNote(services) {
+  const bad = (services || []).filter((s) => ['places', 'overpass', 'search'].includes(s.name) && ['quota_used', 'degraded'].includes(s.state));
   if (!bad.length) return null;
   return (
-    <Note tone="warn" title="Online lookups are limited right now">
+    <Note key="services" tone="warn" title="Online lookups are limited right now">
       {bad.map((s) => <p key={s.name}>{s.label}: {s.note}.</p>)}
       <p className="quiet">What is missing below may exist. Add the businesses you know, and look again later.</p>
     </Note>
@@ -109,7 +108,8 @@ function Search({ category, count, sourcing }) {
 const OPTIONAL = ['caterer', 'photographer'];
 
 export function VendorsPanel({ categories, extra, setExtra, sourcing }) {
-  const out = [<NameNote key="name" by={sourcing.by} setBy={sourcing.setBy} />, <ServiceNotice key="services" />];
+  const services = useResource('/api/services');
+  const out = [<NameNote key="name" by={sourcing.by} setBy={sourcing.setBy} />, serviceNote(services.data)].filter(Boolean);
   for (const category of categories) {
     const mine = sourcing.cards.filter((c) => c.category === category);
     out.push(<Search key={`find-${category}`} category={category} count={mine.length} sourcing={sourcing} />);
