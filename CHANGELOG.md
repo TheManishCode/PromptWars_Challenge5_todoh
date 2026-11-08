@@ -113,3 +113,6 @@
 - Controls (each break shown to fail): free-text deposit not surfaced (3), a total accepted as a per-plate price (1), menu labels not screened for orders (1, after adding the case), orders not set apart from answers (2).
 - Existing end-to-end coverage kept: the hosted journey (`tests/test_hosted_journey.py`), reply matching, mail polling, OAuth, payments, quote fit.
 
+### WP8: decisions presented, none taken
+- `docs/OWNER_DECISIONS.md`: every REVIEW decision (D-001, D-002, D-004, D-006, D-007, D-011, D-012 and the later ones) with the options and how to undo each; the shared earlier-quote pool (kept; what is missing: a real source of records, storage and retention, consent wording, who operates it, deletion); the payment-route questions; the missing repository licence and the GPL program in the image; and seven questions for counsel (none asked). The earlier "or remove the feature" wording about the pool is removed from BLOCKED, DECISIONS, FINAL_REPORT and LAUNCH_CHECKLIST: the pool is preserved.
+

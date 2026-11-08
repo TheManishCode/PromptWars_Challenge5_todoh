@@ -35,7 +35,7 @@ Three categories only. **Done**: a command was run on a named commit and passed.
 
 ## Not done
 
-- The shared earlier-quote pool has no source in any shipped mode; wire an operator mailbox or remove it (`docs/BLOCKED.md`).
+- The shared earlier-quote pool has no source in any shipped mode; wire an operator mailbox (`docs/OWNER_DECISIONS.md` section B); the feature is kept.
 - Opt-in tests not run: Docling (2), live Google Flights, voice engine.
 - Manual "Send it yourself" drafts carry a STOP footer the app cannot honour (D-012).
 - The per-brief cap restarts when a brief becomes a plan (D-011); the global 30 a day is the real bound.

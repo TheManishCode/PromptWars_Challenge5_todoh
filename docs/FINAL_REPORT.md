@@ -66,7 +66,7 @@ python tools/loadtest/soak.py --seconds 1800 --visitors 20       # before a rele
 | D-004 REVIEW | `# nosec B108` on the sandbox's in-sandbox tmpfs path. | Delete the comment and the bandit gate goes red. |
 | D-006 REVIEW | Landing hero photo and video removed, not made optional. | Put the files back, restore the tags in `landing.html`, list them in `STATIC_FILES` and `ATTRIBUTIONS.md`, only with a confirmed licence. |
 | D-007 REVIEW | Per-brief cap of 10 first requests a day (follow-ups not counted). | `SendPolicy.per_plan_per_day` in `messaging/conversations.py`. |
-| D-009 REVIEW | Shared quote pool dormant; month not day; no per-person deletion (records have no owner). | Wire a source or remove the feature (BLOCKED.md). `EVENTMATE_SHARED_QUOTES=0` turns it off now. |
+| D-009 REVIEW | Shared quote pool dormant; month not day; no per-person deletion (records have no owner). | Wire a source (BLOCKED.md, `docs/OWNER_DECISIONS.md` section B); the feature is kept. `EVENTMATE_SHARED_QUOTES=0` turns it off now. |
 | D-011 REVIEW | The per-brief cap restarts when a brief becomes a plan; the global 30 a day is the bound. | Count by brief id across the brief-to-plan link. |
 | D-012 REVIEW | The same STOP footer on "Send it yourself" drafts, where the app never sees the reply. | Use a different footer for manual drafts in `outreach._message` (the hash covers whichever text is used). |
 | D-003, D-005, D-008, D-010 | Egg-info and papers ignored; race-test clock; fixed sender and STOP line; first-line "stop" by word list. | See the rows. |
@@ -84,7 +84,7 @@ DEVIATIONS from `docs/LAUNCH_PLAN.md`:
 | Real mailbox test | With the owner's own address only: `docs/EMAIL_SETUP.md`, send one approved request to yourself, reply STOP and confirm the address is suppressed. |
 | Screen-reader pass | NVDA or VoiceOver through `/` to `/plan` to a built plan: the 8-point list in `docs/BLOCKED.md`; record reader, browser and failures. |
 | Counsel | Review the vendor-card legal text and the shared pool (R-013, D-009). |
-| Shared earlier quotes | Decide: feed the pool from an operator-run mailbox, or remove the feature. |
+| Shared earlier quotes | Decide how to feed the pool: an operator-run mailbox is the one clean source (`docs/OWNER_DECISIONS.md` section B). The feature is kept. |
 | Live-model evals | `prompts/assistant.lock.json` says `not_run`; run them with a real key if models are switched on. |
 | Safari / WebKit | Open `/`, `/plan` and a built plan in Safari at 390 and 1440 px. |
 
