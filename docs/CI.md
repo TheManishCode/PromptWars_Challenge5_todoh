@@ -67,6 +67,12 @@ On a tag `v*`, `release.yml` runs the whole gate, then builds the image once and
 - `actions/attest-build-provenance`, the cache and artifact actions are pinned by sha but were not executed here. `act` does not run docker-in-docker jobs, the browsers, or the long suite.
 - Equivalent mutants: if a refactor makes two rules cover each other, a mutant that switches off one will survive; the fix is a combined patch (as above).
 
+## Owner's first-run checklist (nothing has run on GitHub yet; pushing is the owner's call)
+1. In branch protection for `main`, require the check `ci-gate` (it aggregates every job; add the individual job names if you want them listed).
+2. Expect the skip guard to fail the first run if a runner cannot set up Landlock, bubblewrap or seccomp (the "this machine cannot set up the ... level" skips in `tests/test_documents.py`). Decide on purpose: fix the runner (a self-hosted one, or a kernel that has them), or add those exact tests to `tools/ci/allowed_skips.txt` with a reason. Do not loosen the guard.
+3. Create the `production` environment with required reviewers, and add the `DEPLOY_HOST`, `DEPLOY_USER` and `DEPLOY_SSH_KEY` secrets and the `DEPLOY_ENABLED` variable only once a host is chosen. Until then `tools/ci/deploy.sh` refuses.
+4. Rotate the keys `act` printed into an AI session's transcript (NVIDIA, OpenRouter, Google Places, Brave, Langfuse, the SMTP app password): `docs/BLOCKED.md`.
+
 ## Proof, run on this machine (commands and results)
 All on this machine, at the commit named in the READY message (`git rev-parse --short HEAD`), 2026-11-09. Nothing was run on GitHub.
 
