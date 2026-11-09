@@ -19,7 +19,7 @@ from tests.test_quote_readings import OK_FOR_40
 from tests.test_quote_template import msg
 from tests.test_shared_quotes import ADDRESS, own_vendor, person
 
-PERCENTS = ["25%", "25 %", "25 percent", "30 per cent advance", "30 per-cent", "25 pct", "12.5%"]
+PERCENTS = ["25%", "25 %", "25 percent", "30 per cent advance", "30 per-cent", "25 pct", "12.5%", "25 pc", "25 p.c.", "25 pcs", "100% advance"]
 NEGATIVES = ["-5000", "−5000", "minus 5000", "negative 5000", "-Rs 5000", "Rs -5000", "-5 lakh", "minus 5k"]
 
 
@@ -30,6 +30,11 @@ def test_a_percent_on_a_money_line_is_not_a_rupee_amount(text):
 
 
 @pytest.mark.parametrize("text", NEGATIVES)
+def test_shorthand_glued_to_the_number_is_unclear_never_rupees():
+    for text in ("25pc advance", "30pct", "25%advance"):
+        assert qt._parse("deposit", "money", text)[0] is None, text
+
+
 def test_a_minus_sign_is_never_dropped_from_a_money_line(text):
     assert qt._parse("deposit", "money", text) == (None, NEGATIVE_NOTE)
     assert qt._parse("price", "money", text) == (None, NEGATIVE_NOTE)

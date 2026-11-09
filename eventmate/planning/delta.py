@@ -157,7 +157,7 @@ def ground(raw: dict[str, Any], message: str, plan: PlanVersion, today: date, so
 
 # ----------------------------------------------------------------- what was left out
 
-_CLAUSE = re.compile(r"\s*(?:;|,\s|\band\b|&|\bplus\b|\balso\b|\bthen\b)\s*", re.I)
+_CLAUSE = re.compile(r";|,\s|\band\b|&|\bplus\b|\balso\b|\bthen\b", re.I)  # no leading or trailing \s*: each part is stripped in code, so no pattern can be made quadratic
 _REQUEST = re.compile(r"\b(?:add|include|book|get|hire|arrange|need|want|bring|another|extra|more)\b", re.I)
 _SERVICE = {"photographer": re.compile(r"\bphoto(?:grapher|graphy|graphers)?\b", re.I), "caterer": re.compile(r"\b(?:cater(?:er|ers|ing)?|food|meals?)\b", re.I)}
 _CAN = "A change can set the budget, the guest count or the date, let a vendor go, or add a task"

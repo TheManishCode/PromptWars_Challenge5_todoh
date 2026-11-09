@@ -21,7 +21,6 @@ from collections.abc import Callable, Iterator, Mapping
 from zoneinfo import ZoneInfo
 
 from eventmate.wall import layout
-from eventmate.sqlsafe import secure
 from eventmate.wall.names import NAME_MAX, NAME_MIN, InvalidName, validate
 
 SCHEMA_VERSION = 1
@@ -175,7 +174,8 @@ class WallStore:
     # ------------------------------------------------------------ plumbing
 
     def _connect(self) -> sqlite3.Connection:
-        conn = secure(sqlite3.connect(self.path, timeout=10, isolation_level=None))  # autocommit; transactions are explicit
+        conn = sqlite3.connect(self.path, timeout=10, isolation_level=None)  # autocommit; transactions are explicit
+        conn.execute("PRAGMA secure_delete=ON")  # a deleted name is overwritten, not left in a free page (the wall package imports nothing outside itself, so no shared helper)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout=10000")
         conn.execute("PRAGMA foreign_keys=ON")

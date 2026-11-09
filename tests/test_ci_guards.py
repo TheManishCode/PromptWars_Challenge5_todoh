@@ -90,7 +90,7 @@ def test_a_python_version_the_gate_cannot_set_up_is_a_failure_not_a_pass(tmp_pat
     here = f"{sys.version_info.major}.{sys.version_info.minor}"
     assert out.returncode == 1, out.stdout
     assert all(f"py{v}" in out.stdout and f"FAIL: uv could not provide Python {v}" in out.stdout for v in ("3.11", "3.12", "3.13", "3.14", "3.15") if v != here)
-    assert f"this is the main interpreter" in out.stdout
+    assert "this is the main interpreter" in out.stdout
 
 
 def test_the_matrix_can_be_told_to_accept_a_missing_version_and_says_not_run_out_loud(tmp_path):

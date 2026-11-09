@@ -18,8 +18,9 @@ def test_every_connection_to_a_store_of_personal_data_is_made_secure():
         rel = str(path.relative_to(ROOT))
         if rel in READ_ONLY_OR_COPY:
             continue
-        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if "sqlite3.connect(" in line and ":memory:" not in line and "secure(sqlite3.connect(" not in line and "out = sqlite3.connect" not in line:
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for n, line in enumerate(lines, 1):
+            if "sqlite3.connect(" in line and ":memory:" not in line and "secure(sqlite3.connect(" not in line and "out = sqlite3.connect" not in line and "secure_delete" not in "\n".join(lines[n: n + 3]):
                 bare.append(f"{rel}:{n}: {line.strip()[:90]}")
     assert bare == [], "a connection without secure(): a deleted row could stay readable in the file\n" + "\n".join(bare)
 

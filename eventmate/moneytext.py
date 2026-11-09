@@ -12,7 +12,7 @@ PERCENT_NOTE = "a percentage: type the amount in rupees"
 
 # a sign written against the number ("-5000", "−5 lakh", "-Rs 500", "minus 5000"); a hyphen after a word, a digit or a bracket is a range or a separator ("2-3 lakh", "Budget - 2 lakh"), not a sign
 _SIGN_BEFORE = re.compile(r"(?:(?<![\w.,)\]])[-\u2212\uFE63\uFF0D]|\b(?:minus|negative)\b\s{1,3})(?:(?:rs\.?|inr|\u20b9|rupees?)\s{0,3})?$", re.I)
-_PERCENT_AFTER = re.compile(r"^\s{0,3}(?:%|\uFF05|per\s?-?\s?cent\b|pct\b|percent\b)", re.I)
+_PERCENT_AFTER = re.compile(r"^\s{0,3}(?:%|\uFF05|per\s?-?\s?cent\b|pct\b|percent\b|pcs?\b|p\.\s?c\b\.?)", re.I)  # "pc", "pct" and "p.c." are common shorthand for percent; on a money line "pcs" is unclear too, the safe side
 
 
 def negative_before(text: str, start: int) -> bool:

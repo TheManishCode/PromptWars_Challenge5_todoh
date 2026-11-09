@@ -9,7 +9,7 @@ from eventmate.agents.validator import REPAIRS, SOLVERS_MISSING, _repair_for
 from eventmate.agents.vendor import VendorAgent
 from eventmate.schemas import ConstraintCheck, ConstraintViolation, VendorCategory as C
 from eventmate.service import EventMate
-from tests.conftest import EXAMPLE, TODAY
+from tests.conftest import TODAY
 
 
 def test_a_timeline_check_that_could_not_run_tells_a_deployer_what_to_install():
