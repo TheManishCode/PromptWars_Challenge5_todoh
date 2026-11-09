@@ -11,11 +11,12 @@ run require-tools tools/ci/require_tools.sh
 run test-inventory "$PY" tools/ci/test_inventory.py
 cat "$CI_OUT/test-inventory.log" | sed 's/^/    | /'
 tools/ci/clean_tree.sh snapshot >/dev/null
-args=(-q -p no:cacheprovider -rs "--junitxml=$CI_OUT/junit.xml")
+args=(-q -p no:cacheprovider -rfEs "--junitxml=$CI_OUT/junit.xml")  # -rfEs: failed and errored node ids are printed (and skipped ones, for the skip guard)
 [ -n "${COVERAGE:-}" ] && args+=(--cov=eventmate --cov-report=term-missing:skip-covered "--cov-report=xml:$CI_OUT/coverage.xml" --cov-fail-under=94)
 # shellcheck disable=SC2086
 run pytest "$PY" -m pytest "${args[@]}" ${PYTEST_EXTRA:-}
 tail -n 3 "$CI_OUT/pytest.log" | sed 's/^/    | /'
+"$PY" tools/ci/failed_tests.py "$CI_OUT/junit.xml" "$CI_OUT/failed.txt" | sed 's/^/    | /'  # names the failures; the step above has already decided pass or fail
 run skip-guard "$PY" tools/ci/skip_guard.py "$CI_OUT/junit.xml"
 cat "$CI_OUT/skip-guard.log" | sed 's/^/    | /'
 run clean-tree tools/ci/clean_tree.sh verify

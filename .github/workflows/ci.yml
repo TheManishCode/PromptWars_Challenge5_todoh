@@ -89,6 +89,7 @@ jobs:
           name: test-results-py${{ matrix.python }}
           path: |
             /tmp/todoh-ci-out/junit.xml
+            /tmp/todoh-ci-out/failed.txt
             /tmp/todoh-ci-out/coverage.xml
             /tmp/todoh-ci-out/*.log
           if-no-files-found: ignore

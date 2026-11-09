@@ -39,6 +39,25 @@ def test_the_skip_guard_fails_on_a_missing_extra_and_passes_only_what_is_on_the_
     assert guard.check(junit, allow)[0] == [] and guard.main(["x", str(junit), str(allow)]) == 0
 
 
+def test_a_red_build_names_its_failures_in_a_file_the_log_and_the_step_summary(tmp_path, monkeypatch):
+    junit = tmp_path / "j.xml"
+    junit.write_text("""<?xml version="1.0"?><testsuites><testsuite name="pytest" tests="3">
+<testcase classname="tests.test_a" name="test_ok"/>
+<testcase classname="tests.test_payments" name="test_a_lost_answer[reset]"><failure message="assert 'failed' == 'outcome_unknown'">tb</failure></testcase>
+<testcase classname="tests.test_b" name="test_boom"><error message="collection error">tb</error></testcase></testsuite></testsuites>""")
+    summary = tmp_path / "summary.md"
+    env = {**os.environ, "GITHUB_STEP_SUMMARY": str(summary)}
+    out = subprocess.run([str(CI / "failed_tests.py"), str(junit), str(tmp_path / "failed.txt")], env=env, capture_output=True, text=True)
+    assert out.returncode == 0 and "2 test(s) failed or errored" in out.stdout and "tests.test_payments::test_a_lost_answer[reset]" in out.stdout
+    lines = (tmp_path / "failed.txt").read_text().splitlines()
+    assert len(lines) == 2 and "[failure]" in lines[0] and "[error]" in lines[1]
+    assert "tests.test_b::test_boom" in summary.read_text()
+    junit.write_text('<?xml version="1.0"?><testsuites><testsuite name="pytest" tests="1"><testcase classname="tests.test_a" name="test_ok"/></testsuite></testsuites>')
+    subprocess.run([str(CI / "failed_tests.py"), str(junit), str(tmp_path / "failed.txt")], env=env, capture_output=True, text=True)
+    assert (tmp_path / "failed.txt").read_text() == ""
+    assert "-rfEs" in (CI / "tests.sh").read_text() and "failed.txt" in (ROOT / ".github/workflows/ci.yml").read_text()
+
+
 def test_an_allow_list_line_needs_the_reason_to_match_too(tmp_path):
     guard = load("skip_guard")
     junit = tmp_path / "j.xml"

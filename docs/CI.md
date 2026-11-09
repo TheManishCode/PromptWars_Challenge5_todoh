@@ -37,7 +37,7 @@ Logs, junit and coverage go to `$CI_OUT` (default `/tmp/todoh-ci-out-<hash of th
 | `static` | actionlint, zizmor, shellcheck, `make lint`, bandit (no medium or high), pip-audit, lock drift, gitleaks history and tracked files, `.env` and run-time data not tracked, launch docs tracked, borrowed art not tracked, local actions tracked, provenance tests | `make ci-static` |
 | `ui` | `npm ci`, vitest, `vite build`, `git diff` of `eventmate/web/static` | `make ci-ui` |
 | `solvers` | build FD and VAL at the pinned commits, verify, cache (key = hash of the recipe), upload as an artefact | `tools/ci/solvers.sh` |
-| `tests (py3.12)`, `tests (py3.13)`, `tests (py3.14)` | locked install (with the serve and flights extras), nginx, openssl, Chromium and Firefox; the suite with `-rs` and a junit file; the skip guard; the clean-tree check; coverage gate (94) on 3.14 only | `make ci-tests` |
+| `tests (py3.12)`, `tests (py3.13)`, `tests (py3.14)` | (a red run names its failed and errored node ids in the log, the step summary and `failed.txt`, an artefact) locked install (with the serve and flights extras), nginx, openssl, Chromium and Firefox; the suite with `-rs` and a junit file; the skip guard; the clean-tree check; coverage gate (94) on 3.14 only | `make ci-tests` |
 | `mutants` | the 26 mutants (needs the browsers: two kill via the hosted journey) | `make ci-mutants` |
 | `deploy-check` | `deploy_check.sh` (proxy, smuggling, check_image, leak control, trivy HIGH/CRITICAL with a fix) | `make ci-deploy-check` |
 | `soak` | 60 s, 20 visitors, half on `/plan` | `make ci-soak` |
