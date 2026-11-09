@@ -54,3 +54,41 @@ def test_the_stream_of_a_fast_real_run_sends_each_stage(tmp_path):
     seen = {tuple(s["state"] for s in d["stages"]) for n, d in got if n == "progress"}
     assert any("active" in st for st in seen), "a stage was shown running"
     assert json.dumps(sorted(seen))  # every picture is plain data
+
+
+def test_a_whole_run_between_two_polls_is_still_shown_stage_by_stage_on_any_interpreter(tmp_path, monkeypatch):
+    """Deterministic version of the F9 failure: the run starts and ends between two looks of the stream, whatever the machine or the Python."""
+    import eventmate.web.routes.assistant_plans as ap
+
+    pulse = ArcadePulse()
+    monkeypatch.setattr(ap._arcade_pulse, "current", lambda: pulse)  # the stream follows this pulse, and the test is its only writer
+    c = create_app(EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="trail2"), today_fn=lambda: TODAY, poll_seconds=0).test_client()
+    stream = events_iter(c.get("/api/pulse/stream", buffered=False))
+    name, first = next(stream)
+    assert name == "progress" and first["state"] == "idle"
+    pulse.begin_run("fast")
+    for stage in STAGES:
+        pulse.stage_started(stage)
+        pulse.stage_done(stage)
+    pulse.finish(True)
+    pictures = [d for n, d in stream if n == "progress"]
+    states = [tuple(s["state"] for s in d["stages"]) for d in pictures]
+    assert pictures[-1]["state"] == "done" and sum("active" in st for st in states) == len(STAGES), "every stage was shown running"
+
+
+def events_iter(resp):
+    """Server-sent events as (name, data) one at a time."""
+    name, data = None, None
+    buf = ""
+    for chunk in resp.response:
+        buf += chunk.decode() if isinstance(chunk, bytes) else chunk
+        while "\n\n" in buf:
+            block, buf = buf.split("\n\n", 1)
+            name, data = None, None
+            for line in block.splitlines():
+                if line.startswith("event: "):
+                    name = line[7:]
+                elif line.startswith("data: "):
+                    data = json.loads(line[6:])
+            if name:
+                yield name, data
