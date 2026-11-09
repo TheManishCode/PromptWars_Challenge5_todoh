@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Shared by every tools/ci script. Sourced, not run. The same scripts are called by the workflows and by `make ci`: what passes on a laptop is what passes in CI.
-# CI_OUT (default: a temporary directory outside the repository) holds logs, junit and coverage files, so running the gate never writes into the tree.
+# CI_OUT (default: a temporary directory outside the repository, one per checkout) holds logs, junit and coverage files, so running the gate never writes into the tree.
 set -uo pipefail
 ROOT="${CI_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"  # CI_ROOT: tests point the scripts at a scratch repository
 export ROOT
-export CI_OUT="${CI_OUT:-${TMPDIR:-/tmp}/todoh-ci-out}"
+# One output directory per checkout: two gates run from two checkouts (a clean clone for review, a working tree) must never write the same junit and log files. CI sets CI_OUT explicitly.
+export CI_OUT="${CI_OUT:-${TMPDIR:-/tmp}/todoh-ci-out-$(printf '%s' "$ROOT" | sha256sum | cut -c1-10)}"
 export CI_TOOLS="${CI_TOOLS:-$ROOT/.ci-tools}"  # pinned binaries (tools/ci/bootstrap_tools.sh); git-ignored
 export PATH="$CI_TOOLS/bin:$PATH"
 mkdir -p "$CI_OUT"

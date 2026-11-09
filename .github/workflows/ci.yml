@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  CI_OUT: /tmp/todoh-ci-out  # one job, one runner: a fixed place, so the upload steps can name the files
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

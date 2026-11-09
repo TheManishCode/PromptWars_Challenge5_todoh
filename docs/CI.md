@@ -28,7 +28,7 @@ make ci-static | ci-ui | ci-tests | ci-mutants | ci-deploy-check | ci-soak     #
 tools/ci/guard_demos.sh            # watch each guard fire once, in a throwaway worktree
 tools/ci/act.sh JOB                # run a workflow job under act, from a clean checkout (never the working tree: act prints an unparsable .env in full)
 ```
-Logs, junit and coverage go to `$CI_OUT` (default `/tmp/todoh-ci-out`), never into the tree. Differences between a laptop and CI are named, not hidden: on a laptop the solver commits are reported (not failed) when they are an older local build (`CI_STRICT_SOLVERS=1` forces it), the clean-tree check blames only changes made while the gate ran, and the mutants run against `HEAD` (commit first).
+Logs, junit and coverage go to `$CI_OUT` (default `/tmp/todoh-ci-out-<hash of the checkout path>`: one per checkout, so a review gate in a clean clone and a gate in your working tree never overwrite each other's files, which did happen once on a shared default), never into the tree. Two test runs in one checkout are refused (a lock). Differences between a laptop and CI are named, not hidden: on a laptop the solver commits are reported (not failed) when they are an older local build (`CI_STRICT_SOLVERS=1` forces it), the clean-tree check blames only changes made while the gate ran, and the mutants run against `HEAD` (commit first).
 
 ## Jobs (`.github/workflows/ci.yml`; a `push`, a `pull_request`, or called by `nightly` and `release`)
 
