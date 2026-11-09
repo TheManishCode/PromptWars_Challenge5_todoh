@@ -296,7 +296,7 @@ class SchedulingAgent:
         repair = (
             f"move the event to on or after {later.isoformat()} (earliest date the scheduler can satisfy; re-check vendor availability)"
             if later
-            else "no later date within one year is schedulable; relax the timing rules or the confirmed bookings"
+            else "no later date within one year is schedulable; the timing rules or the bookings you confirmed rule out every date; loosen one of them"
         )
         return [ConstraintViolation(constraint=constraint, detail=detail, repair=repair)]
 

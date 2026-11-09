@@ -387,7 +387,9 @@ class VendorAgent:
             return f"re-quote needed: ask the {label} vendors for a fresh quote and record it"
         if constraint == "booking_status":
             return f"all matching {label}s are unavailable; add alternatives or choose another date"
-        return f"relax the {constraint} constraint"
+        if constraint == "budget_cap":
+            return f"the cheapest {label} that otherwise suits costs more than its share of the budget: raise the total budget"
+        return f"no {label} in the records meets “{constraint.replace('_', ' ')}”: change that part of the brief, or add vendors that do"
 
     # ------------------------------------------------------------ logging
 

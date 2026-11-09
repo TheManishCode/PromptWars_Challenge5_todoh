@@ -747,6 +747,14 @@ class ManagerAgent:
         request = self._parse_and_log(text, today)
         return self.intake_request(request, guest_list_id, start)
 
+    @staticmethod
+    def _with_minimum(v: ConstraintViolation, reality) -> ConstraintViolation:
+        """When the budget is what failed, say the least total that would work (the budget reality check already worked it out), so the repair is a number and not only "raise it"."""
+        least = reality.suggested_minimum_budget or reality.minimum_budget_default_split
+        if v.constraint in ("budget_cap", "total_budget", "category_cap") and least and "about INR" not in v.repair:
+            return v.model_copy(update={"repair": f"{v.repair}. A total of about INR {least:,} would cover the cheapest vendors for everything you asked for (an estimate from the records, not a quote)"})
+        return v
+
     def parse(self, text: str, today: date | None = None) -> EventRequest:
         """Parse and log a request without running the pipeline."""
         return self._parse_and_log(text, today)
@@ -761,6 +769,7 @@ class ManagerAgent:
         violations: list[ConstraintViolation] = [v for s in shortlists.values() for v in s.violations]
         violations += [v for v in assessment.violations if v not in violations]
         violations += [ConstraintViolation(constraint=c.name, detail=c.detail, repair="raise the guest count or prune the guest list") for c in guests.checks if not c.passed]
+        violations = [self._with_minimum(v, reality) for v in violations]
         return IntakeResult(
             request=request,
             task_graph=graph,

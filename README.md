@@ -68,7 +68,7 @@ python -m eventmate show <plan_id>
 python -m eventmate replan <plan_id> --cancel-vendor cat-pune-rasoi
 ```
 
-Requires Python 3.12+. The symbolic timeline check uses [Fast Downward](https://www.fast-downward.org/) and [VAL](https://github.com/KCL-Planning/VAL) (`EVENTMATE_FD`, `EVENTMATE_VAL`, see [configuration](docs/CONFIGURATION.md)); without them plans still build and that check is shown as unavailable, never faked. With no model key, intake, ideas and explanations fall back to deterministic versions.
+Requires Python 3.12+. The symbolic timeline check uses [Fast Downward](https://www.fast-downward.org/) and [VAL](https://github.com/KCL-Planning/VAL) (`EVENTMATE_FD`, `EVENTMATE_VAL`, see [configuration](docs/CONFIGURATION.md)); without them every Build fails, by design: a plan is only shown once the timeline check has passed, and that check is never faked or skipped (the page says "solver binaries not found" and what to install). With no model key, intake, ideas and explanations fall back to deterministic versions.
 
 ## How it works
 

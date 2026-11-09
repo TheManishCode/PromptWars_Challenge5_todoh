@@ -145,7 +145,7 @@ class BudgetAgent:
                         constraint="category_cap",
                         detail=f"{cat.value} needs INR {needed:,} but its cap is INR "
                         f"{shortlists[cat].budget_cap:,}; the other categories leave room",
-                        repair=f"rebalance: raise the {cat.value} cap to INR {needed:,} and lower other caps",
+                        repair=f"give the {cat.value} a bigger share of the budget (at least INR {needed:,}) and the other services less",
                     )
                 )
             else:
@@ -154,7 +154,7 @@ class BudgetAgent:
                         constraint="total_budget",
                         detail=f"cheapest eligible {cat.value} (INR {needed:,}) does not fit with the "
                         f"other categories in INR {usable:,}",
-                        repair=f"raise the budget or relax {cat.value} requirements",
+                        repair=f"raise the budget, or ask for something simpler for the {cat.value}",
                     )
                 )
         return out

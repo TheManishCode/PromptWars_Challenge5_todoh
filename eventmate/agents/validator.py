@@ -52,7 +52,7 @@ REPAIRS = {
     "headcount_matches": "rebuild the plan from the current guest count",
     "spec_matches_policy": "rebuild the schedule spec from the event policy",
     "allocation_matches_request": "recompute the budget allocation from the request",
-    "symbolic_feasibility": "fix the task dependencies; the PDDL check did not confirm feasibility",
+    "symbolic_feasibility": "the timeline check could not confirm the schedule: some steps cannot be ordered as asked; move or remove the step that has to come after itself",
     "invitation_lead_time": "choose a later event date or fewer lead-time days",
     "confirmed_bookings_preserved": "keep the confirmed booking, or explicitly override it",
     "confirmed_booking_time_preserved": "keep the confirmed booking's original time",
@@ -63,6 +63,17 @@ REPAIRS = {
     "timeline_dependencies": "shorten or reorder the programme so setup ends before doors, cleanup follows the close, and no resource is used twice at once",
     "accessibility_declared": "choose a venue that declares the needed access, or ask the venue again and record its answer",
 }
+
+
+SOLVERS_MISSING = "install Fast Downward and VAL, the planning tools the timeline check needs (docs/CONFIGURATION.md); every build fails without them"
+
+
+def _repair_for(check: ConstraintCheck) -> str:
+    """What a person can do about a failed check, in plain words. A timeline check that could not run is a missing tool, not a problem with the plan."""
+    name = check.name.split(":")[-1]
+    if name == "symbolic_feasibility" and check.detail.startswith("unavailable"):
+        return SOLVERS_MISSING
+    return REPAIRS.get(name, f"“{name.replace('_', ' ')}” did not pass: change that part of the plan or the brief and check again")
 
 
 def _chk(name: str, passed: bool, detail: str) -> ConstraintCheck:
@@ -105,7 +116,7 @@ class ValidatorAgent:
         warnings = list(dict.fromkeys(list(draft.warnings) + warnings))
 
         violations = [
-            ConstraintViolation(constraint=c.name, detail=c.detail, repair=REPAIRS.get(c.name.split(":")[-1], f"fix the {c.name} constraint and re-validate"))
+            ConstraintViolation(constraint=c.name, detail=c.detail, repair=_repair_for(c))
             for c in checks
             if not c.passed
         ]
