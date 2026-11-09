@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 from collections.abc import Callable
 
 from eventmate.assistant.identity import Principal, Role
+from eventmate.sqlsafe import scrub, secure
 from eventmate.web.limits import WindowLimiter
 
 if TYPE_CHECKING:  # types only: importing these at runtime would be circular
@@ -109,7 +110,7 @@ class WorkspaceDirectory:
         self.path.chmod(0o600)
 
     def _db(self):
-        return _Tx(sqlite3.connect(self.path, timeout=10))
+        return _Tx(secure(sqlite3.connect(self.path, timeout=10)))
 
     def create(self) -> tuple[str, str]:
         for _ in range(5):
@@ -186,7 +187,15 @@ class WorkspaceDirectory:
 
     def forget(self, workspace_id: str) -> bool:
         with self._lock, self._db() as db:
-            return db.execute("DELETE FROM workspaces WHERE id = ?", (workspace_id,)).rowcount > 0
+            gone = db.execute("DELETE FROM workspaces WHERE id = ?", (workspace_id,)).rowcount > 0
+        if gone:
+            with self._lock:
+                db = secure(sqlite3.connect(self.path, timeout=10, isolation_level=None))  # autocommit: VACUUM cannot run inside a transaction
+                try:
+                    scrub(db)
+                finally:
+                    db.close()
+        return gone
 
     def count(self) -> int:
         with self._db() as db:

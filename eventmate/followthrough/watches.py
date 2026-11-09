@@ -30,6 +30,7 @@ from pydantic import Field, model_validator
 from eventmate.evidence.ledger import EvidenceLedger, FactState
 from eventmate.followthrough.pagediff import describe, diff_page, page_lines
 from eventmate.moneytext import negative_before
+from eventmate.sqlsafe import scrub, secure
 from eventmate.schemas import MAX_BUDGET_INR, _Model
 
 MAX_WATCHES = 20
@@ -111,7 +112,7 @@ class WatchStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(self.path, os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0), 0o600)
         os.close(fd)
-        db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
+        db = secure(sqlite3.connect(self.path, timeout=10, isolation_level=None))
         try:
             db.execute("PRAGMA journal_mode=WAL")
             db.execute("CREATE TABLE IF NOT EXISTS watches (watch_id TEXT PRIMARY KEY, subject TEXT NOT NULL, status TEXT NOT NULL, next_check_at TEXT NOT NULL, version INTEGER NOT NULL, data TEXT NOT NULL)")
@@ -158,7 +159,10 @@ class WatchStore:
         if not self.exists():
             return False
         with self._lock, self._db() as db:
-            return db.execute("DELETE FROM watches WHERE watch_id=?", (watch_id,)).rowcount == 1
+            gone = db.execute("DELETE FROM watches WHERE watch_id=?", (watch_id,)).rowcount == 1
+            if gone:
+                scrub(db)  # the removed watch is not left in the write-ahead log
+            return gone
 
     def due(self, now: datetime, limit: int = 5) -> list[Watch]:
         if not self.exists():

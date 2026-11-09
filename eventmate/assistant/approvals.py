@@ -27,6 +27,7 @@ from pydantic import Field
 
 from eventmate.assistant.identity import Perm, Principal
 from eventmate.assistant.trace import ProposalLog, sha
+from eventmate.sqlsafe import secure
 from eventmate.schemas import _Model
 
 MAX_PENDING_PER_PLAN = 10
@@ -102,7 +103,7 @@ class ApprovalQueue:
             return
         if self._path is None:  # in-memory mode returned above
             raise RuntimeError("the approvals queue has neither a file nor a memory store")
-        c = sqlite3.connect(self._path, timeout=10, isolation_level=None)
+        c = secure(sqlite3.connect(self._path, timeout=10, isolation_level=None))
         try:
             c.execute("PRAGMA journal_mode=WAL")
             yield c

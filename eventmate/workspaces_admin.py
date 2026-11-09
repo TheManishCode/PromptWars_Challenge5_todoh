@@ -22,6 +22,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 from eventmate.transfer import TransferError, export_workspace, import_archive
+from eventmate.sqlsafe import secure
 from eventmate.workspaces import ID, WorkspaceRegistry
 
 
@@ -126,7 +127,7 @@ def _backup_command(a) -> int:
 def _ids(reg: WorkspaceRegistry):
     import sqlite3
 
-    conn = sqlite3.connect(reg.directory.path)
+    conn = secure(sqlite3.connect(reg.directory.path))
     try:
         return conn.execute("SELECT id FROM workspaces ORDER BY created").fetchall()
     finally:

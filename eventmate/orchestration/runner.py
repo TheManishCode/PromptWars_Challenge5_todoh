@@ -15,6 +15,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 
 from eventmate.orchestration.graph import build_graph
+from eventmate.sqlsafe import secure
 from eventmate.orchestration.models import ApprovalReview, ContactReview, MissionView
 
 MISSION_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
@@ -28,7 +29,7 @@ class MissionRunner:
             raise ValueError("the missions database path is a symlink")
         fd = os.open(db_path, os.O_CREAT | os.O_RDWR, 0o600)
         os.close(fd)
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn = secure(sqlite3.connect(db_path, check_same_thread=False))
         self.graph = build_graph(em, SqliteSaver(self._conn))
 
     def close(self) -> None:

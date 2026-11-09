@@ -23,6 +23,7 @@ from collections.abc import Iterator
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from eventmate import migrations
+from eventmate.sqlsafe import secure
 import builtins
 
 JobStatus = Literal["active", "waiting_vendor", "waiting_user", "blocked", "done", "expired", "cancelled"]
@@ -142,7 +143,7 @@ class JobStore:
 
     @contextlib.contextmanager
     def _db(self) -> Iterator[sqlite3.Connection]:
-        db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
+        db = secure(sqlite3.connect(self.path, timeout=10, isolation_level=None))
         try:
             db.execute("PRAGMA journal_mode=WAL")
             yield db
