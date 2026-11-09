@@ -471,6 +471,7 @@
     tasks.forEach(function (x) { lines.push('Add "' + x.name + '"' + (x.days_before_event ? ', ' + plural(x.days_before_event, 'day', 'days') + ' before the event' : ' on the event day') + (x.duration_minutes ? ' (' + x.duration_minutes + ' min)' : '')); });
     if (lines.length) kids.push(h('ul', null, lines.map(function (l) { return h('li', { text: l }); })));
     (t.questions || []).forEach(function (q) { kids.push(h('p', { class: 'q', text: q.question })); });
+    if ((t.not_done || []).length) { kids.push(h('p', null, h('b', { text: 'Not done, and why' }))); kids.push(h('ul', { class: 'not-done' }, t.not_done.map(function (n) { return h('li', { text: n }); }))); }
     (t.notes || []).forEach(function (n) { kids.push(h('p', { class: 'hint', text: n })); });
     tasks.forEach(function (x, i) { if (x.duration_minutes) return; var inp = h('input', { type: 'number', min: '1', max: '1440', id: 'len-' + i, 'aria-label': 'Minutes for ' + x.name }); inputs.push([i, inp]); kids.push(h('label', { for: 'len-' + i }, 'Minutes for "' + x.name + '": ', inp)); });
     var done = ((st.plan && st.plan.items) || []).filter(function (i) { return /^book_|^extra_/.test(i.task_id); }), boxes = [];

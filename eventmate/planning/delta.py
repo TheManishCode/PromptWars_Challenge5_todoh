@@ -63,6 +63,7 @@ class DeltaTurn(_Model):
     questions: tuple[DeltaQuestion, ...] = ()
     source: str  # "rule:parser" or "llm:<model>"
     notes: tuple[str, ...] = ()
+    not_done: tuple[str, ...] = ()  # parts of the message that were neither applied nor asked about, each with why: nothing the user wrote is dropped without being listed
 
     @model_validator(mode="after")
     def _something_to_confirm_or_ask(self) -> DeltaTurn:
@@ -154,6 +155,40 @@ def ground(raw: dict[str, Any], message: str, plan: PlanVersion, today: date, so
     return DeltaTurn(delta=EventDelta(**clean), questions=tuple(questions), source=source, notes=tuple(notes))
 
 
+# ----------------------------------------------------------------- what was left out
+
+_CLAUSE = re.compile(r"\s*(?:;|,\s|\band\b|&|\bplus\b|\balso\b|\bthen\b)\s*", re.I)
+_REQUEST = re.compile(r"\b(?:add|include|book|get|hire|arrange|need|want|bring|another|extra|more)\b", re.I)
+_SERVICE = {"photographer": re.compile(r"\bphoto(?:grapher|graphy|graphers)?\b", re.I), "caterer": re.compile(r"\b(?:cater(?:er|ers|ing)?|food|meals?)\b", re.I)}
+_CAN = "A change can set the budget, the guest count or the date, let a vendor go, or add a task"
+
+
+def left_out(message: str, plan: PlanVersion, today: date, turn: DeltaTurn) -> tuple[str, ...]:
+    """Each part of the message that asked for something and is neither in the delta nor a question: with why. "Add a photographer and stretch the budget to 2.5 lakh" applied the budget and said
+    nothing of the photographer (F7); every part is now applied, asked about, or listed here."""
+    task_words = {w for t in turn.delta.add_tasks for w in re.findall(r"[a-z]{4,}", t.name.casefold())}
+    asked = {q.field for q in turn.questions}
+    out = []
+    for clause in (c.strip() for c in _CLAUSE.split(message) if c and c.strip()):
+        t = mgr._ascii_digits(clause, [], [])
+        if mgr._parse_budget(t, []) is not None or mgr._parse_guests(t, []) is not None or mgr._parse_dates(t, today, [], []) is not None:
+            continue
+        if _CANCEL.search(clause) or (task_words & set(re.findall(r"[a-z]{4,}", clause.casefold()))) or not _REQUEST.search(clause):
+            continue
+        if {"set_budget_inr", "set_guest_count", "set_date", "cancel_vendor", "add_tasks"} & asked and not any(rx.search(clause) for rx in _SERVICE.values()):
+            continue  # a question is already open about it
+        service = next((name for name, rx in _SERVICE.items() if rx.search(clause)), None)
+        have = {s.category.value for s in plan.selections}
+        if service and service in have:
+            why = f"your plan already has a {service}"
+        elif service:
+            why = f"a change cannot add a {service} to a plan that is already built. {_CAN}. To get a {service}, start a new brief that asks for one"
+        else:
+            why = f"I could not read it as something a change can do. {_CAN}"
+        out.append(f"“{clause[:80]}”: {why}.")
+    return tuple(out)
+
+
 # ----------------------------------------------------------------- rule reader
 
 
@@ -190,10 +225,14 @@ def formalize_delta(message: str, plan: PlanVersion, today: date, llm: LLMClient
             for k, v in extra.items():
                 raw.setdefault(k, v)  # what the rules read from the user's words is not overridden by a model
         elif why:
-            return _with_note(ground(raw, message, plan, today, source), why) if raw else _no_change(why)
+            return _finish(_with_note(ground(raw, message, plan, today, source), why), message, plan, today) if raw else _no_change(why)
     if not raw:
         return _no_change("")
-    return ground(raw, message, plan, today, source)
+    return _finish(ground(raw, message, plan, today, source), message, plan, today)
+
+
+def _finish(turn: DeltaTurn, message: str, plan: PlanVersion, today: date) -> DeltaTurn:
+    return turn.model_copy(update={"not_done": left_out(message, plan, today, turn)})
 
 
 def _no_change(note: str) -> DeltaTurn:

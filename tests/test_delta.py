@@ -130,3 +130,39 @@ def test_a_confirmed_delta_becomes_the_disruptions_the_replanner_already_handles
     t = D.formalize_delta("the caterer pulled out, now 80 guests, budget 1.5 lakh, move it to December 20", plan, TODAY)
     kinds = [d.kind for d in D.to_disruptions(t.delta)]
     assert kinds == [DisruptionKind.VENDOR_CANCELLATION, DisruptionKind.BUDGET_CHANGE, DisruptionKind.GUEST_COUNT_CHANGE, DisruptionKind.DATE_CHANGE]
+
+
+# ---- F7: every part of a change request is applied, asked about, or listed as not done
+
+def without_photographer(plan):
+    return plan.model_copy(update={"selections": tuple(s for s in plan.selections if s.category.value != "photographer")})
+
+
+def test_a_part_of_the_message_that_nothing_read_is_listed_as_not_done_with_why(plan):
+    turn = D.formalize_delta("add a photographer and stretch the budget to 2.5 lakh", without_photographer(plan), TODAY)
+    assert turn.delta.set_budget_inr == 250_000, "the part that could be read is still applied"
+    (item,) = turn.not_done
+    assert "add a photographer" in item and "cannot add a photographer" in item and "new brief" in item
+
+
+def test_a_message_that_is_all_understood_lists_nothing_as_not_done(plan):
+    for text in ("budget 3 lakh", "make it 150 guests and move it to 19 December 2026", "stretch the budget to 2.5 lakh"):
+        assert D.formalize_delta(text, plan, TODAY).not_done == (), text
+
+
+def test_a_service_the_plan_already_has_is_said_to_be_there(plan):
+    have = {s.category.value for s in plan.selections}
+    assert "photographer" in have, "the example plan includes a photographer"
+    turn = D.formalize_delta("add a photographer and budget 4 lakh", plan, TODAY)
+    assert turn.delta.set_budget_inr == 400_000 and len(turn.not_done) == 1 and "already has a photographer" in turn.not_done[0]
+
+
+def test_an_unreadable_request_is_listed_with_what_a_change_can_do(plan):
+    turn = D.formalize_delta("book a magician, 90 guests", plan, TODAY)
+    assert turn.delta.set_guest_count == 90 and len(turn.not_done) == 1 and "book a magician" in turn.not_done[0] and "A change can set the budget" in turn.not_done[0]
+
+
+def test_a_task_the_model_added_for_a_part_of_the_message_is_not_called_left_out(plan):
+    fake = Fake({"delta": {"add_tasks": [{"name": "Hire a photographer for the ceremony", "duration_minutes": 60}]}})
+    turn = D.formalize_delta("add a photographer for 60 minutes and budget 3 lakh", plan, TODAY, fake, PromptStore(PROMPTS))
+    assert [t.name for t in turn.delta.add_tasks] == ["Hire a photographer for the ceremony"] and turn.not_done == ()
