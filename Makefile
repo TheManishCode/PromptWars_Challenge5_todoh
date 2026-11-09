@@ -48,7 +48,7 @@ ci-deploy-check:
 ci-soak:
 	tools/ci/soak.sh
 ci:
-	tools/ci/clean_tree.sh snapshot && $(MAKE) --no-print-directory ci-static ci-ui ci-solvers ci-tests ci-mutants
+	tools/ci/clean_tree.sh snapshot && $(MAKE) -k --no-print-directory ci-static ci-ui ci-solvers ci-tests ci-mutants
 ci-full: ci
 	$(MAKE) --no-print-directory ci-deploy-check ci-soak
 # the review gate on one committed sha, in a clean worktree: tools/ci/gate.sh [SHA] [--quick]
