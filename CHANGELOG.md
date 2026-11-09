@@ -122,3 +122,6 @@
 - Findings made while building it: lock-drift compared against the latest upstream and would fail on any new release (now compares against the existing pins); `requirements.lock` pins PyPI `flights==0.9.0` against the pyproject git extra (D-023); `.gitignore`'s `solvers/` pattern hid `.github/actions/solvers`; `act` printed `.env` in full, and ignores `--env-file /dev/null` from a project `.actrc` (now empty tracked files, checked and demonstrated).
 - `docs/CI.md` has the commands, the job and check names, branch protection, CD, and the proof.
 
+### Final-check fixes (branch fix/final-check)
+- F8: a percent is never a rupee amount; F3: a minus sign is never dropped; the terms and compare screens show the deposit as a share of the total. F6: `secure_delete` everywhere personal data is stored. F7: every part of a change request is applied, asked about or listed under "Not done, and why". F1, F4: plain repairs, a missing planning tool says what to install, a too-small budget says the total that would work. F5: a misspelled city in a one-shot brief is offered back by name. F9: the stage stream sends every stage of a quick run. F10: the sandbox works for an interpreter behind symlinks (uv, setup-python). `make ci` runs the tests on every supported Python. Eight new mutants.
+

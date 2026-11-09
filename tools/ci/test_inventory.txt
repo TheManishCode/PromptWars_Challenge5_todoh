@@ -86,6 +86,7 @@ tests/test_intake_page.py 25
 tests/test_intake_reader.py 227
 tests/test_intake_roundtrip.py 42
 tests/test_integrity.py 29
+tests/test_isolation_prefixes.py 4
 tests/test_jobs_api.py 5
 tests/test_jobs_concurrency.py 7
 tests/test_jobs_worker.py 52
@@ -125,6 +126,7 @@ tests/test_planner_select.py 11
 tests/test_privacy.py 18
 tests/test_properties.py 8
 tests/test_proxy_deploy.py 9
+tests/test_pulse_trail.py 4
 tests/test_quote_attachments.py 7
 tests/test_quote_compare.py 9
 tests/test_quote_event_fit.py 4

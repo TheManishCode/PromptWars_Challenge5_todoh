@@ -13,7 +13,7 @@
 | G5 unpinned solvers | `tools/ci/solvers.sh`: Fast Downward `1eef26b2cbf5…` and VAL `3c7a1f330bda…` verified at their commits (strict in CI), built with the CMake flag; the cache key is the hash of the recipe | a different commit fails in CI |
 | CI-1 tests that vanish without a skip (a `collect_ignore` line, a deleted file) | `tools/ci/test_inventory.py`: `tools/ci/test_inventory.txt` lists the tests collected per file; the tests job fails if a file disappears or shrinks ("update tools/ci/test_inventory.txt in the same commit if this removal is intended"), growth is reported, and the static job requires the inventory to equal the tree | `collect_ignore` of one file, and a deleted file, both fail |
 | G6 workflow security | top-level `permissions: contents: read`; concurrency; a timeout on every job; every action by commit sha; trivy by image digest; `gitleaks git` and `gitleaks dir` on the tracked files; actionlint, zizmor, shellcheck; `tests/test_ci_guards.py` enforces the first four | an action at `@v4` fails the guard test |
-| G7 no negative controls | `tools/ci/mutants.py`: 32 patches that re-introduce real bugs; each named test must PASS without it and FAIL with it; a patch that no longer applies fails ("update this mutant") | a neutered test lets a mutant survive and the gate fails |
+| G7 no negative controls | `tools/ci/mutants.py`: 34 patches that re-introduce real bugs; each named test must PASS without it and FAIL with it; a patch that no longer applies fails ("update this mutant") | a neutered test lets a mutant survive and the gate fails |
 | G8 no CD | `release.yml`, `tools/ci/release.sh`, `tools/ci/deploy.sh` (refuses), `tools/ci/post_deploy_smoke.sh` | the stub refuses and never prints a secret (tested) |
 
 ## Running it
@@ -38,7 +38,7 @@ Logs, junit and coverage go to `$CI_OUT` (default `/tmp/todoh-ci-out-<hash of th
 | `ui` | `npm ci`, vitest, `vite build`, `git diff` of `eventmate/web/static` | `make ci-ui` |
 | `solvers` | build FD and VAL at the pinned commits, verify, cache (key = hash of the recipe), upload as an artefact | `tools/ci/solvers.sh` |
 | `tests (py3.12)`, `tests (py3.13)`, `tests (py3.14)` | (a red run names its failed and errored node ids in the log, the step summary and `failed.txt`, an artefact) locked install (with the serve and flights extras), nginx, openssl, Chromium and Firefox; the suite with `-rs` and a junit file; the skip guard; the clean-tree check; coverage gate (94) on 3.14 only | `make ci-tests` |
-| `mutants` | the 32 mutants (needs the browsers: two kill via the hosted journey) | `make ci-mutants` |
+| `mutants` | the 34 mutants (needs the browsers: two kill via the hosted journey) | `make ci-mutants` |
 | `deploy-check` | `deploy_check.sh` (proxy, smuggling, check_image, leak control, trivy HIGH/CRITICAL with a fix) | `make ci-deploy-check` |
 | `soak` | 60 s, 20 visitors, half on `/plan` | `make ci-soak` |
 | `ci-gate` | succeeds only if every job above succeeded (a skipped or cancelled one is not a pass) | n/a |
