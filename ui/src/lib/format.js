@@ -22,6 +22,14 @@ export function inr(n) {
   return `${n < 0 ? '-' : ''}₹${out}`;
 }
 
+/** "12% of the total": the deposit as a share of the total, so Rs 25 on Rs 54,000 reads as 0.05% and looks odd. Under 1% it keeps two decimals, else one at most. */
+export function shareOf(part, total) {
+  if (typeof part !== 'number' || typeof total !== 'number' || !(total > 0) || part < 0) return '';
+  const p = (part / total) * 100;
+  const text = p < 1 && p > 0 ? p.toFixed(2).replace(/0+$/, '').replace(/\.$/, '') : p.toFixed(1).replace(/\.0$/, '');
+  return `${text}% of the total`;
+}
+
 /** "2026-12-12" -> "12 Dec 2026". Anything else is shown as it came. */
 export function longDate(value) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value || '');

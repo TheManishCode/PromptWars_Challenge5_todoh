@@ -22,6 +22,7 @@ from typing import NamedTuple
 from collections.abc import Callable
 
 from eventmate.integrations.discovery import clean_city
+from eventmate.moneytext import negative_before, percent_after
 from eventmate.schemas import MAX_BUDGET_INR, DealOffer, DealQuery, DealReport, MarketSummary, SkippedPage
 from eventmate.integrations.web_access import FetchError, _clean
 from eventmate.integrations.websearch import SearchError, SearchProvider
@@ -89,6 +90,8 @@ def extract_mentions(text: str) -> list[Mention]:
         prev_end = m.end()
         if low is None or high is None or low > high:
             continue
+        if negative_before(text, start) or percent_after(text, m.end()):
+            continue  # "-Rs 450" and "Rs 25%" are not a price of 450 or 25 rupees (F3, F8)
         u = _UNIT.match(text[m.end(): m.end() + 40])
         unit = _UNIT_NAMES[u.group(1).lower()] if u else "unspecified"
         label = _label(text[before_start:start])

@@ -29,6 +29,7 @@ from pydantic import Field, model_validator
 
 from eventmate.evidence.ledger import EvidenceLedger, FactState
 from eventmate.followthrough.pagediff import describe, diff_page, page_lines
+from eventmate.moneytext import negative_before
 from eventmate.schemas import MAX_BUDGET_INR, _Model
 
 MAX_WATCHES = 20
@@ -90,6 +91,8 @@ def amounts(line: str) -> list[int]:
     """The INR amounts a line states, as whole rupees: "Rs 28,000", "INR 1.5 lakh", "₹30k". Only an amount marked as rupees is read; a bare number is not a price."""
     out = []
     for m in _AMOUNT.finditer(line):
+        if negative_before(line, m.start(1)):
+            continue  # a minus sign is part of the amount: it is not read as the positive one (F3)
         unit = (m.group(3) or "").lower()
         mult = 100_000 if unit.startswith(("lakh", "lac")) or unit == "l" else (1_000 if unit == "k" else 1)
         out.append(int(float(m.group(1).replace(",", "") + (m.group(2) or "")) * mult))

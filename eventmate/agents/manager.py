@@ -20,6 +20,7 @@ from typing import NamedTuple
 
 from pydantic import ValidationError
 
+from eventmate.moneytext import negative_before
 from eventmate.planning import allergies, diets, negation
 from eventmate.planning import cities as city_aliases
 from eventmate.planning.community import load_profiles, match_subtype
@@ -351,6 +352,9 @@ def _parse_budget(text: str, problems: list[str]) -> int | None:
         marked = m.group("cur") or m.group("unit") or m.group("cur2") or _stands_for_budget(text, m) or _BUDGET_WORD.match(m.group(0))
         if not marked:
             continue
+        if negative_before(text, m.start("num")):
+            problems.append("a budget cannot be negative: say the amount without a minus sign")
+            return None
         try:
             value = Decimal(m.group("num").replace(",", ""))
             if m.group("unit"):

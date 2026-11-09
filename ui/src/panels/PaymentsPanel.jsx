@@ -3,7 +3,7 @@ import { Note, Notice } from '../components/Note';
 import { useAction } from '../hooks/useAction';
 import { useResource } from '../hooks/useResource';
 import { api } from '../lib/api';
-import { inr, longDate, shortDate } from '../lib/format';
+import { inr, longDate, shareOf, shortDate } from '../lib/format';
 import { categoryLabel } from '../lib/vendors';
 
 const METHODS = { upi: 'UPI', bank_transfer: 'Bank transfer', paypal: 'PayPal', cash: 'Cash', cheque: 'Cheque', card_link: 'A card payment link', other: 'Another way' };
@@ -85,7 +85,7 @@ function Terms({ t, payments, post, busy }) {
   return (
     <div className="terms" data-terms={t.terms_id}>
       <h4>{categoryLabel(t.category)}: {t.vendor_name}</h4>
-      <p>Total {inr(t.total_inr)} · deposit {inr(t.deposit_inr)} · balance {inr(t.balance_inr)}{t.deposit_due ? ` · deposit due ${longDate(t.deposit_due)}` : ''}{t.balance_due ? ` · balance due ${longDate(t.balance_due)}` : ''}</p>
+      <p>Total {inr(t.total_inr)} · deposit {inr(t.deposit_inr)}{t.deposit_inr > 0 ? ` (${shareOf(t.deposit_inr, t.total_inr)})` : ''} · balance {inr(t.balance_inr)}{t.deposit_due ? ` · deposit due ${longDate(t.deposit_due)}` : ''}{t.balance_due ? ` · balance due ${longDate(t.balance_due)}` : ''}</p>
       {t.source_sentence && <blockquote>“{t.source_sentence}”</blockquote>}
       <small className="quiet">Paid so far {inr(t.paid_inr)}{t.refunded_inr ? ` · refunded ${inr(t.refunded_inr)}` : ''} · {t.status.replace('_', ' ')}</small>
       {t.status === 'proposed' && <TermsForm terms={t} post={post} busy={busy} />}

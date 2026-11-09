@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass, field
 
 from eventmate.followthrough.claims import amount_is_in_text
+from eventmate.moneytext import negative_before, percent_after
 
 MAX_LINES = 200
 MAX_AMOUNT = 100_000_000  # INR 10 crore: more than that on one line is a misread, not a quote
@@ -42,7 +43,12 @@ class QuoteExtract:
 def read_amount(cell: str) -> int | None:
     """One INR amount written in the cell ("₹2,00,000", "Rs. 450/-", "1.5 lakh"), or None when there is none or more than one."""
     found = []
-    for m in _NUMBER.finditer(re.sub(r"(?i)\b(?:inr|rs\.?|rupees)|₹|/-", " ", cell)):
+    cleaned = re.sub(r"(?i)\b(?:inr|rs\.?|rupees)|₹|/-", " ", cell)
+    for m in _NUMBER.finditer(cleaned):
+        if negative_before(cleaned, m.start(1)):
+            return None  # a negative cell is not a rate or a total; the line is left for the user to read (F3)
+        if percent_after(cleaned, m.end(2) if m.group(2) else m.end(1)):
+            return None  # a percentage is not a rupee amount (F8)
         try:
             value = round(float(m.group(1).replace(",", "")) * (_MULT[m.group(2).lower()] if m.group(2) else 1))
         except ValueError:

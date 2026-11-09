@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Literal
 
+from eventmate.moneytext import NEGATIVE_NOTE, PERCENT_NOTE, negative_before, percent_after
 from eventmate.followthrough.claims import _MULT, amount_is_in_text, extract_claims
 from eventmate.schemas import MAX_GUESTS, InboundMessage, VendorCategory
 
@@ -90,6 +91,10 @@ def _money(value: str, key: str) -> tuple[str | None, str]:
         return None, "that is a range, not a price"
     found = {}
     for m in _AMOUNT.finditer(value):
+        if negative_before(value, m.start("n")):
+            return None, NEGATIVE_NOTE  # the sign is part of what the vendor wrote: never read as the positive amount (F3)
+        if percent_after(value, m.end("u") if m.group("u") else m.end("n")):
+            return None, PERCENT_NOTE  # "25%" and "30 percent advance" are not Rs 25 and Rs 30 (F8)
         raw = m.group("n")
         unit = (m.group("u") or "").lower()
         try:

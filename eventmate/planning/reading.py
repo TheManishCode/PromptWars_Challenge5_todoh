@@ -16,6 +16,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from eventmate.agents import manager as mgr
+from eventmate.moneytext import negative_before
 from eventmate.planning.questions import Pick, Unresolved, clip, long_date, money
 from eventmate.schemas import MAX_BUDGET_INR, MAX_GUESTS
 
@@ -207,6 +208,8 @@ def screen_budget(text: str, guests: int | None = None) -> Unresolved | None:
         if not (c1 or c2 or unit or at_budget or ranged or _at(_PER_PERSON, rest)):
             continue  # a number that is not money here: a date, a guest count, a phone number ("500 per head" is money: a rate)
         shown = clip(text[m.start(): m.end() + (word.end() if word and (unit or c2) else 0)].strip(), 40)
+        if negative_before(text, m.start("n")):
+            return Unresolved(key="budget_total", field="budget_total", said=shown, question=_budget_question(shown, "a budget cannot be negative"))
         currency = _FOREIGN.get(c1) or _FOREIGN.get(c2)
         if currency:
             return Unresolved(key="budget_total", field="budget_total", said=shown, question=_budget_question(shown, f"that is an amount in {currency}, and this planner works in rupees and does not convert"))
