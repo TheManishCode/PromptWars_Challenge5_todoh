@@ -57,7 +57,7 @@ git checkout -q -- .github
 touch eventmate/web/static/plan-story-knot.webp; git add -f eventmate/web/static/plan-story-knot.webp
 expect_fail borrowed-art bash -c '[ "$(git ls-files "eventmate/web/static/plan-story-*" | wc -l)" = 0 ]'
 git rm -q --cached eventmate/web/static/plan-story-knot.webp; rm -f eventmate/web/static/plan-story-knot.webp
-# 6. a BARE act, run from a checkout that has a .env it cannot parse, must print no value of it (the .actrc points it at /dev/null). Without .actrc the same run prints the value: the control.
+# 6. a BARE act, run from a checkout that has a .env it cannot parse, must print no value of it (the .actrc points it at empty files inside the project: act ignores /dev/null from a project .actrc). Without .actrc the same run prints the value: the control.
 ACT="$ROOT/.ci-tools/bin/act"
 if [ -x "$ACT" ]; then
   FAKE="NOT-A-REAL-SECRET-0123456789"

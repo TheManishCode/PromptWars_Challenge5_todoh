@@ -24,7 +24,16 @@ run gitleaks-history gitleaks git --config .gitleaks.toml --redact --no-banner .
 run gitleaks-tracked bash -c 'rm -rf "$CI_OUT/tracked" && mkdir -p "$CI_OUT/tracked" && git archive HEAD | tar -x -C "$CI_OUT/tracked" && gitleaks dir --config .gitleaks.toml --redact --no-banner "$CI_OUT/tracked"'
 run env-not-tracked bash -c '! git ls-files | grep -E "(^|/)\.env$"'
 run no-local-state-tracked bash -c '! git ls-files | grep -E "\.pyc$|(^|/)__pycache__/|^eventmate/(plans|logs|wall_data|workspaces)/|\.(sqlite3|db)(-wal|-shm)?$|^solvers/|^\.hypothesis/|^ui/node_modules/|(^|/)owner_token$"'
-run actrc-keeps-act-from-reading-env bash -c 'git ls-files --error-unmatch .actrc >/dev/null && for l in "--env-file /dev/null" "--secret-file /dev/null"; do grep -qxF -- "$l" .actrc || { echo ".actrc must contain: $l (a bare act reads ./.env and prints it when it cannot parse it)"; exit 1; }; done'
+# act (0.2.97) refuses `--env-file /dev/null` from a project .actrc ("the path must stay inside the project"), so .actrc points at EMPTY tracked files inside the project instead. A bare `act` then reads
+# nothing from ./.env, which it would otherwise print in full when it cannot parse it.
+run actrc-keeps-act-from-reading-env bash -c '
+  git ls-files --error-unmatch .actrc >/dev/null || { echo ".actrc is not tracked"; exit 1; }
+  for pair in "env-file:act.env" "secret-file:act.secrets" "var-file:act.vars" "input-file:act.input"; do
+    flag="${pair%%:*}"; f=".github/${pair##*:}"
+    grep -qxF -- "--$flag $f" .actrc || { echo ".actrc must contain: --$flag $f"; exit 1; }
+    git ls-files --error-unmatch "$f" >/dev/null || { echo "$f is not tracked"; exit 1; }
+    ! grep -vE "^\s*(#|$)" "$f" | grep -q . || { echo "$f must hold no values (only comments)"; exit 1; }
+  done'
 run launch-docs-tracked bash -c 'for d in CHANGELOG.md docs/DECISIONS.md docs/HANDOFF.md docs/BLOCKED.md docs/LAUNCH_PLAN.md; do git ls-files --error-unmatch "$d" >/dev/null 2>&1 || { echo "$d is missing or untracked"; exit 1; }; done'
 run borrowed-art-not-tracked bash -c '[ "$(git ls-files "eventmate/web/static/plan-story-*" "eventmate/web/static/plan-reference-*" "eventmate/web/static/landing-poster.jpg" "eventmate/web/static/landing-hero.mp4" | wc -l)" = 0 ]'
 run static-provenance "$PY" -m pytest -q -p no:cacheprovider tests/test_static_provenance.py

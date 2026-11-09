@@ -1,4 +1,4 @@
---env-file /dev/null
---secret-file /dev/null
---var-file /dev/null
---input-file /dev/null
+--env-file .github/act.env
+--secret-file .github/act.secrets
+--var-file .github/act.vars
+--input-file .github/act.input
