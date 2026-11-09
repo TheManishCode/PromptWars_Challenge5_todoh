@@ -49,7 +49,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - uses: ./.github/actions/solvers
+      - uses: ./.github/actions/build-solvers
       - run: tools/ci/solvers.sh pack
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -75,7 +75,7 @@ jobs:
       - uses: ./.github/actions/prepare
         with:
           python-version: ${{ matrix.python }}
-      - uses: ./.github/actions/solvers
+      - uses: ./.github/actions/build-solvers
       - name: The suite, the skip guard and the clean-tree check (coverage on the newest Python only)
         env:
           COVERAGE: ${{ matrix.python == '3.14' && '1' || '' }}
@@ -100,7 +100,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/prepare
-      - uses: ./.github/actions/solvers
+      - uses: ./.github/actions/build-solvers
       - run: make ci-mutants
 
   deploy-check:
@@ -127,7 +127,7 @@ jobs:
       - uses: ./.github/actions/prepare
         with:
           browsers: "false"
-      - uses: ./.github/actions/solvers
+      - uses: ./.github/actions/build-solvers
       - run: make ci-soak
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -27,7 +27,7 @@ jobs:
       - uses: ./.github/actions/prepare
         with:
           browsers: "false"
-      - uses: ./.github/actions/solvers
+      - uses: ./.github/actions/build-solvers
       - name: Behavioural evals against the real model
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

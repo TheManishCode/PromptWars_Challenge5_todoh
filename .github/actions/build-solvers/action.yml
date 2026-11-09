@@ -1,0 +1,18 @@
+name: build-solvers
+description: Fast Downward and VAL at the pinned commits (tools/ci/solvers.sh). The cache key is the hash of the recipe, so changing the recipe rebuilds them.
+runs:
+  using: composite
+  steps:
+    - name: Cache key (the hash of the recipe)
+      id: key
+      shell: bash
+      run: echo "key=solvers-$(tools/ci/solvers.sh key)-$(uname -m)" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: solvers
+        key: ${{ steps.key.outputs.key }}
+    - name: Build when not cached, then verify the commits and that both run
+      shell: bash
+      run: |
+        sudo apt-get update && sudo apt-get install -y cmake g++ make flex bison
+        tools/ci/solvers.sh build
