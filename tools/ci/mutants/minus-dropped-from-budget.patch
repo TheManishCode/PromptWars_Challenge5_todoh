@@ -1,0 +1,13 @@
+diff --git a/eventmate/agents/manager.py b/eventmate/agents/manager.py
+index 92c8f80..ec84583 100644
+--- a/eventmate/agents/manager.py
++++ b/eventmate/agents/manager.py
+@@ -352,7 +352,7 @@ def _parse_budget(text: str, problems: list[str]) -> int | None:
+         marked = m.group("cur") or m.group("unit") or m.group("cur2") or _stands_for_budget(text, m) or _BUDGET_WORD.match(m.group(0))
+         if not marked:
+             continue
+-        if negative_before(text, m.start("num")):
++        if False:
+             problems.append("a budget cannot be negative: say the amount without a minus sign")
+             return None
+         try:

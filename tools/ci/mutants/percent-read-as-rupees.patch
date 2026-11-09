@@ -1,0 +1,13 @@
+diff --git a/eventmate/sourcing/quote_template.py b/eventmate/sourcing/quote_template.py
+index 659b5f9..df4d834 100644
+--- a/eventmate/sourcing/quote_template.py
++++ b/eventmate/sourcing/quote_template.py
+@@ -93,7 +93,7 @@ def _money(value: str, key: str) -> tuple[str | None, str]:
+     for m in _AMOUNT.finditer(value):
+         if negative_before(value, m.start("n")):
+             return None, NEGATIVE_NOTE  # the sign is part of what the vendor wrote: never read as the positive amount (F3)
+-        if percent_after(value, m.end("u") if m.group("u") else m.end("n")):
++        if False:
+             return None, PERCENT_NOTE  # "25%" and "30 percent advance" are not Rs 25 and Rs 30 (F8)
+         raw = m.group("n")
+         unit = (m.group("u") or "").lower()
