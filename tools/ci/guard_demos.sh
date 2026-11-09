@@ -43,14 +43,14 @@ rm eventmate/left_behind_by_a_test.json
 
 # 4. a mutant survives because the test that should catch the bug cannot fail
 sed -i 's/^def test_one_plan_cannot_send_more_first_requests_than_its_cap_in_a_day_and_another_plan_still_can(em, pid, chans, clock):$/def test_one_plan_cannot_send_more_first_requests_than_its_cap_in_a_day_and_another_plan_still_can(em, pid, chans, clock):\n    return  # neutered/' tests/test_outbound_safety.py
-git commit -qam "demo: neuter the cap test"
+git -c core.hooksPath=/dev/null commit -qam "demo: neuter the cap test"
 expect_fail mutant-survives tools/ci/mutants.py --only per-plan-cap-off
 git reset -q --hard HEAD~1
 
 # 5. static: a tracked .env, an action not pinned to a sha, a borrowed image
-echo "SECRET=1" > .env; git add -f .env; git commit -qm "demo: track .env"
+echo "SECRET=1" > .env; git add -f .env
 expect_fail env-tracked bash -c '! git ls-files | grep -E "(^|/)\.env$"'
-git reset -q --hard HEAD~1
+git rm -q --cached -f .env; rm -f .env
 sed -i '0,/actions\/checkout@[0-9a-f]\{40\}/s//actions\/checkout@v4/' .github/workflows/ci.yml
 expect_fail unpinned-action "$PY" -m pytest -q -p no:cacheprovider tests/test_ci_guards.py -k pins_every_action
 git checkout -q -- .github
