@@ -3,7 +3,7 @@
 per-plan-cap-off | per-plan-cap-off.patch | tests/test_outbound_safety.py::test_one_plan_cannot_send_more_first_requests_than_its_cap_in_a_day_and_another_plan_still_can | L2: one brief could use the whole day
 per-plan-cap-off-by-one | per-plan-cap-off-by-one.patch | tests/test_outbound_safety.py::test_one_plan_cannot_send_more_first_requests_than_its_cap_in_a_day_and_another_plan_still_can | L2: the cap lets one more through
 footer-removed | footer-removed.patch | tests/test_outbound_safety.py::test_the_footer_is_inside_the_approved_hash | L2: a first request without the sender and STOP line
-bare-stop-branch-removed | bare-stop-branch-removed.patch | tests/test_outbound_safety.py::test_replying_stop_to_the_footer_suppresses_the_address_and_quoting_it_does_not | L2: a reply that is just STOP is not a stop request
+bare-stop-not-read-at-all | bare-stop-not-read-at-all.patch | tests/test_outbound_safety.py::test_replying_stop_to_the_footer_suppresses_the_address_and_quoting_it_does_not | L2: a reply that is just STOP is not a stop request (both the bare-word pattern and the first-line rule off: either alone is covered by the other)
 first-line-stop-off | first-line-stop-off.patch | tests/test_stop_shapes.py | R-015: STOP with a signature or please is not read
 shared-pool-keeps-the-day | shared-pool-keeps-the-day.patch | tests/test_shared_quotes.py::test_the_shared_store_keeps_the_month_of_the_event_never_the_day | R-014: the pool keeps the exact event date
 pasted-replies-shared | pasted-replies-shared.patch | tests/test_quote_promote.py::test_a_reply_the_user_pastes_is_read_confirmed_and_planned_from_like_any_other_and_never_shared | words a user typed reach another person
