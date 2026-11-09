@@ -32,7 +32,8 @@ hooks:
 
 # The gate (tools/ci/): `make ci` is exactly what the workflows run, step by step; `make ci-full` adds the container checks and the soak. docs/CI.md says what each one catches.
 ci-tools:
-	tools/ci/bootstrap_tools.sh && pip install -r tools/ci/requirements-ci.txt && tools/ci/install_flights.sh
+	# the environment first (the lock has fli's own dependencies, babel and others), then the tools, then the documented fli commit on top: one sequence whatever was installed before
+	pip install --require-hashes -r requirements.lock && pip install --no-deps -e . && tools/ci/bootstrap_tools.sh && pip install -r tools/ci/requirements-ci.txt && tools/ci/install_flights.sh
 ci-static:
 	tools/ci/static.sh
 ci-ui:

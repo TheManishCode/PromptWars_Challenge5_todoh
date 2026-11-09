@@ -21,6 +21,10 @@ except Exception:  # noqa: BLE001
     got = ""
 if got != want:
     bad.append(f"flights from the pyproject extra (commit {want[:12]}; installed: {got[:12] or 'the PyPI 0.9.0 from the lock'}): run tools/ci/install_flights.sh")
+import subprocess  # noqa: E402
+r = subprocess.run([sys.executable, "tools/ci/check_fli.py"], capture_output=True, text=True)
+if r.returncode:
+    bad.append(r.stdout.strip() or "fli (the usability check crashed)")
 from tests.browser_helpers import CHROMIUM  # noqa: E402
 if CHROMIUM is None:
     bad.append("chromium or google-chrome-stable on PATH")

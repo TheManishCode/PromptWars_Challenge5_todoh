@@ -20,7 +20,7 @@
 
 ```sh
 python -m venv .venv && . .venv/bin/activate && pip install --require-hashes -r requirements.lock && pip install --no-deps -e .
-make ci-tools        # pinned actionlint, shellcheck, gitleaks (checksummed) into .ci-tools/, and zizmor, uv from tools/ci/requirements-ci.txt
+make ci-tools        # (repeats the two installs above, so it is safe from any starting point; then the fli commit that pyproject documents, checked by check_fli.py) pinned actionlint, shellcheck, gitleaks (checksummed) into .ci-tools/, and zizmor, uv from tools/ci/requirements-ci.txt
 make ci              # static, ui, solvers (verify), tests (with the skip guard and clean-tree check), mutants. Goes on after a failing step and reports them all
 make ci-full         # ci, then deploy-check (needs Docker) and a 60 s soak
 tools/ci/gate.sh [SHA] [--quick]   # the review gate: ONE committed sha in a clean worktree (--quick skips the full suite)

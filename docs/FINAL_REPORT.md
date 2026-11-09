@@ -23,7 +23,8 @@ Needs Python 3.12 or later (verified on 3.14), Node, `git`, `cmake g++ make flex
 ```sh
 # 1. environment
 python3 -m venv .venv && . .venv/bin/activate
-pip install -e ".[dev,serve]"        # add ,flights to also run tests/test_travel.py (pulls fli from GitHub at a pinned commit)
+pip install --require-hashes -r requirements.lock && pip install --no-deps -e .   # the locked set, fli's own dependencies included
+#   then, to run the gate: make ci-tools (the same sequence again, plus the pinned tools and the fli commit that pyproject documents). `pip install -e ".[dev,serve]"` alone leaves fli half-installed: tests/test_travel.py fails
 
 # 2. the planning tools (plans refuse to run without them; ~10 min compile)
 mkdir -p solvers && cd solvers

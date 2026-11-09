@@ -3,6 +3,7 @@ import importlib.util
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -56,6 +57,21 @@ def test_a_red_build_names_its_failures_in_a_file_the_log_and_the_step_summary(t
     subprocess.run([str(CI / "failed_tests.py"), str(junit), str(tmp_path / "failed.txt")], env=env, capture_output=True, text=True)
     assert (tmp_path / "failed.txt").read_text() == ""
     assert "-rfEs" in (CI / "tests.sh").read_text() and "failed.txt" in (ROOT / ".github/workflows/ci.yml").read_text()
+
+
+def test_a_half_installed_fli_fails_up_front_with_the_fix(tmp_path):
+    pkg = tmp_path / "libs" / "fli"
+    (pkg / "search").mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "models.py").write_text("Airport = FlightSearchFilters = FlightSegment = MaxStops = PassengerInfo = SeatType = SortBy = DateSearchFilters = object\n")
+    (pkg / "search" / "__init__.py").write_text("import babel_that_is_not_installed\nSearchFlights = SearchDates = object\n")  # `import fli` works; the submodule does not
+    (pkg / "search" / "exceptions.py").write_text("SearchClientError = Exception\n")
+    env = {**os.environ, "PYTHONPATH": str(tmp_path / "libs")}
+    out = subprocess.run([sys.executable, str(CI / "check_fli.py")], env=env, capture_output=True, text=True, cwd=ROOT)
+    assert out.returncode == 1 and "fli.search" in out.stdout and "babel_that_is_not_installed" in out.stdout and "make ci-tools" in out.stdout
+    assert "check_fli.py" in (CI / "require_tools.sh").read_text() and "requirements.lock" in (ROOT / "Makefile").read_text()
+    ok = subprocess.run([sys.executable, str(CI / "check_fli.py")], capture_output=True, text=True, cwd=ROOT)
+    assert ok.returncode == 0, ok.stdout
 
 
 def test_an_allow_list_line_needs_the_reason_to_match_too(tmp_path):
