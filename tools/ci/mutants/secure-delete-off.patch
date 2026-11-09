@@ -1,0 +1,13 @@
+diff --git a/eventmate/workspaces.py b/eventmate/workspaces.py
+index 8a2de11..1dafbba 100644
+--- a/eventmate/workspaces.py
++++ b/eventmate/workspaces.py
+@@ -110,7 +110,7 @@ class WorkspaceDirectory:
+         self.path.chmod(0o600)
+ 
+     def _db(self):
+-        return _Tx(secure(sqlite3.connect(self.path, timeout=10)))
++        return _Tx(sqlite3.connect(self.path, timeout=10))
+ 
+     def create(self) -> tuple[str, str]:
+         for _ in range(5):
