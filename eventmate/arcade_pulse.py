@@ -40,6 +40,20 @@ class ArcadePulse:
         self._error = ""
         self._stages: dict[str, dict[str, float | None]] = {}
         self._t0 = 0.0
+        self._seq = 0
+        self._trail: list[tuple[int, dict]] = []  # every state the current run went through, in order: a stream sends each one even when the run is quicker than its poll
+
+    def _note(self) -> None:
+        """Called with the lock held after each change: remember the picture of the run at this moment."""
+        self._seq += 1
+        self._trail.append((self._seq, self._picture()))
+
+    def watch(self, since: int | None) -> tuple[list[dict], int]:
+        """(the pictures recorded after ``since``, the new position). With ``None``: the picture now and the position to continue from."""
+        with self._lock:
+            if since is None:
+                return [self._picture()], self._seq
+            return [pic for n, pic in self._trail if n > since], self._seq
 
     def begin_run(self, label: str) -> int:
         with self._lock:
@@ -49,6 +63,8 @@ class ArcadePulse:
             self._error = ""
             self._t0 = time.monotonic()
             self._stages = {name: {"state": "waiting", "t0": None, "t1": None} for name in STAGES}
+            self._trail = []
+            self._note()
             return self._run_id
 
     def stage_started(self, name: str) -> None:
@@ -60,6 +76,7 @@ class ArcadePulse:
                 return
             st["state"] = "active"
             st["t0"] = time.monotonic()
+            self._note()
 
     def stage_done(self, name: str) -> None:
         with self._lock:
@@ -72,6 +89,7 @@ class ArcadePulse:
                 st["t0"] = time.monotonic()
             st["t1"] = time.monotonic()
             st["state"] = "done"
+            self._note()
 
     def finish(self, ok: bool, error: str = "") -> None:
         with self._lock:
@@ -84,28 +102,32 @@ class ArcadePulse:
                     st["t1"] = now
             self._state = "done" if ok else "failed"
             self._error = error[:300]
+            self._note()
 
     def snapshot(self) -> dict:
         with self._lock:
-            now = time.monotonic()
-            stages: list[dict] = []
-            for name in STAGES:
-                st = self._stages.get(name)
-                if not st:
-                    stages.append({"name": name, "state": "waiting", "ms": None})
-                    continue
-                ms: float | None = None
-                if st["t0"] is not None:
-                    ms = round(((st["t1"] or now) - st["t0"]) * 1000, 1)
-                stages.append({"name": name, "state": st["state"], "ms": ms})
-            return {
-                "run_id": self._run_id,
-                "label": self._label,
-                "state": self._state,
-                "error": self._error,
-                "elapsed_ms": round((now - self._t0) * 1000, 1) if self._state != "idle" else None,
-                "stages": stages,
-            }
+            return self._picture()
+
+    def _picture(self) -> dict:
+        now = time.monotonic()
+        stages: list[dict] = []
+        for name in STAGES:
+            st = self._stages.get(name)
+            if not st:
+                stages.append({"name": name, "state": "waiting", "ms": None})
+                continue
+            ms: float | None = None
+            if st["t0"] is not None:
+                ms = round(((st["t1"] or now) - st["t0"]) * 1000, 1)
+            stages.append({"name": name, "state": st["state"], "ms": ms})
+        return {
+            "run_id": self._run_id,
+            "label": self._label,
+            "state": self._state,
+            "error": self._error,
+            "elapsed_ms": round((now - self._t0) * 1000, 1) if self._state != "idle" else None,
+            "stages": stages,
+        }
 
 
 class _CurrentPulse:
@@ -144,6 +166,9 @@ class _CurrentPulse:
 
     def snapshot(self) -> dict:
         return self._target().snapshot()
+
+    def watch(self, since: int | None) -> tuple[list[dict], int]:
+        return self._target().watch(since)
 
 
 pulse = _CurrentPulse()

@@ -184,14 +184,17 @@ def register(app, k):
             try:
                 first, last, deadline, beat = None, None, time.monotonic() + PULSE_STREAM_MAX_S, time.monotonic()
                 opened = beat
+                seen = None
                 while time.monotonic() < deadline:
-                    snap = source.snapshot()
+                    pictures, seen = source.watch(seen)  # every state since the last look, so a run quicker than the poll still shows each stage (F9)
+                    snap = pictures[-1] if pictures else source.snapshot()
                     if first is None:
                         first = (snap["run_id"], snap["state"] == "running")
-                    key = (snap["run_id"], snap["state"], tuple(s["state"] for s in snap["stages"]))
-                    if key != last:
-                        last = key
-                        yield f"event: progress\ndata: {json.dumps(snap)}\n\n"
+                    for pic in pictures:
+                        key = (pic["run_id"], pic["state"], tuple(s["state"] for s in pic["stages"]))
+                        if key != last:
+                            last = key
+                            yield f"event: progress\ndata: {json.dumps(pic)}\n\n"
                     if snap["state"] in ("done", "failed") and (snap["run_id"] > first[0] or first[1]):
                         return
                     if snap["run_id"] == first[0] and not first[1] and time.monotonic() - opened > PULSE_START_WAIT_S:  # no run under way and none has started
