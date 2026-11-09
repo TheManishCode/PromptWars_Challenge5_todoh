@@ -12,6 +12,15 @@ for m in ("fli", "playwright.sync_api", "waitress", "pytest_cov"):
         importlib.import_module(m)
     except Exception as e:  # noqa: BLE001
         bad.append(f"{m} ({type(e).__name__})")
+import json, tomllib  # noqa: E401
+from importlib.metadata import distribution
+want = tomllib.load(open("pyproject.toml", "rb"))["project"]["optional-dependencies"]["flights"][0].rsplit("@", 1)[-1].strip()
+try:
+    got = json.loads(distribution("flights").read_text("direct_url.json") or "{}").get("vcs_info", {}).get("commit_id", "")
+except Exception:  # noqa: BLE001
+    got = ""
+if got != want:
+    bad.append(f"flights from the pyproject extra (commit {want[:12]}; installed: {got[:12] or 'the PyPI 0.9.0 from the lock'}): run tools/ci/install_flights.sh")
 from tests.browser_helpers import CHROMIUM  # noqa: E402
 if CHROMIUM is None:
     bad.append("chromium or google-chrome-stable on PATH")

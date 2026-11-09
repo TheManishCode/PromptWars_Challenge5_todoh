@@ -57,4 +57,15 @@ git checkout -q -- .github
 touch eventmate/web/static/plan-story-knot.webp; git add -f eventmate/web/static/plan-story-knot.webp
 expect_fail borrowed-art bash -c '[ "$(git ls-files "eventmate/web/static/plan-story-*" | wc -l)" = 0 ]'
 git rm -q --cached eventmate/web/static/plan-story-knot.webp; rm -f eventmate/web/static/plan-story-knot.webp
+# 6. a BARE act, run from a checkout that has a .env it cannot parse, must print no value of it (the .actrc points it at /dev/null). Without .actrc the same run prints the value: the control.
+ACT="$ROOT/.ci-tools/bin/act"
+if [ -x "$ACT" ]; then
+  FAKE="NOT-A-REAL-SECRET-0123456789"
+  printf 'this line is not valid dotenv @@ %s\n' "$FAKE" > .env
+  out="$("$ACT" --list 2>&1)"; if echo "$out" | grep -q "$FAKE"; then step act-bare-with-actrc "LEAKED the value"; FAILS=$((FAILS + 1)); else step act-bare-with-actrc "caught (as it should): no value printed"; fi
+  mv .actrc "$CI_OUT/actrc.bak"; out="$("$ACT" --list 2>&1)"; mv "$CI_OUT/actrc.bak" .actrc
+  if echo "$out" | grep -q "$FAKE"; then step act-bare-without-actrc "control: without .actrc act DOES print the value (this is why .actrc exists)"; else step act-bare-without-actrc "NOT A CONTROL: act printed nothing even without .actrc"; FAILS=$((FAILS + 1)); fi
+  expect_fail act-wrapper-refuses-near-a-env bash -c 'cd "$1" && "$2/tools/ci/act.sh" ui' _ "$WT" "$WT"
+  rm -f .env
+else step act-demos "skipped: act is not installed (tools/ci/bootstrap_tools.sh --act)"; fi
 finish guard-demos

@@ -32,7 +32,7 @@ hooks:
 
 # The gate (tools/ci/): `make ci` is exactly what the workflows run, step by step; `make ci-full` adds the container checks and the soak. docs/CI.md says what each one catches.
 ci-tools:
-	tools/ci/bootstrap_tools.sh && pip install -r tools/ci/requirements-ci.txt
+	tools/ci/bootstrap_tools.sh && pip install -r tools/ci/requirements-ci.txt && tools/ci/install_flights.sh
 ci-static:
 	tools/ci/static.sh
 ci-ui:
