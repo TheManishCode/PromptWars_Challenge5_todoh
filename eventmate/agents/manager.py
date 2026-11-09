@@ -481,6 +481,10 @@ def _parse_city(text: str, known: Iterable[str], problems: list[str]) -> str | N
     if not found:  # a bare name in a list ("50 students, Bangalore, veg"): only a city this product knows, never a guess
         found = {city_aliases.canonical(m.group(0)) for m in city_aliases.BARE.finditer(text)} | {c for c in cities if re.search(rf"(?<!\w){re.escape(c)}(?!\w)", text, re.I)}
     if not found:
+        for word in re.findall(r"\b(?:in|at|near)\s+([A-Za-z]{3,})\b", text, re.I | re.A):
+            if near := city_aliases.near_city(word, tuple(cities)):
+                problems.append(f"I do not know a city called “{word}”. Did you mean {near}? Say it again with that spelling")
+                return None
         problems.append("city not found (e.g. 'in Pune')")
         return None
     spellings = {city_aliases.canonical(c) for c in found}

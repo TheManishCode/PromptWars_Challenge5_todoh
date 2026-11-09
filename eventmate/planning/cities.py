@@ -139,6 +139,11 @@ def _near(word: str, known: tuple[str, ...]) -> str | None:
     return names[best[0]] if best else None
 
 
+def near_city(word: str, known: tuple[str, ...]) -> str | None:
+    """The known city ``word`` looks like a misspelling of ("banglore" -> Bengaluru), else None. Only ever offered back as a question."""
+    return _near(word, tuple(known))
+
+
 def _as_written(word: str) -> str:
     w = " ".join(word.split()).strip(".,;:!?'\"()")
     return w if any(c.isupper() for c in w) else " ".join(p.capitalize() for p in w.split())

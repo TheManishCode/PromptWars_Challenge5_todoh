@@ -795,7 +795,7 @@ def raised_by(messages: Sequence[str], draft: IntakeDraft, today: date) -> list[
 
 # FUTURE(intake-fields): no field yet for access needs (ground floor, lift, parking), how many guests have an allergy ("make that two guests" is a no-op with a note), diet group sizes beside "half vegetarian", time of day, or per-day catering.
 # FUTURE(intake-venue): the planner always includes a venue, so "venue we already have" is only noted. It needs a plan request that can say "venue provided" and price it as zero.
-# FUTURE(intake-types): farewell, reunion, anniversary, team lunch, pooja and kitty party all read as "other"; the engine has no matching event type. Hindi "kal" (tomorrow or yesterday) is deliberately not read.
+# FUTURE(intake-types): hackathon, farewell, reunion, anniversary, team lunch, pooja and kitty party all read as "other"; the engine has no matching event type. Hindi "kal" (tomorrow or yesterday) is deliberately not read.
 EDITABLE = ("event_type", "guest_count", "city", "event_date", "budget_total")  # facts the user can type straight into the review card
 
 
