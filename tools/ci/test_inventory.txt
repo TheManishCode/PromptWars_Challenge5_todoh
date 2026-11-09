@@ -28,7 +28,7 @@ tests/test_budget.py 28
 tests/test_catalog_coverage.py 11
 tests/test_changes_api.py 9
 tests/test_channels.py 51
-tests/test_ci_guards.py 28
+tests/test_ci_guards.py 29
 tests/test_cities.py 10
 tests/test_claims.py 18
 tests/test_claims_random.py 11

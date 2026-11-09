@@ -44,7 +44,7 @@ jobs:
           subject-path: dist/*.tar.gz
       - name: Build provenance is skipped
         if: github.event.repository.private != false
-        run: echo "::notice::No provenance attestation: this repository is private, and attestations need a public repository or GitHub Enterprise Cloud (docs/CI.md)."
+        run: echo "::notice::No provenance attestation because this repository is private; attestations need a public repository or GitHub Enterprise Cloud (docs/CI.md)."
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-${{ github.ref_name }}
