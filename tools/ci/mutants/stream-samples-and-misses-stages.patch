@@ -1,0 +1,13 @@
+diff --git a/eventmate/web/routes/assistant_plans.py b/eventmate/web/routes/assistant_plans.py
+index 5828dcd..2421e94 100644
+--- a/eventmate/web/routes/assistant_plans.py
++++ b/eventmate/web/routes/assistant_plans.py
+@@ -186,7 +186,7 @@ def register(app, k):
+                 opened = beat
+                 seen = None
+                 while time.monotonic() < deadline:
+-                    pictures, seen = source.watch(seen)  # every state since the last look, so a run quicker than the poll still shows each stage (F9)
++                    pictures, seen = [source.snapshot()], 0
+                     snap = pictures[-1] if pictures else source.snapshot()
+                     if first is None:
+                         first = (snap["run_id"], snap["state"] == "running")
