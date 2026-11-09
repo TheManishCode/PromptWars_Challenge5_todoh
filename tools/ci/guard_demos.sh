@@ -5,6 +5,8 @@
 #   3. clean tree      a "test" that writes a file into the repository                  -> must fail
 #   4. mutant survives the test that guards a bug is neutered                          -> the mutants gate must fail
 #   5. new borrowed art / tracked .env / unpinned action                                -> the static checks must fail
+#   6. a test file dropped from collection (collect_ignore) or deleted                  -> the test inventory must fail
+#   7. act reading a .env                                                               -> must print nothing
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 WT="$(mktemp -d)/wt"
 git worktree add -q --detach "$WT" HEAD
@@ -57,6 +59,14 @@ git checkout -q -- .github
 touch eventmate/web/static/plan-story-knot.webp; git add -f eventmate/web/static/plan-story-knot.webp
 expect_fail borrowed-art bash -c '[ "$(git ls-files "eventmate/web/static/plan-story-*" | wc -l)" = 0 ]'
 git rm -q --cached eventmate/web/static/plan-story-knot.webp; rm -f eventmate/web/static/plan-story-knot.webp
+# 6a. a test file silently dropped from collection (a collect_ignore line): no skip, the tests are just gone
+echo 'collect_ignore = ["test_payments.py"]' >> tests/conftest.py
+expect_fail test-inventory "$PY" tools/ci/test_inventory.py
+git checkout -q -- tests/conftest.py
+rm -f tests/test_e2e_money.py
+expect_fail test-file-deleted "$PY" tools/ci/test_inventory.py
+git checkout -q -- tests/test_e2e_money.py
+
 # 6. a BARE act, run from a checkout that has a .env it cannot parse, must print no value of it (the .actrc points it at empty files inside the project: act ignores /dev/null from a project .actrc). Without .actrc the same run prints the value: the control.
 ACT="$ROOT/.ci-tools/bin/act"
 if [ -x "$ACT" ]; then

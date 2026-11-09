@@ -34,6 +34,7 @@ run actrc-keeps-act-from-reading-env bash -c '
     git ls-files --error-unmatch "$f" >/dev/null || { echo "$f is not tracked"; exit 1; }
     ! grep -vE "^\s*(#|$)" "$f" | grep -q . || { echo "$f must hold no values (only comments)"; exit 1; }
   done'
+run test-inventory-is-current "$PY" tools/ci/test_inventory.py --exact
 run launch-docs-tracked bash -c 'for d in CHANGELOG.md docs/DECISIONS.md docs/HANDOFF.md docs/BLOCKED.md docs/LAUNCH_PLAN.md; do git ls-files --error-unmatch "$d" >/dev/null 2>&1 || { echo "$d is missing or untracked"; exit 1; }; done'
 run borrowed-art-not-tracked bash -c '[ "$(git ls-files "eventmate/web/static/plan-story-*" "eventmate/web/static/plan-reference-*" "eventmate/web/static/landing-poster.jpg" "eventmate/web/static/landing-hero.mp4" | wc -l)" = 0 ]'
 run static-provenance "$PY" -m pytest -q -p no:cacheprovider tests/test_static_provenance.py

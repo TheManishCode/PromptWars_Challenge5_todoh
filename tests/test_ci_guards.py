@@ -132,11 +132,21 @@ def test_the_deploy_job_is_off_by_default_behind_an_approval_and_the_stub_refuse
     wf = yaml.safe_load((ROOT / ".github" / "workflows" / "release.yml").read_text())
     dep = wf["jobs"]["deploy"]
     assert dep["if"] == "vars.DEPLOY_ENABLED == 'true'" and dep["environment"] == "production"
+    attest = next(st for st in wf["jobs"]["build"]["steps"] if str(st.get("uses", "")).startswith("actions/attest-build-provenance"))
+    assert attest["if"] == "github.event.repository.private == false", "provenance only on a public repository: a private one would fail every release"
+    assert any("provenance is skipped" in st.get("name", "") for st in wf["jobs"]["build"]["steps"])
     assert wf["jobs"]["build"]["permissions"] == {"contents": "read", "id-token": "write", "attestations": "write"}
     env = {"DEPLOY_HOST": "h", "DEPLOY_USER": "u", "DEPLOY_SSH_KEY": "THE-KEY-VALUE", "PATH": os.environ["PATH"]}
     out = subprocess.run([str(CI / "deploy.sh")], env=env, capture_output=True, text=True)
     assert out.returncode == 1 and "no host has been chosen" in out.stderr and "THE-KEY-VALUE" not in out.stdout + out.stderr
     assert subprocess.run([str(CI / "deploy.sh")], env={"PATH": os.environ["PATH"]}, capture_output=True, text=True).returncode == 1
+
+
+def test_the_tool_downloads_retry_through_a_cdn_outage_and_the_binaries_are_cached():
+    text = (CI / "bootstrap_tools.sh").read_text()
+    assert "--retry 6 --retry-delay 10 --retry-all-errors --retry-max-time 300" in text
+    action = (ROOT / ".github/actions/prepare/action.yml").read_text()
+    assert "path: .ci-tools" in action and "hashFiles('tools/ci/bootstrap_tools.sh')" in action
 
 
 def test_live_evals_and_the_nightly_never_run_on_push_and_the_gate_names_every_job():

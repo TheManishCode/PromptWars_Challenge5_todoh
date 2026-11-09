@@ -5,6 +5,8 @@
 export HYPOTHESIS_PROFILE="${HYPOTHESIS_PROFILE:-ci}"  # derandomised: a failing property is reproducible from the log
 run require-tools tools/ci/require_tools.sh
 [ "$FAILS" -eq 0 ] || finish tests
+run test-inventory "$PY" tools/ci/test_inventory.py
+cat "$CI_OUT/test-inventory.log" | sed 's/^/    | /'
 tools/ci/clean_tree.sh snapshot >/dev/null
 args=(-q -p no:cacheprovider -rs "--junitxml=$CI_OUT/junit.xml")
 [ -n "${COVERAGE:-}" ] && args+=(--cov=eventmate --cov-report=term-missing:skip-covered "--cov-report=xml:$CI_OUT/coverage.xml" --cov-fail-under=94)

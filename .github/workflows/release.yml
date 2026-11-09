@@ -37,9 +37,14 @@ jobs:
           TAG: ${{ github.ref_name }}
           DIST: ${{ github.workspace }}/dist
         run: tools/ci/release.sh "$TAG"
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+      - name: Build provenance (public repositories only; a private one needs GitHub Enterprise Cloud)
+        if: github.event.repository.private == false
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: dist/*.tar.gz
+      - name: Build provenance is skipped
+        if: github.event.repository.private != false
+        run: echo "::notice::No provenance attestation: this repository is private, and attestations need a public repository or GitHub Enterprise Cloud (docs/CI.md)."
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-${{ github.ref_name }}

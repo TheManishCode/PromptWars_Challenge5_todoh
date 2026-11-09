@@ -13,6 +13,11 @@ runs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
       with:
         python-version: ${{ inputs.python-version }}
+    - name: Cache the pinned tool binaries (a GitHub release CDN blip must not turn every pull request red)
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: .ci-tools
+        key: ci-tools-${{ hashFiles('tools/ci/bootstrap_tools.sh') }}-${{ runner.os }}
     - name: "Locked dependencies (hash-pinned), the flights extra at the commit pyproject names, then the gate's own tools"
       shell: bash
       run: |

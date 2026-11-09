@@ -13,7 +13,7 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 fetch() {  # fetch NAME URL SHA256 MEMBER...  (a tarball: only the named members are extracted)
   local name="$1" url="$2" sum="$3"; shift 3
   if [ -x "$BIN/$name" ]; then return 0; fi
-  curl -fsSL --retry 3 -o "$tmp/$name.pkg" "$url"
+  curl -fsSL --retry 6 --retry-delay 10 --retry-all-errors --retry-max-time 300 -o "$tmp/$name.pkg" "$url"
   echo "$sum  $tmp/$name.pkg" | sha256sum -c - >/dev/null || { echo "checksum mismatch for $name" >&2; exit 1; }
   mkdir -p "$tmp/x-$name"; tar -xf "$tmp/$name.pkg" -C "$tmp/x-$name"
   cp "$(find "$tmp/x-$name" -type f -name "$1" | head -1)" "$BIN/$name"; chmod +x "$BIN/$name"
