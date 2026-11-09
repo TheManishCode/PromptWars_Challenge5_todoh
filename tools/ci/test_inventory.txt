@@ -101,7 +101,7 @@ tests/test_mail_poll.py 12
 tests/test_manager.py 86
 tests/test_migrations.py 19
 tests/test_mission_graph.py 23
-tests/test_money_sign_percent.py 34
+tests/test_money_sign_percent.py 39
 tests/test_multiprocess.py 3
 tests/test_observability.py 16
 tests/test_observations.py 25

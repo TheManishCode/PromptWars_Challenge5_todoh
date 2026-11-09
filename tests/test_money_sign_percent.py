@@ -29,12 +29,12 @@ def test_a_percent_on_a_money_line_is_not_a_rupee_amount(text):
     assert qt._parse("price", "money", text) == (None, PERCENT_NOTE)
 
 
-@pytest.mark.parametrize("text", NEGATIVES)
 def test_shorthand_glued_to_the_number_is_unclear_never_rupees():
     for text in ("25pc advance", "30pct", "25%advance"):
         assert qt._parse("deposit", "money", text)[0] is None, text
 
 
+@pytest.mark.parametrize("text", NEGATIVES)
 def test_a_minus_sign_is_never_dropped_from_a_money_line(text):
     assert qt._parse("deposit", "money", text) == (None, NEGATIVE_NOTE)
     assert qt._parse("price", "money", text) == (None, NEGATIVE_NOTE)
