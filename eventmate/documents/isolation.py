@@ -124,12 +124,28 @@ def _landlock_enter(read_dirs: list[str], read_files: list[str], work: str, list
     return enter
 
 
+def _interpreter_prefixes(interpreter: str) -> list[Path]:
+    """Every prefix (the directory above ``bin``) the interpreter is reached through, as written: the virtual environment, each hop of the symlinks from its ``bin/python``, and where they end. A
+    uv or setup-python interpreter is reached through an alias directory (``cpython-3.12-linux-x86_64-gnu`` pointing at ``cpython-3.12.13-...``); the sandbox has to mount the interpreter's files at
+    the path the symlink names, or exec finds nothing there (F10). Only the interpreter's own prefixes: nothing else of the host."""
+    out: list[Path] = []
+    venv = Path(interpreter).parent.parent
+    if (venv / "pyvenv.cfg").exists():
+        out.append(venv)
+    path, hops = interpreter, 0
+    while os.path.islink(path) and hops < 16:
+        target = os.path.normpath(os.path.join(os.path.dirname(path), os.readlink(path)))
+        out.append(Path(target).parent.parent)
+        path, hops = target, hops + 1
+    out.append(Path(os.path.realpath(interpreter)).parent.parent)
+    return [p for p in dict.fromkeys(out) if str(p) != "/"]
+
+
 def _confinement_paths(interpreter: str, package_root: str, model_home: str | None) -> tuple[list[str], list[str]]:
     # /proc is not granted whole: another process of the same user (the server) has its environment, command line and memory there. Only the reader's own entry, and the two files that describe the machine.
     dirs = ["/usr", "/lib", "/lib64", "/bin", "/sbin", "/proc/self", "/sys/devices/system/cpu", os.path.join(package_root, "eventmate")]
-    venv = Path(interpreter).parent.parent
-    for p in (venv if (venv / "pyvenv.cfg").exists() else None, Path(os.path.realpath(interpreter)).parent.parent, Path(sys.base_prefix)):
-        if p is not None and str(p) != "/":
+    for p in (*_interpreter_prefixes(interpreter), Path(sys.base_prefix)):
+        if str(p) != "/":
             dirs.append(str(p))
     if model_home:
         dirs.append(model_home)
@@ -146,11 +162,10 @@ def _binds(interpreter: str, package_root: str, work: str, model_home: str | Non
         elif link.is_dir():
             out += ["--ro-bind", str(link), str(link)]
     seen: set[str] = {"/usr"}
-    venv = Path(interpreter).parent.parent
-    for p in (venv if (venv / "pyvenv.cfg").exists() else None, Path(os.path.realpath(interpreter)).parent.parent):
-        if p is not None and str(p) not in seen and not str(p).startswith("/usr/") and str(p) != "/":
+    for p in _interpreter_prefixes(interpreter):
+        if str(p) not in seen and not str(p).startswith("/usr/") and str(p) != "/":
             seen.add(str(p))
-            out += ["--ro-bind", str(p), str(p)]
+            out += ["--ro-bind", os.path.realpath(p), str(p)]  # the real files, at the path the symlinks name
     out += ["--ro-bind", os.path.join(package_root, "eventmate"), os.path.join(package_root, "eventmate")]
     if model_home and os.path.isdir(model_home):
         out += ["--ro-bind", model_home, model_home]
