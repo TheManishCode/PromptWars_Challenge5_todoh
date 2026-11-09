@@ -1,0 +1,13 @@
+diff --git a/eventmate/planning/delta.py b/eventmate/planning/delta.py
+index 1448504..1f92e9c 100644
+--- a/eventmate/planning/delta.py
++++ b/eventmate/planning/delta.py
+@@ -232,7 +232,7 @@ def formalize_delta(message: str, plan: PlanVersion, today: date, llm: LLMClient
+ 
+ 
+ def _finish(turn: DeltaTurn, message: str, plan: PlanVersion, today: date) -> DeltaTurn:
+-    return turn.model_copy(update={"not_done": left_out(message, plan, today, turn)})
++    return turn
+ 
+ 
+ def _no_change(note: str) -> DeltaTurn:
