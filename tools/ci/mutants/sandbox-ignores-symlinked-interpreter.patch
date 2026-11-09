@@ -1,0 +1,13 @@
+diff --git a/eventmate/documents/isolation.py b/eventmate/documents/isolation.py
+index 8f9843c..68150e7 100644
+--- a/eventmate/documents/isolation.py
++++ b/eventmate/documents/isolation.py
+@@ -133,7 +133,7 @@ def _interpreter_prefixes(interpreter: str) -> list[Path]:
+     if (venv / "pyvenv.cfg").exists():
+         out.append(venv)
+     path, hops = interpreter, 0
+-    while os.path.islink(path) and hops < 16:
++    while False:
+         target = os.path.normpath(os.path.join(os.path.dirname(path), os.readlink(path)))
+         out.append(Path(target).parent.parent)
+         path, hops = target, hops + 1
