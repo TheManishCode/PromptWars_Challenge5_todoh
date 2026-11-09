@@ -1,0 +1,13 @@
+diff --git a/eventmate/payments/approvals.py b/eventmate/payments/approvals.py
+index 14f0099..f95d6cf 100644
+--- a/eventmate/payments/approvals.py
++++ b/eventmate/payments/approvals.py
+@@ -21,7 +21,7 @@ from eventmate.schemas import MAX_BUDGET_INR, _Model
+ 
+ APPROVAL_TTL = timedelta(hours=24)
+ EXECUTING_LEASE = timedelta(minutes=5)  # a payment claimed for carrying out and never finished (the process died) is treated as unknown after this, never as failed and never carried out again
+-LIVE = ("proposed", "approved", "executing", "instructed", "submitted", "outcome_unknown")  # a proposal in one of these holds its (terms, kind): no second one is made beside it. "outcome_unknown" stays here on purpose
++LIVE = ("proposed", "approved", "executing", "instructed", "submitted")  # a proposal in one of these holds its (terms, kind): no second one is made beside it. "outcome_unknown" stays here on purpose
+ Status = Literal["proposed", "approved", "executing", "instructed", "submitted", "outcome_unknown", "paid", "failed", "cancelled", "expired"]
+ 
+ 

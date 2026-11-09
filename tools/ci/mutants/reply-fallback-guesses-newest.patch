@@ -1,0 +1,13 @@
+diff --git a/eventmate/messaging/conversations.py b/eventmate/messaging/conversations.py
+index 801418b..6824c29 100644
+--- a/eventmate/messaging/conversations.py
++++ b/eventmate/messaging/conversations.py
+@@ -411,7 +411,7 @@ class ConversationService:
+             key = self.event_key(d.plan_id if d.plan_id else p)
+             if key not in newest or (d.sent_at or floor) >= (newest[key][1].sent_at or floor):
+                 newest[key] = (p, d)
+-        if len(newest) > 1:
++        if False:
+             return sorted(newest.values(), key=lambda pd: pd[1].sent_at or floor)
+         p, d = next(iter(newest.values()))
+         return p, d, "sender"

@@ -1,126 +1,151 @@
 name: ci
+# One gate, the same one `make ci` runs on a laptop: each job calls a tools/ci script. Required checks for branch protection: see docs/CI.md (the single check "ci-gate" depends on all of them).
 on:
   push:
   pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  lint-and-security:
+  static:
+    name: static
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0  # the secret scan reads the whole history
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+          persist-credentials: false
+      - uses: ./.github/actions/prepare
         with:
-          python-version: "3.14"  # the version the suite was run with (requirements.txt); 3.12 and 3.13 are allowed by pyproject but not tested
+          browsers: "false"
+      - run: make ci-static
+
+  ui:
+    name: ui
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
-      - run: pip install --require-hashes -r requirements.lock && pip install --no-deps -e .
-      - run: make lint
-      - run: make security
-      - name: Dependency vulnerabilities (blocking; a known vulnerability in a locked package fails the build)
-        run: |
-          for _ in 1 2 3; do pip-audit -r requirements.lock --require-hashes --no-deps --disable-pip && exit 0; code=$?; [ $code -ne 1 ] || exit 1; sleep 20; done; exit 1
-      - name: Runtime lock is in step with pyproject (a drifted lock would ship a different set of packages than was tested)
-        run: |
-          pip install uv && uv pip compile pyproject.toml --extra serve --generate-hashes --python-version 3.14 -o /tmp/runtime.lock >/dev/null
-          diff <(grep -E "^[a-z0-9_.-]+==" requirements-runtime.lock | sort) <(grep -E "^[a-z0-9_.-]+==" /tmp/runtime.lock | sort)
-      - name: Software bill of materials (CycloneDX) for the locked dependencies
-        run: pip-audit -r requirements-runtime.lock --require-hashes --no-deps --disable-pip -f cyclonedx-json -o sbom.json || true
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with: {name: sbom, path: sbom.json, if-no-files-found: ignore}
-      - name: Secret scan over the whole history (gitleaks, pinned release, checksum verified)
-        run: |
-          curl -fsSLO https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
-          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks_8.30.1_linux_x64.tar.gz" | sha256sum -c -
-          tar xzf gitleaks_8.30.1_linux_x64.tar.gz gitleaks
-          ./gitleaks detect --source . --config .gitleaks.toml --no-banner
+      - run: make ci-ui
+
+  solvers:
+    name: solvers
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/solvers
+      - run: tools/ci/solvers.sh pack
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solvers
+          path: /tmp/todoh-ci-out/solvers.tar
+          retention-days: 7
 
   tests:
-    # The planning tests need Fast Downward and VAL (docs/CONFIGURATION.md); they are built once and cached. pyproject allows 3.12 and later: all are run (a 3.10-only
-    # failure was found by an outside verifier, so the supported range is tested, not assumed). Coverage is measured on the newest one.
+    name: tests (py${{ matrix.python }})
+    needs: solvers
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         python: ["3.12", "3.13", "3.14"]
     env:
       HYPOTHESIS_PROFILE: ci  # derandomised: a failing property is reproducible from the log
-      EVENTMATE_FD: ${{ github.workspace }}/solvers/downward/fast-downward.py
-      EVENTMATE_VAL: ${{ github.workspace }}/solvers/VAL/build/bin/Validate
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/prepare
         with:
           python-version: ${{ matrix.python }}
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        id: solvers
+      - uses: ./.github/actions/solvers
+      - name: The suite, the skip guard and the clean-tree check (coverage on the newest Python only)
+        env:
+          COVERAGE: ${{ matrix.python == '3.14' && '1' || '' }}
+        run: make ci-tests
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          path: solvers
-          key: solvers-fd-24.06.1-val-v1
-      - name: Build Fast Downward and VAL
-        if: steps.solvers.outputs.cache-hit != 'true'
-        run: |
-          sudo apt-get update && sudo apt-get install -y cmake g++ make flex bison
-          mkdir -p solvers && cd solvers
-          git clone --depth 1 --branch release-24.06.1 https://github.com/aibasel/downward.git
-          (cd downward && ./build.py)
-          git clone --depth 1 https://github.com/KCL-Planning/VAL.git
-          (cd VAL && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 && make -j"$(nproc)")
-      - run: pip install --require-hashes -r requirements.lock && pip install --no-deps -e .
-      - run: python -m playwright install --with-deps chromium
-      - name: Test suite
-        run: |
-          if [ "${{ matrix.python }}" = "3.14" ]; then
-            python -m pytest -q --cov=eventmate --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=94
-          else
-            python -m pytest -q
-          fi
-      - if: matrix.python == '3.14'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with: {name: coverage, path: coverage.xml}
+          name: test-results-py${{ matrix.python }}
+          path: |
+            /tmp/todoh-ci-out/junit.xml
+            /tmp/todoh-ci-out/coverage.xml
+            /tmp/todoh-ci-out/*.log
+          if-no-files-found: ignore
+
+  mutants:
+    name: mutants
+    needs: solvers
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/prepare
+      - uses: ./.github/actions/solvers
+      - run: make ci-mutants
+
+  deploy-check:
+    name: deploy-check
+    needs: solvers
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/prepare
+      - run: make ci-deploy-check
 
   soak:
-    # A short sustained-load run against the real server: any 5xx, a slow p95 or growth in memory, open files or threads fails the build (tools/loadtest/soak.py).
-    needs: tests
+    name: soak
+    needs: solvers
     runs-on: ubuntu-latest
-    env:
-      EVENTMATE_FD: ${{ github.workspace }}/solvers/downward/fast-downward.py
-      EVENTMATE_VAL: ${{ github.workspace }}/solvers/VAL/build/bin/Validate
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with: {python-version: "3.14"}
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          path: solvers
-          key: solvers-fd-24.06.1-val-v1
-      - run: pip install --require-hashes -r requirements.lock && pip install --no-deps -e .
-      - run: python tools/loadtest/soak.py --seconds 60 --visitors 20 --report soak.json
+          persist-credentials: false
+      - uses: ./.github/actions/prepare
+        with:
+          browsers: "false"
+      - uses: ./.github/actions/solvers
+      - run: make ci-soak
       - if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with: {name: soak-report, path: soak.json}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: soak-report
+          path: /tmp/todoh-ci-out/soak.json
+          if-no-files-found: ignore
 
-  container:
-    # The image builds, starts in shared mode, reports ready, serves /metrics to the owner only, drains on SIGTERM, and has no known high or critical vulnerability.
-    needs: tests
+  ci-gate:
+    name: ci-gate
+    if: always()
+    needs: [static, ui, solvers, tests, mutants, deploy-check, soak]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - run: docker build -t todoh:ci .
-      - name: Start in shared mode and check readiness, metrics and shutdown
+      - name: Every job must have succeeded (a skipped or cancelled one is not a pass)
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
-          docker run -d --name todoh -p 8000:8000 -e EVENTMATE_SECRET="$(head -c 48 /dev/urandom | base64 | tr -d '\n=+/')" -e EVENTMATE_PUBLIC_URL=https://todoh.test \
-            -e EVENTMATE_ALLOWED_HOSTS=todoh.test -e EVENTMATE_TRUSTED_PROXY=172.16.0.0/12 -e EVENTMATE_OWNER_TOKEN=ci-owner-token-0123456789 todoh:ci
-          for _ in $(seq 1 40); do curl -fsS -H "Host: todoh.test" http://127.0.0.1:8000/readyz && break; sleep 1; done
-          curl -fsS -H "Host: todoh.test" http://127.0.0.1:8000/readyz
-          # a visitor can open a workspace (this failed in production once: the image had no prompt files) and the voice endpoint answers
-          curl -fsS -D /tmp/h -o /dev/null -H "Host: todoh.test" http://127.0.0.1:8000/api/session
-          cookie="$(grep -i '^set-cookie' /tmp/h | sed 's/^[^:]*: *//; s/;.*//')"  # the cookie is Secure, so curl would not send it back over plain http by itself
-          curl -fsS -H "Cookie: $cookie" -H "Host: todoh.test" http://127.0.0.1:8000/api/voice/capabilities | grep -q '"live"'
-          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: todoh.test' http://127.0.0.1:8000/metrics)" = 404
-          curl -fsS -H "Host: todoh.test" -H "Authorization: Bearer ci-owner-token-0123456789" http://127.0.0.1:8000/metrics | grep -q eventmate_uptime_seconds
-          docker stop -t 30 todoh >/dev/null; test "$(docker inspect -f '{{.State.ExitCode}}' todoh)" = 0
-      - name: Image vulnerability scan (blocking on HIGH and CRITICAL that have a fix)
-        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.65.0 image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed todoh:ci
+          echo "job results: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || { echo "a job did not succeed: $r"; exit 1; }; done

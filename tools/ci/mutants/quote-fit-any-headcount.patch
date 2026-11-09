@@ -1,0 +1,13 @@
+diff --git a/eventmate/agents/vendor.py b/eventmate/agents/vendor.py
+index e15fcab..1cc70e0 100644
+--- a/eventmate/agents/vendor.py
++++ b/eventmate/agents/vendor.py
+@@ -80,7 +80,7 @@ def quote_fits(q, provider: Provider, guests: int | None, event_date: date | Non
+     if guests is None:
+         return False
+     lo, hi = getattr(provider, "min_guests", None), getattr(provider, "max_guests", None)
+-    return q.guest_count == guests or (lo is not None and hi is not None and lo <= guests <= hi)
++    return True
+ 
+ 
+ class VendorRepository:

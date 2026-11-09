@@ -4,7 +4,7 @@
 #   tools/check_image.sh            build and check
 #   TODOH_IMAGE=name tools/check_image.sh   check an image that is already built (skips the build)
 set -u
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 2
 IMAGE="${TODOH_IMAGE:-todoh-check}"
 FAIL=0
 ok()   { printf '  ok    %s\n' "$1"; }

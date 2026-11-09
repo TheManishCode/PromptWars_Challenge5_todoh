@@ -1,0 +1,13 @@
+diff --git a/eventmate/payments/desk.py b/eventmate/payments/desk.py
+index 18c143a..777fb5c 100644
+--- a/eventmate/payments/desk.py
++++ b/eventmate/payments/desk.py
+@@ -97,7 +97,7 @@ class PaymentDesk:
+         amount = t.deposit_inr if kind == "deposit" else t.balance_inr
+         if amount <= 0:
+             raise ValueError(f"these terms have no {kind} to pay")
+-        if kind == "balance" and t.deposit_inr > 0 and t.status != "deposit_paid":
++        if False:
+             raise ValueError("the deposit comes first: record it as paid before proposing the balance")
+         if self._remaining(t, kind) < amount:
+             raise ValueError(f"the {kind} is already paid")

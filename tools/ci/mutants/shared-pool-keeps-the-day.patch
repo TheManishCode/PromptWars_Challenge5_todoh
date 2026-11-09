@@ -1,0 +1,13 @@
+diff --git a/eventmate/pricing/shared_quotes.py b/eventmate/pricing/shared_quotes.py
+index 2ce0222..2e15a95 100644
+--- a/eventmate/pricing/shared_quotes.py
++++ b/eventmate/pricing/shared_quotes.py
+@@ -50,7 +50,7 @@ class SharedQuote(_Model):
+     @field_validator("quoted_for_date")
+     @classmethod
+     def _month_only(cls, v: date | None) -> date | None:
+-        return v.replace(day=1) if v else v
++        return v
+ 
+ 
+ class _File(JsonlLog[SharedQuote]):

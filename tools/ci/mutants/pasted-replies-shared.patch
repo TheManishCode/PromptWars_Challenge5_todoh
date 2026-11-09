@@ -1,0 +1,13 @@
+diff --git a/eventmate/service.py b/eventmate/service.py
+index aa60464..abfb9c2 100644
+--- a/eventmate/service.py
++++ b/eventmate/service.py
+@@ -1211,7 +1211,7 @@ class EventMate:
+             hidden_costs=[HiddenCost(label="Taxes (GST) extra: ask for the amount")] if taxes is not None and taxes.value == "no" else [],
+             note=f"from the vendor's reply of {msg.received_at.date().isoformat()}; the price and its validity were confirmed by {by}"[:200],
+         )
+-        if self.shared_quotes is not None and msg.pasted_by is None and (keys := self._shared_keys(msg.vendor_id)):  # only what a vendor sent through the app is shared, never what a user typed in
++        if self.shared_quotes is not None and (keys := self._shared_keys(msg.vendor_id)):  # only what a vendor sent through the app is shared, never what a user typed in
+             self.shared_quotes.add(
+                 keys, msg.category, amount, "per_plate" if msg.category == VendorCategory.CATERER else "total", scope.request.guest_count if msg.category == VendorCategory.CATERER else None,
+                 scope.request.event_date, msg.received_at, msg.received_at.date() + timedelta(days=days), None if taxes is None else taxes.value == "yes",

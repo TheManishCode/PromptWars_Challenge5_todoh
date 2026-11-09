@@ -1,0 +1,3 @@
+# Tools the gate itself needs, beyond requirements.lock (which has pytest, ruff, bandit, pyflakes, pip-audit, playwright). Pinned exact versions.
+zizmor==1.32.0
+uv==0.13.7

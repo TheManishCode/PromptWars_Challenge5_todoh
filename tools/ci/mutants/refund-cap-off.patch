@@ -1,0 +1,13 @@
+diff --git a/eventmate/payments/desk.py b/eventmate/payments/desk.py
+index 18c143a..022b6d6 100644
+--- a/eventmate/payments/desk.py
++++ b/eventmate/payments/desk.py
+@@ -243,7 +243,7 @@ class PaymentDesk:
+             raise ValueError("no such payment terms")
+         if not isinstance(amount_inr, int) or isinstance(amount_inr, bool) or amount_inr <= 0:
+             raise ValueError("a refund is a whole number of rupees above zero")
+-        if amount_inr > t.paid_inr - t.refunded_inr:
++        if False:
+             raise ValueError(f"INR {amount_inr:,} is more than the INR {t.paid_inr - t.refunded_inr:,} paid and not yet refunded")
+         self._ledger_add(plan_id, "refund", t.category, amount_inr, f"refund from {t.payee_name} (recorded by {by})"[:200])
+         refunded = t.refunded_inr + amount_inr

@@ -1,0 +1,65 @@
+name: release
+# CD that publishes nothing. On a tag v*: the whole gate, then ONE image build exported as an artefact with a CycloneDX SBOM and SHA256SUMS (and build provenance), then a deploy job that is switched
+# off (it runs only when the repository variable DEPLOY_ENABLED is 'true') and, when on, waits for a person to approve the `production` environment. Its body refuses until a host is chosen.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: build
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write       # the provenance attestation is signed with the job's identity
+      attestations: write   # and stored with the repository: nothing else is written
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Build the image once, export it, list it, checksum it
+        env:
+          TAG: ${{ github.ref_name }}
+          DIST: ${{ github.workspace }}/dist
+        run: tools/ci/release.sh "$TAG"
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: dist/*.tar.gz
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-${{ github.ref_name }}
+          path: dist/
+          retention-days: 30
+
+  deploy:
+    name: deploy
+    needs: build
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production  # required reviewers are set on this environment by the owner: a person approves before anything runs
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Deploy (refuses until a host is chosen, see docs/HOSTING_PLAN.md)
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: tools/ci/deploy.sh

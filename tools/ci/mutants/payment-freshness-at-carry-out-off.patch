@@ -1,0 +1,13 @@
+diff --git a/eventmate/payments/desk.py b/eventmate/payments/desk.py
+index 18c143a..a6e37bd 100644
+--- a/eventmate/payments/desk.py
++++ b/eventmate/payments/desk.py
+@@ -154,7 +154,7 @@ class PaymentDesk:
+         cur = self.proposals.get(plan_id, proposal_id)
+         if cur is None:
+             raise ValueError("no such payment")
+-        why = self._fresh(plan_id, cur) if cur.status == "approved" else None
++        why = None
+         if why:
+             self.proposals.transition(plan_id, proposal_id, ("approved",), status="expired" if "run out" in why else "cancelled", error=why)
+             raise ValueError(why)

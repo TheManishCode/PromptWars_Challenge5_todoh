@@ -1,0 +1,12 @@
+diff --git a/eventmate/messaging/channels.py b/eventmate/messaging/channels.py
+index a837bc8..1651873 100644
+--- a/eventmate/messaging/channels.py
++++ b/eventmate/messaging/channels.py
+@@ -375,6 +375,7 @@ class EmailChannel:
+             return {int(x) for x in (data[0] or b"").split()} if typ == "OK" and data else set()
+ 
+         window = sorted(run())
++        return window[-MAX_POLL_MESSAGES:], [], "window"
+         try:
+             tied: set[int] = set()
+             for addr in sorted({t.recipient.strip().lower() for t in threads if _EMAIL.fullmatch(t.recipient.strip())}):

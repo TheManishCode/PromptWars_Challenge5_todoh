@@ -1,0 +1,8 @@
+# The only tests allowed to skip. Each needs outside software or a live service and is opt-in; every other test must RUN (tools/ci/skip_guard.py).
+# Format: <junit classname>::<test name, a glob> | <text the skip reason must contain>
+# A new line here is a decision made in review, with the reason it cannot run in CI. A skip because a tool is missing (nginx, openssl, Chromium, Firefox, the flights library) is never added:
+# install the tool (tools/ci/require_tools.sh says which).
+tests.test_documents::test_a_real_word_quote_goes_through_docling_in_the_sandbox_into_the_same_lines | set EVENTMATE_DOCLING_PYTHON
+tests.test_documents::test_a_real_pdf_goes_through_docling_offline_in_the_sandbox_into_the_same_lines | needs EVENTMATE_DOCLING_PYTHON
+tests.test_travel::test_live_cheapest_days_match_a_one_way_search_for_the_same_day | set EVENTMATE_LIVE_FLIGHTS=1
+tests.test_voice_real_engine::test_the_real_engine_transcribes_the_sample_and_leaves_no_audio_behind | opt-in: needs EVENTMATE_VOICE_ENGINE

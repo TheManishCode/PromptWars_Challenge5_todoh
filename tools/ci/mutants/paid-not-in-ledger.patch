@@ -1,0 +1,13 @@
+diff --git a/eventmate/payments/desk.py b/eventmate/payments/desk.py
+index 18c143a..5e94fc2 100644
+--- a/eventmate/payments/desk.py
++++ b/eventmate/payments/desk.py
+@@ -212,7 +212,7 @@ class PaymentDesk:
+             raise ValueError("no such payment terms")
+         with self.proposals.lock():  # claim the recording once, so two tabs never write the money twice
+             p = self.proposals.transition(plan_id, proposal_id, ("instructed", "submitted", "outcome_unknown"), status="paid", paid_by=by, paid_at=self.now, paid_reference=(reference or "")[:100])
+-        self._ledger_add(plan_id, "payment", t.category, p.amount_inr, f"{p.kind} to {p.payee_name} (confirmed by {by})"[:200])
++        (lambda *a: None)(plan_id, "payment", t.category, p.amount_inr, f"{p.kind} to {p.payee_name} (confirmed by {by})"[:200])
+         paid = t.paid_inr + p.amount_inr
+         self.terms.update(plan_id, t.terms_id, paid_inr=paid, status="paid" if paid >= t.total_inr else "deposit_paid")
+         self.proposals.log(plan_id, "paid", by=by, proposal_id=proposal_id, terms_id=t.terms_id, amount_inr=p.amount_inr, provider=p.provider, detail=(reference or "")[:100])

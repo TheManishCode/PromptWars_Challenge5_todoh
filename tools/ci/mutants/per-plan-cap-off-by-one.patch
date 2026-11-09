@@ -1,0 +1,13 @@
+diff --git a/eventmate/messaging/conversations.py b/eventmate/messaging/conversations.py
+index 801418b..b4a00f5 100644
+--- a/eventmate/messaging/conversations.py
++++ b/eventmate/messaging/conversations.py
+@@ -279,7 +279,7 @@ class ConversationService:
+                     if len(recent) >= self.policy.per_day:
+                         waiting.append(f"daily limit of {self.policy.per_day} messages reached")
+                         return sent, waiting
+-                    if d.kind == "request" and sum(1 for r in recent if r.plan_id == pid and r.kind == "request") >= self.policy.per_plan_per_day:
++                    if d.kind == "request" and sum(1 for r in recent if r.plan_id == pid and r.kind == "request") > self.policy.per_plan_per_day:
+                         waiting.append(f"this plan has sent {self.policy.per_plan_per_day} first requests in 24 hours, which is its limit; the rest wait")
+                         continue
+                     if sum(1 for r in recent if r.vendor_id == d.vendor_id) >= self.policy.per_vendor_per_day:

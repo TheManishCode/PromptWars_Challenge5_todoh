@@ -1,0 +1,13 @@
+diff --git a/eventmate/messaging/mail_oauth.py b/eventmate/messaging/mail_oauth.py
+index 1df2609..4ad2509 100644
+--- a/eventmate/messaging/mail_oauth.py
++++ b/eventmate/messaging/mail_oauth.py
+@@ -51,7 +51,7 @@ class OAuthConfig:
+ 
+ def xoauth2_string(user: str, access_token: str) -> str:
+     """The SASL XOAUTH2 initial client response, before base64 (the libraries encode it)."""
+-    return f"user={user}\x01auth=Bearer {access_token}\x01\x01"
++    return f"user={user}\x01auth=Bearer {access_token}\x01"
+ 
+ 
+ def _post_token(form: dict[str, str]) -> tuple[int, dict]:

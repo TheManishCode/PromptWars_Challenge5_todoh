@@ -1,0 +1,13 @@
+diff --git a/eventmate/agents/vendor.py b/eventmate/agents/vendor.py
+index e15fcab..4ee91e4 100644
+--- a/eventmate/agents/vendor.py
++++ b/eventmate/agents/vendor.py
+@@ -73,8 +73,6 @@ _QUOTED_ONLY: contextvars.ContextVar[bool] = contextvars.ContextVar("quoted_only
+ def quote_fits(q, provider: Provider, guests: int | None, event_date: date | None) -> bool:
+     """Whether a recorded quote may price this event: it was given for the same date, and for a per-plate price the guest count is the one quoted or inside the range the
+     vendor itself states (min and max guests). A flat price is for the date, not the headcount. Without the event's date nothing fits: a quote never prices an event it was not given for."""
+-    if event_date is None or q.quoted_for_date != event_date:
+-        return False
+     if q.basis != "per_plate":
+         return True
+     if guests is None:

@@ -1,0 +1,13 @@
+diff --git a/eventmate/messaging/conversations.py b/eventmate/messaging/conversations.py
+index 801418b..bd7ec08 100644
+--- a/eventmate/messaging/conversations.py
++++ b/eventmate/messaging/conversations.py
+@@ -56,7 +56,7 @@ _UNAVAILABLE = re.compile(
+ )
+ _AVAILABLE = re.compile(r"\b(?:available|we can do|we are free|slot is (?:open|free)|date is (?:open|free))\b", re.I)
+ _STOP = re.compile(
+-    r"\b(?:stop (?:messaging|contacting|texting|sending|calling|emailing)|(?:don'?t|do not|never) (?:message|contact|text|call|email|write to)|unsubscribe|wrong number|not interested|remove (?:me|my number|my email))\b|^\s*stop[.!\s]*$",
++    r"\b(?:stop (?:messaging|contacting|texting|sending|calling|emailing)|(?:don'?t|do not|never) (?:message|contact|text|call|email|write to)|unsubscribe|wrong number|not interested|remove (?:me|my number|my email))\b",
+     re.I,
+ )
+ _VALIDITY = re.compile(r"\b(?:valid|validity|expires?|expiry|until|till)\b", re.I)

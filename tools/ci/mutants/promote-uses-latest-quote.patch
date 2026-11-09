@@ -1,0 +1,13 @@
+diff --git a/eventmate/pricing/observations.py b/eventmate/pricing/observations.py
+index 164ab8a..b2b1237 100644
+--- a/eventmate/pricing/observations.py
++++ b/eventmate/pricing/observations.py
+@@ -99,7 +99,7 @@ class ObservationStore:
+     def quote_for_reply(self, vendor_id: str, message_id: str) -> QuoteObservation | None:
+         """The quote recorded from this very reply, whatever the vendor quoted since: a reply is promoted with its own price, never the vendor's latest."""
+         mine = [o for o in self.quotes(vendor_id) if o.evidence_ref.startswith(f"reply {message_id}:")]
+-        return mine[-1] if mine else None
++        return self.pricing_quote(vendor_id)
+ 
+     def vendor_confirmed(self, vendor_id: str) -> bool:
+         """True if a vendor_confirmation observation (which always carries an evidence_ref) exists for this vendor."""

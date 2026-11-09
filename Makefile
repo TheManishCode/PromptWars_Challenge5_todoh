@@ -1,4 +1,4 @@
-.PHONY: install test lint security check web redteam deploy-check ui hooks
+.PHONY: install test lint security check web redteam deploy-check ui hooks ci ci-full ci-tools ci-static ci-ui ci-solvers ci-tests ci-mutants ci-deploy-check ci-soak ci-gate ci-release post-deploy-smoke
 install:
 	pip install -e ".[dev]"
 test:
@@ -29,3 +29,34 @@ deploy-check:
 # refuses a commit that stages .env, run-time data, caches, solvers or a secret (tools/pre-commit)
 hooks:
 	cp tools/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+# The gate (tools/ci/): `make ci` is exactly what the workflows run, step by step; `make ci-full` adds the container checks and the soak. docs/CI.md says what each one catches.
+ci-tools:
+	tools/ci/bootstrap_tools.sh && pip install -r tools/ci/requirements-ci.txt
+ci-static:
+	tools/ci/static.sh
+ci-ui:
+	tools/ci/ui.sh
+ci-solvers:
+	tools/ci/solvers.sh build
+ci-tests:
+	tools/ci/tests.sh
+ci-mutants:
+	tools/ci/mutants.py
+ci-deploy-check:
+	tools/ci/deploy_check.sh
+ci-soak:
+	tools/ci/soak.sh
+ci:
+	tools/ci/clean_tree.sh snapshot && $(MAKE) --no-print-directory ci-static ci-ui ci-solvers ci-tests ci-mutants
+ci-full: ci
+	$(MAKE) --no-print-directory ci-deploy-check ci-soak
+# the review gate on one committed sha, in a clean worktree: tools/ci/gate.sh [SHA] [--quick]
+ci-gate:
+	tools/ci/gate.sh
+ci-release:
+	@test -n "$(TAG)" || { echo "usage: make ci-release TAG=v1.2.3"; exit 2; }
+	tools/ci/release.sh $(TAG)
+post-deploy-smoke:
+	@test -n "$(URL)" -a -n "$(HOST)" || { echo "usage: make post-deploy-smoke URL=http://127.0.0.1:8000 HOST=todoh.example"; exit 2; }
+	tools/ci/post_deploy_smoke.sh $(URL) $(HOST)

@@ -1,0 +1,13 @@
+diff --git a/eventmate/payments/desk.py b/eventmate/payments/desk.py
+index 18c143a..d4fd581 100644
+--- a/eventmate/payments/desk.py
++++ b/eventmate/payments/desk.py
+@@ -149,7 +149,7 @@ class PaymentDesk:
+         prov: PaymentProvider | None = providers.get(provider_name)
+         if prov is None:
+             raise ValueError("that way of paying is not switched on")
+-        if provider_name != "manual" and not self.external_allowed:
++        if False:
+             raise ValueError("money cannot be moved from a visitor's workspace: use the manual instruction")
+         cur = self.proposals.get(plan_id, proposal_id)
+         if cur is None:

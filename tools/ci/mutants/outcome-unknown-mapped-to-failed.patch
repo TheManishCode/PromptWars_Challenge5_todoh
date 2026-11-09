@@ -1,0 +1,13 @@
+diff --git a/eventmate/payments/providers.py b/eventmate/payments/providers.py
+index 4298913..c2e2e21 100644
+--- a/eventmate/payments/providers.py
++++ b/eventmate/payments/providers.py
+@@ -179,7 +179,7 @@ class PayPalSandboxProvider:
+         try:
+             status, doc = self._call("POST", "/v1/payments/payouts", headers, body)
+         except (OSError, ssl.SSLError, http.client.HTTPException):
+-            raise ProviderOutcomeUnknown("the connection to PayPal's sandbox failed while submitting: the payment may or may not have been accepted, so it is not retried. Look in PayPal's sandbox for a payout "
++            raise ProviderError("the connection to PayPal's sandbox failed while submitting: the payment may or may not have been accepted, so it is not retried. Look in PayPal's sandbox for a payout "
+                                          f"with sender batch id {req.proposal_id}, then say whether it went through") from None
+         batch = (doc.get("batch_header") or {}).get("payout_batch_id") if isinstance(doc.get("batch_header"), dict) else None
+         if status in (200, 201) and isinstance(batch, str) and batch:

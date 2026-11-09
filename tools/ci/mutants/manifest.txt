@@ -1,0 +1,28 @@
+# name | patch | tests that must FAIL with the patch applied (and pass without it) | what the real bug was
+# Add a mutant: make the break in a throwaway worktree, `git diff > tools/ci/mutants/<name>.patch`, add a line here. See docs/CI.md.
+per-plan-cap-off | per-plan-cap-off.patch | tests/test_outbound_safety.py::test_one_plan_cannot_send_more_first_requests_than_its_cap_in_a_day_and_another_plan_still_can | L2: one brief could use the whole day
+per-plan-cap-off-by-one | per-plan-cap-off-by-one.patch | tests/test_outbound_safety.py::test_one_plan_cannot_send_more_first_requests_than_its_cap_in_a_day_and_another_plan_still_can | L2: the cap lets one more through
+footer-removed | footer-removed.patch | tests/test_outbound_safety.py::test_the_footer_is_inside_the_approved_hash | L2: a first request without the sender and STOP line
+bare-stop-branch-removed | bare-stop-branch-removed.patch | tests/test_outbound_safety.py::test_replying_stop_to_the_footer_suppresses_the_address_and_quoting_it_does_not | L2: a reply that is just STOP is not a stop request
+first-line-stop-off | first-line-stop-off.patch | tests/test_stop_shapes.py | R-015: STOP with a signature or please is not read
+shared-pool-keeps-the-day | shared-pool-keeps-the-day.patch | tests/test_shared_quotes.py::test_the_shared_store_keeps_the_month_of_the_event_never_the_day | R-014: the pool keeps the exact event date
+pasted-replies-shared | pasted-replies-shared.patch | tests/test_quote_promote.py::test_a_reply_the_user_pastes_is_read_confirmed_and_planned_from_like_any_other_and_never_shared | words a user typed reach another person
+quote-fit-ignores-date | quote-fit-ignores-date.patch | tests/test_quote_event_fit.py::test_a_quote_for_another_date_does_not_price_this_event | A1: a quote for another date prices this event
+quote-fit-any-headcount | quote-fit-any-headcount.patch | tests/test_quote_event_fit.py::test_a_quote_for_300_guests_on_one_date_does_not_price_90_guests | A1: a per-plate quote for 300 prices 90
+promote-uses-latest-quote | promote-uses-latest-quote.patch | tests/test_quote_promote.py::test_a_reply_is_promoted_with_its_own_quote_not_the_vendors_latest | A1: promote takes the vendor's latest quote
+reply-fallback-guesses-newest | reply-fallback-guesses-newest.patch | tests/test_reply_matching.py::test_a_fresh_reply_from_an_address_two_events_wrote_to_is_held_not_guessed | A2: a reply is filed under a guessed event
+review-claim-not-exclusive | review-claim-not-exclusive.patch | tests/test_reply_matching.py::test_two_processes_claiming_one_held_reply_one_wins | R-019: two callers file one reply under two events
+brief-link-alias-off | brief-link-alias-off.patch | tests/test_reply_matching.py::test_a_reply_that_arrives_after_the_brief_became_a_plan_is_the_plans_reply | A4: a reply after the build is lost to the plan
+payment-hash-not-checked | payment-hash-not-checked.patch | tests/test_payments.py::test_approval_is_bound_to_the_hash_of_exactly_this_payment | WP4: an approval of something else is accepted
+payment-freshness-at-carry-out-off | payment-freshness-at-carry-out-off.patch | tests/test_payments.py::test_an_approval_that_ran_out_before_it_was_carried_out_is_refused_expired_and_no_provider_is_called | R-021: an expired approval is carried out
+outcome-unknown-mapped-to-failed | outcome-unknown-mapped-to-failed.patch | tests/test_payments.py::test_a_lost_answer_is_an_unknown_outcome_that_is_never_retried_and_never_paid_twice | R-020: a lost answer is called failed and a second payment is allowed
+unknown-outside-live-set | unknown-outside-live-set.patch | tests/test_payments.py::test_a_lost_answer_is_an_unknown_outcome_that_is_never_retried_and_never_paid_twice | R-020: an unknown payment frees its slot
+deposit-before-balance-off | deposit-before-balance-off.patch | tests/test_payments.py::test_a_payment_needs_confirmed_terms_and_the_deposit_comes_before_the_balance_and_there_is_one_live_payment_each | WP4: the balance is paid before the deposit
+refund-cap-off | refund-cap-off.patch | tests/test_payments.py::test_a_refund_is_an_explicit_step_into_the_ledger_and_cannot_exceed_what_was_paid | WP4: a refund larger than what was paid
+visitor-workspace-moves-money | visitor-workspace-moves-money.patch | tests/test_payments.py::test_a_visitors_workspace_can_never_move_money_through_a_provider | WP4: a hosted visitor reaches a payment provider
+paid-not-in-ledger | paid-not-in-ledger.patch | tests/test_payments.py::test_paid_is_recorded_only_when_the_user_says_so_and_only_then_reaches_the_ledger | WP4: a paid payment missing from the budget ledger
+imap-search-newest-fifty | imap-search-newest-fifty.patch | tests/test_mail_poll.py::test_a_reply_buried_under_a_busy_mailbox_is_still_found | A3: a busy mailbox hides an older reply
+spam-folder-filed-like-inbox | spam-folder-filed-like-inbox.patch | tests/test_mail_poll.py::test_a_reply_the_provider_called_spam_goes_to_the_users_review_and_is_filed_nowhere | LM3: spam is filed as a reply
+oauth-string-wrong | oauth-string-wrong.patch | tests/test_mail_oauth.py::test_the_initial_client_response_is_exactly_the_one_in_googles_documentation | LM4: a malformed XOAUTH2 string
+nginx-host-drops-port | nginx-host-drops-port.patch | tests/test_hosted_journey.py | R-011: every write is refused on a port other than 443
+build-gated-on-comparable | build-gated-on-comparable.patch | tests/test_hosted_journey.py | R-012: Build is enabled before any vendor is chosen

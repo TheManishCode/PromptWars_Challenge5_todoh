@@ -1,0 +1,13 @@
+diff --git a/eventmate/messaging/conversations.py b/eventmate/messaging/conversations.py
+index 801418b..acacd5b 100644
+--- a/eventmate/messaging/conversations.py
++++ b/eventmate/messaging/conversations.py
+@@ -92,7 +92,7 @@ def analyze_reply(body: str, checklist: Sequence[str]) -> ReplyAnalysis:
+     questions = tuple(s.strip()[:200] for s in _SENTENCE.split(body) if s.strip().endswith("?"))[:5]
+     text = _norm(body)
+     return ReplyAnalysis(
+-        amounts=amounts, says_unavailable=unavailable, says_available=bool(_AVAILABLE.search(body)) and not unavailable, questions=questions, asks_to_stop=bool(_STOP.search(body)) or _first_line_is_stop(body),
++        amounts=amounts, says_unavailable=unavailable, says_available=bool(_AVAILABLE.search(body)) and not unavailable, questions=questions, asks_to_stop=bool(_STOP.search(body)) or False,
+         checklist_mentioned=tuple(item for item in checklist if _norm(item) in text),
+     )
+ 

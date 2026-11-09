@@ -1,0 +1,31 @@
+diff --git a/deploy/nginx.conf.example b/deploy/nginx.conf.example
+index fe73ee8..cc10085 100644
+--- a/deploy/nginx.conf.example
++++ b/deploy/nginx.conf.example
+@@ -29,7 +29,7 @@ server {
+         proxy_pass http://{{backend}};
+         proxy_http_version 1.1;
+         proxy_set_header Connection "";                                  # keep-alive to the backend; also drops a client's Connection header
+-        proxy_set_header Host $http_host;  # with the port the browser used: the application compares it with the Origin header, which keeps a non-443 port (R-011)
++        proxy_set_header Host $host;  # with the port the browser used: the application compares it with the Origin header, which keeps a non-443 port (R-011)
+         proxy_set_header X-Forwarded-For   $remote_addr;                  # set, not appended: whatever the client sent is dropped
+         proxy_set_header X-Forwarded-Proto $scheme;                       # https here, because TLS ends here
+         proxy_read_timeout 90s;
+@@ -42,7 +42,7 @@ server {
+         proxy_pass http://{{backend}};
+         proxy_http_version 1.1;
+         proxy_set_header Connection "";
+-        proxy_set_header Host $http_host;  # with the port the browser used: the application compares it with the Origin header, which keeps a non-443 port (R-011)
++        proxy_set_header Host $host;  # with the port the browser used: the application compares it with the Origin header, which keeps a non-443 port (R-011)
+         proxy_set_header X-Forwarded-For   $remote_addr;
+         proxy_set_header X-Forwarded-Proto $scheme;
+         proxy_read_timeout 90s;
+@@ -55,7 +55,7 @@ server {
+         proxy_pass http://{{backend}};
+         proxy_http_version 1.1;
+         proxy_set_header Connection "";
+-        proxy_set_header Host $http_host;  # with the port the browser used: the application compares it with the Origin header, which keeps a non-443 port (R-011)
++        proxy_set_header Host $host;  # with the port the browser used: the application compares it with the Origin header, which keeps a non-443 port (R-011)
+         proxy_set_header X-Forwarded-For   $remote_addr;
+         proxy_set_header X-Forwarded-Proto $scheme;
+         proxy_buffering off;                                              # the point of this block

@@ -1,0 +1,13 @@
+diff --git a/eventmate/messaging/outreach.py b/eventmate/messaging/outreach.py
+index a52cf05..1a0e079 100644
+--- a/eventmate/messaging/outreach.py
++++ b/eventmate/messaging/outreach.py
+@@ -115,7 +115,7 @@ def _message(plan: PlanVersion, category: VendorCategory, vendor_name: str, send
+     lines += [""] + quote_template.template_lines(category)
+     if checklist:
+         lines += ["", "For each of these, please say on the \"Included and extra\" line whether it is included or extra: " + ", ".join(checklist) + "."]
+-    lines += ["Any other charges (overtime, travel, taxes) can go on the same line.", "", f"Thank you,\n{sender}", "", f"(Written with to;doh on behalf of {sender}. {STOP_LINE})"]  # in the body, so the approved hash covers it
++    lines += ["Any other charges (overtime, travel, taxes) can go on the same line.", "", f"Thank you,\n{sender}"]  # in the body, so the approved hash covers it
+     return subject, "\n".join(lines)
+ 
+ 

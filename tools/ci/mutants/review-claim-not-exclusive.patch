@@ -1,0 +1,13 @@
+diff --git a/eventmate/messaging/reply_review.py b/eventmate/messaging/reply_review.py
+index 31f220d..d74668d 100644
+--- a/eventmate/messaging/reply_review.py
++++ b/eventmate/messaging/reply_review.py
+@@ -73,8 +73,6 @@ class ReplyReviewStore:
+                 raise ValueError("no such reply")
+             if cur.status in ("assigned", "dismissed"):
+                 raise ValueError(f"this reply is already {cur.status}")
+-            if cur.status == "assigning" and not self._lapsed(cur):
+-                raise ValueError("this reply is being filed right now")
+             if cur.status == "assigning" and cur.assigned_plan_id not in (None, plan_id):
+                 raise ValueError("an earlier attempt was filing this reply under another event; finish that one")
+             return self._file()._append(cur.model_copy(update={"status": "assigning", "assigned_plan_id": plan_id, "claimed_at": self.now()}), review_id)

@@ -1,0 +1,13 @@
+diff --git a/eventmate/messaging/conversations.py b/eventmate/messaging/conversations.py
+index 801418b..86e353b 100644
+--- a/eventmate/messaging/conversations.py
++++ b/eventmate/messaging/conversations.py
+@@ -357,7 +357,7 @@ class ConversationService:
+                 if report.spam_error:
+                     warnings.append(report.spam_error)
+             for item in inbound:
+-                if item.folder != "INBOX":  # found in the spam folder: for the user to look at, never filed, read as a quote or obeyed
++                if False:  # found in the spam folder: for the user to look at, never filed, read as a quote or obeyed
+                     if self.unmatched is not None:
+                         self.unmatched.add(item.channel, item.sender, item.received_at, item.external_id, "spam", item.body)
+                     ignored += 1

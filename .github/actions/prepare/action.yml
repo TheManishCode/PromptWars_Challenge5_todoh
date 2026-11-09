@@ -1,0 +1,31 @@
+name: prepare
+description: Python, the locked dependencies, the flights extra and (optionally) the system tools and browsers the tests need. A missing one is a failure later (tools/ci/require_tools.sh), never a silent skip.
+inputs:
+  python-version:
+    description: Python version
+    default: "3.14"
+  browsers:
+    description: Install nginx, openssl, Chromium and Firefox for the browser and proxy tests ("true" or "false")
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Locked dependencies, the serve and flights extras, the gate's own tools
+      shell: bash
+      run: |
+        pip install --require-hashes -r requirements.lock
+        pip install --no-deps -e .
+        pip install -r tools/ci/requirements-ci.txt
+        pip install -e ".[serve,flights]"
+        tools/ci/bootstrap_tools.sh
+    - name: nginx, openssl, Chromium and Firefox
+      if: inputs.browsers == 'true'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y nginx openssl
+        sudo systemctl stop nginx || true  # the tests start their own nginx on their own ports
+        python -m playwright install --with-deps chromium firefox

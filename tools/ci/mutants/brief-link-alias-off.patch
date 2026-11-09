@@ -1,0 +1,12 @@
+diff --git a/eventmate/service.py b/eventmate/service.py
+index aa60464..fa7b2d1 100644
+--- a/eventmate/service.py
++++ b/eventmate/service.py
+@@ -166,7 +166,6 @@ class EventMate:
+         self.voice_notes = VoiceNoteStore(self.store.root)
+         self.repo.access = self.access_store
+         self.outreach_store = OutreachStore(self.store.root, self.observations.checklists)
+-        self.outreach_store.home = self.brief_links.home
+         self.staging.protect = self._brief_awaits_replies
+         self._jobs: JobWorker | None = None
+         self.jobs_clock = None  # tests inject a clock here before the worker is first used
