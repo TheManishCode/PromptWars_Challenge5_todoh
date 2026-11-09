@@ -64,4 +64,31 @@ On a tag `v*`, `release.yml` runs the whole gate, then builds the image once and
 - Equivalent mutants: if a refactor makes two rules cover each other, a mutant that switches off one will survive; the fix is a combined patch (as above).
 
 ## Proof, run on this machine (commands and results)
-PROOF_PLACEHOLDER
+All on this machine, at the commit named in the READY message (`git rev-parse --short HEAD`), 2026-11-09. Nothing was run on GitHub.
+
+**Static tools.** `actionlint` (1.7.12): clean. `zizmor --offline --min-severity medium .github` (1.32.0): no findings (at lower severity it only suggests GitHub's self-repository syntax for the local `uses: ./...`). `shellcheck --severity=warning` (0.11.0) on every tracked shell script: clean.
+
+**`COVERAGE=1 make ci`, end to end, exit 0:** static (16 checks) PASS; ui PASS (`npm ci`, vitest, `vite build`, no change in `eventmate/web/static`); solvers verified (a WARNING that the local Fast Downward is `ed3d389`, not the pinned `1eef26b2`: strict only in CI); tests PASS: require-tools ok, **5249 passed, 4 skipped**, skip guard "4 skip(s), all on the allow-list", clean-tree ok, **coverage 95.27% (gate 94)**; mutants: **all 26 killed**.
+
+**`tools/ci/deploy_check.sh` (Docker):** the proxy/TLS and smuggling tests passed and did not skip; the image built; `tools/check_image.sh` all ok (read-only, all capabilities dropped, no-new-privileges, Landlock, FD+VAL validated a plan inside, the leak check); the leak control FAILED the planted image and named both planted files, as it must; trivy (pinned by digest) found no HIGH or CRITICAL with a fix.
+
+**`tools/ci/soak.sh` (60 s, 20 visitors, 10 on `/plan`):** 1181 requests, all 2xx, no failures, RSS 218 to 222 MB. **`tools/ci/release.sh v0.0.0-ci`:** `todoh-v0.0.0-ci.tar.gz` (docker save), a CycloneDX 1.6 SBOM (157 components) and `SHA256SUMS` (both verified OK); nothing pushed. **`tools/ci/post_deploy_smoke.sh`** against a local container in shared mode: five checks passed; with `OWNER_TOKEN` the owner route also passed; against a wrong Host name it FAILED.
+
+**Under `act` (0.2.97, image `catthehacker/ubuntu:act-latest`, from a clean clone):** the `ui` job: **succeeded**, `ui-reproduces ok`. The `static` job, including the composite `prepare` action (hash-pinned install, the checksummed tool downloads): **succeeded**, all 16 checks ok. The `solvers` job: built Fast Downward and VAL at the pinned commits, verified both and packed them (about 3 minutes with the cache action), and **failed only at `actions/upload-artifact`** ("Unable to get the ACTIONS_RUNTIME_TOKEN": `act` has no artifact service). **Not run under `act`**: `tests`, `mutants`, `deploy-check` and `soak` (browsers, docker-in-docker, a 12-minute suite); they were run directly, above.
+
+**Each guard fires once (`tools/ci/guard_demos.sh`, in a throwaway worktree of HEAD):**
+```
+skip-guard       caught: tests.test_zz_demo_skip::test_needs_a_tool_that_is_missing: nginx is not installed here
+ui-diff          caught: ui-reproduces FAIL: the build changed eventmate/web/static (plan.js edited by hand)
+clean-tree       caught: ?? eventmate/left_behind_by_a_test.json
+mutant-survives  caught: SURVIVED per-plan-cap-off (the cap test was neutered)
+env-tracked      caught
+unpinned-action  caught: tests/test_ci_guards.py (actions/checkout@v4)
+borrowed-art     caught
+act-bare-with-actrc     caught: a bare `act` with an unparsable .env printed no value
+act-bare-without-actrc  control: without .actrc the same run DOES print the value
+act-wrapper-refuses-near-a-env  caught
+```
+Two more were seen by accident: the clean-tree guard failed my own first `make ci` because I added a file while the suite ran, and the lock-drift step failed against today's upstream releases before it was changed to compare against the existing pins.
+
+**An incident the gate now prevents.** `act` loads `./.env` by default and, when it cannot parse it, prints it in full; that put real keys into an AI session's transcript (rotation is an owner step: `docs/BLOCKED.md`). `act` also ignores `--env-file /dev/null` from a project `.actrc` ("the path must stay inside the project"), so `.actrc` points at four empty tracked files in `.github/` (`act.env`, `act.secrets`, `act.vars`, `act.input`); the static gate checks them; `tools/ci/act.sh` refuses to start with a `.env` in its directory or any parent up to `$HOME`, and runs `act` only from a clean clone.
