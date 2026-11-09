@@ -38,3 +38,8 @@ Not run: the PayPal sandbox round trip (needs sandbox credentials from the owner
 ## Payments: reconciliation
 - Reconciliation of an unknown payment outcome is the user's two steps ("it went through" / "it did not") until a documented lookup by sender batch id is confirmed. No unverified endpoint is called on a money path.
 
+## CI/CD: built and proved locally, never run on GitHub
+- The workflows have not run on GitHub (nothing was pushed). Runner differences are untested: a skip on a runner (for example Landlock, `docs/CI.md`), the Chromium path, apt package names. The first run is the owner's, and the skip guard will say exactly what needs a decision.
+- Owner steps: branch protection with the check names in `docs/CI.md`; a `production` environment with required reviewers; the repository secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` only when a host exists (`tools/ci/deploy.sh` refuses until then); leave the variable `DEPLOY_ENABLED` unset.
+- **The keys in the local `.env` were printed once into an AI session's transcript by `act` (2026-11-09).** They are not in git. Rotate them: NVIDIA, OpenRouter, Google Places, Brave, Langfuse, and the SMTP app password. The repository now keeps `act` from reading `.env` (`.actrc`, `tools/ci/act.sh`, a static check, a demo).
+
