@@ -1,4 +1,4 @@
-.PHONY: install test lint security check web redteam deploy-check ui hooks ci ci-full ci-tools ci-static ci-ui ci-solvers ci-tests ci-mutants ci-deploy-check ci-soak ci-gate ci-release post-deploy-smoke
+.PHONY: install test lint security check web redteam deploy-check ui hooks ci ci-full ci-tools ci-static ci-ui ci-solvers ci-tests ci-matrix ci-mutants ci-deploy-check ci-soak ci-gate ci-release post-deploy-smoke
 install:
 	pip install -e ".[dev]"
 test:
@@ -42,6 +42,9 @@ ci-solvers:
 	tools/ci/solvers.sh build
 ci-tests:
 	tools/ci/tests.sh
+# the same tests on the other supported Pythons (3.12, 3.13, 3.14 minus the main one), each in its own uv venv: tools/ci/matrix.sh
+ci-matrix:
+	tools/ci/matrix.sh
 ci-mutants:
 	tools/ci/mutants.py
 ci-deploy-check:
@@ -49,7 +52,7 @@ ci-deploy-check:
 ci-soak:
 	tools/ci/soak.sh
 ci:
-	tools/ci/clean_tree.sh snapshot && $(MAKE) -k --no-print-directory ci-static ci-ui ci-solvers ci-tests ci-mutants
+	tools/ci/clean_tree.sh snapshot && $(MAKE) -k --no-print-directory ci-static ci-ui ci-solvers ci-tests ci-matrix ci-mutants
 ci-full: ci
 	$(MAKE) --no-print-directory ci-deploy-check ci-soak
 # the review gate on one committed sha, in a clean worktree: tools/ci/gate.sh [SHA] [--quick]

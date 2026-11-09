@@ -13,7 +13,7 @@
 | G5 unpinned solvers | `tools/ci/solvers.sh`: Fast Downward `1eef26b2cbf5…` and VAL `3c7a1f330bda…` verified at their commits (strict in CI), built with the CMake flag; the cache key is the hash of the recipe | a different commit fails in CI |
 | CI-1 tests that vanish without a skip (a `collect_ignore` line, a deleted file) | `tools/ci/test_inventory.py`: `tools/ci/test_inventory.txt` lists the tests collected per file; the tests job fails if a file disappears or shrinks ("update tools/ci/test_inventory.txt in the same commit if this removal is intended"), growth is reported, and the static job requires the inventory to equal the tree | `collect_ignore` of one file, and a deleted file, both fail |
 | G6 workflow security | top-level `permissions: contents: read`; concurrency; a timeout on every job; every action by commit sha; trivy by image digest; `gitleaks git` and `gitleaks dir` on the tracked files; actionlint, zizmor, shellcheck; `tests/test_ci_guards.py` enforces the first four | an action at `@v4` fails the guard test |
-| G7 no negative controls | `tools/ci/mutants.py`: 26 patches that re-introduce real bugs; each named test must PASS without it and FAIL with it; a patch that no longer applies fails ("update this mutant") | a neutered test lets a mutant survive and the gate fails |
+| G7 no negative controls | `tools/ci/mutants.py`: 32 patches that re-introduce real bugs; each named test must PASS without it and FAIL with it; a patch that no longer applies fails ("update this mutant") | a neutered test lets a mutant survive and the gate fails |
 | G8 no CD | `release.yml`, `tools/ci/release.sh`, `tools/ci/deploy.sh` (refuses), `tools/ci/post_deploy_smoke.sh` | the stub refuses and never prints a secret (tested) |
 
 ## Running it
@@ -24,7 +24,7 @@ make ci-tools        # (repeats the two installs above, so it is safe from any s
 make ci              # static, ui, solvers (verify), tests (with the skip guard and clean-tree check), mutants. Goes on after a failing step and reports them all
 make ci-full         # ci, then deploy-check (needs Docker) and a 60 s soak
 tools/ci/gate.sh [SHA] [--quick]   # the review gate: ONE committed sha in a clean worktree (--quick skips the full suite)
-make ci-static | ci-ui | ci-tests | ci-mutants | ci-deploy-check | ci-soak     # one gate at a time
+make ci-static | ci-ui | ci-tests | ci-matrix | ci-mutants | ci-deploy-check | ci-soak     # one gate at a time
 tools/ci/guard_demos.sh            # watch each guard fire once, in a throwaway worktree
 tools/ci/act.sh JOB                # run a workflow job under act, from a clean checkout (never the working tree: act prints an unparsable .env in full)
 ```
@@ -38,7 +38,7 @@ Logs, junit and coverage go to `$CI_OUT` (default `/tmp/todoh-ci-out-<hash of th
 | `ui` | `npm ci`, vitest, `vite build`, `git diff` of `eventmate/web/static` | `make ci-ui` |
 | `solvers` | build FD and VAL at the pinned commits, verify, cache (key = hash of the recipe), upload as an artefact | `tools/ci/solvers.sh` |
 | `tests (py3.12)`, `tests (py3.13)`, `tests (py3.14)` | (a red run names its failed and errored node ids in the log, the step summary and `failed.txt`, an artefact) locked install (with the serve and flights extras), nginx, openssl, Chromium and Firefox; the suite with `-rs` and a junit file; the skip guard; the clean-tree check; coverage gate (94) on 3.14 only | `make ci-tests` |
-| `mutants` | the 26 mutants (needs the browsers: two kill via the hosted journey) | `make ci-mutants` |
+| `mutants` | the 32 mutants (needs the browsers: two kill via the hosted journey) | `make ci-mutants` |
 | `deploy-check` | `deploy_check.sh` (proxy, smuggling, check_image, leak control, trivy HIGH/CRITICAL with a fix) | `make ci-deploy-check` |
 | `soak` | 60 s, 20 visitors, half on `/plan` | `make ci-soak` |
 | `ci-gate` | succeeds only if every job above succeeded (a skipped or cancelled one is not a pass) | n/a |
@@ -53,6 +53,9 @@ Require status checks to pass before merging, with these exact check names, and 
 
 ## The mutants
 `tools/ci/mutants/manifest.txt` lists `name | patch | tests that must fail | the real bug`. To add one: in a throwaway worktree make the break, `git diff -- <file> > tools/ci/mutants/<name>.patch`, add a line. The runner needs the named tests to pass on `HEAD` first (otherwise a failure means nothing), then to fail with the patch (pytest exit 1; an import error is "broken", not "killed"). An equivalent mutant is a finding about the code, not about the gate: the bare-STOP mutant survived once because the first-line rule (R-015) now covers the bare word, so it was changed to switch off both.
+
+## Every supported Python
+pyproject says Python >=3.12 and CI tests 3.12, 3.13 and 3.14, but a laptop gate that only ran the interpreter in its venv missed a privacy test that fails on 3.12 (an older SQLite keeps a deleted row's bytes unless `secure_delete` is on). So `make ci` also runs `make ci-matrix` (`tools/ci/matrix.sh`): the same tests gate (tools check, test inventory, the suite, skip guard, clean tree) on every version in `MATRIX_VERSIONS` (default `3.12 3.13 3.14`) except the one the main interpreter already ran in full. Each version gets its own uv venv built from `requirements.lock`, the package and the documented fli commit, and its own output directory (`$CI_OUT/py3.12`, ...). A version uv cannot provide is a **failure**; on an offline machine `MATRIX_SKIP_MISSING=1` turns it into a loud `NOT RUN` line and the summary says which versions the gate did not cover. Coverage is measured on the newest version only, as in CI. `tests/test_ci_guards.py` checks that the local and the CI matrix are the same versions.
 
 ## Flaky upstreams
 The pinned tool downloads (`bootstrap_tools.sh`) retry for up to five minutes (`--retry 6 --retry-delay 10 --retry-all-errors --retry-max-time 300`: a GitHub release CDN returned HTTP 504 on every default retry once), and the workflows cache `.ci-tools` keyed on the hash of that script, so a blip costs one run at most. When the tools are missing `require_tools.sh` still refuses to run the suite ("missing: ...") rather than letting it skip.

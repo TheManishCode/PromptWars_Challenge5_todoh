@@ -28,7 +28,7 @@ tests/test_budget.py 28
 tests/test_catalog_coverage.py 11
 tests/test_changes_api.py 9
 tests/test_channels.py 51
-tests/test_ci_guards.py 31
+tests/test_ci_guards.py 35
 tests/test_cities.py 10
 tests/test_claims.py 18
 tests/test_claims_random.py 11
@@ -43,7 +43,7 @@ tests/test_conversations_api.py 9
 tests/test_cpsat.py 21
 tests/test_deals.py 43
 tests/test_decision_logger.py 25
-tests/test_delta.py 14
+tests/test_delta.py 19
 tests/test_deploy_files.py 4
 tests/test_diets.py 34
 tests/test_digest_notify.py 44
@@ -61,6 +61,7 @@ tests/test_exec_state.py 37
 tests/test_explainer.py 28
 tests/test_explore.py 41
 tests/test_external_vendors.py 38
+tests/test_first_brief_words.py 3
 tests/test_found_online_page.py 3
 tests/test_fuzz_api.py 3
 tests/test_fuzz_replanning.py 8
@@ -99,6 +100,7 @@ tests/test_mail_poll.py 12
 tests/test_manager.py 86
 tests/test_migrations.py 19
 tests/test_mission_graph.py 23
+tests/test_money_sign_percent.py 34
 tests/test_multiprocess.py 3
 tests/test_observability.py 16
 tests/test_observations.py 25
@@ -139,6 +141,7 @@ tests/test_redteam_server.py 2
 tests/test_redteam_terminal.py 2
 tests/test_regex_time.py 8
 tests/test_repair.py 13
+tests/test_repair_words.py 8
 tests/test_replanning.py 36
 tests/test_reply_corpus.py 54
 tests/test_reply_injection.py 19
@@ -147,6 +150,7 @@ tests/test_retention.py 15
 tests/test_rules.py 14
 tests/test_scheduler.py 13
 tests/test_secret_hygiene.py 3
+tests/test_secure_delete.py 4
 tests/test_serve.py 5
 tests/test_serve_drain.py 4
 tests/test_service_health.py 13

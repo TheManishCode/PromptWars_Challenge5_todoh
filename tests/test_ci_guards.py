@@ -74,6 +74,41 @@ def test_a_half_installed_fli_fails_up_front_with_the_fix(tmp_path):
     assert ok.returncode == 0, ok.stdout
 
 
+def run_matrix(tmp_path, **extra):
+    """matrix.sh against a scratch repository, with a fake `uv` that cannot provide any Python (an offline laptop)."""
+    repo = scratch_repo(tmp_path)
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "uv").write_text("#!/bin/sh\necho 'no network' >&2\nexit 2\n")
+    (bin_ / "uv").chmod(0o755)
+    env = {**os.environ, "CI_ROOT": str(repo), "CI_OUT": str(tmp_path / "out"), "PATH": f"{bin_}:{os.environ['PATH']}", "MATRIX_VERSIONS": "3.11 3.12 3.13 3.14 3.15", "MATRIX_VENVS": str(tmp_path / "venvs"), **extra}
+    return subprocess.run(["bash", str(CI / "matrix.sh")], env=env, capture_output=True, text=True)
+
+
+def test_a_python_version_the_gate_cannot_set_up_is_a_failure_not_a_pass(tmp_path):
+    out = run_matrix(tmp_path)
+    here = f"{sys.version_info.major}.{sys.version_info.minor}"
+    assert out.returncode == 1, out.stdout
+    assert all(f"py{v}" in out.stdout and f"FAIL: uv could not provide Python {v}" in out.stdout for v in ("3.11", "3.12", "3.13", "3.14", "3.15") if v != here)
+    assert f"this is the main interpreter" in out.stdout
+
+
+def test_the_matrix_can_be_told_to_accept_a_missing_version_and_says_not_run_out_loud(tmp_path):
+    out = run_matrix(tmp_path, MATRIX_SKIP_MISSING="1")
+    assert out.returncode == 0 and "NOT RUN: uv could not provide Python" in out.stdout and "NOT RUN: Python" in out.stdout and "the gate did not cover them" in out.stdout
+
+
+def test_make_ci_runs_the_matrix_and_it_covers_every_python_the_workflow_does():
+    makefile = (ROOT / "Makefile").read_text()
+    assert re.search(r"^ci:\n\t.*ci-tests ci-matrix ci-mutants", makefile, re.M) and "ci-matrix:\n\ttools/ci/matrix.sh" in makefile
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    versions = [str(v) for v in workflow["jobs"]["tests"]["strategy"]["matrix"]["python"]]
+    default = re.search(r'MATRIX_VERSIONS:-([0-9. ]+)\}', (CI / "matrix.sh").read_text()).group(1).split()
+    assert versions == default, "the local matrix and the CI matrix must be the same versions"
+    requires = re.search(r'requires-python = ">=(\d+\.\d+)"', (ROOT / "pyproject.toml").read_text()).group(1)
+    assert versions[0] == requires, "the oldest supported Python is tested"
+
+
 def test_an_allow_list_line_needs_the_reason_to_match_too(tmp_path):
     guard = load("skip_guard")
     junit = tmp_path / "j.xml"
