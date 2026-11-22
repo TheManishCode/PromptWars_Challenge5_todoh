@@ -104,12 +104,12 @@ def test_brief_to_confirmed_quote_to_a_manual_reprice(em, world, pid, clock):
     assert "Confirmed" in digest(final)
     # nothing about the plan has changed: a confirmed quote is not a plan change
     assert em.store.latest(pid) == v1 and len(em.store.versions(pid)) == 1 and em.store.latest(pid).total_cost == v1.total_cost
-    stale = [x for x in em.quote_status(pid) if x.price_stale]
+    stale = [x for x in em.quote_status(pid, today=clock().date()) if x.price_stale]
     assert [x.vendor_id for x in stale] == ["cat-pune-rasoi"] and stale[0].plan_cost > stale[0].current_price == 78_000
     # the user presses the existing Re-price action (the same replan the UI button sends)
     out = em.replan(pid, Disruption(kind=DisruptionKind.BUDGET_CHANGE, new_budget=v1.request.budget_total), today=TODAY)
     assert out.status == "replanned" and out.plan.version == 2 and out.plan.selection_for(C.CATERER).cost == 78_000
-    assert out.plan.total_cost < v1.total_cost and out.plan.validation.passed and not [x for x in em.quote_status(pid) if x.price_stale]
+    assert out.plan.total_cost < v1.total_cost and out.plan.validation.passed and not [x for x in em.quote_status(pid, today=clock().date()) if x.price_stale]
 
 
 # ---- replies

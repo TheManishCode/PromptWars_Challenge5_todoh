@@ -13,7 +13,9 @@ RASOI = "cat-pune-rasoi"  # the caterer the example plan picks at INR 550/plate
 
 @pytest.fixture
 def em(tmp_path):
-    return EventMate(log_dir=tmp_path / "logs", plan_dir=tmp_path / "plans", run_id="qp")
+    e = EventMate(log_dir=tmp_path / "logs", plan_dir=tmp_path / "plans", run_id="qp")
+    e.repo.clock = lambda: TODAY  # direct shortlist calls do not pass through EventMate.plan's clock setup
+    return e
 
 
 def rec(em, vendor=RASOI, category=C.CATERER, **kw):
