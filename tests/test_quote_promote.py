@@ -27,6 +27,7 @@ def world(tmp_path):
     clock, chans = Clock(), {"email": FakeChannel("email"), "whatsapp": FakeChannel("whatsapp", False, False)}
     em = EventMate(log_dir=tmp_path / "l", plan_dir=tmp_path / "p", run_id="qp", channels=chans, require_symbolic=False)
     em.outreach_store.now = em.conversations.now = em.quote_confirmations.now = clock
+    em.repo.clock = lambda: clock().date()  # quote expiry must use the same clock as the replies
     em.conversations.policy = SendPolicy(per_vendor_per_day=20, per_day=200, whatsapp_gap_s=0)
     brief = "brief_" + em.intake_turn([MYSURU], today=TODAY).staged_id
     biz, _ = em.add_test_vendor("Test Caterer", "Mysuru", C.CATERER, "owner@personal.test", True, "Asha", plan_id=brief)
