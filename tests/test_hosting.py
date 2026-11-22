@@ -145,8 +145,9 @@ def test_in_shared_mode_a_reader_that_is_not_shut_in_tightly_enough_is_never_run
     assert sandbox.required_levels({"EVENTMATE_REQUIRE_NETLESS": "1"}) == isolation.NETWORK_CUT
     assert sandbox.required_levels({}) is None and sandbox.required_levels({"EVENTMATE_MODE": "local"}) is None and sandbox.required_levels({"EVENTMATE_REQUIRE_NETLESS": "0"}) is None
     monkeypatch.setenv("EVENTMATE_MODE", "shared")
+    monkeypatch.setattr(isolation, "_unshare_works", lambda: None)  # runner without unprivileged namespaces
     for weak in ("none", "no-sockets", "network"):  # a network cut alone is not enough where other visitors' files are on the same disk
-        monkeypatch.setattr(isolation, "available", lambda *a, _l=weak, **k: _l)
+        monkeypatch.setattr(isolation, "plan", lambda *a, _l=weak, **k: isolation.Plan(_l))
         with pytest.raises(sandbox.DocumentError, match="cannot shut the file reader in"):
             sandbox.convert(b"Item,Qty\nA,1\n", "q.csv")
     monkeypatch.setenv("EVENTMATE_MODE", "local")
