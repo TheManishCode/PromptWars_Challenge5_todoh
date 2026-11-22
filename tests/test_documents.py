@@ -514,16 +514,27 @@ def _run(plan, code, *args, work=None):
 NET_PROBE = "import socket,sys\ntry:\n    s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1', int(sys.argv[1]))); print('connected')\nexcept OSError:\n    print('refused')"
 
 
-@pytest.mark.parametrize("level", ["contained", "confined", "network", "no-sockets"])
+@pytest.mark.parametrize("level", ["contained", "confined", "network", "network-unavailable", "no-sockets"])
 def test_each_isolation_level_cuts_the_reader_off_from_the_network(level, tmp_path, monkeypatch):
-    """A listener on loopback is reachable from a plain child and not from a child shut in at this level."""
+    """Available levels deny loopback; a missing namespace backend selects a tested socket-denying fallback."""
     import socket
 
     from eventmate.documents import isolation
 
+    if level == "network-unavailable":
+        monkeypatch.setattr(isolation, "_unshare_works", lambda: None)
+        level = "network"
     usable = {"contained": lambda: isolation._bwrap_works(sys.executable, sandbox.ROOT), "confined": lambda: isolation._landlock_works(sys.executable, sandbox.ROOT) and isolation._seccomp_works(),
               "network": lambda: bool(isolation._unshare_works()), "no-sockets": isolation._seccomp_works}
-    if not usable[level]():
+    if level == "network" and not usable[level]():
+        # Some runner kernels deny unprivileged unshare. Exercise the actual
+        # selector without stronger backends, then prove its fallback still
+        # denies sockets. Do not skip a security check or relax the host policy.
+        monkeypatch.setattr(isolation, "_bwrap_works", lambda *a: False)
+        monkeypatch.setattr(isolation, "_landlock_works", lambda *a: False)
+        assert isolation.available(sys.executable, sandbox.ROOT) == "no-sockets"
+        level = "no-sockets"
+    elif not usable[level]():
         pytest.skip(f"this machine cannot set up the {level} level")
     monkeypatch.setattr(isolation, "available", lambda *a, **k: level)
     plan = isolation.plan(sys.executable, sandbox.ROOT, str(tmp_path), None)
@@ -682,7 +693,7 @@ def test_the_socket_filter_also_refuses_the_x32_system_call_range():
     unfiltered = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True).stdout.splitlines()
     filtered = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, preexec_fn=isolation._seccomp_no_sockets).stdout.splitlines()
     assert filtered == ["x32 socket refused 1", "plain socket refused 1", "x32 io_uring refused 1"], filtered  # EPERM (1) for all three
-    if unfiltered[0].startswith("x32 socket fd"):
-        assert True  # this kernel has x32, so the assertion above was a real test of the range
-    else:
-        pytest.skip("this kernel has no x32 ABI: the filter is correct, but the test could not show the bypass it prevents")
+    # The control proves ordinary sockets work. Even without native x32,
+    # changing its syscall result from ENOSYS to EPERM proves the filter
+    # intercepted that range, so the denial assertions above remain meaningful.
+    assert unfiltered[1] == "plain socket fd 0", unfiltered
