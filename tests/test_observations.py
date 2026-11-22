@@ -176,7 +176,16 @@ def em(tmp_path):
 
 
 @pytest.fixture
-def client(em):
+def client(em, monkeypatch):
+    # The API stamps new observations with wall-clock time independently of
+    # today_fn. Keep both clocks on the fixture date, even after quotes expire
+    # in the real world. Production expiry validation must remain unchanged.
+    class QuoteClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return NOW.astimezone(tz) if tz else NOW.replace(tzinfo=None)
+
+    monkeypatch.setattr("eventmate.web.routes.ledger_external.datetime", QuoteClock)
     return create_app(em, today_fn=lambda: TODAY).test_client()
 
 
@@ -195,6 +204,7 @@ BODY = {
 def test_api_records_and_reports_a_quote(client):
     r = post(client, f"/api/observations/{CATERER}/quotes", BODY)
     assert r.status_code == 201, r.get_json()
+    assert datetime.fromisoformat(r.get_json()["observation"]["observed_at"]) == NOW
     got = client.get(f"/api/observations/{CATERER}").get_json()
     assert got["report"]["effective_total"] == 63_000 and len(got["quotes"]) == 1
     assert got["report"]["status"] == "valid"
