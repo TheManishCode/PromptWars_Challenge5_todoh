@@ -50,7 +50,7 @@ tests/test_digest_notify.py 44
 tests/test_discovery.py 41
 tests/test_discovery_e2e.py 5
 tests/test_docs_claims.py 3
-tests/test_documents.py 81
+tests/test_documents.py 82
 tests/test_e2e_money.py 1
 tests/test_e2e_random.py 3
 tests/test_earlier_quotes.py 13
