@@ -118,7 +118,7 @@ def _summary(ctx: ToolContext, _):
 
 def _event_state(ctx: ToolContext, _):
     """A bounded slice of EventState: counts, vendor names with statuses, dates. No guest names, contact details, prices or message text."""
-    s = build_state(ctx.em, ctx.plan_id)
+    s = build_state(ctx.em, ctx.plan_id, now=ctx.em.outreach_store.now())
     kinds: dict[str, int] = {}
     for i in s.open_items:
         kinds[i.kind] = kinds.get(i.kind, 0) + 1
